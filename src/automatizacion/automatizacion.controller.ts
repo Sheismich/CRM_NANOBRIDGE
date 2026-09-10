@@ -8,11 +8,13 @@ import {
   consultaSupresionQuerySchema,
   estadoProspectoInputSchema,
   incidenciaInputSchema,
+  registroEnvioInputSchema,
   registroProspectoInputSchema,
   registroSupresionInputSchema,
   scoringInputSchema,
   tareaAutomatizacionInputSchema,
-  validacionInputSchema
+  validacionInputSchema,
+  verificacionEnvioQuerySchema
 } from "./dto/automatizacion.schema.js";
 
 // Endpoints que consume n8n (PLAN_API_DEFINITIVO.md, sección "Endpoints de
@@ -78,6 +80,20 @@ export class AutomatizacionController {
   async tareas(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
     const input = tareaAutomatizacionInputSchema.parse(body);
     const result = await this.tareasService.createFromAutomation(input);
+    response.status(result.ya_existia ? 200 : 201);
+    return result;
+  }
+
+  @Get("envios/verificacion")
+  verificarEnvio(@Query() query: Record<string, unknown>) {
+    const input = verificacionEnvioQuerySchema.parse(query);
+    return this.automatizacionService.verificarEnvio(input);
+  }
+
+  @Post("envios")
+  async registrarEnvio(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
+    const input = registroEnvioInputSchema.parse(body);
+    const result = await this.automatizacionService.registrarEnvio(input);
     response.status(result.ya_existia ? 200 : 201);
     return result;
   }

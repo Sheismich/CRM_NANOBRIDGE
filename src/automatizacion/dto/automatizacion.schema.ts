@@ -73,6 +73,20 @@ export const registroSupresionInputSchema = z.object({
 });
 export type RegistroSupresionInput = z.infer<typeof registroSupresionInputSchema>;
 
+// --- Verificación / Registro de envío ---------------------------------------------
+export const verificacionEnvioQuerySchema = z.object({
+  prospecto_id: z.coerce.number().int().positive(),
+  canal: z.enum(["correo", "whatsapp"]).default("correo")
+});
+export type VerificacionEnvioQuery = z.infer<typeof verificacionEnvioQuerySchema>;
+
+export const registroEnvioInputSchema = z.object({
+  execution_id: z.string().trim().min(1).max(100),
+  prospecto_id: z.coerce.number().int().positive(),
+  canal: z.enum(["correo", "whatsapp"]).default("correo")
+});
+export type RegistroEnvioInput = z.infer<typeof registroEnvioInputSchema>;
+
 // --- Campaña activa --------------------------------------------------------------
 export const campanaActivaQuerySchema = z.object({
   campana_id: z.coerce.number().int().positive()

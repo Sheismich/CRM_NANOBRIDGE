@@ -191,6 +191,20 @@ export const listaSupresion = mysqlTable("lista_supresion", {
   uniqueIndex("uq_supresion_tipo_valor").on(table.tipo, table.valorNormalizado)
 ]);
 
+export const envios = mysqlTable("envios", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }).notNull(),
+  canal: mysqlEnum("canal", ["correo", "whatsapp"]).notNull().default("correo"),
+  numeroContacto: int("numero_contacto").notNull(),
+  ventanaVenceEn: datetime("ventana_vence_en").notNull(),
+  ventanaEstado: mysqlEnum("ventana_estado", ["abierta", "vencida", "cerrada"]).notNull().default("abierta"),
+  executionId: varchar("execution_id", { length: 100 }),
+  enviadoEn: datetime("enviado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  uniqueIndex("uq_envios_execution_id").on(table.executionId),
+  index("idx_envios_prospecto_canal").on(table.prospectoId, table.canal)
+]);
+
 export const parametrosAutomatizacion = mysqlTable("parametros_automatizacion", {
   clave: varchar("clave", { length: 80 }).primaryKey(),
   valor: json("valor").notNull(),

@@ -1,14 +1,28 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, campanas, contactos, empresas, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, prospectos, resultadosScoring } from "../database/schema.js";
+import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, prospectos, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
-import type { CampanaActivaQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput } from "./dto/automatizacion.schema.js";
+import type { CampanaActivaQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
 function normalizarValor(tipo: "correo" | "telefono" | "whatsapp", valor: string): string {
   return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
+}
+
+// Política de contactos (PLAN_N8N_DEFINITIVO.md): "cinco días hábiles de
+// espera" entre un envío y el siguiente. Solo descuenta sábado/domingo —
+// no hay calendario de festivos definido en ningún plan todavía.
+function addBusinessDays(start: Date, days: number): Date {
+  const result = new Date(start);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const day = result.getDay();
+    if (day !== 0 && day !== 6) added++;
+  }
+  return result;
 }
 
 // Catálogos derivados en vivo de los ENUM ya declarados en las migraciones
@@ -283,6 +297,95 @@ export class AutomatizacionService {
     });
 
     return { id: input.prospecto_id, estado: input.estado, motivo: input.motivo };
+  }
+
+  // --- Verificación de envío ----------------------------------------------------------
+  // B1, paso 9 (PLAN_N8N_DEFINITIVO.md): gate antes de enviar. Bloquea por
+  // canal apagado (política de contactos: WhatsApp sigue desactivado hasta
+  // tener proveedor aprobado), por máximo de 3 contactos totales (envío
+  // inicial + dos recordatorios), o por una ventana de espera del último
+  // envío que sigue abierta y vigente.
+  async verificarEnvio(query: VerificacionEnvioQuery) {
+    if (query.canal === "whatsapp") {
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Canal WhatsApp desactivado (pendiente proveedor aprobado)", numero_contacto_siguiente: null, ventana_vence_en: null };
+    }
+
+    const [prospecto] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, query.prospecto_id)).limit(1);
+    if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
+
+    const [ultimo] = await this.db
+      .select({ numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn, ventanaEstado: envios.ventanaEstado })
+      .from(envios)
+      .where(and(eq(envios.prospectoId, query.prospecto_id), eq(envios.canal, query.canal)))
+      .orderBy(desc(envios.numeroContacto))
+      .limit(1);
+
+    const total = ultimo?.numeroContacto ?? 0;
+
+    if (total >= 3) {
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Máximo de 3 contactos alcanzado", numero_contacto_siguiente: null, ventana_vence_en: null };
+    }
+
+    if (ultimo && ultimo.ventanaEstado === "abierta" && ultimo.ventanaVenceEn > new Date()) {
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Ventana de espera activa", numero_contacto_siguiente: total + 1, ventana_vence_en: ultimo.ventanaVenceEn };
+    }
+
+    return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: true, motivo: null, numero_contacto_siguiente: total + 1, ventana_vence_en: null };
+  }
+
+  // --- Registro de envío --------------------------------------------------------------
+  // B1, paso 12. Abre una nueva ventana de espera de 5 días hábiles
+  // (B0, punto 3: "crear ventanas de espera al registrar envíos").
+  // numero_contacto se recalcula en el servidor en vez de confiar en lo
+  // que mande n8n, para no desincronizarse de Verificación de envío si
+  // algo se salta el orden del flujo.
+  async registrarEnvio(input: RegistroEnvioInput) {
+    const [existing] = await this.db
+      .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn })
+      .from(envios)
+      .where(eq(envios.executionId, input.execution_id))
+      .limit(1);
+    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, ventana_vence_en: existing.ventanaVenceEn, ya_existia: true as const };
+
+    if (input.canal === "whatsapp") {
+      throw new HttpError(409, "Canal WhatsApp desactivado (pendiente proveedor aprobado)");
+    }
+
+    const [prospecto] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
+    if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
+
+    const [ultimo] = await this.db
+      .select({ numeroContacto: envios.numeroContacto })
+      .from(envios)
+      .where(and(eq(envios.prospectoId, input.prospecto_id), eq(envios.canal, input.canal)))
+      .orderBy(desc(envios.numeroContacto))
+      .limit(1);
+
+    const total = ultimo?.numeroContacto ?? 0;
+    if (total >= 3) throw new HttpError(409, "Máximo de 3 contactos alcanzado para este prospecto y canal");
+
+    const ventanaVenceEn = addBusinessDays(new Date(), 5);
+
+    try {
+      const [result] = await this.db.insert(envios).values({
+        prospectoId: input.prospecto_id,
+        canal: input.canal,
+        numeroContacto: total + 1,
+        ventanaVenceEn,
+        executionId: input.execution_id
+      });
+      return { id: result.insertId, numero_contacto: total + 1, ventana_vence_en: ventanaVenceEn, ya_existia: false as const };
+    } catch (error) {
+      if (isDuplicateEntry(error)) {
+        const [retry] = await this.db
+          .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn })
+          .from(envios)
+          .where(eq(envios.executionId, input.execution_id))
+          .limit(1);
+        if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, ventana_vence_en: retry.ventanaVenceEn, ya_existia: true as const };
+      }
+      throw error;
+    }
   }
 
   // --- Campaña activa ----------------------------------------------------------------
