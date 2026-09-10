@@ -1,3 +1,7 @@
+// A diferencia del resto de la app, este script corre fuera de Next.js
+// (con tsx, vía `npm run migrate`), así que Next no le carga el .env por su
+// cuenta. dotenv solo se usa aquí, no en src/config/env.ts.
+import "dotenv/config";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

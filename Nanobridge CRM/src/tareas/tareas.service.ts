@@ -1,0 +1,180 @@
+import { Inject, Injectable } from "@nestjs/common";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
+import { auditoria, tareas } from "../database/schema.js";
+import { HttpError } from "../shared/http-error.js";
+import { OutboxService } from "../outbox/outbox.service.js";
+import type { CurrentUser } from "../auth/current-user.type.js";
+import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
+
+export type ListTareasFilters = {
+  estado?: "pendiente" | "en_progreso" | "cerrada" | "cancelada";
+  prioridad?: "baja" | "media" | "alta" | "urgente";
+  tipo?: "seguimiento" | "clasificacion" | "revision_documento" | "otro";
+  responsableId?: number;
+};
+
+function toRow(row: typeof tareas.$inferSelect) {
+  return {
+    id: row.id,
+    tipo: row.tipo,
+    titulo: row.titulo,
+    descripcion: row.descripcion,
+    estado: row.estado,
+    prioridad: row.prioridad,
+    responsable_id: row.responsableId,
+    empresa_id: row.empresaId,
+    contacto_id: row.contactoId,
+    prospecto_id: row.prospectoId,
+    fecha_limite: row.fechaLimite,
+    clasificacion: row.clasificacion,
+    resultado: row.resultado,
+    cerrada_en: row.cerradaEn,
+    creada_por: row.creadaPor,
+    creado_en: row.creadoEn,
+    actualizado_en: row.actualizadoEn
+  };
+}
+
+@Injectable()
+export class TareasService {
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDb,
+    private readonly outboxService: OutboxService
+  ) {}
+
+  // La bandeja de tareas: el agente solo ve lo suyo (PLAN_CRM_DEFINITIVO.md
+  // "El agente ve sus empresas, contactos, tareas y oportunidades
+  // asignadas"); administrador y supervisor pueden ver o filtrar por
+  // cualquier responsable.
+  private scopedFilters(user: CurrentUser, filters: ListTareasFilters): ListTareasFilters {
+    if (user.rol === "agente") return { ...filters, responsableId: user.id };
+    return filters;
+  }
+
+  async list(user: CurrentUser, filters: ListTareasFilters, page: number, limit: number) {
+    const scoped = this.scopedFilters(user, filters);
+    const offset = (page - 1) * limit;
+
+    const conditions = [
+      scoped.estado ? eq(tareas.estado, scoped.estado) : undefined,
+      scoped.prioridad ? eq(tareas.prioridad, scoped.prioridad) : undefined,
+      scoped.tipo ? eq(tareas.tipo, scoped.tipo) : undefined,
+      scoped.responsableId ? eq(tareas.responsableId, scoped.responsableId) : undefined
+    ].filter((condition): condition is NonNullable<typeof condition> => condition !== undefined);
+
+    const rows = await this.db
+      .select()
+      .from(tareas)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(tareas.prioridad), tareas.fechaLimite)
+      .limit(limit)
+      .offset(offset);
+
+    return { page, limit, data: rows.map(toRow) };
+  }
+
+  async create(user: CurrentUser, input: CrearTareaInput) {
+    const [result] = await this.db.insert(tareas).values({
+      tipo: input.tipo,
+      titulo: input.titulo,
+      descripcion: input.descripcion ?? null,
+      prioridad: input.prioridad,
+      responsableId: input.responsableId,
+      empresaId: input.empresaId ?? null,
+      contactoId: input.contactoId ?? null,
+      prospectoId: input.prospectoId ?? null,
+      fechaLimite: input.fechaLimite ?? null,
+      creadaPor: user.id
+    });
+    return result.insertId;
+  }
+
+  async get(user: CurrentUser, id: number) {
+    const [row] = await this.db.select().from(tareas).where(eq(tareas.id, id)).limit(1);
+    if (!row || (user.rol === "agente" && row.responsableId !== user.id)) {
+      throw new HttpError(404, "Tarea no encontrada");
+    }
+    return toRow(row);
+  }
+
+  private async findAssignable(user: CurrentUser, id: number) {
+    const [row] = await this.db.select().from(tareas).where(eq(tareas.id, id)).limit(1);
+    if (!row || (user.rol === "agente" && row.responsableId !== user.id)) {
+      throw new HttpError(404, "Tarea no encontrada");
+    }
+    if (row.estado === "cerrada" || row.estado === "cancelada") {
+      throw new HttpError(409, "La tarea ya está cerrada");
+    }
+    return row;
+  }
+
+  // Cerrar una tarea genera un evento en eventos_pendientes (patrón outbox
+  // obligatorio, PLAN_CRM_DEFINITIVO.md #5): nunca se llama a n8n desde aquí
+  // directamente, solo se encola el evento en la misma transacción.
+  async cerrar(user: CurrentUser, id: number, resultado: string) {
+    const row = await this.findAssignable(user, id);
+
+    await this.db.transaction(async (tx) => {
+      await tx.update(tareas).set({
+        estado: "cerrada",
+        resultado,
+        cerradaEn: sql`CURRENT_TIMESTAMP`
+      }).where(eq(tareas.id, id));
+
+      await this.outboxService.enqueue(tx, {
+        tipo: "tarea_cerrada",
+        entidadTipo: "tarea",
+        entidadId: id,
+        payload: { tarea_id: id, tipo: row.tipo, resultado, cerrada_por: user.id }
+      });
+
+      await tx.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "tarea",
+        entidadId: id,
+        accion: "cerrar",
+        despues: { resultado }
+      });
+    });
+  }
+
+  // Cola de clasificación manual: solo tareas tipo 'clasificacion'.
+  async listColaClasificacion(user: CurrentUser, page: number, limit: number) {
+    return this.list(user, { tipo: "clasificacion", estado: "pendiente" }, page, limit);
+  }
+
+  async clasificar(user: CurrentUser, id: number, input: ClasificarTareaInput) {
+    const row = await this.findAssignable(user, id);
+    if (row.tipo !== "clasificacion") {
+      throw new HttpError(409, "Solo las tareas de clasificación se resuelven aquí");
+    }
+    if (!row.prospectoId) {
+      throw new HttpError(409, "La tarea de clasificación no tiene un prospecto asociado");
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx.update(tareas).set({
+        estado: "cerrada",
+        clasificacion: input.clasificacion,
+        resultado: input.comentario ?? input.clasificacion,
+        cerradaEn: sql`CURRENT_TIMESTAMP`
+      }).where(eq(tareas.id, id));
+
+      await this.outboxService.enqueue(tx, {
+        tipo: "prospecto_clasificado",
+        entidadTipo: "prospecto",
+        entidadId: row.prospectoId!,
+        payload: { tarea_id: id, prospecto_id: row.prospectoId, clasificacion: input.clasificacion, comentario: input.comentario ?? null, clasificado_por: user.id }
+      });
+
+      await tx.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "tarea",
+        entidadId: id,
+        accion: "clasificar",
+        despues: { clasificacion: input.clasificacion }
+      });
+    });
+  }
+}

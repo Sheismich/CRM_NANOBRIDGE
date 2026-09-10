@@ -1,33 +1,51 @@
 {
   "name": "nanobridge-crm",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
   "description": "Backend API for the Nanobridge CRM and outbound automation.",
+  "author": "",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js",
-    "test": "node --import tsx --test src/**/*.test.ts",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "migrate": "tsx src/database/migrate.ts"
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main.js",
+    "lint": "oxlint src/",
+    "migrate": "tsx src/database/migrate.ts",
+    "db:studio": "drizzle-kit studio --config drizzle.config.ts"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "argon2": "^0.44.0",
+    "@nestjs/common": "^12.0.1",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/platform-express": "^12.0.1",
+    "@nestjs/schedule": "^12.0.1",
+    "argon2": "^0.45.1",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.2",
+    "drizzle-orm": "^0.45.2",
     "express": "^5.1.0",
     "mysql2": "^3.14.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
     "zod": "^4.1.5"
   },
+  "overrides": {
+    "multer": "^2.3.0"
+  },
   "devDependencies": {
-    "@types/cookie-parser": "^1.4.9",
-    "@types/express": "^5.0.3",
+    "@nestjs/cli": "^12.0.0",
+    "@nestjs/schematics": "^12.0.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.0",
     "@types/node": "^24.3.0",
+    "drizzle-kit": "^0.31.10",
+    "oxlint": "^1.58.0",
     "tsx": "^4.20.5",
-    "typescript": "^5.9.2"
+    "typescript": "^6.0.2"
   }
 }

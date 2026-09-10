@@ -5,6 +5,7 @@ CREATE TABLE roles (
   creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- statement-break
 INSERT INTO roles (clave, nombre) VALUES
   ('administrador', 'Administrador'),
   ('supervisor', 'Supervisor'),
