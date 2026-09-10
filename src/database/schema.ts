@@ -177,6 +177,27 @@ export const historialEtapaOportunidad = mysqlTable("historial_etapa_oportunidad
   index("idx_historial_etapa_oportunidad").on(table.oportunidadId)
 ]);
 
+// Historial integral (PLAN_CRM_DEFINITIVO.md #4): solo lo que no tiene
+// tabla propia -- llamadas/WhatsApp manuales y comentarios del asesor. El
+// resto de la línea de tiempo (correos, tareas, cambios de estado) se lee
+// en vivo de envios/respuestas/tareas/auditoria, no se duplica aquí.
+export const actividades = mysqlTable("actividades", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  empresaId: bigint("empresa_id", { mode: "number", unsigned: true }).notNull(),
+  contactoId: bigint("contacto_id", { mode: "number", unsigned: true }),
+  oportunidadId: bigint("oportunidad_id", { mode: "number", unsigned: true }),
+  tipo: mysqlEnum("tipo", ["llamada", "whatsapp", "comentario"]).notNull(),
+  resultado: varchar("resultado", { length: 255 }),
+  proximaAccion: varchar("proxima_accion", { length: 255 }),
+  comentario: text("comentario"),
+  responsableId: bigint("responsable_id", { mode: "number", unsigned: true }).notNull(),
+  ocurridaEn: datetime("ocurrida_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  index("idx_actividades_empresa").on(table.empresaId),
+  index("idx_actividades_contacto").on(table.contactoId)
+]);
+
 export const tareas = mysqlTable("tareas", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   tipo: mysqlEnum("tipo", ["seguimiento", "clasificacion", "revision_documento", "otro"]).notNull().default("seguimiento"),
