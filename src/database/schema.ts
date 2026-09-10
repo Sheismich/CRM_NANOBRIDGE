@@ -122,6 +122,61 @@ export const prospectos = mysqlTable("prospectos", {
   index("idx_prospectos_contacto").on(table.contactoId)
 ]);
 
+export const catalogoEtapaEmbudo = mysqlTable("catalogo_etapa_embudo", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  clave: varchar("clave", { length: 40 }).notNull(),
+  nombre: varchar("nombre", { length: 80 }).notNull(),
+  probabilidad: int("probabilidad").notNull(),
+  orden: int("orden").notNull(),
+  esCierre: boolean("es_cierre").notNull().default(false),
+  esGanada: boolean("es_ganada").notNull().default(false),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  uniqueIndex("uq_etapa_embudo_clave").on(table.clave)
+]);
+
+export const catalogoMotivoPerdida = mysqlTable("catalogo_motivo_perdida", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  clave: varchar("clave", { length: 40 }).notNull(),
+  nombre: varchar("nombre", { length: 120 }).notNull(),
+  requiereExplicacion: boolean("requiere_explicacion").notNull().default(false),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  uniqueIndex("uq_motivo_perdida_clave").on(table.clave)
+]);
+
+export const oportunidades = mysqlTable("oportunidades", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  empresaId: bigint("empresa_id", { mode: "number", unsigned: true }).notNull(),
+  contactoId: bigint("contacto_id", { mode: "number", unsigned: true }),
+  prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  etapaId: bigint("etapa_id", { mode: "number", unsigned: true }).notNull(),
+  responsableId: bigint("responsable_id", { mode: "number", unsigned: true }).notNull(),
+  valorEstimado: decimal("valor_estimado", { precision: 12, scale: 2 }),
+  fechaCierreEstimada: date("fecha_cierre_estimada", { mode: "string" }),
+  motivoPerdidaId: bigint("motivo_perdida_id", { mode: "number", unsigned: true }),
+  motivoPerdidaDetalle: varchar("motivo_perdida_detalle", { length: 500 }),
+  cerrada: boolean("cerrada").notNull().default(false),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  index("idx_oportunidades_empresa").on(table.empresaId),
+  index("idx_oportunidades_responsable").on(table.responsableId)
+]);
+
+export const historialEtapaOportunidad = mysqlTable("historial_etapa_oportunidad", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  oportunidadId: bigint("oportunidad_id", { mode: "number", unsigned: true }).notNull(),
+  etapaId: bigint("etapa_id", { mode: "number", unsigned: true }).notNull(),
+  usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull(),
+  motivoPerdidaId: bigint("motivo_perdida_id", { mode: "number", unsigned: true }),
+  comentario: varchar("comentario", { length: 500 }),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  index("idx_historial_etapa_oportunidad").on(table.oportunidadId)
+]);
+
 export const tareas = mysqlTable("tareas", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   tipo: mysqlEnum("tipo", ["seguimiento", "clasificacion", "revision_documento", "otro"]).notNull().default("seguimiento"),
