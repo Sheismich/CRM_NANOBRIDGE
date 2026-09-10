@@ -177,6 +177,49 @@ export const historialEtapaOportunidad = mysqlTable("historial_etapa_oportunidad
   index("idx_historial_etapa_oportunidad").on(table.oportunidadId)
 ]);
 
+// Cotizaciones (PLAN_CRM_DEFINITIVO.md #7): cada fila es una versión.
+// version=1 y cotizacionRaizId=null para la primera; las siguientes
+// apuntan a la fila de la versión 1 vía cotizacionRaizId, así se recupera
+// toda la cadena con (id = X OR cotizacionRaizId = X).
+export const cotizaciones = mysqlTable("cotizaciones", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  empresaId: bigint("empresa_id", { mode: "number", unsigned: true }).notNull(),
+  oportunidadId: bigint("oportunidad_id", { mode: "number", unsigned: true }).notNull(),
+  contactoId: bigint("contacto_id", { mode: "number", unsigned: true }),
+  cotizacionRaizId: bigint("cotizacion_raiz_id", { mode: "number", unsigned: true }),
+  version: int("version").notNull().default(1),
+  moneda: char("moneda", { length: 3 }).notNull().default("MXN"),
+  subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
+  descuento: decimal("descuento", { precision: 12, scale: 2 }).notNull().default("0"),
+  impuestos: decimal("impuestos", { precision: 12, scale: 2 }).notNull().default("0"),
+  total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+  fechaEmision: date("fecha_emision", { mode: "string" }).notNull(),
+  fechaEnvio: date("fecha_envio", { mode: "string" }),
+  fechaEsperadaCierre: date("fecha_esperada_cierre", { mode: "string" }),
+  probabilidad: int("probabilidad"),
+  estado: mysqlEnum("estado", ["borrador", "enviada", "aceptada", "rechazada", "vencida", "obsoleta"]).notNull().default("borrador"),
+  creadoPor: bigint("creado_por", { mode: "number", unsigned: true }).notNull(),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  index("idx_cotizaciones_empresa").on(table.empresaId),
+  index("idx_cotizaciones_oportunidad").on(table.oportunidadId),
+  index("idx_cotizaciones_raiz").on(table.cotizacionRaizId)
+]);
+
+export const cotizacionPartidas = mysqlTable("cotizacion_partidas", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  cotizacionId: bigint("cotizacion_id", { mode: "number", unsigned: true }).notNull(),
+  descripcion: varchar("descripcion", { length: 255 }).notNull(),
+  cantidad: decimal("cantidad", { precision: 10, scale: 2 }).notNull(),
+  precioUnitario: decimal("precio_unitario", { precision: 12, scale: 2 }).notNull(),
+  importe: decimal("importe", { precision: 12, scale: 2 }).notNull(),
+  orden: int("orden").notNull().default(0),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  index("idx_cotizacion_partidas_cotizacion").on(table.cotizacionId)
+]);
+
 // Historial integral (PLAN_CRM_DEFINITIVO.md #4): solo lo que no tiene
 // tabla propia -- llamadas/WhatsApp manuales y comentarios del asesor. El
 // resto de la línea de tiempo (correos, tareas, cambios de estado) se lee
