@@ -51,6 +51,12 @@ export const registroProspectoInputSchema = z.object({
 });
 export type RegistroProspectoInput = z.infer<typeof registroProspectoInputSchema>;
 
+// --- Consulta de prospecto para scoring -------------------------------------------
+export const consultaProspectoScoringQuerySchema = z.object({
+  prospecto_id: z.coerce.number().int().positive()
+});
+export type ConsultaProspectoScoringQuery = z.infer<typeof consultaProspectoScoringQuerySchema>;
+
 // --- Validaciones --------------------------------------------------------------
 export const validacionInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),

@@ -5,7 +5,7 @@ import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSup
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
-import type { CampanaActivaQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
+import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
 function normalizarValor(tipo: "correo" | "telefono" | "whatsapp", valor: string): string {
   return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
@@ -243,6 +243,60 @@ export class AutomatizacionService {
       }
       throw error;
     }
+  }
+
+  // --- Consulta de prospecto para scoring ---------------------------------------
+  // B2 (PLAN_API_DEFINITIVO.md #14): datos firmográficos para que n8n arme
+  // el prompt de Gemini. Deliberadamente no incluye correo ni teléfono
+  // (viven en medios_contacto, tabla que este método ni siquiera toca) —
+  // regla dura de PLAN_N8N_DEFINITIVO.md: "nunca enviar correo, teléfono,
+  // descripción libre o documentos a Gemini".
+  async consultarProspectoParaScoring(query: ConsultaProspectoScoringQuery) {
+    const [row] = await this.db
+      .select({
+        estado: prospectos.estado,
+        fuenteUrl: prospectos.fuenteUrl,
+        confianza: prospectos.confianza,
+        contactoNombre: contactos.nombre,
+        contactoPuesto: contactos.puesto,
+        contactoArea: contactos.area,
+        empresaNombreLegal: empresas.nombreLegal,
+        empresaNombreComercial: empresas.nombreComercial,
+        empresaGiro: empresas.giro,
+        empresaTamano: empresas.tamano,
+        empresaRegion: empresas.region,
+        empresaEstado: empresas.estado,
+        empresaCiudad: empresas.ciudad,
+        empresaPais: empresas.pais,
+        empresaSitioWeb: empresas.sitioWeb,
+        empresaLinkedinUrl: empresas.linkedinUrl
+      })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .where(eq(prospectos.id, query.prospecto_id))
+      .limit(1);
+    if (!row) throw new HttpError(404, "Prospecto no encontrado");
+
+    return {
+      prospecto_id: query.prospecto_id,
+      estado: row.estado,
+      fuente_url: row.fuenteUrl,
+      confianza: row.confianza,
+      contacto: { nombre: row.contactoNombre, puesto: row.contactoPuesto, area: row.contactoArea },
+      empresa: {
+        nombre_legal: row.empresaNombreLegal,
+        nombre_comercial: row.empresaNombreComercial,
+        giro: row.empresaGiro,
+        tamano: row.empresaTamano,
+        region: row.empresaRegion,
+        estado: row.empresaEstado,
+        ciudad: row.empresaCiudad,
+        pais: row.empresaPais,
+        sitio_web: row.empresaSitioWeb,
+        linkedin_url: row.empresaLinkedinUrl
+      }
+    };
   }
 
   // --- Validaciones --------------------------------------------------------------

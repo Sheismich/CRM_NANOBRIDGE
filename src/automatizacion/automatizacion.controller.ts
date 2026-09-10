@@ -5,6 +5,7 @@ import { TareasService } from "../tareas/tareas.service.js";
 import { ApiKeyGuard } from "../auth/guards/api-key.guard.js";
 import {
   campanaActivaQuerySchema,
+  consultaProspectoScoringQuerySchema,
   consultaSupresionQuerySchema,
   estadoProspectoInputSchema,
   incidenciaInputSchema,
@@ -67,6 +68,12 @@ export class AutomatizacionController {
   actualizarEstadoProspecto(@Body() body: unknown) {
     const input = estadoProspectoInputSchema.parse(body);
     return this.automatizacionService.actualizarEstadoProspecto(input);
+  }
+
+  @Get("prospectos/scoring")
+  consultarProspectoParaScoring(@Query() query: Record<string, unknown>) {
+    const input = consultaProspectoScoringQuerySchema.parse(query);
+    return this.automatizacionService.consultarProspectoParaScoring(input);
   }
 
   @Post("validaciones")
