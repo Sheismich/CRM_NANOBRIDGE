@@ -1,13 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, campanas, contactos, empresas, incidencias, mediosContacto, parametrosAutomatizacion, prospectos, resultadosScoring } from "../database/schema.js";
+import { auditoria, campanas, contactos, empresas, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, prospectos, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
-import type { EstadoProspectoInput, IncidenciaInput, RegistroProspectoInput, ScoringInput, ValidacionInput } from "./dto/automatizacion.schema.js";
+import { isDuplicateEntry } from "../shared/database-errors.js";
+import type { ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput } from "./dto/automatizacion.schema.js";
 
-function isDuplicateEntry(error: unknown): boolean {
-  return typeof error === "object" && error !== null && (error as { code?: string }).code === "ER_DUP_ENTRY";
+function normalizarValor(tipo: "correo" | "telefono" | "whatsapp", valor: string): string {
+  return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
 }
 
 // Catálogos derivados en vivo de los ENUM ya declarados en las migraciones
@@ -282,5 +283,61 @@ export class AutomatizacionService {
     });
 
     return { id: input.prospecto_id, estado: input.estado, motivo: input.motivo };
+  }
+
+  // --- Consulta de supresión -------------------------------------------------------
+  // B1, paso 8: "verificar antes de enviar" (PLAN_API_DEFINITIVO.md).
+  async consultarSupresion(query: ConsultaSupresionQuery) {
+    const valorNormalizado = normalizarValor(query.tipo, query.valor);
+    const [row] = await this.db
+      .select({ motivo: listaSupresion.motivo })
+      .from(listaSupresion)
+      .where(and(eq(listaSupresion.tipo, query.tipo), eq(listaSupresion.valorNormalizado, valorNormalizado)))
+      .limit(1);
+
+    return { en_supresion: !!row, motivo: row?.motivo ?? null };
+  }
+
+  // --- Registro de supresión ---------------------------------------------------------
+  // B2: se invoca al procesar una respuesta clasificada como "baja" o
+  // "no_contactar" (PLAN_N8N_DEFINITIVO.md). La baja aplica al medio de
+  // contacto específico, no a toda la empresa (PLAN_CRM_DEFINITIVO.md,
+  // decisiones de diseño cerradas) — por eso también actualiza el
+  // medios_contacto correspondiente si ya existe uno, además de dejar el
+  // registro en lista_supresion (que persiste aunque ese medio no exista
+  // todavía o el contacto se borre después).
+  async registrarSupresion(input: RegistroSupresionInput) {
+    const valorNormalizado = normalizarValor(input.tipo, input.valor);
+
+    try {
+      const [result] = await this.db.insert(listaSupresion).values({
+        tipo: input.tipo,
+        valorNormalizado,
+        motivo: input.motivo,
+        executionId: input.execution_id
+      });
+
+      await this.db.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(and(eq(mediosContacto.tipo, input.tipo), eq(mediosContacto.valorNormalizado, valorNormalizado)));
+
+      await this.db.insert(auditoria).values({
+        usuarioId: null,
+        entidad: "medio_contacto",
+        entidadId: result.insertId,
+        accion: "registrar_supresion",
+        despues: { execution_id: input.execution_id, tipo: input.tipo, motivo: input.motivo }
+      });
+
+      return { id: result.insertId, ya_existia: false as const };
+    } catch (error) {
+      if (isDuplicateEntry(error)) {
+        const [existing] = await this.db
+          .select({ id: listaSupresion.id })
+          .from(listaSupresion)
+          .where(and(eq(listaSupresion.tipo, input.tipo), eq(listaSupresion.valorNormalizado, valorNormalizado)))
+          .limit(1);
+        if (existing) return { id: existing.id, ya_existia: true as const };
+      }
+      throw error;
+    }
   }
 }

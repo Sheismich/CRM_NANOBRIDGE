@@ -1,12 +1,14 @@
-import { Body, Controller, Get, HttpCode, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { AutomatizacionService } from "./automatizacion.service.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import { ApiKeyGuard } from "../auth/guards/api-key.guard.js";
 import {
+  consultaSupresionQuerySchema,
   estadoProspectoInputSchema,
   incidenciaInputSchema,
   registroProspectoInputSchema,
+  registroSupresionInputSchema,
   scoringInputSchema,
   tareaAutomatizacionInputSchema,
   validacionInputSchema
@@ -75,6 +77,20 @@ export class AutomatizacionController {
   async tareas(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
     const input = tareaAutomatizacionInputSchema.parse(body);
     const result = await this.tareasService.createFromAutomation(input);
+    response.status(result.ya_existia ? 200 : 201);
+    return result;
+  }
+
+  @Get("supresion")
+  consultarSupresion(@Query() query: Record<string, unknown>) {
+    const input = consultaSupresionQuerySchema.parse(query);
+    return this.automatizacionService.consultarSupresion(input);
+  }
+
+  @Post("supresion")
+  async registrarSupresion(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
+    const input = registroSupresionInputSchema.parse(body);
+    const result = await this.automatizacionService.registrarSupresion(input);
     response.status(result.ya_existia ? 200 : 201);
     return result;
   }

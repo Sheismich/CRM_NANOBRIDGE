@@ -180,6 +180,17 @@ export const procesosFallidos = mysqlTable("procesos_fallidos", {
   index("idx_procesos_fallidos_resuelto").on(table.resuelto)
 ]);
 
+export const listaSupresion = mysqlTable("lista_supresion", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  tipo: mysqlEnum("tipo", ["correo", "telefono", "whatsapp"]).notNull(),
+  valorNormalizado: varchar("valor_normalizado", { length: 512 }).notNull(),
+  motivo: varchar("motivo", { length: 255 }).notNull(),
+  executionId: varchar("execution_id", { length: 100 }),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  uniqueIndex("uq_supresion_tipo_valor").on(table.tipo, table.valorNormalizado)
+]);
+
 export const parametrosAutomatizacion = mysqlTable("parametros_automatizacion", {
   clave: varchar("clave", { length: 80 }).primaryKey(),
   valor: json("valor").notNull(),

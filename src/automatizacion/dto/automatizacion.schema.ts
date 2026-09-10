@@ -58,6 +58,21 @@ export const validacionInputSchema = z.object({
 });
 export type ValidacionInput = z.infer<typeof validacionInputSchema>;
 
+// --- Supresión -----------------------------------------------------------------
+export const consultaSupresionQuerySchema = z.object({
+  tipo: z.enum(["correo", "telefono", "whatsapp"]),
+  valor: z.string().trim().min(1).max(512)
+});
+export type ConsultaSupresionQuery = z.infer<typeof consultaSupresionQuerySchema>;
+
+export const registroSupresionInputSchema = z.object({
+  execution_id: z.string().trim().min(1).max(100),
+  tipo: z.enum(["correo", "telefono", "whatsapp"]),
+  valor: z.string().trim().min(1).max(512),
+  motivo: z.string().trim().min(2).max(255)
+});
+export type RegistroSupresionInput = z.infer<typeof registroSupresionInputSchema>;
+
 // --- Estado de prospecto ---------------------------------------------------------
 export const estadoProspectoInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),

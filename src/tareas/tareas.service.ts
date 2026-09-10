@@ -3,14 +3,11 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, contactos, prospectos, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
+import { isDuplicateEntry } from "../shared/database-errors.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
 import type { TareaAutomatizacionInput } from "../automatizacion/dto/automatizacion.schema.js";
-
-function isDuplicateEntry(error: unknown): boolean {
-  return typeof error === "object" && error !== null && (error as { code?: string }).code === "ER_DUP_ENTRY";
-}
 
 export type ListTareasFilters = {
   estado?: "pendiente" | "en_progreso" | "cerrada" | "cancelada";
