@@ -45,7 +45,7 @@ No conectar un nodo HTTP hasta que su endpoint pase pruebas contra el stub. El r
 
 - Recibir respuestas desde webhook del proveedor de correo. Proveedor de correo (entrada y salida) pendiente de decidir.
 - Registrar respuesta mediante API.
-- Clasificar con IA o enviar a cola manual: el nodo llama siempre al endpoint "Respuesta clasificada"; si la clasificación es ambigua, ese mismo endpoint inserta el caso en `cola_clasificacion` para revisión manual del CRM — no hay un endpoint separado para esto.
+- Clasificar con IA o enviar a cola manual: el nodo llama siempre al endpoint "Respuesta clasificada"; si la clasificación es ambigua, ese mismo endpoint crea una `tarea` con `tipo=clasificacion` (no hay tabla `cola_clasificacion` aparte), que aparece en la bandeja `GET /api/v1/cola-clasificacion` para que el Equipo CRM la resuelva.
 - Procesar no interesado, baja, respuesta automática, ambigua e interesado.
 - Cuando la clasificación es "baja" o "no_contactar", invocar el endpoint de registro de supresión.
 - Programar recordatorios.
@@ -59,15 +59,27 @@ No conectar un nodo HTTP hasta que su endpoint pase pruebas contra el stub. El r
 - WhatsApp permanece apagado hasta contar con proveedor y reglas aprobadas.
 - Correo entra por webhook del proveedor; no usar polling.
 
-## B3 Webhooks de reingreso
+## B3 Webhook de reingreso
 
-Construir:
+Decisión (10-sep-2026): **un solo webhook**, no tres. `OutboxDispatcherService` (API) entrega todo tipo de evento saliente a una única `N8N_WEBHOOK_URL`, con el tipo de evento dentro del body:
 
-- `/webhook/v1/reingreso-validacion`
-- `/webhook/v1/reingreso-clasificacion`
-- `/webhook/v1/reactivacion`
+```json
+{
+  "tipo": "tarea_cerrada",
+  "entidad_tipo": "tarea",
+  "entidad_id": 3,
+  "payload": { "...": "..." }
+}
+```
 
-Todos validan API key e idempotencia por `evento_id`.
+Construir en n8n:
+
+- Un único nodo Webhook (`/webhook/v1/entrada` o el path que se defina), con auth por header (`X-API-Key` contra `WEBHOOK_ENTRADA_API_KEY`).
+- Justo después, un nodo **Switch** (o varios **IF**) que lea `{{$json.tipo}}` y branchee: `tarea_cerrada`, `prospecto_clasificado`, y los que se agreguen después (reactivación, etc.).
+
+No se construyen `/webhook/v1/reingreso-validacion`, `/webhook/v1/reingreso-clasificacion` ni `/webhook/v1/reactivacion` por separado — quedan reemplazados por el branching interno de este único webhook. El despachador de la API no cambia para acomodar esto (ya lo hacía así).
+
+Idempotencia: por ahora el despachador no manda un `evento_id` explícito en el body (usa `entidad_id` + `tipo` + timestamp del payload); si n8n necesita deduplicar del lado de la clasificación por sí mismo, puede usar `entidad_id` + `tipo` como clave.
 
 ## B4 Error Workflow
 
