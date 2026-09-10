@@ -165,79 +165,95 @@ export class AutomatizacionService {
     const correoNormalizado = input.contacto.correo ? normalizeEmail(input.contacto.correo) : null;
     const telefonoNormalizado = input.contacto.telefono ? normalizePhone(input.contacto.telefono) : null;
 
-    try {
-      return await this.db.transaction(async (tx) => {
-        // Coincidencia existente de correo o teléfono, sin importar si el
-        // contacto está activo: el UNIQUE(tipo, valor_normalizado) de
-        // medios_contacto es global, así que reusar aquí evita chocar con
-        // esa restricción al intentar insertar el mismo valor de nuevo.
-        const matches = await tx
-          .select({ contactoId: contactos.id, empresaId: contactos.empresaId, esCorreo: sql<number>`(${mediosContacto.tipo} = 'correo')` })
-          .from(mediosContacto)
-          .innerJoin(contactos, eq(contactos.id, mediosContacto.contactoId))
-          .where(sql`(${mediosContacto.tipo} = 'correo' AND ${mediosContacto.valorNormalizado} = ${correoNormalizado}) OR (${mediosContacto.tipo} = 'telefono' AND ${mediosContacto.valorNormalizado} = ${telefonoNormalizado})`)
-          .orderBy(sql`(${mediosContacto.tipo} = 'correo') DESC`)
-          .limit(1);
+    // Reintento acotado: un ER_DUP_ENTRY aquí puede ser (a) nuestro propio
+    // execution_id insertado por una llamada concurrente idéntica -- el
+    // retry-lookup de abajo lo resuelve -- o (b) el UNIQUE(tipo,
+    // valor_normalizado) de medios_contacto chocando con OTRA ejecución
+    // (execution_id distinto) que registró el mismo correo/teléfono justo
+    // entre nuestro pre-check de "matches" y el insert. Antes, (b) no tenía
+    // manejo: el retry-lookup por execution_id no encontraba nada (nuestro
+    // propio insert de prospecto también hizo rollback) y el error subía
+    // como 500 en vez de degradar a duplicado:true (hallazgo de code
+    // review, 10-sep-2026). Reintentar la transacción completa resuelve
+    // (b): en la siguiente vuelta, el pre-check de "matches" ya ve el
+    // contacto recién comprometido por la otra ejecución y toma la rama de
+    // deduplicado en vez de volver a intentar el insert.
+    const MAX_INTENTOS = 2;
+    for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+      try {
+        return await this.db.transaction(async (tx) => {
+          // Coincidencia existente de correo o teléfono, sin importar si el
+          // contacto está activo: el UNIQUE(tipo, valor_normalizado) de
+          // medios_contacto es global, así que reusar aquí evita chocar con
+          // esa restricción al intentar insertar el mismo valor de nuevo.
+          const matches = await tx
+            .select({ contactoId: contactos.id, empresaId: contactos.empresaId, esCorreo: sql<number>`(${mediosContacto.tipo} = 'correo')` })
+            .from(mediosContacto)
+            .innerJoin(contactos, eq(contactos.id, mediosContacto.contactoId))
+            .where(sql`(${mediosContacto.tipo} = 'correo' AND ${mediosContacto.valorNormalizado} = ${correoNormalizado}) OR (${mediosContacto.tipo} = 'telefono' AND ${mediosContacto.valorNormalizado} = ${telefonoNormalizado})`)
+            .orderBy(sql`(${mediosContacto.tipo} = 'correo') DESC`)
+            .limit(1);
 
-        let contactoId: number;
-        let empresaId: number;
-        const duplicado = matches.length > 0;
+          let contactoId: number;
+          let empresaId: number;
+          const duplicado = matches.length > 0;
 
-        if (duplicado) {
-          contactoId = matches[0]!.contactoId;
-          empresaId = matches[0]!.empresaId;
-        } else {
-          const [company] = await tx.insert(empresas).values({
-            nombreLegal: input.empresa.nombreLegal,
-            nombreComercial: input.empresa.nombreComercial ?? null,
-            giro: input.empresa.giro ?? null,
-            tamano: input.empresa.tamano ?? null,
-            region: input.empresa.region ?? null,
-            estado: input.empresa.estado ?? null,
-            ciudad: input.empresa.ciudad ?? null,
-            pais: input.empresa.pais.toUpperCase(),
-            sitioWeb: input.empresa.sitioWeb ?? null,
-            linkedinUrl: input.empresa.linkedinUrl ?? null
-          });
-          empresaId = company.insertId;
+          if (duplicado) {
+            contactoId = matches[0]!.contactoId;
+            empresaId = matches[0]!.empresaId;
+          } else {
+            const [company] = await tx.insert(empresas).values({
+              nombreLegal: input.empresa.nombreLegal,
+              nombreComercial: input.empresa.nombreComercial ?? null,
+              giro: input.empresa.giro ?? null,
+              tamano: input.empresa.tamano ?? null,
+              region: input.empresa.region ?? null,
+              estado: input.empresa.estado ?? null,
+              ciudad: input.empresa.ciudad ?? null,
+              pais: input.empresa.pais.toUpperCase(),
+              sitioWeb: input.empresa.sitioWeb ?? null,
+              linkedinUrl: input.empresa.linkedinUrl ?? null
+            });
+            empresaId = company.insertId;
 
-          const [contact] = await tx.insert(contactos).values({
-            empresaId,
-            nombre: input.contacto.nombre,
-            puesto: input.contacto.puesto ?? null,
-            area: input.contacto.area ?? null
-          });
-          contactoId = contact.insertId;
+            const [contact] = await tx.insert(contactos).values({
+              empresaId,
+              nombre: input.contacto.nombre,
+              puesto: input.contacto.puesto ?? null,
+              area: input.contacto.area ?? null
+            });
+            contactoId = contact.insertId;
 
-          const medios = [["correo", input.contacto.correo, correoNormalizado] as const, ["telefono", input.contacto.telefono, telefonoNormalizado] as const];
-          for (const [tipo, valor, normalizado] of medios) {
-            if (valor && normalizado) {
-              await tx.insert(mediosContacto).values({ contactoId, tipo, valor, valorNormalizado: normalizado, esPrincipal: tipo === "correo" });
+            const medios = [["correo", input.contacto.correo, correoNormalizado] as const, ["telefono", input.contacto.telefono, telefonoNormalizado] as const];
+            for (const [tipo, valor, normalizado] of medios) {
+              if (valor && normalizado) {
+                await tx.insert(mediosContacto).values({ contactoId, tipo, valor, valorNormalizado: normalizado, esPrincipal: tipo === "correo" });
+              }
             }
           }
-        }
 
-        const [prospecto] = await tx.insert(prospectos).values({
-          contactoId,
-          campanaId: input.campana_id ?? null,
-          executionId: input.execution_id,
-          estado: "capturado",
-          fuenteUrl: input.fuente_url ?? null,
-          confianza: input.confianza ?? null
+          const [prospecto] = await tx.insert(prospectos).values({
+            contactoId,
+            campanaId: input.campana_id ?? null,
+            executionId: input.execution_id,
+            estado: "capturado",
+            fuenteUrl: input.fuente_url ?? null,
+            confianza: input.confianza ?? null
+          });
+
+          await tx.insert(auditoria).values({
+            usuarioId: null,
+            entidad: "prospecto",
+            entidadId: prospecto.insertId,
+            accion: "registrar_automatizacion",
+            despues: { execution_id: input.execution_id, contacto_id: contactoId, empresa_id: empresaId, duplicado }
+          });
+
+          return { id: prospecto.insertId, contacto_id: contactoId, empresa_id: empresaId, duplicado, ya_existia: false as const };
         });
+      } catch (error) {
+        if (!isDuplicateEntry(error)) throw error;
 
-        await tx.insert(auditoria).values({
-          usuarioId: null,
-          entidad: "prospecto",
-          entidadId: prospecto.insertId,
-          accion: "registrar_automatizacion",
-          despues: { execution_id: input.execution_id, contacto_id: contactoId, empresa_id: empresaId, duplicado }
-        });
-
-        return { id: prospecto.insertId, contacto_id: contactoId, empresa_id: empresaId, duplicado, ya_existia: false as const };
-      });
-    } catch (error) {
-      if (isDuplicateEntry(error)) {
         const [retry] = await this.db
           .select({ id: prospectos.id, contactoId: prospectos.contactoId, empresaId: contactos.empresaId })
           .from(prospectos)
@@ -245,9 +261,15 @@ export class AutomatizacionService {
           .where(eq(prospectos.executionId, input.execution_id))
           .limit(1);
         if (retry) return { id: retry.id, contacto_id: retry.contactoId, empresa_id: retry.empresaId, duplicado: false, ya_existia: true as const };
+
+        if (intento === MAX_INTENTOS) throw error;
+        // No fue nuestro propio execution_id -- fue el UNIQUE de
+        // medios_contacto contra otra ejecución concurrente. Se reintenta
+        // la transacción completa en la siguiente vuelta del for.
       }
-      throw error;
     }
+
+    throw new HttpError(409, "No se pudo registrar el prospecto tras varios intentos concurrentes; reintenta");
   }
 
   // --- Consulta de prospecto para scoring ---------------------------------------
@@ -413,38 +435,53 @@ export class AutomatizacionService {
     const [prospecto] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
 
-    const [ultimo] = await this.db
-      .select({ numeroContacto: envios.numeroContacto })
-      .from(envios)
-      .where(and(eq(envios.prospectoId, input.prospecto_id), eq(envios.canal, input.canal)))
-      .orderBy(desc(envios.numeroContacto))
-      .limit(1);
-
-    const total = ultimo?.numeroContacto ?? 0;
-    if (total >= 3) throw new HttpError(409, "Máximo de 3 contactos alcanzado para este prospecto y canal");
-
     const ventanaVenceEn = addBusinessDays(new Date(), 5);
 
-    try {
-      const [result] = await this.db.insert(envios).values({
-        prospectoId: input.prospecto_id,
-        canal: input.canal,
-        numeroContacto: total + 1,
-        ventanaVenceEn,
-        executionId: input.execution_id
-      });
-      return { id: result.insertId, numero_contacto: total + 1, ventana_vence_en: ventanaVenceEn, ya_existia: false as const };
-    } catch (error) {
-      if (isDuplicateEntry(error)) {
+    // Reintento acotado: envios tiene UNIQUE(prospecto_id, canal,
+    // numero_contacto) (migración 011), así que si otra llamada
+    // concurrente (execution_id distinto) toma el mismo número de
+    // contacto entre este SELECT y el INSERT, el insert falla por
+    // duplicado en vez de crear dos filas con el mismo numero_contacto —
+    // se recalcula el total y se reintenta, en vez de confiar solo en el
+    // chequeo en memoria (hallazgo de code review, 10-sep-2026).
+    const MAX_INTENTOS = 3;
+    for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+      const [ultimo] = await this.db
+        .select({ numeroContacto: envios.numeroContacto })
+        .from(envios)
+        .where(and(eq(envios.prospectoId, input.prospecto_id), eq(envios.canal, input.canal)))
+        .orderBy(desc(envios.numeroContacto))
+        .limit(1);
+
+      const total = ultimo?.numeroContacto ?? 0;
+      if (total >= 3) throw new HttpError(409, "Máximo de 3 contactos alcanzado para este prospecto y canal");
+
+      try {
+        const [result] = await this.db.insert(envios).values({
+          prospectoId: input.prospecto_id,
+          canal: input.canal,
+          numeroContacto: total + 1,
+          ventanaVenceEn,
+          executionId: input.execution_id
+        });
+        return { id: result.insertId, numero_contacto: total + 1, ventana_vence_en: ventanaVenceEn, ya_existia: false as const };
+      } catch (error) {
+        if (!isDuplicateEntry(error)) throw error;
+
         const [retry] = await this.db
           .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn })
           .from(envios)
           .where(eq(envios.executionId, input.execution_id))
           .limit(1);
         if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, ventana_vence_en: retry.ventanaVenceEn, ya_existia: true as const };
+
+        // No fue nuestro propio execution_id el que chocó -- fue el
+        // UNIQUE de numero_contacto contra otra llamada concurrente.
+        // Se recalcula el total en la siguiente vuelta del for.
       }
-      throw error;
     }
+
+    throw new HttpError(409, "No se pudo registrar el envío tras varios intentos concurrentes; reintenta");
   }
 
   // --- Ventanas vencidas ---------------------------------------------------------------
@@ -471,7 +508,15 @@ export class AutomatizacionService {
         .from(envios)
         .where(and(eq(envios.ventanaEstado, "abierta"), lte(envios.ventanaVenceEn, sql`CURRENT_TIMESTAMP`)))
         .orderBy(envios.ventanaVenceEn)
-        .limit(query.limit);
+        .limit(query.limit)
+        // SELECT ... FOR UPDATE SKIP LOCKED: sin esto, dos polls
+        // concurrentes de n8n podían leer las mismas filas "abierta" antes
+        // de que cualquiera confirmara el UPDATE a "vencida" y reclamar el
+        // mismo envío dos veces (hallazgo de code review, 10-sep-2026).
+        // skipLocked en vez de bloquear: el segundo poll simplemente se
+        // queda con las filas que el primero no tomó, no espera a que
+        // termine su transacción.
+        .for("update", { skipLocked: true });
 
       if (rows.length === 0) return { data: [] };
 
@@ -499,15 +544,23 @@ export class AutomatizacionService {
   // porque nadie la cerró a tiempo, pero si ya pasó su fecha de fin no
   // debe seguir enviando.
   async consultarCampanaActiva(query: CampanaActivaQuery) {
+    // La comparación de "hoy" se hace con CURDATE() del propio MySQL, no
+    // con new Date() en Node: comparar contra una fecha calculada en JS
+    // (típicamente UTC) contra fecha_fin (DATE simple, sin hora) desalinea
+    // el resultado varias horas alrededor de medianoche según la zona
+    // horaria del servidor de la API.
     const [row] = await this.db
-      .select({ nombre: campanas.nombre, estado: campanas.estado, fechaFin: campanas.fechaFin })
+      .select({
+        nombre: campanas.nombre,
+        estado: campanas.estado,
+        vigente: sql<number>`(${campanas.fechaFin} IS NULL OR ${campanas.fechaFin} >= CURDATE())`
+      })
       .from(campanas)
       .where(eq(campanas.id, query.campana_id))
       .limit(1);
     if (!row) throw new HttpError(404, "Campaña no encontrada");
 
-    const hoy = new Date().toISOString().slice(0, 10);
-    const activa = row.estado === "activa" && (!row.fechaFin || row.fechaFin >= hoy);
+    const activa = row.estado === "activa" && !!row.vigente;
 
     return { campana_id: query.campana_id, nombre: row.nombre, estado: row.estado, activa };
   }
@@ -599,34 +652,42 @@ export class AutomatizacionService {
     const tardia = !ventanaAbierta;
     const envioId = ultimo?.id ?? null;
 
+    // Insert de respuestas + cierre de ventana + creación de la tarea
+    // comercial van en una sola transacción: antes eran escrituras
+    // sueltas, así que si createFromAutomation fallaba después de que ya
+    // se hubiera confirmado la respuesta (tardia=true), el retry
+    // idempotente entraba por el early-return de arriba y nunca reintentaba
+    // crear la tarea perdida (hallazgo de code review, 10-sep-2026).
     try {
-      const [result] = await this.db.insert(respuestas).values({
-        prospectoId: input.prospecto_id,
-        envioId,
-        canal: input.canal,
-        contenido: input.contenido ?? null,
-        tardia,
-        executionId: input.execution_id
-      });
-
-      if (ventanaAbierta && ultimo) {
-        await this.db.update(envios).set({ ventanaEstado: "cerrada" }).where(eq(envios.id, ultimo.id));
-      }
-
-      let tareaId: number | null = null;
-      if (tardia) {
-        const tarea = await this.tareasService.createFromAutomation({
-          execution_id: `resp-tardia-${input.execution_id}`,
-          prospecto_id: input.prospecto_id,
-          tipo: "seguimiento",
-          titulo: "Respuesta tardía de prospecto",
-          descripcion: input.contenido,
-          prioridad: "media"
+      return await this.db.transaction(async (tx) => {
+        const [result] = await tx.insert(respuestas).values({
+          prospectoId: input.prospecto_id,
+          envioId,
+          canal: input.canal,
+          contenido: input.contenido ?? null,
+          tardia,
+          executionId: input.execution_id
         });
-        tareaId = tarea.id;
-      }
 
-      return { id: result.insertId, envio_id: envioId, tardia, tarea_id: tareaId, ya_existia: false as const };
+        if (ventanaAbierta && ultimo) {
+          await tx.update(envios).set({ ventanaEstado: "cerrada" }).where(eq(envios.id, ultimo.id));
+        }
+
+        let tareaId: number | null = null;
+        if (tardia) {
+          const tarea = await this.tareasService.createFromAutomation({
+            execution_id: `resp-tardia-${input.execution_id}`,
+            prospecto_id: input.prospecto_id,
+            tipo: "seguimiento",
+            titulo: "Respuesta tardía de prospecto",
+            descripcion: input.contenido,
+            prioridad: "media"
+          }, tx);
+          tareaId = tarea.id;
+        }
+
+        return { id: result.insertId, envio_id: envioId, tardia, tarea_id: tareaId, ya_existia: false as const };
+      });
     } catch (error) {
       if (isDuplicateEntry(error)) {
         const [retry] = await this.db
@@ -680,47 +741,57 @@ export class AutomatizacionService {
       ambigua: "en_revision"
     };
 
-    try {
-      await this.db.update(respuestas).set({
-        estado: "clasificada",
-        clasificacion: input.clasificacion,
-        comentario: input.comentario ?? null,
-        executionIdClasificacion: input.execution_id,
-        clasificadoEn: sql`CURRENT_TIMESTAMP`
-      }).where(eq(respuestas.id, input.respuesta_id));
-    } catch (error) {
-      if (isDuplicateEntry(error)) {
-        throw new HttpError(409, "execution_id de clasificación ya usado en otra respuesta");
-      }
-      throw error;
-    }
-
     const nuevoEstado = estadoProspecto[input.clasificacion];
-    if (nuevoEstado) {
-      await this.db.update(prospectos).set({ estado: nuevoEstado }).where(eq(prospectos.id, respuesta.prospectoId));
-    }
 
-    let tareaId: number | null = null;
-    if (input.clasificacion === "ambigua") {
-      const tarea = await this.tareasService.createFromAutomation({
-        execution_id: `resp-clasif-${input.execution_id}`,
-        prospecto_id: respuesta.prospectoId,
-        tipo: "clasificacion",
-        titulo: "Clasificar respuesta ambigua",
-        descripcion: input.comentario ?? respuesta.contenido ?? undefined,
-        prioridad: "media"
+    // Update de respuestas + update de prospectos + creación de la tarea
+    // "ambigua" + auditoría van en una sola transacción: antes eran
+    // escrituras sueltas, así que si createFromAutomation fallaba después
+    // de confirmar respuestas.estado='clasificada', el retry idempotente
+    // entraba por el early-return de arriba (estado ya es 'clasificada') y
+    // nunca reintentaba crear la tarea perdida (hallazgo de code review,
+    // 10-sep-2026).
+    return this.db.transaction(async (tx) => {
+      try {
+        await tx.update(respuestas).set({
+          estado: "clasificada",
+          clasificacion: input.clasificacion,
+          comentario: input.comentario ?? null,
+          executionIdClasificacion: input.execution_id,
+          clasificadoEn: sql`CURRENT_TIMESTAMP`
+        }).where(eq(respuestas.id, input.respuesta_id));
+      } catch (error) {
+        if (isDuplicateEntry(error)) {
+          throw new HttpError(409, "execution_id de clasificación ya usado en otra respuesta");
+        }
+        throw error;
+      }
+
+      if (nuevoEstado) {
+        await tx.update(prospectos).set({ estado: nuevoEstado }).where(eq(prospectos.id, respuesta.prospectoId));
+      }
+
+      let tareaId: number | null = null;
+      if (input.clasificacion === "ambigua") {
+        const tarea = await this.tareasService.createFromAutomation({
+          execution_id: `resp-clasif-${input.execution_id}`,
+          prospecto_id: respuesta.prospectoId,
+          tipo: "clasificacion",
+          titulo: "Clasificar respuesta ambigua",
+          descripcion: input.comentario ?? respuesta.contenido ?? undefined,
+          prioridad: "media"
+        }, tx);
+        tareaId = tarea.id;
+      }
+
+      await tx.insert(auditoria).values({
+        usuarioId: null,
+        entidad: "respuesta",
+        entidadId: input.respuesta_id,
+        accion: "clasificar_respuesta",
+        despues: { execution_id: input.execution_id, clasificacion: input.clasificacion, tarea_id: tareaId }
       });
-      tareaId = tarea.id;
-    }
 
-    await this.db.insert(auditoria).values({
-      usuarioId: null,
-      entidad: "respuesta",
-      entidadId: input.respuesta_id,
-      accion: "clasificar_respuesta",
-      despues: { execution_id: input.execution_id, clasificacion: input.clasificacion, tarea_id: tareaId }
+      return { id: respuesta.id, prospecto_id: respuesta.prospectoId, clasificacion: input.clasificacion, tarea_id: tareaId, ya_existia: false as const };
     });
-
-    return { id: respuesta.id, prospecto_id: respuesta.prospectoId, clasificacion: input.clasificacion, tarea_id: tareaId, ya_existia: false as const };
   }
 }

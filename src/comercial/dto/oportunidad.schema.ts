@@ -22,7 +22,10 @@ export const listOportunidadesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   etapaClave: z.enum(ETAPA_CLAVES).optional(),
-  cerrada: z.coerce.boolean().optional(),
+  // z.coerce.boolean() hace Boolean(valor) sobre el string crudo -- "false"
+  // es un string no vacío, así que coercionaría a true. Mapeo explícito en
+  // vez de confiar en la coerción automática de zod.
+  cerrada: z.enum(["true", "false"]).optional().transform((value) => (value === undefined ? undefined : value === "true")),
   responsableId: z.coerce.number().int().positive().optional()
 });
 export type ListOportunidadesQuery = z.infer<typeof listOportunidadesQuerySchema>;

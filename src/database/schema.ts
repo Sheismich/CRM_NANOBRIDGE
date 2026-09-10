@@ -257,6 +257,7 @@ export const envios = mysqlTable("envios", {
   enviadoEn: datetime("enviado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
   uniqueIndex("uq_envios_execution_id").on(table.executionId),
+  uniqueIndex("uq_envios_prospecto_canal_numero").on(table.prospectoId, table.canal, table.numeroContacto),
   index("idx_envios_prospecto_canal").on(table.prospectoId, table.canal)
 ]);
 

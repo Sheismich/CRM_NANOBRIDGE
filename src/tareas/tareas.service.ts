@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
+import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, contactos, prospectos, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
@@ -185,14 +185,21 @@ export class TareasService {
   // (revisión manual tras agotar intentos de corrección) y 10 (alerta con
   // SLA para el Equipo CRM). Sin responsable_id ni creada_por (bandeja sin
   // asignar); idempotente por execution_id.
-  async createFromAutomation(input: TareaAutomatizacionInput) {
-    const [existing] = await this.db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
+  //
+  // `db` es opcional (default this.db) para que otro servicio que ya abrió
+  // su propia transacción (p. ej. AutomatizacionService.registrarRespuesta)
+  // pueda pasar su `tx` y que la tarea se cree atómicamente junto con el
+  // resto de escrituras, en vez de quedar como una escritura suelta que
+  // puede sobrevivir aunque el resto haga rollback (o viceversa) — hallazgo
+  // de code review, 10-sep-2026.
+  async createFromAutomation(input: TareaAutomatizacionInput, db: DrizzleDb | DrizzleTx = this.db) {
+    const [existing] = await db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
     if (existing) return { id: existing.id, ya_existia: true as const };
 
     let contactoId: number | null = null;
     let empresaId: number | null = null;
     if (input.prospecto_id) {
-      const [prospecto] = await this.db
+      const [prospecto] = await db
         .select({ id: prospectos.id, contactoId: contactos.id, empresaId: contactos.empresaId })
         .from(prospectos)
         .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
@@ -204,7 +211,7 @@ export class TareasService {
     }
 
     try {
-      const [result] = await this.db.insert(tareas).values({
+      const [result] = await db.insert(tareas).values({
         tipo: input.tipo,
         titulo: input.titulo,
         descripcion: input.descripcion ?? null,
@@ -220,7 +227,7 @@ export class TareasService {
       return { id: result.insertId, ya_existia: false as const };
     } catch (error) {
       if (isDuplicateEntry(error)) {
-        const [retry] = await this.db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
+        const [retry] = await db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
         if (retry) return { id: retry.id, ya_existia: true as const };
       }
       throw error;
