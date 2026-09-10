@@ -93,6 +93,12 @@ export const registroEnvioInputSchema = z.object({
 });
 export type RegistroEnvioInput = z.infer<typeof registroEnvioInputSchema>;
 
+// --- Ventanas vencidas -------------------------------------------------------------
+export const ventanasVencidasQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50)
+});
+export type VentanasVencidasQuery = z.infer<typeof ventanasVencidasQuerySchema>;
+
 // --- Campaña activa --------------------------------------------------------------
 export const campanaActivaQuerySchema = z.object({
   campana_id: z.coerce.number().int().positive()

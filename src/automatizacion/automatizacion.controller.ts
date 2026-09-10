@@ -15,6 +15,7 @@ import {
   scoringInputSchema,
   tareaAutomatizacionInputSchema,
   validacionInputSchema,
+  ventanasVencidasQuerySchema,
   verificacionEnvioQuerySchema
 } from "./dto/automatizacion.schema.js";
 
@@ -103,6 +104,12 @@ export class AutomatizacionController {
     const result = await this.automatizacionService.registrarEnvio(input);
     response.status(result.ya_existia ? 200 : 201);
     return result;
+  }
+
+  @Get("envios/vencidas")
+  ventanasVencidas(@Query() query: Record<string, unknown>) {
+    const input = ventanasVencidasQuerySchema.parse(query);
+    return this.automatizacionService.listarVentanasVencidas(input);
   }
 
   @Get("campanas/activa")

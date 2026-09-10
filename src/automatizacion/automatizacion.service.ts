@@ -1,11 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, prospectos, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
-import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
+import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
 function normalizarValor(tipo: "correo" | "telefono" | "whatsapp", valor: string): string {
   return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
@@ -440,6 +440,49 @@ export class AutomatizacionService {
       }
       throw error;
     }
+  }
+
+  // --- Ventanas vencidas ---------------------------------------------------------------
+  // B2 (PLAN_API_DEFINITIVO.md #15): n8n hace polling de esto (política de
+  // contactos: 5 días hábiles de espera) para decidir el siguiente paso de
+  // cada prospecto en espera. Semántica de "reclamar": las filas devueltas
+  // se marcan vencida en la misma transacción, para que un segundo poll
+  // concurrente (o el siguiente ciclo) no las vuelva a traer. Si n8n falla
+  // después de reclamarlas, el Error Workflow (B4) es la red de
+  // recuperación, no un reintento automático de este endpoint.
+  // es_ultimo_contacto=true (numero_contacto ya llegó a 3) le dice a n8n
+  // que debe marcar inactividad (Estado de prospecto) en vez de mandar
+  // otro recordatorio.
+  async listarVentanasVencidas(query: VentanasVencidasQuery) {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({
+          id: envios.id,
+          prospectoId: envios.prospectoId,
+          canal: envios.canal,
+          numeroContacto: envios.numeroContacto,
+          enviadoEn: envios.enviadoEn
+        })
+        .from(envios)
+        .where(and(eq(envios.ventanaEstado, "abierta"), lte(envios.ventanaVenceEn, sql`CURRENT_TIMESTAMP`)))
+        .orderBy(envios.ventanaVenceEn)
+        .limit(query.limit);
+
+      if (rows.length === 0) return { data: [] };
+
+      await tx.update(envios).set({ ventanaEstado: "vencida" }).where(inArray(envios.id, rows.map((row) => row.id)));
+
+      return {
+        data: rows.map((row) => ({
+          envio_id: row.id,
+          prospecto_id: row.prospectoId,
+          canal: row.canal,
+          numero_contacto: row.numeroContacto,
+          es_ultimo_contacto: row.numeroContacto >= 3,
+          enviado_en: row.enviadoEn
+        }))
+      };
+    });
   }
 
   // --- Campaña activa ----------------------------------------------------------------
