@@ -5,7 +5,7 @@ import { auditoria, campanas, contactos, empresas, incidencias, listaSupresion, 
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
-import type { ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput } from "./dto/automatizacion.schema.js";
+import type { CampanaActivaQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput } from "./dto/automatizacion.schema.js";
 
 function normalizarValor(tipo: "correo" | "telefono" | "whatsapp", valor: string): string {
   return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
@@ -283,6 +283,28 @@ export class AutomatizacionService {
     });
 
     return { id: input.prospecto_id, estado: input.estado, motivo: input.motivo };
+  }
+
+  // --- Campaña activa ----------------------------------------------------------------
+  // B1, paso previo a "Registro de envío" (PLAN_N8N_DEFINITIVO.md): n8n
+  // consulta esto justo antes de disparar un envío para no seguir
+  // mandando mensajes de una campaña que ya se pausó o finalizó después de
+  // que el prospecto entró al flujo. `activa` combina el campo `estado`
+  // con `fecha_fin`: una campaña puede seguir marcada "activa" en la BD
+  // porque nadie la cerró a tiempo, pero si ya pasó su fecha de fin no
+  // debe seguir enviando.
+  async consultarCampanaActiva(query: CampanaActivaQuery) {
+    const [row] = await this.db
+      .select({ nombre: campanas.nombre, estado: campanas.estado, fechaFin: campanas.fechaFin })
+      .from(campanas)
+      .where(eq(campanas.id, query.campana_id))
+      .limit(1);
+    if (!row) throw new HttpError(404, "Campaña no encontrada");
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    const activa = row.estado === "activa" && (!row.fechaFin || row.fechaFin >= hoy);
+
+    return { campana_id: query.campana_id, nombre: row.nombre, estado: row.estado, activa };
   }
 
   // --- Consulta de supresión -------------------------------------------------------

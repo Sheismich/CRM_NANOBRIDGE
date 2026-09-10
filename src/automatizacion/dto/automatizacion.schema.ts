@@ -73,6 +73,12 @@ export const registroSupresionInputSchema = z.object({
 });
 export type RegistroSupresionInput = z.infer<typeof registroSupresionInputSchema>;
 
+// --- Campaña activa --------------------------------------------------------------
+export const campanaActivaQuerySchema = z.object({
+  campana_id: z.coerce.number().int().positive()
+});
+export type CampanaActivaQuery = z.infer<typeof campanaActivaQuerySchema>;
+
 // --- Estado de prospecto ---------------------------------------------------------
 export const estadoProspectoInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),

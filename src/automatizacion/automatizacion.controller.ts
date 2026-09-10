@@ -4,6 +4,7 @@ import { AutomatizacionService } from "./automatizacion.service.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import { ApiKeyGuard } from "../auth/guards/api-key.guard.js";
 import {
+  campanaActivaQuerySchema,
   consultaSupresionQuerySchema,
   estadoProspectoInputSchema,
   incidenciaInputSchema,
@@ -79,6 +80,12 @@ export class AutomatizacionController {
     const result = await this.tareasService.createFromAutomation(input);
     response.status(result.ya_existia ? 200 : 201);
     return result;
+  }
+
+  @Get("campanas/activa")
+  campanaActiva(@Query() query: Record<string, unknown>) {
+    const input = campanaActivaQuerySchema.parse(query);
+    return this.automatizacionService.consultarCampanaActiva(input);
   }
 
   @Get("supresion")
