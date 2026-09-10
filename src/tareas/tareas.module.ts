@@ -8,6 +8,9 @@ import { OutboxModule } from "../outbox/outbox.module.js";
 @Module({
   imports: [AuthModule, OutboxModule],
   controllers: [TareasController, ColaClasificacionController],
-  providers: [TareasService]
+  providers: [TareasService],
+  // Exportado para que AutomatizacionModule reuse createFromAutomation()
+  // en vez de duplicar el acceso a la tabla tareas.
+  exports: [TareasService]
 })
 export class TareasModule {}

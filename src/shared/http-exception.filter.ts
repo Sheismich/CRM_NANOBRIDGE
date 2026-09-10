@@ -1,5 +1,6 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from "@nestjs/common";
 import type { Response } from "express";
+import { ZodError } from "zod";
 import { HttpError } from "./http-error.js";
 
 /**
@@ -9,8 +10,10 @@ import { HttpError } from "./http-error.js";
  * - HttpError propio -> { error: "request_error", message } con su status.
  * - 404 automático de Nest (ninguna ruta coincide) -> el mismo cuerpo que
  *   ya devolvía el catch-all de Express/Next.
- * - Cualquier otro error (incluida una validación de Zod fallida) -> 500
- *   genérico, igual que las versiones anteriores.
+ * - ZodError (body/query inválido) -> 400 con el detalle de campos. Esto
+ *   faltaba (caía al 500 genérico) tanto en la versión de Express como en
+ *   la de Next.js; se corrige aquí también.
+ * - Cualquier otro error -> 500 genérico.
  */
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -19,6 +22,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpError) {
       response.status(exception.status).json({ error: "request_error", message: exception.message });
+      return;
+    }
+
+    if (exception instanceof ZodError) {
+      response.status(400).json({ error: "validation_error", message: "Datos inválidos", details: exception.issues });
       return;
     }
 

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, contactos, empresas, mediosContacto } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
+import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CompanyInput } from "./dto/empresa.schema.js";
 
@@ -10,8 +11,6 @@ import type { CompanyInput } from "./dto/empresa.schema.js";
 // propietario_id, medio_tipo, etc.) aunque las columnas de
 // src/database/schema.ts estén en camelCase: es el mismo contrato HTTP que
 // ya consumen n8n y el CRM, solo cambió cómo se arman las queries por dentro.
-function normalizeEmail(value: string) { return value.trim().toLowerCase(); }
-function normalizePhone(value: string) { return value.replace(/\D/g, ""); }
 
 @Injectable()
 export class EmpresasService {

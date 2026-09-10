@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, char, datetime, int, json, mysqlEnum, mysqlTable, uniqueIndex, varchar, decimal, index, text } from "drizzle-orm/mysql-core";
+import { bigint, boolean, char, date, datetime, int, json, mysqlEnum, mysqlTable, uniqueIndex, varchar, decimal, index, text } from "drizzle-orm/mysql-core";
 
 /**
  * Espejo tipado de src/database/migrations/001_initial_schema.sql.
@@ -95,10 +95,22 @@ export const mediosContacto = mysqlTable("medios_contacto", {
   index("idx_medios_contacto").on(table.contactoId)
 ]);
 
+export const campanas = mysqlTable("campanas", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  nombre: varchar("nombre", { length: 160 }).notNull(),
+  canal: mysqlEnum("canal", ["correo", "whatsapp"]).notNull().default("correo"),
+  estado: mysqlEnum("estado", ["borrador", "activa", "pausada", "finalizada"]).notNull().default("borrador"),
+  fechaInicio: date("fecha_inicio", { mode: "string" }),
+  fechaFin: date("fecha_fin", { mode: "string" }),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
 export const prospectos = mysqlTable("prospectos", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   contactoId: bigint("contacto_id", { mode: "number", unsigned: true }).notNull(),
   campanaId: bigint("campana_id", { mode: "number", unsigned: true }),
+  executionId: varchar("execution_id", { length: 100 }),
   estado: varchar("estado", { length: 60 }).notNull().default("capturado"),
   score: decimal("score", { precision: 5, scale: 2 }),
   prioridad: mysqlEnum("prioridad", ["alta", "media", "baja"]),
@@ -117,15 +129,21 @@ export const tareas = mysqlTable("tareas", {
   descripcion: text("descripcion"),
   estado: mysqlEnum("estado", ["pendiente", "en_progreso", "cerrada", "cancelada"]).notNull().default("pendiente"),
   prioridad: mysqlEnum("prioridad", ["baja", "media", "alta", "urgente"]).notNull().default("media"),
-  responsableId: bigint("responsable_id", { mode: "number", unsigned: true }).notNull(),
+  // Nullable desde 006_tareas_automatizacion.sql: n8n crea tareas sin
+  // responsable (bandeja sin asignar), a diferencia de las que crea un
+  // usuario de sesión en POST /api/v1/tareas.
+  responsableId: bigint("responsable_id", { mode: "number", unsigned: true }),
   empresaId: bigint("empresa_id", { mode: "number", unsigned: true }),
   contactoId: bigint("contacto_id", { mode: "number", unsigned: true }),
   prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }),
+  executionId: varchar("execution_id", { length: 100 }),
   fechaLimite: datetime("fecha_limite"),
   clasificacion: varchar("clasificacion", { length: 60 }),
   resultado: text("resultado"),
   cerradaEn: datetime("cerrada_en"),
-  creadaPor: bigint("creada_por", { mode: "number", unsigned: true }).notNull(),
+  // Nullable desde 006_tareas_automatizacion.sql: NULL = creada por
+  // automatización (n8n), no por un usuario de sesión.
+  creadaPor: bigint("creada_por", { mode: "number", unsigned: true }),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
@@ -160,6 +178,44 @@ export const procesosFallidos = mysqlTable("procesos_fallidos", {
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
   index("idx_procesos_fallidos_resuelto").on(table.resuelto)
+]);
+
+export const parametrosAutomatizacion = mysqlTable("parametros_automatizacion", {
+  clave: varchar("clave", { length: 80 }).primaryKey(),
+  valor: json("valor").notNull(),
+  descripcion: varchar("descripcion", { length: 255 }),
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+export const resultadosScoring = mysqlTable("resultados_scoring", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  executionId: varchar("execution_id", { length: 100 }).notNull(),
+  prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }).notNull(),
+  score: decimal("score", { precision: 5, scale: 2 }).notNull(),
+  prioridad: mysqlEnum("prioridad", ["alta", "media", "baja"]),
+  confianza: mysqlEnum("confianza", ["alta", "media", "baja"]),
+  metodo: mysqlEnum("metodo", ["gemini", "reglas"]).notNull().default("gemini"),
+  detalle: json("detalle"),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  uniqueIndex("uq_resultados_scoring_execution_id").on(table.executionId),
+  index("idx_resultados_scoring_prospecto").on(table.prospectoId)
+]);
+
+export const incidencias = mysqlTable("incidencias", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  executionId: varchar("execution_id", { length: 100 }),
+  prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }),
+  tipo: varchar("tipo", { length: 60 }).notNull(),
+  severidad: mysqlEnum("severidad", ["baja", "media", "alta"]).notNull().default("media"),
+  mensaje: text("mensaje").notNull(),
+  detalle: json("detalle"),
+  estado: mysqlEnum("estado", ["abierta", "resuelta"]).notNull().default("abierta"),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  index("idx_incidencias_prospecto").on(table.prospectoId),
+  index("idx_incidencias_estado").on(table.estado)
 ]);
 
 export const auditoria = mysqlTable("auditoria", {

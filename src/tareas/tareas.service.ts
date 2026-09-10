@@ -1,11 +1,16 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, tareas } from "../database/schema.js";
+import { auditoria, contactos, prospectos, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
+import type { TareaAutomatizacionInput } from "../automatizacion/dto/automatizacion.schema.js";
+
+function isDuplicateEntry(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: string }).code === "ER_DUP_ENTRY";
+}
 
 export type ListTareasFilters = {
   estado?: "pendiente" | "en_progreso" | "cerrada" | "cancelada";
@@ -176,5 +181,52 @@ export class TareasService {
         despues: { clasificacion: input.clasificacion }
       });
     });
+  }
+
+  // Endpoint de automatización (n8n), no de sesión: PLAN_API_DEFINITIVO.md,
+  // endpoint "Tareas" de la lista de 17. Diagrama PARTE 1/2, pasos 3a
+  // (revisión manual tras agotar intentos de corrección) y 10 (alerta con
+  // SLA para el Equipo CRM). Sin responsable_id ni creada_por (bandeja sin
+  // asignar); idempotente por execution_id.
+  async createFromAutomation(input: TareaAutomatizacionInput) {
+    const [existing] = await this.db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
+    if (existing) return { id: existing.id, ya_existia: true as const };
+
+    let contactoId: number | null = null;
+    let empresaId: number | null = null;
+    if (input.prospecto_id) {
+      const [prospecto] = await this.db
+        .select({ id: prospectos.id, contactoId: contactos.id, empresaId: contactos.empresaId })
+        .from(prospectos)
+        .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+        .where(eq(prospectos.id, input.prospecto_id))
+        .limit(1);
+      if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
+      contactoId = prospecto.contactoId;
+      empresaId = prospecto.empresaId;
+    }
+
+    try {
+      const [result] = await this.db.insert(tareas).values({
+        tipo: input.tipo,
+        titulo: input.titulo,
+        descripcion: input.descripcion ?? null,
+        prioridad: input.prioridad,
+        responsableId: null,
+        empresaId,
+        contactoId,
+        prospectoId: input.prospecto_id ?? null,
+        executionId: input.execution_id,
+        fechaLimite: input.fecha_limite ? new Date(input.fecha_limite) : null,
+        creadaPor: null
+      });
+      return { id: result.insertId, ya_existia: false as const };
+    } catch (error) {
+      if (isDuplicateEntry(error)) {
+        const [retry] = await this.db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
+        if (retry) return { id: retry.id, ya_existia: true as const };
+      }
+      throw error;
+    }
   }
 }
