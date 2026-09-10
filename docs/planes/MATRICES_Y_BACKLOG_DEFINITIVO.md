@@ -33,8 +33,8 @@
 1. Tareas y cola de clasificación.
 2. Endpoints de automatización.
 3. Sustitución de MOCK por HTTP.
-4. Historial de interacciones.
-5. Oportunidades y pipeline.
+4. Oportunidades y pipeline.
+5. Historial de interacciones (reordenado 10-sep-2026: es una vista de lectura que agrega lo que generan otros módulos — PLAN_CRM_DEFINITIVO.md #4; construirla antes de Oportunidades dejaría `oportunidad_id` nullable sin FK y habría que retrabajarla).
 6. Cotizaciones.
 7. Documentos.
 8. Métricas y dashboards.
