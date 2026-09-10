@@ -205,6 +205,26 @@ export const envios = mysqlTable("envios", {
   index("idx_envios_prospecto_canal").on(table.prospectoId, table.canal)
 ]);
 
+export const respuestas = mysqlTable("respuestas", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }).notNull(),
+  envioId: bigint("envio_id", { mode: "number", unsigned: true }),
+  canal: mysqlEnum("canal", ["correo", "whatsapp"]).notNull().default("correo"),
+  contenido: text("contenido"),
+  tardia: boolean("tardia").notNull().default(false),
+  estado: mysqlEnum("estado", ["pendiente_clasificacion", "clasificada"]).notNull().default("pendiente_clasificacion"),
+  clasificacion: mysqlEnum("clasificacion", ["interesado", "no_interesado", "baja", "automatica", "ambigua"]),
+  comentario: varchar("comentario", { length: 500 }),
+  executionId: varchar("execution_id", { length: 100 }),
+  executionIdClasificacion: varchar("execution_id_clasificacion", { length: 100 }),
+  recibidoEn: datetime("recibido_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  clasificadoEn: datetime("clasificado_en")
+}, (table) => [
+  uniqueIndex("uq_respuestas_execution_id").on(table.executionId),
+  uniqueIndex("uq_respuestas_execution_id_clasificacion").on(table.executionIdClasificacion),
+  index("idx_respuestas_prospecto").on(table.prospectoId)
+]);
+
 export const parametrosAutomatizacion = mysqlTable("parametros_automatizacion", {
   clave: varchar("clave", { length: 80 }).primaryKey(),
   valor: json("valor").notNull(),

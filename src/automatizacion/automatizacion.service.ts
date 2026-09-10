@@ -1,11 +1,12 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, prospectos, resultadosScoring } from "../database/schema.js";
+import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
-import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
+import { TareasService } from "../tareas/tareas.service.js";
+import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
 function normalizarValor(tipo: "correo" | "telefono" | "whatsapp", valor: string): string {
   return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
@@ -38,7 +39,8 @@ const CATALOGOS: Record<string, { tabla: string; columna: string }> = {
   canal_campana: { tabla: "campanas", columna: "canal" },
   estado_campana: { tabla: "campanas", columna: "estado" },
   tarea_tipo: { tabla: "tareas", columna: "tipo" },
-  tarea_prioridad: { tabla: "tareas", columna: "prioridad" }
+  tarea_prioridad: { tabla: "tareas", columna: "prioridad" },
+  clasificacion_respuesta: { tabla: "respuestas", columna: "clasificacion" }
 };
 
 function parseEnumValues(columnType: string): string[] {
@@ -49,7 +51,10 @@ function parseEnumValues(columnType: string): string[] {
 
 @Injectable()
 export class AutomatizacionService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDb,
+    private readonly tareasService: TareasService
+  ) {}
 
   // --- Parámetros ----------------------------------------------------------
   async obtenerParametros() {
@@ -561,5 +566,161 @@ export class AutomatizacionService {
       }
       throw error;
     }
+  }
+
+  // --- Respuesta recibida ---------------------------------------------------------------
+  // B2 (PLAN_API_DEFINITIVO.md #16): n8n llama esto en cuanto llega una
+  // respuesta del proveedor de correo/WhatsApp. Cierra la ventana de
+  // espera abierta del último envío (para que "Ventanas vencidas" deje de
+  // programar recordatorios) o, si no hay ventana abierta para ese
+  // prospecto+canal, la marca como tardía y crea una tarea comercial en
+  // vez de tocar el outbound (PLAN_N8N_DEFINITIVO.md: "procesar
+  // respuestas tardías: crear tarea comercial, no reiniciar
+  // automáticamente el outbound").
+  async registrarRespuesta(input: RespuestaRecibidaInput) {
+    const [existing] = await this.db
+      .select({ id: respuestas.id, envioId: respuestas.envioId, tardia: respuestas.tardia })
+      .from(respuestas)
+      .where(eq(respuestas.executionId, input.execution_id))
+      .limit(1);
+    if (existing) return { id: existing.id, envio_id: existing.envioId, tardia: existing.tardia, ya_existia: true as const };
+
+    const [prospecto] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
+    if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
+
+    const [ultimo] = await this.db
+      .select({ id: envios.id, ventanaEstado: envios.ventanaEstado })
+      .from(envios)
+      .where(and(eq(envios.prospectoId, input.prospecto_id), eq(envios.canal, input.canal)))
+      .orderBy(desc(envios.numeroContacto))
+      .limit(1);
+
+    const ventanaAbierta = ultimo?.ventanaEstado === "abierta";
+    const tardia = !ventanaAbierta;
+    const envioId = ultimo?.id ?? null;
+
+    try {
+      const [result] = await this.db.insert(respuestas).values({
+        prospectoId: input.prospecto_id,
+        envioId,
+        canal: input.canal,
+        contenido: input.contenido ?? null,
+        tardia,
+        executionId: input.execution_id
+      });
+
+      if (ventanaAbierta && ultimo) {
+        await this.db.update(envios).set({ ventanaEstado: "cerrada" }).where(eq(envios.id, ultimo.id));
+      }
+
+      let tareaId: number | null = null;
+      if (tardia) {
+        const tarea = await this.tareasService.createFromAutomation({
+          execution_id: `resp-tardia-${input.execution_id}`,
+          prospecto_id: input.prospecto_id,
+          tipo: "seguimiento",
+          titulo: "Respuesta tardía de prospecto",
+          descripcion: input.contenido,
+          prioridad: "media"
+        });
+        tareaId = tarea.id;
+      }
+
+      return { id: result.insertId, envio_id: envioId, tardia, tarea_id: tareaId, ya_existia: false as const };
+    } catch (error) {
+      if (isDuplicateEntry(error)) {
+        const [retry] = await this.db
+          .select({ id: respuestas.id, envioId: respuestas.envioId, tardia: respuestas.tardia })
+          .from(respuestas)
+          .where(eq(respuestas.executionId, input.execution_id))
+          .limit(1);
+        if (retry) return { id: retry.id, envio_id: retry.envioId, tardia: retry.tardia, ya_existia: true as const };
+      }
+      throw error;
+    }
+  }
+
+  // --- Respuesta clasificada -------------------------------------------------------------
+  // B2 (PLAN_API_DEFINITIVO.md #17): recibe el veredicto (IA o el criterio
+  // que use n8n) y decide qué pasa con el prospecto. El caso "ambigua" no
+  // fija un estado final: crea una tarea tipo=clasificacion que cae en la
+  // bandeja `/cola-clasificacion` para que el Equipo CRM decida
+  // manualmente (PLAN_N8N_DEFINITIVO.md B2). El resto de los casos
+  // (interesado, no_interesado, baja, automatica) es responsabilidad de
+  // este endpoint solo hasta fijar el estado del prospecto — invocar
+  // Registro de supresión cuando la clasificación es "baja" lo hace el
+  // propio flujo de n8n como paso aparte, no esta función.
+  async clasificarRespuesta(input: RespuestaClasificadaInput) {
+    const [respuesta] = await this.db
+      .select({
+        id: respuestas.id,
+        prospectoId: respuestas.prospectoId,
+        contenido: respuestas.contenido,
+        estado: respuestas.estado,
+        clasificacion: respuestas.clasificacion,
+        executionIdClasificacion: respuestas.executionIdClasificacion
+      })
+      .from(respuestas)
+      .where(eq(respuestas.id, input.respuesta_id))
+      .limit(1);
+    if (!respuesta) throw new HttpError(404, "Respuesta no encontrada");
+
+    if (respuesta.estado === "clasificada") {
+      if (respuesta.executionIdClasificacion === input.execution_id) {
+        return { id: respuesta.id, prospecto_id: respuesta.prospectoId, clasificacion: respuesta.clasificacion, tarea_id: null, ya_existia: true as const };
+      }
+      throw new HttpError(409, "La respuesta ya fue clasificada");
+    }
+
+    const estadoProspecto: Record<typeof input.clasificacion, string | null> = {
+      interesado: "interesado",
+      no_interesado: "no_interesado",
+      baja: "baja",
+      automatica: null,
+      ambigua: "en_revision"
+    };
+
+    try {
+      await this.db.update(respuestas).set({
+        estado: "clasificada",
+        clasificacion: input.clasificacion,
+        comentario: input.comentario ?? null,
+        executionIdClasificacion: input.execution_id,
+        clasificadoEn: sql`CURRENT_TIMESTAMP`
+      }).where(eq(respuestas.id, input.respuesta_id));
+    } catch (error) {
+      if (isDuplicateEntry(error)) {
+        throw new HttpError(409, "execution_id de clasificación ya usado en otra respuesta");
+      }
+      throw error;
+    }
+
+    const nuevoEstado = estadoProspecto[input.clasificacion];
+    if (nuevoEstado) {
+      await this.db.update(prospectos).set({ estado: nuevoEstado }).where(eq(prospectos.id, respuesta.prospectoId));
+    }
+
+    let tareaId: number | null = null;
+    if (input.clasificacion === "ambigua") {
+      const tarea = await this.tareasService.createFromAutomation({
+        execution_id: `resp-clasif-${input.execution_id}`,
+        prospecto_id: respuesta.prospectoId,
+        tipo: "clasificacion",
+        titulo: "Clasificar respuesta ambigua",
+        descripcion: input.comentario ?? respuesta.contenido ?? undefined,
+        prioridad: "media"
+      });
+      tareaId = tarea.id;
+    }
+
+    await this.db.insert(auditoria).values({
+      usuarioId: null,
+      entidad: "respuesta",
+      entidadId: input.respuesta_id,
+      accion: "clasificar_respuesta",
+      despues: { execution_id: input.execution_id, clasificacion: input.clasificacion, tarea_id: tareaId }
+    });
+
+    return { id: respuesta.id, prospecto_id: respuesta.prospectoId, clasificacion: input.clasificacion, tarea_id: tareaId, ya_existia: false as const };
   }
 }

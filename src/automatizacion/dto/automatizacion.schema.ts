@@ -93,6 +93,24 @@ export const registroEnvioInputSchema = z.object({
 });
 export type RegistroEnvioInput = z.infer<typeof registroEnvioInputSchema>;
 
+// --- Respuesta recibida --------------------------------------------------------------
+export const respuestaRecibidaInputSchema = z.object({
+  execution_id: z.string().trim().min(1).max(100),
+  prospecto_id: z.coerce.number().int().positive(),
+  canal: z.enum(["correo", "whatsapp"]).default("correo"),
+  contenido: z.string().trim().max(8000).optional()
+});
+export type RespuestaRecibidaInput = z.infer<typeof respuestaRecibidaInputSchema>;
+
+// --- Respuesta clasificada -------------------------------------------------------------
+export const respuestaClasificadaInputSchema = z.object({
+  execution_id: z.string().trim().min(1).max(100),
+  respuesta_id: z.coerce.number().int().positive(),
+  clasificacion: z.enum(["interesado", "no_interesado", "baja", "automatica", "ambigua"]),
+  comentario: z.string().trim().max(500).optional()
+});
+export type RespuestaClasificadaInput = z.infer<typeof respuestaClasificadaInputSchema>;
+
 // --- Ventanas vencidas -------------------------------------------------------------
 export const ventanasVencidasQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50)

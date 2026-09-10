@@ -12,6 +12,8 @@ import {
   registroEnvioInputSchema,
   registroProspectoInputSchema,
   registroSupresionInputSchema,
+  respuestaClasificadaInputSchema,
+  respuestaRecibidaInputSchema,
   scoringInputSchema,
   tareaAutomatizacionInputSchema,
   validacionInputSchema,
@@ -128,6 +130,22 @@ export class AutomatizacionController {
   async registrarSupresion(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
     const input = registroSupresionInputSchema.parse(body);
     const result = await this.automatizacionService.registrarSupresion(input);
+    response.status(result.ya_existia ? 200 : 201);
+    return result;
+  }
+
+  @Post("respuestas")
+  async respuestaRecibida(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
+    const input = respuestaRecibidaInputSchema.parse(body);
+    const result = await this.automatizacionService.registrarRespuesta(input);
+    response.status(result.ya_existia ? 200 : 201);
+    return result;
+  }
+
+  @Post("respuestas/clasificacion")
+  async respuestaClasificada(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
+    const input = respuestaClasificadaInputSchema.parse(body);
+    const result = await this.automatizacionService.clasificarRespuesta(input);
     response.status(result.ya_existia ? 200 : 201);
     return result;
   }
