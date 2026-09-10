@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { eventosPendientes, procesosFallidos } from "../database/schema.js";
 import { env } from "../config/env.js";
@@ -28,18 +28,32 @@ export class OutboxDispatcherService {
 
   @Interval(env.OUTBOX_DISPATCH_INTERVAL_MS)
   async dispatchPending() {
-    // Evita que dos corridas se pisen si una tanda tarda más que el intervalo.
+    // Evita que dos corridas se pisen si una tanda tarda más que el
+    // intervalo -- pero esto solo protege a ESTE proceso contra sí mismo.
     if (this.dispatching) return;
     this.dispatching = true;
     try {
-      const pending = await this.db
-        .select()
-        .from(eventosPendientes)
-        .where(and(
-          eq(eventosPendientes.estado, "pendiente"),
-          or(isNull(eventosPendientes.proximoIntentoEn), lte(eventosPendientes.proximoIntentoEn, sql`CURRENT_TIMESTAMP`))
-        ))
-        .limit(BATCH_SIZE);
+      // SELECT ... FOR UPDATE SKIP LOCKED + claim (marcar 'procesando') en
+      // la misma transacción: sin esto, en un despliegue con más de una
+      // instancia del backend, dos procesos podían leer y entregar el
+      // mismo evento dos veces (mismo patrón que se corrigió en
+      // listarVentanasVencidas -- hallazgo de code review, 10-sep-2026).
+      const pending = await this.db.transaction(async (tx) => {
+        const rows = await tx
+          .select()
+          .from(eventosPendientes)
+          .where(and(
+            eq(eventosPendientes.estado, "pendiente"),
+            or(isNull(eventosPendientes.proximoIntentoEn), lte(eventosPendientes.proximoIntentoEn, sql`CURRENT_TIMESTAMP`))
+          ))
+          .limit(BATCH_SIZE)
+          .for("update", { skipLocked: true });
+
+        if (rows.length === 0) return [];
+
+        await tx.update(eventosPendientes).set({ estado: "procesando" }).where(inArray(eventosPendientes.id, rows.map((row) => row.id)));
+        return rows;
+      });
 
       for (const event of pending) {
         await this.dispatchOne(event);
@@ -50,9 +64,9 @@ export class OutboxDispatcherService {
     }
   }
 
+  // El evento ya quedó marcado 'procesando' (claim atómico en
+  // dispatchPending); aquí solo se intenta la entrega.
   private async dispatchOne(event: typeof eventosPendientes.$inferSelect) {
-    await this.db.update(eventosPendientes).set({ estado: "procesando" }).where(eq(eventosPendientes.id, event.id));
-
     try {
       await this.deliver(event);
       await this.db.update(eventosPendientes).set({ estado: "enviado" }).where(eq(eventosPendientes.id, event.id));

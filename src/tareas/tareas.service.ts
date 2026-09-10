@@ -118,11 +118,18 @@ export class TareasService {
     const row = await this.findAssignable(user, id);
 
     await this.db.transaction(async (tx) => {
-      await tx.update(tareas).set({
+      // findAssignable ya validó el estado, pero fuera de cualquier
+      // bloqueo -- dos PATCH concurrentes sobre la misma tarea podían
+      // pasar ambos el guard y duplicar el evento de outbox. Revalidar
+      // dentro del propio UPDATE (WHERE ... AND estado NOT IN (...)) y
+      // chequear affectedRows cierra la carrera (hallazgo de code review,
+      // 10-sep-2026).
+      const [result] = await tx.update(tareas).set({
         estado: "cerrada",
         resultado,
         cerradaEn: sql`CURRENT_TIMESTAMP`
-      }).where(eq(tareas.id, id));
+      }).where(and(eq(tareas.id, id), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
+      if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada");
 
       await this.outboxService.enqueue(tx, {
         tipo: "tarea_cerrada",
@@ -156,12 +163,14 @@ export class TareasService {
     }
 
     await this.db.transaction(async (tx) => {
-      await tx.update(tareas).set({
+      // Misma revalidación que cerrar() -- ver comentario ahí.
+      const [result] = await tx.update(tareas).set({
         estado: "cerrada",
         clasificacion: input.clasificacion,
         resultado: input.comentario ?? input.clasificacion,
         cerradaEn: sql`CURRENT_TIMESTAMP`
-      }).where(eq(tareas.id, id));
+      }).where(and(eq(tareas.id, id), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
+      if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada");
 
       await this.outboxService.enqueue(tx, {
         tipo: "prospecto_clasificado",

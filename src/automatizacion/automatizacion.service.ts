@@ -5,6 +5,7 @@ import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSup
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
+import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
@@ -224,12 +225,10 @@ export class AutomatizacionService {
             });
             contactoId = contact.insertId;
 
-            const medios = [["correo", input.contacto.correo, correoNormalizado] as const, ["telefono", input.contacto.telefono, telefonoNormalizado] as const];
-            for (const [tipo, valor, normalizado] of medios) {
-              if (valor && normalizado) {
-                await tx.insert(mediosContacto).values({ contactoId, tipo, valor, valorNormalizado: normalizado, esPrincipal: tipo === "correo" });
-              }
-            }
+            await insertarMediosContacto(tx, contactoId, [
+              { tipo: "correo", valor: input.contacto.correo, valorNormalizado: correoNormalizado },
+              { tipo: "telefono", valor: input.contacto.telefono, valorNormalizado: telefonoNormalizado }
+            ]);
           }
 
           const [prospecto] = await tx.insert(prospectos).values({

@@ -4,6 +4,8 @@ import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, contactos, empresas, mediosContacto } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
+import { isDuplicateEntry } from "../shared/database-errors.js";
+import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CompanyInput } from "./dto/empresa.schema.js";
 
@@ -67,22 +69,23 @@ export class EmpresasService {
           area: contact.area ?? null
         });
 
-        const media = [
-          ["correo", contact.correo, contact.correo && normalizeEmail(contact.correo)],
-          ["telefono", contact.telefono, contact.telefono && normalizePhone(contact.telefono)],
-          ["whatsapp", contact.whatsapp, contact.whatsapp && normalizePhone(contact.whatsapp)]
-        ] as const;
-
-        for (const [tipo, raw, normalized] of media) {
-          if (raw && normalized) {
-            await tx.insert(mediosContacto).values({
-              contactoId: created.insertId,
-              tipo,
-              valor: raw,
-              valorNormalizado: normalized,
-              esPrincipal: tipo === "correo"
-            });
+        // El UNIQUE(tipo, valor_normalizado) de medios_contacto es global
+        // (no por empresa): un correo/teléfono que ya pertenece a OTRO
+        // contacto (de esta empresa o de cualquier otra) revienta el
+        // insert. Antes ese ER_DUP_ENTRY no se capturaba y subía como 500
+        // genérico en vez de un error de validación legible (hallazgo de
+        // code review, 10-sep-2026).
+        try {
+          await insertarMediosContacto(tx, created.insertId, [
+            { tipo: "correo", valor: contact.correo, valorNormalizado: contact.correo ? normalizeEmail(contact.correo) : null },
+            { tipo: "telefono", valor: contact.telefono, valorNormalizado: contact.telefono ? normalizePhone(contact.telefono) : null },
+            { tipo: "whatsapp", valor: contact.whatsapp, valorNormalizado: contact.whatsapp ? normalizePhone(contact.whatsapp) : null }
+          ]);
+        } catch (error) {
+          if (isDuplicateEntry(error)) {
+            throw new HttpError(409, `El correo, teléfono o WhatsApp de "${contact.nombre}" ya está registrado en otro contacto`);
           }
+          throw error;
         }
       }
 
