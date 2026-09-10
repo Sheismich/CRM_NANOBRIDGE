@@ -48,6 +48,8 @@ Mantener los 17 endpoints de automatización (todos con auth `X-API-Key` / `CRM_
 16. Respuesta recibida.
 17. Respuesta clasificada (también recibe el caso ambiguo y lo inserta en `cola_clasificacion`; la pantalla CRM `/cola-clasificacion` solo lee y resuelve, nunca recibe escritura directa de n8n).
 
+**✅ Completado (10-sep-2026).** Los 17 endpoints están construidos, probados contra MySQL real (positivos, negativos, idempotencia) y en `main`. Historial de commits: `babdfab` (módulo base) hasta `a689a40` (Respuesta recibida/clasificada).
+
 Todos los endpoints que n8n necesita para continuar el flujo son críticos. "Parámetros" y "Catálogos" están separados porque `PLAN_N8N_DEFINITIVO.md` (B1) los sustituye como dos pasos independientes.
 
 ## Endpoints CRM

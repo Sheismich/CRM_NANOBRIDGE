@@ -41,6 +41,8 @@ Sustituir uno por uno y probar cada endpoint antes de conectarlo:
 
 No conectar un nodo HTTP hasta que su endpoint pase pruebas contra el stub. El registro de una nueva supresión (`no_contactar`) no es parte de esta secuencia: se conecta en B2, al procesar una respuesta clasificada como negativa.
 
+**✅ B1 completado (10-sep-2026).** Los 17 endpoints de `PLAN_API_DEFINITIVO.md` (incluyendo B2: Consulta de prospecto para scoring, Ventanas vencidas, Respuesta recibida, Respuesta clasificada) están construidos y probados. Pendiente del lado n8n: conectar cada nodo HTTP real contra estos endpoints (ya no contra el stub).
+
 ## B2 Respuestas, clasificación y seguimiento
 
 - Recibir respuestas desde webhook del proveedor de correo. Proveedor de correo (entrada y salida) pendiente de decidir.
