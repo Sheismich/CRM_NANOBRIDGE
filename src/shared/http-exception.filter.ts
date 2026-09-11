@@ -1,4 +1,4 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from "@nestjs/common";
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, PayloadTooLargeException } from "@nestjs/common";
 import type { Response } from "express";
 import { ZodError } from "zod";
 import { HttpError } from "./http-error.js";
@@ -27,6 +27,20 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof ZodError) {
       response.status(400).json({ error: "validation_error", message: "Datos inválidos", details: exception.issues });
+      return;
+    }
+
+    // FileInterceptor (multer) con `limits.fileSize` lanza esto cuando el
+    // archivo excede el límite -- sin este caso caía al 500 genérico de
+    // abajo (PayloadTooLargeException SÍ es un HttpException, pero su
+    // status 413 no es NOT_FOUND, así que no entraba al branch de arriba).
+    // Se mapea a 400 para cumplir "un archivo que exceda el tamaño máximo
+    // [debe ser] rechazado con 400" (PLAN_CRM_DEFINITIVO.md #8), mismo
+    // contrato que ya cumple DocumentosService.validarArchivo() para el
+    // caso que sí llega a bufferizarse completo (hallazgo de code review,
+    // 11-sep-2026).
+    if (exception instanceof PayloadTooLargeException) {
+      response.status(400).json({ error: "request_error", message: "El archivo excede el tamaño máximo permitido" });
       return;
     }
 

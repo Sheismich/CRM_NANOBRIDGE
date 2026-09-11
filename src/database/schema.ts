@@ -383,6 +383,37 @@ export const incidencias = mysqlTable("incidencias", {
   index("idx_incidencias_estado").on(table.estado)
 ]);
 
+// Expediente documental (PLAN_CRM_DEFINITIVO.md #8): cada fila es una
+// versión de un documento (mismo criterio que `cotizaciones`, ver
+// 014_documentos.sql para el detalle de la decisión de versionado y
+// estados).
+export const documentos = mysqlTable("documentos", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  empresaId: bigint("empresa_id", { mode: "number", unsigned: true }).notNull(),
+  oportunidadId: bigint("oportunidad_id", { mode: "number", unsigned: true }),
+  contactoId: bigint("contacto_id", { mode: "number", unsigned: true }),
+  documentoRaizId: bigint("documento_raiz_id", { mode: "number", unsigned: true }),
+  version: int("version").notNull().default(1),
+  nombreOriginal: varchar("nombre_original", { length: 255 }).notNull(),
+  mimeType: varchar("mime_type", { length: 120 }).notNull(),
+  tamanoBytes: bigint("tamano_bytes", { mode: "number", unsigned: true }).notNull(),
+  storageDriver: varchar("storage_driver", { length: 20 }).notNull(),
+  storageKey: varchar("storage_key", { length: 1024 }).notNull(),
+  estado: mysqlEnum("estado", ["vigente", "obsoleto", "archivado"]).notNull().default("vigente"),
+  politicaRetencion: varchar("politica_retencion", { length: 60 }),
+  subidoPor: bigint("subido_por", { mode: "number", unsigned: true }).notNull(),
+  revisadoPor: bigint("revisado_por", { mode: "number", unsigned: true }),
+  revisadoEn: datetime("revisado_en"),
+  activo: boolean("activo").notNull().default(true),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  index("idx_documentos_empresa").on(table.empresaId),
+  index("idx_documentos_oportunidad").on(table.oportunidadId),
+  index("idx_documentos_contacto").on(table.contactoId),
+  index("idx_documentos_raiz").on(table.documentoRaizId)
+]);
+
 export const auditoria = mysqlTable("auditoria", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }),

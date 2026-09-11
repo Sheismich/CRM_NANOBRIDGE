@@ -8,12 +8,13 @@ import { OutboxModule } from "./outbox/outbox.module.js";
 import { AutomatizacionModule } from "./automatizacion/automatizacion.module.js";
 import { ComercialModule } from "./comercial/comercial.module.js";
 import { ReportesModule } from "./reportes/reportes.module.js";
+import { DocumentosModule } from "./documentos/documentos.module.js";
 import { HealthController } from "./health/health.controller.js";
 
 @Module({
   // ScheduleModule.forRoot() habilita @Interval() en OutboxDispatcherService
   // (el despachador del patrón outbox corre solo, sin cron externo).
-  imports: [ScheduleModule.forRoot(), DatabaseModule, AuthModule, CrmModule, TareasModule, OutboxModule, AutomatizacionModule, ComercialModule, ReportesModule],
+  imports: [ScheduleModule.forRoot(), DatabaseModule, AuthModule, CrmModule, TareasModule, OutboxModule, AutomatizacionModule, ComercialModule, ReportesModule, DocumentosModule],
   controllers: [HealthController]
 })
 export class AppModule {}

@@ -1,5 +1,11 @@
 node_modules/
 dist/
+# Blobs subidos por el driver local del expediente documental
+# (STORAGE_LOCAL_DIR, PLAN_CRM_DEFINITIVO.md #8), no se versionan. Anclado
+# a la raíz (/storage/): sin la barra inicial también matchea
+# src/documentos/storage/ -- el código fuente de los drivers -- y lo deja
+# fuera del repo (hallazgo de code review, 11-sep-2026).
+/storage/
 .env
 .env.*
 !.env.example
