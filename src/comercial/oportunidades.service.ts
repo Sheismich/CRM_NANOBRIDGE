@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, catalogoEtapaEmbudo, catalogoMotivoPerdida, empresas, historialEtapaOportunidad, oportunidades } from "../database/schema.js";
+import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CambiarEtapaInput, CrearOportunidadInput, ListOportunidadesQuery, ReabrirOportunidadInput } from "./dto/oportunidad.schema.js";
@@ -54,11 +55,11 @@ export class OportunidadesService {
     const offset = (query.page - 1) * query.limit;
     const responsableId = this.scopedResponsable(user, query.responsableId);
 
-    const conditions = [
+    const conditions = compactConditions([
       responsableId ? eq(oportunidades.responsableId, responsableId) : undefined,
       query.cerrada !== undefined ? eq(oportunidades.cerrada, query.cerrada) : undefined,
       query.etapaClave ? eq(catalogoEtapaEmbudo.clave, query.etapaClave) : undefined
-    ].filter((condition): condition is NonNullable<typeof condition> => condition !== undefined);
+    ]);
 
     const rows = await this.db
       .select({

@@ -1,6 +1,13 @@
 import { z } from "zod";
 
 const PARTIDA_MAX = 50;
+// cotizacion_partidas.importe y cotizaciones.subtotal/descuento/impuestos/
+// total son DECIMAL(12,2): 10 dígitos enteros + 2 decimales, tope real
+// 9,999,999,999.99. cantidad*precioUnitario y descuento/impuestos se
+// validaban cada uno por separado sin tope conjunto, así que un valor
+// dentro de sus límites individuales podía desbordar la columna igual
+// (hallazgo de code review, 11-sep-2026).
+const MAX_MONTO = 9_999_999_999.99;
 
 export const partidaInputSchema = z.object({
   descripcion: z.string().trim().min(2).max(255),
@@ -9,24 +16,47 @@ export const partidaInputSchema = z.object({
 });
 export type PartidaInput = z.infer<typeof partidaInputSchema>;
 
+// Valida que el subtotal (suma de cantidad*precioUnitario) y el total
+// (subtotal - descuento + impuestos) quepan en DECIMAL(12,2) y que el
+// descuento no vuelva el total negativo. Se comparte entre
+// datosCotizacionSchema y crearCotizacionSchema (en vez de duplicar la
+// cuenta en los dos) porque ambos se usan directamente con .parse() en el
+// controller.
+function validarMontos(data: { descuento: number; impuestos: number; partidas: PartidaInput[] }, ctx: z.RefinementCtx) {
+  const subtotal = data.partidas.reduce((acc, p) => acc + p.cantidad * p.precioUnitario, 0);
+  if (subtotal > MAX_MONTO) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["partidas"], message: `El subtotal (suma de cantidad × precio unitario) no puede exceder ${MAX_MONTO}` });
+    return;
+  }
+  const total = subtotal - data.descuento + data.impuestos;
+  if (total < 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["descuento"], message: "El descuento no puede exceder subtotal + impuestos" });
+  } else if (total > MAX_MONTO) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["impuestos"], message: `El total no puede exceder ${MAX_MONTO}` });
+  }
+}
+
 // Campos que se repiten al crear la v1 y al crear una nueva versión: la
 // empresa y la oportunidad NO cambian entre versiones de la misma
 // cotización (ver cotizacionRaizId en el schema), así que solo viven en
 // crearCotizacionSchema, no aquí.
-export const datosCotizacionSchema = z.object({
+const datosCotizacionShape = z.object({
   contactoId: z.coerce.number().int().positive().optional(),
-  descuento: z.coerce.number().min(0).default(0),
-  impuestos: z.coerce.number().min(0).default(0),
+  descuento: z.coerce.number().min(0).max(MAX_MONTO).default(0),
+  impuestos: z.coerce.number().min(0).max(MAX_MONTO).default(0),
   fechaEsperadaCierre: z.string().date().optional(),
   probabilidad: z.coerce.number().int().min(0).max(100).optional(),
   partidas: z.array(partidaInputSchema).min(1).max(PARTIDA_MAX)
 });
-export type DatosCotizacionInput = z.infer<typeof datosCotizacionSchema>;
+export const datosCotizacionSchema = datosCotizacionShape.superRefine(validarMontos);
+export type DatosCotizacionInput = z.infer<typeof datosCotizacionShape>;
 
-export const crearCotizacionSchema = datosCotizacionSchema.extend({
-  empresaId: z.coerce.number().int().positive(),
-  oportunidadId: z.coerce.number().int().positive()
-});
+export const crearCotizacionSchema = datosCotizacionShape
+  .extend({
+    empresaId: z.coerce.number().int().positive(),
+    oportunidadId: z.coerce.number().int().positive()
+  })
+  .superRefine(validarMontos);
 export type CrearCotizacionInput = z.infer<typeof crearCotizacionSchema>;
 
 export const listCotizacionesQuerySchema = z.object({

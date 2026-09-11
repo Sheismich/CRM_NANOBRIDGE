@@ -1,0 +1,38 @@
+// Exportación de reportes en CSV (PLAN_CRM_DEFINITIVO.md #9, "Exportación
+// de reportes"). El proyecto no tiene ninguna convención previa de
+// exportación (ningún otro módulo genera CSV ni Excel), así que se define
+// aquí desde cero: CSV simple con cabecera, separador "," y comillas dobles
+// alrededor de cualquier valor que contenga coma, comilla o salto de línea
+// (regla estándar RFC 4180). Se eligió CSV sobre Excel porque no agrega
+// dependencias nuevas (no hay ninguna librería de generación de .xlsx en
+// package.json) y cualquier hoja de cálculo lo abre sin conversión.
+const UTF8_BOM = "﻿";
+
+export function toCsv(rows: Record<string, unknown>[]): string {
+  if (rows.length === 0) return "";
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(",")];
+  for (const row of rows) {
+    lines.push(headers.map((header) => escapeCsvValue(row[header])).join(","));
+  }
+  // BOM UTF-8 al inicio: Excel en Windows detecta la codificación y los
+  // acentos ("Título", "Región") no se rompen al abrir el archivo.
+  return UTF8_BOM + lines.join("\r\n");
+}
+
+// Un valor que empieza con "=", "+", "-" o "@" se interpreta como fórmula
+// al abrir el CSV en Excel/Sheets (CSV/formula injection, OWASP). El
+// reporte de actividades incluye usuarios.nombre tal cual viene de la BD
+// (hallazgo de code review, 11-sep-2026) -- anteponer un apóstrofo fuerza
+// esos valores a texto plano sin cambiar lo que el usuario ve.
+const FORMULA_TRIGGER = /^[=+\-@]/;
+
+function escapeCsvValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  let str = String(value);
+  if (FORMULA_TRIGGER.test(str)) str = `'${str}`;
+  if (/[",\r\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}

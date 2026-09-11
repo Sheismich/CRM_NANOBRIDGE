@@ -4,6 +4,7 @@ import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.con
 import { auditoria, contactos, prospectos, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
+import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
@@ -58,12 +59,12 @@ export class TareasService {
     const scoped = this.scopedFilters(user, filters);
     const offset = (page - 1) * limit;
 
-    const conditions = [
+    const conditions = compactConditions([
       scoped.estado ? eq(tareas.estado, scoped.estado) : undefined,
       scoped.prioridad ? eq(tareas.prioridad, scoped.prioridad) : undefined,
       scoped.tipo ? eq(tareas.tipo, scoped.tipo) : undefined,
       scoped.responsableId ? eq(tareas.responsableId, scoped.responsableId) : undefined
-    ].filter((condition): condition is NonNullable<typeof condition> => condition !== undefined);
+    ]);
 
     const rows = await this.db
       .select()

@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, catalogoEtapaEmbudo, contactos, cotizacionPartidas, cotizaciones, empresas, oportunidades } from "../database/schema.js";
+import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CambiarEstadoCotizacionInput, CrearCotizacionInput, DatosCotizacionInput, ListCotizacionesQuery, PartidaInput } from "./dto/cotizacion.schema.js";
@@ -48,9 +49,14 @@ export class CotizacionesService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
 
   private calcular(partidas: PartidaInput[], descuento: number, impuestos: number) {
-    const calculadas = partidas.map((p, index) => ({ ...p, importe: p.cantidad * p.precioUnitario, orden: index }));
-    const subtotal = calculadas.reduce((acc, p) => acc + p.importe, 0);
-    const total = subtotal - descuento + impuestos;
+    // Cada importe se redondea aquí, no solo al guardarlo en
+    // insertarPartidas(): así subtotal/total se calculan sobre los mismos
+    // valores exactos que terminan en cotizacion_partidas.importe, en vez
+    // de sobre floats sin redondear que pueden diferir en un centavo de la
+    // suma de lo que realmente se guarda (hallazgo de code review, 11-sep-2026).
+    const calculadas = partidas.map((p, index) => ({ ...p, importe: Number((p.cantidad * p.precioUnitario).toFixed(2)), orden: index }));
+    const subtotal = Number(calculadas.reduce((acc, p) => acc + p.importe, 0).toFixed(2));
+    const total = Number((subtotal - descuento + impuestos).toFixed(2));
     return { calculadas, subtotal, total };
   }
 
@@ -156,7 +162,18 @@ export class CotizacionesService {
     const nuevaVersionNum = actual.version + 1;
 
     return this.db.transaction(async (tx) => {
-      await tx.update(cotizaciones).set({ estado: "obsoleta" }).where(eq(cotizaciones.id, actual.id));
+      // obtenerScoped() validó el estado fuera de cualquier bloqueo -- dos
+      // POST .../version concurrentes podían leer ambos version=N y
+      // terminar insertando dos filas "vigentes" con esa misma versión.
+      // Revalidar dentro del propio UPDATE (WHERE ... AND estado !=
+      // 'obsoleta') y chequear affectedRows cierra la carrera: solo una de
+      // las dos solicitudes gana el marcado como obsoleta y continúa a
+      // insertar la nueva versión (mismo patrón que TareasService.cerrar(),
+      // hallazgo de code review, 11-sep-2026).
+      const [marcarObsoleta] = await tx.update(cotizaciones).set({ estado: "obsoleta" }).where(and(eq(cotizaciones.id, actual.id), ne(cotizaciones.estado, "obsoleta")));
+      if (marcarObsoleta.affectedRows === 0) {
+        throw new HttpError(409, "La cotización ya fue versionada o marcada obsoleta por otra solicitud");
+      }
 
       const [result] = await tx.insert(cotizaciones).values({
         empresaId: actual.empresaId,
@@ -194,14 +211,14 @@ export class CotizacionesService {
     if (!empresa) throw new HttpError(404, "Empresa no encontrada");
 
     const offset = (query.page - 1) * query.limit;
-    const conditions = [
+    const conditions = compactConditions([
       eq(cotizaciones.empresaId, query.empresaId),
       // Solo la versión vigente de cada cadena: una obsoleta solo se ve
       // explícitamente en GET /cotizaciones/:id (campo "versiones").
       ne(cotizaciones.estado, "obsoleta"),
       query.oportunidadId ? eq(cotizaciones.oportunidadId, query.oportunidadId) : undefined,
       user.rol === "agente" ? eq(oportunidades.responsableId, user.id) : undefined
-    ].filter((c): c is NonNullable<typeof c> => c !== undefined);
+    ]);
 
     const rows = await this.db
       .select({ cotizacion: cotizaciones })
@@ -242,10 +259,17 @@ export class CotizacionesService {
     }
 
     await this.db.transaction(async (tx) => {
-      if (input.estado === "enviada") {
-        await tx.update(cotizaciones).set({ estado: input.estado, fechaEnvio: sql`CURDATE()` }).where(eq(cotizaciones.id, id));
-      } else {
-        await tx.update(cotizaciones).set({ estado: input.estado }).where(eq(cotizaciones.id, id));
+      // Mismo problema que nuevaVersion(): el guard de arriba valida contra
+      // un estado leído fuera de cualquier bloqueo. Revalidar dentro del
+      // propio UPDATE (WHERE ... AND estado = <el que se validó>) y
+      // chequear affectedRows cierra la carrera -- dos PATCH .../estado
+      // concurrentes ya no pueden aplicar ambos una transición mutuamente
+      // excluyente (ej. aceptada y rechazada) sobre el mismo 'enviada'
+      // (hallazgo de code review, 11-sep-2026).
+      const set = input.estado === "enviada" ? { estado: input.estado, fechaEnvio: sql`CURDATE()` } : { estado: input.estado };
+      const [result] = await tx.update(cotizaciones).set(set).where(and(eq(cotizaciones.id, id), eq(cotizaciones.estado, cotizacion.estado)));
+      if (result.affectedRows === 0) {
+        throw new HttpError(409, "El estado de la cotización cambió, vuelve a intentarlo");
       }
 
       await tx.insert(auditoria).values({
