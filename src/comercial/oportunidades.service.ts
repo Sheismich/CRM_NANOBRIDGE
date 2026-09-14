@@ -129,7 +129,11 @@ export class OportunidadesService {
   }
 
   async create(user: CurrentUser, input: CrearOportunidadInput) {
-    const [empresa] = await this.db.select({ id: empresas.id }).from(empresas).where(eq(empresas.id, input.empresaId)).limit(1);
+    // eq(empresas.activo, true) agregado (hallazgo de code review,
+    // 14-sep-2026): sin él, se podía crear una oportunidad nueva contra
+    // una empresa ya desactivada (EmpresasService.deactivate), quedando
+    // "huérfana" de cualquier registro de empresa visible.
+    const [empresa] = await this.db.select({ id: empresas.id }).from(empresas).where(and(eq(empresas.id, input.empresaId), eq(empresas.activo, true))).limit(1);
     if (!empresa) throw new HttpError(404, "Empresa no encontrada");
 
     const [etapaInicial] = await this.db.select({ id: catalogoEtapaEmbudo.id }).from(catalogoEtapaEmbudo).where(eq(catalogoEtapaEmbudo.clave, "calificada")).limit(1);

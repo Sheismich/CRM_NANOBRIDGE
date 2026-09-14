@@ -82,7 +82,10 @@ export class DocumentosService {
   }
 
   private async validarContacto(empresaId: number, contactoId: number) {
-    const [row] = await this.db.select({ id: contactos.id }).from(contactos).where(and(eq(contactos.id, contactoId), eq(contactos.empresaId, empresaId))).limit(1);
+    // eq(contactos.activo, true) agregado (hallazgo de code review,
+    // 14-sep-2026): sin él, se podía subir un documento nuevo apuntando a
+    // un contacto ya desactivado (EmpresasService.deactivateContact).
+    const [row] = await this.db.select({ id: contactos.id }).from(contactos).where(and(eq(contactos.id, contactoId), eq(contactos.empresaId, empresaId), eq(contactos.activo, true))).limit(1);
     if (!row) throw new HttpError(404, "Contacto no encontrado en esa empresa");
   }
 

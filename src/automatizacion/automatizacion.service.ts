@@ -390,8 +390,24 @@ export class AutomatizacionService {
       return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Canal WhatsApp desactivado (pendiente proveedor aprobado)", numero_contacto_siguiente: null, ventana_vence_en: null };
     }
 
-    const [prospecto] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, query.prospecto_id)).limit(1);
+    // Join contra contactos/empresas para exigir que ambos sigan activos
+    // (hallazgo de code review, 14-sep-2026): antes, un prospecto ya
+    // validado (estado='validado', validado cuando su contacto/empresa SÍ
+    // estaban activos) seguía pasando este gate indefinidamente aunque su
+    // empresa se desactivara después -- la automatización podía seguir
+    // enviándole correos a una empresa ya dada de baja en el CRM.
+    const [prospecto] = await this.db
+      .select({ id: prospectos.id, contactoActivo: contactos.activo, empresaActiva: empresas.activo })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .where(eq(prospectos.id, query.prospecto_id))
+      .limit(1);
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
+
+    if (!prospecto.contactoActivo || !prospecto.empresaActiva) {
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto o la empresa fueron desactivados", numero_contacto_siguiente: null, ventana_vence_en: null };
+    }
 
     const [ultimo] = await this.db
       .select({ numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn, ventanaEstado: envios.ventanaEstado })
