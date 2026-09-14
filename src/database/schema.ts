@@ -387,6 +387,60 @@ export const incidencias = mysqlTable("incidencias", {
 // versión de un documento (mismo criterio que `cotizaciones`, ver
 // 014_documentos.sql para el detalle de la decisión de versionado y
 // estados).
+// Alta manual e importación CSV de prospectos (PLAN_CRM_DEFINITIVO.md
+// módulo 3). Ver comentario completo en
+// src/database/migrations/015_prospectos_importacion.sql -- este es solo
+// el espejo tipado para Drizzle, la migración sigue siendo la fuente de
+// verdad.
+export const borradoresCaptura = mysqlTable("borradores_captura", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  loteId: varchar("lote_id", { length: 64 }).notNull(),
+  fuente: varchar("fuente", { length: 255 }).notNull(),
+  filaNumero: int("fila_numero", { unsigned: true }).notNull(),
+  filaOriginal: json("fila_original").notNull(),
+
+  empresaNombreLegal: varchar("empresa_nombre_legal", { length: 255 }),
+  empresaGiro: varchar("empresa_giro", { length: 120 }),
+  empresaTamano: mysqlEnum("empresa_tamano", ["micro", "pequena", "mediana", "grande"]),
+  empresaRegion: varchar("empresa_region", { length: 120 }),
+  empresaEstado: varchar("empresa_estado", { length: 120 }),
+  empresaCiudad: varchar("empresa_ciudad", { length: 120 }),
+  empresaPais: char("empresa_pais", { length: 2 }).notNull().default("MX"),
+  empresaSitioWeb: varchar("empresa_sitio_web", { length: 2048 }),
+
+  contactoNombre: varchar("contacto_nombre", { length: 160 }),
+  contactoPuesto: varchar("contacto_puesto", { length: 160 }),
+
+  correo: varchar("correo", { length: 254 }),
+  correoNormalizado: varchar("correo_normalizado", { length: 254 }),
+  telefono: varchar("telefono", { length: 40 }),
+  telefonoNormalizado: varchar("telefono_normalizado", { length: 40 }),
+  canalInicial: mysqlEnum("canal_inicial", ["correo", "telefono", "whatsapp"]),
+
+  confianza: mysqlEnum("confianza", ["alta", "media", "baja"]),
+  prioridad: mysqlEnum("prioridad", ["alta", "media", "baja"]),
+  score: decimal("score", { precision: 5, scale: 2 }),
+  fuenteUrl: varchar("fuente_url", { length: 2048 }),
+  observaciones: text("observaciones"),
+
+  estado: mysqlEnum("estado", ["pendiente_revision", "duplicado", "importado", "rechazado", "expirado"]).notNull().default("pendiente_revision"),
+  matchContactoId: bigint("match_contacto_id", { mode: "number", unsigned: true }),
+  matchMotivo: mysqlEnum("match_motivo", ["correo", "telefono"]),
+  errores: json("errores"),
+
+  prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }),
+  campanaId: bigint("campana_id", { mode: "number", unsigned: true }),
+
+  creadoPor: bigint("creado_por", { mode: "number", unsigned: true }).notNull(),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  expiraEn: datetime("expira_en").notNull(),
+  procesadoEn: datetime("procesado_en"),
+  procesadoPor: bigint("procesado_por", { mode: "number", unsigned: true })
+}, (table) => [
+  index("idx_borradores_lote").on(table.loteId),
+  index("idx_borradores_estado_expira").on(table.estado, table.expiraEn)
+]);
+
 export const documentos = mysqlTable("documentos", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   empresaId: bigint("empresa_id", { mode: "number", unsigned: true }).notNull(),

@@ -36,3 +36,78 @@ function escapeCsvValue(value: unknown): string {
   }
   return str;
 }
+
+// Importación de prospectos (PLAN_CRM_DEFINITIVO.md #3, "importación
+// CSV"). Parser manual (RFC 4180) en vez de una librería nueva, por el
+// mismo motivo que toCsv() no usa una para exportar: nada más en el
+// proyecto parsea CSV todavía, así que no vale la pena la dependencia
+// nueva para un formato de por sí simple. Soporta comillas dobles,
+// comas dentro de campos citados y comillas escapadas ("").
+export function parseCsv(contenido: string): Record<string, string>[] {
+  // Quita el BOM UTF-8 si viene (el mismo que escribe toCsv, o el que
+  // agrega Excel al exportar "CSV UTF-8" -- sin esto, el primer header
+  // queda con el BOM pegado y nunca hace match por nombre de columna).
+  const texto = contenido.replace(/^\uFEFF/, "");
+  const filas = parseCsvFilas(texto);
+  if (filas.length === 0) return [];
+
+  const headers = filas[0]!.map((h) => h.trim());
+  return filas.slice(1)
+    .filter((fila) => fila.some((valor) => valor.trim() !== "")) // ignora líneas en blanco al final del archivo
+    .map((fila) => {
+      const row: Record<string, string> = {};
+      headers.forEach((header, i) => {
+        row[header] = (fila[i] ?? "").trim();
+      });
+      return row;
+    });
+}
+
+function parseCsvFilas(texto: string): string[][] {
+  const filas: string[][] = [];
+  let fila: string[] = [];
+  let campo = "";
+  let dentroDeComillas = false;
+
+  for (let i = 0; i < texto.length; i++) {
+    const char = texto[i];
+
+    if (dentroDeComillas) {
+      if (char === '"') {
+        if (texto[i + 1] === '"') {
+          campo += '"';
+          i++; // comilla escapada ("") -> una sola comilla literal
+        } else {
+          dentroDeComillas = false;
+        }
+      } else {
+        campo += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      dentroDeComillas = true;
+    } else if (char === ",") {
+      fila.push(campo);
+      campo = "";
+    } else if (char === "\r") {
+      // se ignora; \n (solo o precedido de \r) cierra la fila
+    } else if (char === "\n") {
+      fila.push(campo);
+      filas.push(fila);
+      fila = [];
+      campo = "";
+    } else {
+      campo += char;
+    }
+  }
+
+  // última fila sin salto de línea final
+  if (campo !== "" || fila.length > 0) {
+    fila.push(campo);
+    filas.push(fila);
+  }
+
+  return filas;
+}

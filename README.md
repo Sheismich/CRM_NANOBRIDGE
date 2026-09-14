@@ -40,7 +40,8 @@ src/
     dto/credentials.schema.ts          esquemas Zod de entrada
   crm/
     crm.module.ts, empresas.controller.ts, empresas.service.ts   GET/POST /empresas, GET /empresas/:id
-    dto/empresa.schema.ts              esquemas Zod de entrada
+    prospectos.controller.ts, prospectos.service.ts   alta manual e importación CSV vía borradores_captura (ver sección propia abajo)
+    dto/empresa.schema.ts, dto/prospecto.schema.ts   esquemas Zod de entrada
   tareas/
     tareas.module.ts, tareas.controller.ts, tareas.service.ts   GET/POST /tareas, GET /tareas/:id, PATCH /tareas/:id/cerrar
     cola-clasificacion.controller.ts   GET /cola-clasificacion, POST /cola-clasificacion/:id/clasificar
@@ -83,6 +84,26 @@ Probado de extremo a extremo con un receptor HTTP de prueba haciendo de n8n: cie
 
 Igual que las versiones anteriores, no me quedé solo en que compilara: instalé MySQL real en el entorno de build, corrí `npm run migrate`, y con el build compilado (`npm run build` + `node dist/main.js`) probé en caliente: `GET /health`, un 404 en una ruta cualquiera y en una ruta bajo `/api/v1`, bootstrap de la cuenta admin, `GET /api/v1/auth/me`, crear una empresa con un contacto (dos medios de contacto, en una transacción), listar empresas, consultarla por id con el join a contactos/medios, una empresa inexistente (404), bootstrap duplicado (409), login y logout. Todo respondió exactamente igual que en las versiones en Express y en Next.js.
 
+## Prospectos: alta manual e importación CSV (avance sobre el plan)
+
+`PLAN_CRM_DEFINITIVO.md` #3 y `PLAN_API_DEFINITIVO.md` (grupo `/prospectos`). Migración `015_prospectos_importacion.sql` (tabla `borradores_captura`) + su espejo en `schema.ts`.
+
+- **Diferencia con `/api/v1/automatizacion/prospectos`**: ese endpoint es para n8n (`X-API-Key`, un registro confiable por evento de automatización). Este módulo es para un usuario de sesión dando de alta prospectos a mano o por lote — nunca escribe directo en `empresas`/`contactos`/`prospectos`, siempre pasa primero por un borrador.
+- **Alta manual** (`POST /api/v1/prospectos`): una fila = un lote de 1. Reusa el mismo camino de validación y deduplicación que la importación CSV en vez de tener su propia copia.
+- **Importación CSV** (`POST /api/v1/prospectos/importaciones`, multipart, campo `archivo`): parsea el CSV (parser RFC 4180 propio en `shared/csv.ts`, sin dependencia nueva), valida cada fila (correo, teléfono, giro, tamaño, canal) y deduplica — primero contra otras filas del mismo archivo, luego contra `medios_contacto` en BD, por correo normalizado y después por teléfono normalizado. Cada fila queda en `borradores_captura` como `pendiente_revision`, `duplicado` (con `match_contacto_id` si coincidió con un contacto real) o `rechazado` (con el detalle en `errores`) — ninguna fila se descarta en silencio, incluidas las que no traen ni nombre de empresa ni de contacto.
+- **Revisión** (`GET /api/v1/prospectos/importaciones/:loteId`): lista las filas del lote con su estado.
+- **Confirmación** (`POST .../filas/:id/confirmar`, `POST .../confirmar-todos`, `POST .../filas/:id/rechazar`): promueve un borrador a empresa+contacto+prospecto real (o rechaza). Confirmar una fila `duplicado` exige `usarContactoExistente:true` explícito — "la razón social nunca fusiona prospectos automáticamente" (PLAN_CRM_DEFINITIVO.md) aplicado aquí a nivel de contacto. `confirmar-todos` solo toca las `pendiente_revision` de un lote; las `duplicado` siempre se deciden una por una.
+- **Limpieza de borradores vencidos** (Jobs internos, `PLAN_API_DEFINITIVO.md`): `@Interval` diario marca como `expirado` cualquier borrador `pendiente_revision`/`duplicado` con más de 30 días sin decisión.
+- Un agente solo ve y opera sobre los lotes que él mismo importó; administrador/supervisor ven cualquiera (mismo criterio de scoping que `EmpresasService`).
+
+Probado con datos reales: se mapeó la base de 30 prospectos industriales de STEELSAFE NANO® (`Prospeccion_industrial_STEELSAFE_NANO.xlsx`) a un CSV con este contrato de columnas y se corrió contra `parseCsv`/`filaCsvSchema` directamente (sin mockear nada) — 29/30 filas pasan validación limpia; la única rechazada no tiene ni correo ni teléfono publicado (solo un formulario web), que es exactamente el criterio de "requiere verificación humana" que ya señala la propia base. El mapeo también detectó dos celdas de correo con más de una dirección separada por "|" en el Excel original, resueltas tomando la primera.
+
 ## Qué falta (siguiente avance sugerido)
 
-Según `MATRICES_Y_BACKLOG_DEFINITIVO.md`, después de tareas y outbox sigue: endpoints de automatización para n8n (los 17 del `PLAN_API_DEFINITIVO.md`), sustituir mocks por HTTP real, historial de interacciones, oportunidades y pipeline, cotizaciones, documentos, y métricas/dashboards. También falta un módulo `usuarios` (alta y gestión de cuentas vía API — por ahora el único usuario se crea con `/auth/bootstrap`) y un CRUD independiente de `contactos` (hoy solo se crean dentro de `POST /empresas`).
+Esta sección estaba desactualizada: automatización (los 17 endpoints para n8n), oportunidades/pipeline, cotizaciones, documentos y reportes/dashboards ya están implementados (ver secciones arriba), aunque no quedaron documentados aquí cuando se construyeron. Lo que de verdad falta hoy:
+
+- Módulo `usuarios` — alta y gestión de cuentas vía API; por ahora el único usuario se crea con `/auth/bootstrap`.
+- CRUD independiente de `/contactos` — hoy solo se crean/editan dentro de `/empresas/:id/contactos`.
+- Endpoint `/auditoria` — la tabla existe y ya se escribe desde varios servicios, pero no hay forma de consultarla vía API todavía.
+- `catalogo_tipo_documento` y `metricas_comerciales_diarias` (tablas mencionadas en `PLAN_CRM_DEFINITIVO.md` que no llegaron a crearse); los reportes de momento se calculan en vivo en cada consulta, no desde un job diario.
+- Confirmar con B1 de `PLAN_N8N_DEFINITIVO.md` si n8n ya sustituyó sus nodos MOCK por los endpoints reales de `/api/v1/automatizacion` (eso vive del lado del flujo de n8n, no de este repo).
