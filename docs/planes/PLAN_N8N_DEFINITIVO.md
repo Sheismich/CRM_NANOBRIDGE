@@ -90,6 +90,8 @@ Idempotencia: por ahora el despachador no manda un `evento_id` explícito en el 
 - Si el fallo es crítico, crear `procesos_fallidos`.
 - Si es accesorio, continuar y dejar trazabilidad.
 
+**✅ B4 completado (14-sep-2026).** `POST /api/v1/automatizacion/errores-workflow` hace "registrar incidencia" + "crear `procesos_fallidos` si es crítico" en una sola llamada atómica (una transacción), en vez de dos llamadas condicionales separadas. Idempotente por `execution_id` (obligatorio en este endpoint, a diferencia del resto de incidencias). Pendiente del lado n8n: apuntar el nodo del Error Trigger global a este endpoint.
+
 ## Criterio de terminado
 
 Un prospecto puede recorrer ingesta, validación, scoring, supresión, envío, respuesta, clasificación, seguimiento, reactivación y cierre sin MySQL directo, sin duplicados y sin perder errores.

@@ -7,6 +7,7 @@ import {
   campanaActivaQuerySchema,
   consultaProspectoScoringQuerySchema,
   consultaSupresionQuerySchema,
+  errorWorkflowInputSchema,
   estadoProspectoInputSchema,
   incidenciaInputSchema,
   registroEnvioInputSchema,
@@ -54,6 +55,14 @@ export class AutomatizacionController {
   async incidencias(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
     const input = incidenciaInputSchema.parse(body);
     const result = await this.automatizacionService.registrarIncidencia(input);
+    response.status(result.ya_existia ? 200 : 201);
+    return result;
+  }
+
+  @Post("errores-workflow")
+  async erroresWorkflow(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
+    const input = errorWorkflowInputSchema.parse(body);
+    const result = await this.automatizacionService.registrarErrorWorkflow(input);
     response.status(result.ya_existia ? 200 : 201);
     return result;
   }

@@ -28,7 +28,7 @@
 
 ## Endpoints de automatización n8n
 
-Mantener los 17 endpoints de automatización (todos con auth `X-API-Key` / `CRM_CALLBACK_API_KEY`):
+Mantener los 18 endpoints de automatización (todos con auth `X-API-Key` / `CRM_CALLBACK_API_KEY`):
 
 1. Parámetros.
 2. Catálogos.
@@ -47,8 +47,9 @@ Mantener los 17 endpoints de automatización (todos con auth `X-API-Key` / `CRM_
 15. Ventanas vencidas.
 16. Respuesta recibida.
 17. Respuesta clasificada (también recibe el caso ambiguo y lo inserta en `cola_clasificacion`; la pantalla CRM `/cola-clasificacion` solo lee y resuelve, nunca recibe escritura directa de n8n).
+18. Registrar error de workflow (n8n Error Workflow, B4): `POST /api/v1/automatizacion/errores-workflow`. Registra una incidencia y, si el fallo es crítico, también una fila en `procesos_fallidos`, en una sola llamada transaccional.
 
-**✅ Completado (10-sep-2026).** Los 17 endpoints están construidos, probados contra MySQL real (positivos, negativos, idempotencia) y en `main`. Historial de commits: `babdfab` (módulo base) hasta `a689a40` (Respuesta recibida/clasificada).
+**✅ Completado (10-sep-2026), extendido con B4 (14-sep-2026).** Los 18 endpoints están construidos, probados contra MySQL real (positivos, negativos, idempotencia) y en `main`. Historial de commits: `babdfab` (módulo base) hasta `a689a40` (Respuesta recibida/clasificada); B4 se agregó después, ver commit de "Registrar error de workflow".
 
 Todos los endpoints que n8n necesita para continuar el flujo son críticos. "Parámetros" y "Catálogos" están separados porque `PLAN_N8N_DEFINITIVO.md` (B1) los sustituye como dos pasos independientes.
 
@@ -111,10 +112,12 @@ CORS: el frontend CRM (React) vive en un origen distinto al backend; configurar 
 ### `procesos_fallidos`
 
 - `id` BIGINT UNSIGNED PK.
-- `execution_id` VARCHAR(100) NULL — id de ejecución de n8n.
-- `evento_id` CHAR(36) NULL — FK opcional a `eventos_pendientes` cuando aplica.
+- `evento_id` BIGINT UNSIGNED NULL — FK opcional a `eventos_pendientes` cuando el fallo viene del despachador de outbox interno.
+- `execution_id` VARCHAR(100) NULL, UNIQUE — id de ejecución de n8n; NULL para las filas que crea internamente el despachador de outbox (MySQL permite múltiples NULL en un índice UNIQUE). Es la clave de idempotencia para las filas que crea el Error Workflow (B4).
 - `workflow` VARCHAR(120) NULL, `nodo` VARCHAR(120) NULL, `endpoint` VARCHAR(160) NULL.
 - `codigo_http` SMALLINT UNSIGNED NULL.
+- `tipo` VARCHAR(100) NOT NULL — tipo del evento/reporte de origen.
+- `payload` JSON NOT NULL — contexto crudo del fallo (para el despachador de outbox, el payload del evento; para B4, `detalle` fusionado con workflow/nodo/endpoint/codigo_http).
 - `mensaje` TEXT NOT NULL.
 - `estado` ENUM(`abierto`, `en_revision`, `resuelto`) DEFAULT `abierto`.
 - `creado_en`, `actualizado_en` DATETIME.

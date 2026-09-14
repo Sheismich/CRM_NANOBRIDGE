@@ -1,13 +1,19 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
+import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, procesosFallidos, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { TareasService } from "../tareas/tareas.service.js";
-import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
+import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
+
+// tipo fijo de incidencias.tipo para todo lo que reporta el Error Workflow
+// global de n8n (B4) — junto con execution_id es la pareja que usa el
+// UNIQUE uq_incidencias_execution_tipo (004_scoring_e_incidencias.sql)
+// para que registrarErrorWorkflow() sea idempotente.
+const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
 
 function normalizarValor(tipo: "correo" | "telefono" | "whatsapp", valor: string): string {
   return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
@@ -142,6 +148,120 @@ export class AutomatizacionService {
         if (existing) return { id: existing.id, ya_existia: true as const };
       }
       throw error;
+    }
+  }
+
+  // --- Error de workflow (B4, PLAN_N8N_DEFINITIVO.md) -----------------------------
+  // El Error Trigger global de n8n llama esto UNA vez por ejecución fallida
+  // en vez de dos llamadas condicionales separadas (registrar incidencia +
+  // tal vez registrar procesos_fallidos) -- por eso ambas escrituras pasan
+  // por la misma transacción aquí: o quedan las dos, o ninguna. `critico`
+  // decide si además de la incidencia (que siempre se registra, para dejar
+  // rastro de todo lo que falla) se crea una fila en procesos_fallidos, la
+  // que sí exige triage humano.
+  async registrarErrorWorkflow(input: ErrorWorkflowInput) {
+    if (input.prospecto_id) {
+      const [prospecto] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
+      if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
+    }
+
+    // Un solo objeto para ambas escrituras (única fuente de verdad): así
+    // el contexto crudo que manda n8n en `detalle` no se pierde de una
+    // tabla sin perderse de la otra.
+    const detalle = {
+      ...input.detalle,
+      workflow: input.workflow ?? null,
+      nodo: input.nodo ?? null,
+      endpoint: input.endpoint ?? null,
+      codigo_http: input.codigo_http ?? null
+    };
+
+    try {
+      return await this.db.transaction(async (tx) => {
+        const [incidencia] = await tx.insert(incidencias).values({
+          executionId: input.execution_id,
+          prospectoId: input.prospecto_id ?? null,
+          tipo: TIPO_ERROR_WORKFLOW,
+          severidad: input.critico ? "alta" : "media",
+          mensaje: input.mensaje,
+          detalle
+        });
+
+        let procesoFallidoId: number | null = null;
+        if (input.critico) {
+          const [proceso] = await tx.insert(procesosFallidos).values({
+            executionId: input.execution_id,
+            tipo: TIPO_ERROR_WORKFLOW,
+            workflow: input.workflow ?? null,
+            nodo: input.nodo ?? null,
+            endpoint: input.endpoint ?? null,
+            codigoHttp: input.codigo_http ?? null,
+            mensaje: input.mensaje,
+            payload: detalle
+          });
+          procesoFallidoId = proceso.insertId;
+        }
+
+        return { incidencia_id: incidencia.insertId, proceso_fallido_id: procesoFallidoId, ya_existia: false as const };
+      });
+    } catch (error) {
+      if (!isDuplicateEntry(error)) throw error;
+
+      const [existing] = await this.db
+        .select({ id: incidencias.id })
+        .from(incidencias)
+        .where(sql`${incidencias.executionId} = ${input.execution_id} AND ${incidencias.tipo} = ${TIPO_ERROR_WORKFLOW}`)
+        .limit(1);
+      if (!existing) throw error;
+
+      const [existingProceso] = await this.db
+        .select({ id: procesosFallidos.id })
+        .from(procesosFallidos)
+        .where(eq(procesosFallidos.executionId, input.execution_id))
+        .limit(1);
+
+      // Promoción (hallazgo de code review, 14-sep-2026): un segundo
+      // reporte para el mismo execution_id (reintento de n8n, u otro nodo
+      // de la misma ejecución que sí resultó crítico) no debe perderse en
+      // silencio solo porque el (execution_id, tipo) ya existía. Si este
+      // reporte llega marcado crítico y todavía no hay fila en
+      // procesos_fallidos, se crea ahora y se sube la severidad de la
+      // incidencia ya existente -- así una promoción tardía a crítico
+      // sigue generando la fila que exige triage humano, en vez de
+      // devolver silenciosamente proceso_fallido_id: null.
+      if (input.critico && !existingProceso) {
+        try {
+          return await this.db.transaction(async (tx) => {
+            const [proceso] = await tx.insert(procesosFallidos).values({
+              executionId: input.execution_id,
+              tipo: TIPO_ERROR_WORKFLOW,
+              workflow: input.workflow ?? null,
+              nodo: input.nodo ?? null,
+              endpoint: input.endpoint ?? null,
+              codigoHttp: input.codigo_http ?? null,
+              mensaje: input.mensaje,
+              payload: detalle
+            });
+            await tx.update(incidencias).set({ severidad: "alta" }).where(eq(incidencias.id, existing.id));
+            return { incidencia_id: existing.id, proceso_fallido_id: proceso.insertId, ya_existia: true as const };
+          });
+        } catch (promotionError) {
+          // Carrera rarísima: dos promociones concurrentes para el mismo
+          // execution_id. uq_procesos_fallidos_execution_id ya garantizó
+          // que solo una ganó -- se resuelve como una idempotencia más en
+          // vez de burbujear un 500.
+          if (!isDuplicateEntry(promotionError)) throw promotionError;
+          const [raceWinner] = await this.db
+            .select({ id: procesosFallidos.id })
+            .from(procesosFallidos)
+            .where(eq(procesosFallidos.executionId, input.execution_id))
+            .limit(1);
+          if (raceWinner) return { incidencia_id: existing.id, proceso_fallido_id: raceWinner.id, ya_existia: true as const };
+          throw promotionError;
+        }
+      }
+
+      return { incidencia_id: existing.id, proceso_fallido_id: existingProceso?.id ?? null, ya_existia: true as const };
     }
   }
 

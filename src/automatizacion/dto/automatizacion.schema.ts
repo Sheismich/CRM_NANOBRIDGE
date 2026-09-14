@@ -24,6 +24,26 @@ export const incidenciaInputSchema = z.object({
 });
 export type IncidenciaInput = z.infer<typeof incidenciaInputSchema>;
 
+// --- Error de workflow (B4, PLAN_N8N_DEFINITIVO.md) -----------------------------
+// El Error Trigger global de n8n llama esto UNA vez por ejecución fallida,
+// sin importar el workflow/nodo donde haya tronado. A diferencia de
+// incidenciaInputSchema, aquí execution_id es OBLIGATORIO: es la clave de
+// idempotencia de este endpoint (ver uq_incidencias_execution_tipo en
+// 004_scoring_e_incidencias.sql, con el `tipo` fijo que usa
+// registrarErrorWorkflow), no un dato opcional de trazabilidad.
+export const errorWorkflowInputSchema = z.object({
+  execution_id: z.string().trim().min(1).max(100),
+  workflow: z.string().trim().min(1).max(120).optional(),
+  nodo: z.string().trim().min(1).max(120).optional(),
+  endpoint: z.string().trim().min(1).max(160).optional(),
+  codigo_http: z.coerce.number().int().min(100).max(599).optional(),
+  mensaje: z.string().trim().min(1).max(2000),
+  critico: z.boolean().default(false),
+  prospecto_id: z.coerce.number().int().positive().optional(),
+  detalle: z.record(z.string(), z.unknown()).optional()
+});
+export type ErrorWorkflowInput = z.infer<typeof errorWorkflowInputSchema>;
+
 // --- Registro de prospecto -----------------------------------------------------
 export const registroProspectoInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),

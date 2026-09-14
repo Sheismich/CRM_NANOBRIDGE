@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, char, date, datetime, int, json, mysqlEnum, mysqlTable, uniqueIndex, varchar, decimal, index, text } from "drizzle-orm/mysql-core";
+import { bigint, boolean, char, date, datetime, int, json, mysqlEnum, mysqlTable, smallint, uniqueIndex, varchar, decimal, index, text } from "drizzle-orm/mysql-core";
 
 /**
  * Espejo tipado de src/database/migrations/001_initial_schema.sql.
@@ -287,16 +287,29 @@ export const eventosPendientes = mysqlTable("eventos_pendientes", {
   index("idx_eventos_entidad").on(table.entidadTipo, table.entidadId)
 ]);
 
+// B4 Error Workflow (PLAN_API_DEFINITIVO.md / PLAN_N8N_DEFINITIVO.md):
+// extendida en 016_procesos_fallidos_b4.sql más allá de su alcance
+// original de outbox interno (eventoId/tipo/payload) para también recibir
+// los reportes de falla de n8n (executionId/workflow/nodo/endpoint/
+// codigoHttp). `estado` reemplaza al antiguo `resuelto` booleano, mismo
+// patrón que `incidencias`.
 export const procesosFallidos = mysqlTable("procesos_fallidos", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   eventoId: bigint("evento_id", { mode: "number", unsigned: true }),
+  executionId: varchar("execution_id", { length: 100 }),
+  workflow: varchar("workflow", { length: 120 }),
+  nodo: varchar("nodo", { length: 120 }),
+  endpoint: varchar("endpoint", { length: 160 }),
+  codigoHttp: smallint("codigo_http", { unsigned: true }),
   tipo: varchar("tipo", { length: 100 }).notNull(),
   payload: json("payload").notNull(),
-  error: text("error").notNull(),
-  resuelto: boolean("resuelto").notNull().default(false),
-  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+  mensaje: text("mensaje").notNull(),
+  estado: mysqlEnum("estado", ["abierto", "en_revision", "resuelto"]).notNull().default("abierto"),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
-  index("idx_procesos_fallidos_resuelto").on(table.resuelto)
+  uniqueIndex("uq_procesos_fallidos_execution_id").on(table.executionId),
+  index("idx_procesos_fallidos_estado").on(table.estado)
 ]);
 
 export const listaSupresion = mysqlTable("lista_supresion", {

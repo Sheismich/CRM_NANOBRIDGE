@@ -136,7 +136,7 @@ export class OutboxDispatcherService {
           eventoId: event.id,
           tipo: event.tipo,
           payload: event.payload,
-          error: message
+          mensaje: message
         });
       });
       this.logger.error(`Evento ${event.id} (${event.tipo}) agotó reintentos tras ${attempts} intentos: ${message}`);
