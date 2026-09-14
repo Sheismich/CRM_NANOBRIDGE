@@ -78,7 +78,7 @@ export class CotizacionesService {
   // propio responsable, hereda el de la oportunidad a la que pertenece.
   private async validarOportunidad(user: CurrentUser, empresaId: number, oportunidadId: number) {
     const [row] = await this.db
-      .select({ id: oportunidades.id, empresaId: oportunidades.empresaId, responsableId: oportunidades.responsableId, probabilidad: catalogoEtapaEmbudo.probabilidad })
+      .select({ id: oportunidades.id, empresaId: oportunidades.empresaId, responsableId: oportunidades.responsableId, probabilidad: catalogoEtapaEmbudo.probabilidad, cerrada: oportunidades.cerrada })
       .from(oportunidades)
       .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
       .where(eq(oportunidades.id, oportunidadId))
@@ -86,6 +86,11 @@ export class CotizacionesService {
     if (!row || row.empresaId !== empresaId || (user.rol === "agente" && row.responsableId !== user.id)) {
       throw new HttpError(404, "Oportunidad no encontrada en esa empresa");
     }
+    // Agregado (hallazgo de code review, 14-sep-2026): sin esto se podía
+    // generar una cotización nueva (crear(), único llamador de este
+    // método) contra una oportunidad ya cerrada (ganada o perdida) -- el
+    // sistema ya la da por resuelta y una cotización nueva contradice eso.
+    if (row.cerrada) throw new HttpError(409, "La oportunidad ya está cerrada; no se pueden crear cotizaciones nuevas contra ella");
     return row;
   }
 
@@ -108,7 +113,11 @@ export class CotizacionesService {
   }
 
   async crear(user: CurrentUser, input: CrearCotizacionInput) {
-    const [empresa] = await this.db.select({ id: empresas.id }).from(empresas).where(eq(empresas.id, input.empresaId)).limit(1);
+    // eq(empresas.activo, true) agregado (hallazgo de code review,
+    // 14-sep-2026, mismo bug ya corregido en oportunidades.service.ts):
+    // sin él, se podía crear una cotización nueva contra una empresa ya
+    // desactivada.
+    const [empresa] = await this.db.select({ id: empresas.id }).from(empresas).where(and(eq(empresas.id, input.empresaId), eq(empresas.activo, true))).limit(1);
     if (!empresa) throw new HttpError(404, "Empresa no encontrada");
 
     const oportunidad = await this.validarOportunidad(user, input.empresaId, input.oportunidadId);

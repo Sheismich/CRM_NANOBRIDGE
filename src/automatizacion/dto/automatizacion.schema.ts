@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tieneDigitosSuficientes } from "../../shared/normalize.js";
 
 // --- Scoring -----------------------------------------------------------------
 export const scoringInputSchema = z.object({
@@ -43,7 +44,9 @@ export const registroProspectoInputSchema = z.object({
     puesto: z.string().trim().max(160).optional(),
     area: z.string().trim().max(160).optional(),
     correo: z.string().trim().email().max(254).optional(),
-    telefono: z.string().trim().min(7).max(40).optional()
+    // .refine adicional (hallazgo de code review, 14-sep-2026): ver
+    // tieneDigitosSuficientes() en shared/normalize.ts.
+    telefono: z.string().trim().min(7).max(40).refine(tieneDigitosSuficientes, { message: "El teléfono debe contener al menos 7 dígitos" }).optional()
   }).refine((input) => input.correo || input.telefono, { message: "El contacto requiere correo o teléfono para poder deduplicar" }),
   campana_id: z.coerce.number().int().positive().optional(),
   fuente_url: z.string().url().max(2048).optional(),

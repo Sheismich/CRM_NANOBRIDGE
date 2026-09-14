@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
@@ -349,13 +349,21 @@ export class AutomatizacionService {
     const valido = motivos.length === 0;
     const estado = valido ? "validado" : "excluido";
 
-    await this.db.update(prospectos).set({ estado }).where(eq(prospectos.id, input.prospecto_id));
-    await this.db.insert(auditoria).values({
-      usuarioId: null,
-      entidad: "prospecto",
-      entidadId: input.prospecto_id,
-      accion: "validar_automatizacion",
-      despues: { execution_id: input.execution_id, valido, motivos, estado }
+    // Transacción agregada (hallazgo de code review, 14-sep-2026): eran
+    // dos escrituras sueltas -- si el UPDATE de prospectos committaba y el
+    // INSERT de auditoría tronaba después, el prospecto cambiaba de
+    // estado sin ningún rastro en auditoria, y no hay ningún mecanismo de
+    // reintento que lo repare (a diferencia de registrarRespuesta/
+    // clasificarRespuesta, que sí son idempotentes por execution_id).
+    await this.db.transaction(async (tx) => {
+      await tx.update(prospectos).set({ estado }).where(eq(prospectos.id, input.prospecto_id));
+      await tx.insert(auditoria).values({
+        usuarioId: null,
+        entidad: "prospecto",
+        entidadId: input.prospecto_id,
+        accion: "validar_automatizacion",
+        despues: { execution_id: input.execution_id, valido, motivos, estado }
+      });
     });
 
     return { id: input.prospecto_id, valido, motivos, estado };
@@ -366,17 +374,48 @@ export class AutomatizacionService {
     const [prospecto] = await this.db.select({ id: prospectos.id, estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
 
-    await this.db.update(prospectos).set({ estado: input.estado }).where(eq(prospectos.id, input.prospecto_id));
-    await this.db.insert(auditoria).values({
-      usuarioId: null,
-      entidad: "prospecto",
-      entidadId: input.prospecto_id,
-      accion: "cambiar_estado_automatizacion",
-      antes: { estado: prospecto.estado },
-      despues: { execution_id: input.execution_id, estado: input.estado, motivo: input.motivo }
+    // Transacción agregada (hallazgo de code review, 14-sep-2026), mismo
+    // motivo que validarProspecto() arriba.
+    await this.db.transaction(async (tx) => {
+      await tx.update(prospectos).set({ estado: input.estado }).where(eq(prospectos.id, input.prospecto_id));
+      await tx.insert(auditoria).values({
+        usuarioId: null,
+        entidad: "prospecto",
+        entidadId: input.prospecto_id,
+        accion: "cambiar_estado_automatizacion",
+        antes: { estado: prospecto.estado },
+        despues: { execution_id: input.execution_id, estado: input.estado, motivo: input.motivo }
+      });
     });
 
     return { id: input.prospecto_id, estado: input.estado, motivo: input.motivo };
+  }
+
+  // Compartido por verificarEnvio() y registrarEnvio(): true si el medio
+  // de contacto (correo/whatsapp) de este prospecto para este canal está
+  // en lista_supresion. No asume que el medio ya esté marcado
+  // estado_contacto='no_contactar' -- registrarSupresion() solo actualiza
+  // esa columna si el medio YA existía en el momento de suprimirse; si el
+  // medio se agrega/reactiva después con el mismo valor, mediosContacto
+  // vuelve a nacer en 'activo' (default de columna) aunque lista_supresion
+  // siga teniendo el registro, así que esta consulta va directo contra
+  // lista_supresion, la fuente de verdad real (hallazgo de code review,
+  // 14-sep-2026).
+  private async estaSuprimido(prospectoId: number, canal: "correo" | "whatsapp"): Promise<boolean> {
+    const [medio] = await this.db
+      .select({ valorNormalizado: mediosContacto.valorNormalizado })
+      .from(mediosContacto)
+      .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
+      .where(and(eq(prospectos.id, prospectoId), eq(mediosContacto.tipo, canal)))
+      .limit(1);
+    if (!medio) return false;
+
+    const [suprimido] = await this.db
+      .select({ id: listaSupresion.id })
+      .from(listaSupresion)
+      .where(and(eq(listaSupresion.tipo, canal), eq(listaSupresion.valorNormalizado, medio.valorNormalizado)))
+      .limit(1);
+    return !!suprimido;
   }
 
   // --- Verificación de envío ----------------------------------------------------------
@@ -407,6 +446,18 @@ export class AutomatizacionService {
 
     if (!prospecto.contactoActivo || !prospecto.empresaActiva) {
       return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto o la empresa fueron desactivados", numero_contacto_siguiente: null, ventana_vence_en: null };
+    }
+
+    // Consulta directa a lista_supresion agregada (hallazgo de code
+    // review, 14-sep-2026): antes este gate confiaba por completo en que
+    // n8n hubiera llamado ANTES a "Consulta de supresión" como paso
+    // separado del flujo (PLAN_N8N_DEFINITIVO.md B1) -- si el workflow
+    // reintenta/reentra directo en verificación sin repetir ese paso
+    // (bug de workflow, reintento manual, etc.), este endpoint dejaba
+    // pasar el envío sin ninguna comprobación de supresión propia. Mismo
+    // chequeo en registrarEnvio() más abajo.
+    if (await this.estaSuprimido(query.prospecto_id, query.canal)) {
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto está en la lista de supresión", numero_contacto_siguiente: null, ventana_vence_en: null };
     }
 
     const [ultimo] = await this.db
@@ -459,28 +510,59 @@ export class AutomatizacionService {
     // duplicado en vez de crear dos filas con el mismo numero_contacto —
     // se recalcula el total y se reintenta, en vez de confiar solo en el
     // chequeo en memoria (hallazgo de code review, 10-sep-2026).
+    //
+    // El chequeo de supresión vive DENTRO de esta misma transacción, con
+    // un FOR UPDATE sobre la fila de medios_contacto (hallazgo de code
+    // review, 14-sep-2026): hacerlo antes y fuera de una transacción (como
+    // en un primer intento de este fix) dejaba una ventana real entre "leer
+    // que no está suprimido" y "confirmar el envío" en la que un
+    // registrarSupresion() concurrente para ese mismo valor podía colarse
+    // sin que este método se enterara. Con el FOR UPDATE, un
+    // registrarSupresion() concurrente que intente actualizar esa misma
+    // fila de medios_contacto se queda esperando a que esta transacción
+    // termine -- el orden final ya no es ambiguo, sea cual sea quien
+    // arrancó primero.
     const MAX_INTENTOS = 3;
     for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
-      const [ultimo] = await this.db
-        .select({ numeroContacto: envios.numeroContacto })
-        .from(envios)
-        .where(and(eq(envios.prospectoId, input.prospecto_id), eq(envios.canal, input.canal)))
-        .orderBy(desc(envios.numeroContacto))
-        .limit(1);
-
-      const total = ultimo?.numeroContacto ?? 0;
-      if (total >= 3) throw new HttpError(409, "Máximo de 3 contactos alcanzado para este prospecto y canal");
-
       try {
-        const [result] = await this.db.insert(envios).values({
-          prospectoId: input.prospecto_id,
-          canal: input.canal,
-          numeroContacto: total + 1,
-          ventanaVenceEn,
-          executionId: input.execution_id
+        return await this.db.transaction(async (tx) => {
+          const [medio] = await tx
+            .select({ valorNormalizado: mediosContacto.valorNormalizado })
+            .from(mediosContacto)
+            .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
+            .where(and(eq(prospectos.id, input.prospecto_id), eq(mediosContacto.tipo, input.canal)))
+            .limit(1)
+            .for("update");
+          if (medio) {
+            const [suprimido] = await tx
+              .select({ id: listaSupresion.id })
+              .from(listaSupresion)
+              .where(and(eq(listaSupresion.tipo, input.canal), eq(listaSupresion.valorNormalizado, medio.valorNormalizado)))
+              .limit(1);
+            if (suprimido) throw new HttpError(409, "El contacto está en la lista de supresión");
+          }
+
+          const [ultimo] = await tx
+            .select({ numeroContacto: envios.numeroContacto })
+            .from(envios)
+            .where(and(eq(envios.prospectoId, input.prospecto_id), eq(envios.canal, input.canal)))
+            .orderBy(desc(envios.numeroContacto))
+            .limit(1);
+
+          const total = ultimo?.numeroContacto ?? 0;
+          if (total >= 3) throw new HttpError(409, "Máximo de 3 contactos alcanzado para este prospecto y canal");
+
+          const [result] = await tx.insert(envios).values({
+            prospectoId: input.prospecto_id,
+            canal: input.canal,
+            numeroContacto: total + 1,
+            ventanaVenceEn,
+            executionId: input.execution_id
+          });
+          return { id: result.insertId, numero_contacto: total + 1, ventana_vence_en: ventanaVenceEn, ya_existia: false as const };
         });
-        return { id: result.insertId, numero_contacto: total + 1, ventana_vence_en: ventanaVenceEn, ya_existia: false as const };
       } catch (error) {
+        if (error instanceof HttpError) throw error;
         if (!isDuplicateEntry(error)) throw error;
 
         const [retry] = await this.db
@@ -604,25 +686,37 @@ export class AutomatizacionService {
   async registrarSupresion(input: RegistroSupresionInput) {
     const valorNormalizado = normalizarValor(input.tipo, input.valor);
 
+    // Las 3 escrituras ahora corren en una sola transacción (hallazgo de
+    // code review, 14-sep-2026): antes eran 3 sentencias sueltas -- si el
+    // insert a lista_supresion committaba pero el UPDATE de
+    // medios_contacto tronaba, la petición 500eaba, y un retry de n8n con
+    // el mismo tipo/valor chocaba con ER_DUP_ENTRY en el insert (ya
+    // comprometido) y devolvía ya_existia:true de inmediato -- sin volver
+    // a intentar el UPDATE que nunca se aplicó, dejando el medio de
+    // contacto "activo" pese a que la supresión sí quedó registrada. Con
+    // la transacción, cualquier fallo revierte las 3 y un retry vuelve a
+    // intentar las 3 desde cero.
     try {
-      const [result] = await this.db.insert(listaSupresion).values({
-        tipo: input.tipo,
-        valorNormalizado,
-        motivo: input.motivo,
-        executionId: input.execution_id
+      return await this.db.transaction(async (tx) => {
+        const [result] = await tx.insert(listaSupresion).values({
+          tipo: input.tipo,
+          valorNormalizado,
+          motivo: input.motivo,
+          executionId: input.execution_id
+        });
+
+        await tx.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(and(eq(mediosContacto.tipo, input.tipo), eq(mediosContacto.valorNormalizado, valorNormalizado)));
+
+        await tx.insert(auditoria).values({
+          usuarioId: null,
+          entidad: "medio_contacto",
+          entidadId: result.insertId,
+          accion: "registrar_supresion",
+          despues: { execution_id: input.execution_id, tipo: input.tipo, motivo: input.motivo }
+        });
+
+        return { id: result.insertId, ya_existia: false as const };
       });
-
-      await this.db.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(and(eq(mediosContacto.tipo, input.tipo), eq(mediosContacto.valorNormalizado, valorNormalizado)));
-
-      await this.db.insert(auditoria).values({
-        usuarioId: null,
-        entidad: "medio_contacto",
-        entidadId: result.insertId,
-        accion: "registrar_supresion",
-        despues: { execution_id: input.execution_id, tipo: input.tipo, motivo: input.motivo }
-      });
-
-      return { id: result.insertId, ya_existia: false as const };
     } catch (error) {
       if (isDuplicateEntry(error)) {
         const [existing] = await this.db
@@ -767,13 +861,25 @@ export class AutomatizacionService {
     // 10-sep-2026).
     return this.db.transaction(async (tx) => {
       try {
-        await tx.update(respuestas).set({
+        // ne(estado, "clasificada") + affectedRows (hallazgo de code
+        // review, 14-sep-2026): el guard de arriba (estado==='clasificada')
+        // se lee ANTES de esta transacción -- sin revalidarlo aquí dentro,
+        // dos POST /respuestas/clasificacion concurrentes para la misma
+        // respuesta (distinto execution_id cada uno) pasaban ambos ese
+        // guard, y el segundo en confirmar pisaba en silencio la
+        // clasificación del primero (y el estado del prospecto), con dos
+        // filas de auditoría contradictorias. Mismo patrón CAS que ya usa
+        // TareasService.cerrar()/clasificar().
+        const [result] = await tx.update(respuestas).set({
           estado: "clasificada",
           clasificacion: input.clasificacion,
           comentario: input.comentario ?? null,
           executionIdClasificacion: input.execution_id,
           clasificadoEn: sql`CURRENT_TIMESTAMP`
-        }).where(eq(respuestas.id, input.respuesta_id));
+        }).where(and(eq(respuestas.id, input.respuesta_id), ne(respuestas.estado, "clasificada")));
+        if (result.affectedRows === 0) {
+          throw new HttpError(409, "La respuesta ya fue clasificada por otra solicitud");
+        }
       } catch (error) {
         if (isDuplicateEntry(error)) {
           throw new HttpError(409, "execution_id de clasificación ya usado en otra respuesta");

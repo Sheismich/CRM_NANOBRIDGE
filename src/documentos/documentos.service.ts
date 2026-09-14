@@ -1,6 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { extname } from "node:path";
 import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, contactos, documentos, empresas, oportunidades } from "../database/schema.js";
@@ -10,7 +9,7 @@ import { env } from "../config/env.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { STORAGE_SERVICE } from "./storage/storage.constants.js";
 import type { StorageService } from "./storage/storage.types.js";
-import { TIPOS_MIME_PERMITIDOS, type CambiarEstadoDocumentoInput, type ListDocumentosQuery, type NuevaVersionDocumentoInput, type RevisarDocumentoInput, type SubirDocumentoInput } from "./dto/documento.schema.js";
+import { EXTENSION_POR_MIME, TIPOS_MIME_PERMITIDOS, type CambiarEstadoDocumentoInput, type ListDocumentosQuery, type NuevaVersionDocumentoInput, type RevisarDocumentoInput, type SubirDocumentoInput } from "./dto/documento.schema.js";
 
 /** Subconjunto de Express.Multer.File que de verdad usa el servicio (memoryStorage: sin destination/filename/path). */
 export type ArchivoSubido = { originalname: string; mimetype: string; size: number; buffer: Buffer };
@@ -133,12 +132,15 @@ export class DocumentosService {
     }
   }
 
-  private buildStorageKey(empresaId: number, originalName: string): string {
+  private buildStorageKey(empresaId: number, mimetype: string): string {
     // Key propia (UUID), no el nombre original: evita colisiones y
     // caracteres inseguros en el path/objeto de storage. nombre_original
     // se conserva aparte para mostrarlo y para el Content-Disposition de
-    // la descarga.
-    const ext = extname(originalName).slice(0, 10);
+    // la descarga. La extensión sale de EXTENSION_POR_MIME (mimetype ya
+    // validado contra TIPOS_MIME_PERMITIDOS por validarArchivo()), no del
+    // nombre de archivo que manda el cliente -- ver comentario en
+    // EXTENSION_POR_MIME (hallazgo de code review, 14-sep-2026).
+    const ext = EXTENSION_POR_MIME[mimetype as keyof typeof EXTENSION_POR_MIME] ?? "";
     return `documentos/${empresaId}/${randomUUID()}${ext}`;
   }
 
@@ -154,7 +156,7 @@ export class DocumentosService {
       input.contactoId ? this.validarContacto(input.empresaId, input.contactoId) : Promise.resolve()
     ]);
 
-    const key = this.buildStorageKey(input.empresaId, archivo.originalname);
+    const key = this.buildStorageKey(input.empresaId, archivo.mimetype);
     // Se sube el archivo ANTES de abrir la transacción de DB: si el insert
     // de metadatos fallara después, queda un blob huérfano en storage
     // (aceptable -- nada lo referencia, un futuro job de purga lo puede
@@ -272,7 +274,7 @@ export class DocumentosService {
 
     const raizId = actual.documentoRaizId ?? actual.id;
     const nuevaVersionNum = actual.version + 1;
-    const key = this.buildStorageKey(actual.empresaId, archivo.originalname);
+    const key = this.buildStorageKey(actual.empresaId, archivo.mimetype);
     await this.storageService.subir(key, { buffer: archivo.buffer, mimeType: archivo.mimetype, tamanoBytes: archivo.size });
 
     return this.db.transaction(async (tx) => {

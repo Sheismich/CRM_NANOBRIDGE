@@ -139,7 +139,13 @@ export class ReportesService {
       .groupBy(catalogoEtapaEmbudo.id, catalogoEtapaEmbudo.clave, catalogoEtapaEmbudo.nombre, catalogoEtapaEmbudo.orden)
       .orderBy(catalogoEtapaEmbudo.orden);
 
-    const base = Number(rows.find((r) => r.orden === 1)?.alcanzadas ?? 0);
+    // Se identifica la etapa de entrada por su clave ("calificada"), no
+    // por orden===1: el número mágico se rompía si algún día se inserta
+    // una etapa nueva antes de "calificada" y se renumera catalogo_etapa_
+    // embudo.orden -- el reporte seguiría corriendo pero con el punto de
+    // partida equivocado, sin ningún error visible (hallazgo de code
+    // review, 14-sep-2026).
+    const base = Number(rows.find((r) => r.etapaClave === "calificada")?.alcanzadas ?? 0);
     const etapas = rows
       .filter((r) => r.etapaClave !== "perdida")
       .map((r) => ({
@@ -255,7 +261,12 @@ export class ReportesService {
     switch (reporte) {
       case "actividades": {
         const datos = await this.actividadesPorAgente(query);
-        return { nombreArchivo: "actividades_por_agente.csv", contenido: toCsv(datos) };
+        // headers explícito: datos puede venir vacío (sin actividades en
+        // el rango pedido) y sin esto el CSV salía sin encabezado, a
+        // diferencia de cualquier exportación con resultados (hallazgo de
+        // code review, 14-sep-2026) -- igual en los otros dos casos de
+        // abajo que también pueden venir vacíos.
+        return { nombreArchivo: "actividades_por_agente.csv", contenido: toCsv(datos, ["responsable_id", "responsable_nombre", "llamada", "whatsapp", "comentario", "total"]) };
       }
       case "tareas": {
         const datos = await this.tareasReporte(query);
@@ -263,7 +274,7 @@ export class ReportesService {
           ...datos.cerradas.por_tipo.map((f) => ({ categoria: "cerrada", tipo: f.tipo, cantidad: f.cantidad })),
           ...datos.vencidas.por_tipo.map((f) => ({ categoria: "vencida", tipo: f.tipo, cantidad: f.cantidad }))
         ];
-        return { nombreArchivo: "tareas_cerradas_vencidas.csv", contenido: toCsv(filas) };
+        return { nombreArchivo: "tareas_cerradas_vencidas.csv", contenido: toCsv(filas, ["categoria", "tipo", "cantidad"]) };
       }
       case "conversion-etapas": {
         const datos = await this.conversionEtapas(query);
@@ -284,7 +295,7 @@ export class ReportesService {
       }
       case "forecast": {
         const datos = await this.forecastMensual(query);
-        return { nombreArchivo: "forecast_mensual.csv", contenido: toCsv(datos) };
+        return { nombreArchivo: "forecast_mensual.csv", contenido: toCsv(datos, ["mes", "cantidad", "valor_estimado_total", "valor_ponderado"]) };
       }
       default: {
         const exhaustivo: never = reporte;

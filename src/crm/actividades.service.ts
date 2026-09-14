@@ -82,8 +82,17 @@ export class ActividadesService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
 
   async crear(user: CurrentUser, input: CrearActividadInput) {
-    const [empresa] = await this.db.select({ id: empresas.id }).from(empresas).where(eq(empresas.id, input.empresaId)).limit(1);
-    if (!empresa) throw new HttpError(404, "Empresa no encontrada");
+    // eq(activo, true) + scoping por propietario para agente agregados
+    // (hallazgo de code review, 14-sep-2026): antes solo se comprobaba que
+    // la empresa existiera -- un agente podía registrar actividades contra
+    // una empresa ajena, y cualquiera podía registrarlas contra una
+    // empresa ya desactivada (mismo bug que ya se había corregido en
+    // oportunidades.service.ts/documentos.service.ts, pero se quedó sin
+    // aplicar aquí).
+    const [empresa] = await this.db.select({ id: empresas.id, propietarioId: empresas.propietarioId }).from(empresas).where(and(eq(empresas.id, input.empresaId), eq(empresas.activo, true))).limit(1);
+    if (!empresa || (user.rol === "agente" && empresa.propietarioId !== user.id)) {
+      throw new HttpError(404, "Empresa no encontrada");
+    }
 
     if (input.contactoId) {
       const [contacto] = await this.db.select({ id: contactos.id }).from(contactos).where(and(eq(contactos.id, input.contactoId), eq(contactos.empresaId, input.empresaId))).limit(1);
@@ -132,7 +141,10 @@ export class ActividadesService {
   // que la oportunidad existiera, así que no hay forma correcta de
   // atribuirlos a ella.
   async timeline(user: CurrentUser, query: TimelineQuery) {
-    const [empresa] = await this.db.select({ id: empresas.id, propietarioId: empresas.propietarioId }).from(empresas).where(eq(empresas.id, query.empresaId)).limit(1);
+    // eq(activo, true) agregado (hallazgo de code review, 14-sep-2026):
+    // sin él, se podía consultar el timeline de una empresa ya
+    // desactivada como si nada.
+    const [empresa] = await this.db.select({ id: empresas.id, propietarioId: empresas.propietarioId }).from(empresas).where(and(eq(empresas.id, query.empresaId), eq(empresas.activo, true))).limit(1);
     if (!empresa || (user.rol === "agente" && empresa.propietarioId !== user.id)) {
       throw new HttpError(404, "Empresa no encontrada");
     }

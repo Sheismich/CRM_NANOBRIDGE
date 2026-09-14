@@ -110,7 +110,7 @@ export class EmpresasService {
       // vez de poder colarse a mitad de este update (hallazgo de code
       // review, 14-sep-2026: antes no había ningún guard y una empresa
       // podía editarse justo después de haber sido desactivada).
-      const before = await this.findEmpresaScoped(tx, user, id);
+      const before = await this.findEmpresaScoped(tx, user, id, true);
 
       const set: Partial<typeof empresas.$inferInsert> = {};
       if (input.nombreLegal !== undefined) set.nombreLegal = input.nombreLegal;
@@ -463,12 +463,13 @@ export class EmpresasService {
 
   // Usado por get() y update(): necesita todos los campos de la empresa
   // (get() los devuelve, update() los usa para el snapshot "antes" de
-  // auditoría). FOR UPDATE: al llamarse dentro de una transacción (desde
-  // update()) bloquea la fila hasta el commit -- fuera de una transacción
-  // (desde get(), vía this.db) es un lock de una sola sentencia que MySQL
-  // libera solo al terminar esa sentencia, inofensivo.
-  private async findEmpresaScoped(db: DrizzleDb | DrizzleTx, user: CurrentUser, id: number) {
-    const [company] = await db
+  // auditoría). `forUpdate` bloquea la fila (FOR UPDATE) hasta el commit
+  // de la transacción que llama -- update() lo pide (así se serializa
+  // contra un deactivate() concurrente, ver comentario ahí); get() es una
+  // lectura simple y NO lo pide, para no tomar un row lock (aunque sea
+  // breve) en cada GET bajo carga (hallazgo de code review, 14-sep-2026).
+  private async findEmpresaScoped(db: DrizzleDb | DrizzleTx, user: CurrentUser, id: number, forUpdate = false) {
+    const query = db
       .select({
         id: empresas.id,
         nombreLegal: empresas.nombreLegal,
@@ -487,8 +488,8 @@ export class EmpresasService {
       })
       .from(empresas)
       .where(and(eq(empresas.id, id), eq(empresas.activo, true)))
-      .limit(1)
-      .for("update");
+      .limit(1);
+    const [company] = await (forUpdate ? query.for("update") : query);
 
     this.assertOwnership(user, company);
     return company;
