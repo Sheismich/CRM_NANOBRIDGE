@@ -34,8 +34,12 @@ const schema = z.object({
   // Despachador de eventos_pendientes (patrón outbox, PLAN_CRM_DEFINITIVO.md
   // #5): a dónde se entregan los eventos salientes hacia n8n. Sin configurar,
   // el despachador deja los eventos en 'fallido' tras agotar reintentos en
-  // vez de intentar una URL inexistente.
-  N8N_WEBHOOK_URL: z.string().url().optional(),
+  // vez de intentar una URL inexistente. z.preprocess normaliza "" a
+  // undefined -- .env.example lo deja vacío (documentado, sin valor) igual
+  // que GCS_BUCKET/GCS_PROJECT_ID/GCS_KEY_FILE más abajo; sin esto, copiar
+  // .env.example tal cual tumbaba el arranque entero con un ZodError en vez
+  // de tratarse como "no configurado" (hallazgo de auditoría, 14-sep-2026).
+  N8N_WEBHOOK_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
   OUTBOX_DISPATCH_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
   // Expediente documental (PLAN_CRM_DEFINITIVO.md #8). STORAGE_DRIVER
   // decide en runtime qué StorageService implementa
