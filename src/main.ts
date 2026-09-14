@@ -15,6 +15,13 @@ async function bootstrap() {
   app.disable("x-powered-by");
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+  // CORS_ORIGINS vacío (default) => origin:false: ningún navegador puede
+  // llamar la API desde otro origen, pero n8n (X-API-Key) y curl no son
+  // peticiones de navegador y no pasan por CORS -- no se rompen.
+  // credentials:true es obligatorio para que el navegador mande la cookie
+  // de sesión en fetch/XHR cross-origin; con eso, `origin` no puede ser
+  // "*" (spec de CORS), de ahí la whitelist explícita en vez de comodín.
+  app.enableCors({ origin: env.CORS_ORIGINS.length > 0 ? env.CORS_ORIGINS : false, credentials: true });
   app.useGlobalFilters(new HttpExceptionFilter());
 
   await app.listen(env.PORT);

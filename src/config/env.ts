@@ -7,6 +7,28 @@ const schema = z.object({
   DATABASE_URL: z.string().url(),
   SESSION_COOKIE_NAME: z.string().min(1).default("nanobridge_session"),
   SESSION_TTL_HOURS: z.coerce.number().int().positive().max(720).default(12),
+  // CORS: whitelist explícita de orígenes del frontend (subdominio propio,
+  // ej. https://app.nanobridge.com), separados por coma. Sin esto, main.ts
+  // no habilita CORS y cualquier fetch/XHR desde un navegador en otro
+  // origen es rechazado -- las llamadas de n8n y curl (no son peticiones de
+  // navegador, CORS no aplica) no se ven afectadas por dejarlo vacío.
+  // Como el frontend vive en un subdominio del mismo sitio
+  // (SameSite=Lax de la cookie de sesión ya cubre ese caso, PLAN_API_
+  // DEFINITIVO.md), no hace falta SameSite=None+Secure -- si en el futuro
+  // el frontend pasa a un dominio ajeno, hay que revisar
+  // session.service.ts también.
+  // Se normaliza cada entrada a new URL(origin).origin (sin path, sin
+  // trailing slash, host en minúsculas) -- el paquete `cors` compara el
+  // Origin del navegador contra esta lista con === exacto, y ese header
+  // siempre llega ya en esa forma canónica. Sin normalizar, un
+  // "https://app.nanobridge.com/" o "https://App.nanobridge.com" en el
+  // .env pasaba la validación de z.string().url() pero nunca hacía match
+  // en runtime -- CORS quedaba silenciosamente roto para el origen
+  // "correcto" (hallazgo de code review, 14-sep-2026).
+  CORS_ORIGINS: z.preprocess(
+    (v) => (v === "" || v === undefined ? [] : String(v).split(",").map((origin) => origin.trim()).filter(Boolean)),
+    z.array(z.string().url().transform((origin) => new URL(origin).origin))
+  ).default([]),
   CRM_CALLBACK_API_KEY: z.string().min(16),
   WEBHOOK_ENTRADA_API_KEY: z.string().min(16),
   // Despachador de eventos_pendientes (patrón outbox, PLAN_CRM_DEFINITIVO.md
