@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { eventosPendientes } from "../database/schema.js";
+import { eventosPendientes, procesosFallidos } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
+import { compactConditions } from "../shared/drizzle-utils.js";
 
 export type OutboxEventInput = {
   tipo: string;
@@ -75,5 +76,58 @@ export class OutboxService {
       proximoIntentoEn: null,
       ultimoError: null
     }).where(eq(eventosPendientes.id, id));
+  }
+
+  // "Revisión de procesos fallidos" (job/pantalla de PLAN_API_DEFINITIVO.md,
+  // sección "Jobs internos"): hasta ahora procesos_fallidos solo se escribía
+  // (outbox-dispatcher.service.ts al agotar reintentos, automatizacion.
+  // service.ts registrarErrorWorkflow para fallos críticos de n8n) pero
+  // nada lo exponía vía API para revisarlo -- hallazgo de la auditoría
+  // global, 14-sep-2026.
+  async listProcesosFallidos(estado: "abierto" | "en_revision" | "resuelto" | undefined, tipo: string | undefined, page: number, limit: number) {
+    const offset = (page - 1) * limit;
+    const conditions = compactConditions([
+      estado !== undefined ? eq(procesosFallidos.estado, estado) : undefined,
+      tipo !== undefined ? eq(procesosFallidos.tipo, tipo) : undefined
+    ]);
+
+    const rows = await this.db
+      .select()
+      .from(procesosFallidos)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(procesosFallidos.creadoEn))
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      page,
+      limit,
+      data: rows.map((row) => ({
+        id: row.id,
+        evento_id: row.eventoId,
+        execution_id: row.executionId,
+        workflow: row.workflow,
+        nodo: row.nodo,
+        endpoint: row.endpoint,
+        codigo_http: row.codigoHttp,
+        tipo: row.tipo,
+        payload: row.payload,
+        mensaje: row.mensaje,
+        estado: row.estado,
+        creado_en: row.creadoEn,
+        actualizado_en: row.actualizadoEn
+      }))
+    };
+  }
+
+  // Solo cambia el estado del triage (abierto/en_revision/resuelto) -- a
+  // diferencia de retry() de arriba, esto NO reintenta nada automáticamente
+  // (un proceso_fallido puede no tener evento_id, ej. los que crea
+  // registrarErrorWorkflow, así que no siempre hay algo que reintentar).
+  async actualizarEstadoProcesoFallido(id: number, estado: "abierto" | "en_revision" | "resuelto") {
+    const [proceso] = await this.db.select({ id: procesosFallidos.id }).from(procesosFallidos).where(eq(procesosFallidos.id, id)).limit(1);
+    if (!proceso) throw new HttpError(404, "Proceso fallido no encontrado");
+
+    await this.db.update(procesosFallidos).set({ estado }).where(eq(procesosFallidos.id, id));
   }
 }

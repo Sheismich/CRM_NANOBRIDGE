@@ -50,6 +50,7 @@ src/
     outbox.module.ts, outbox.service.ts            enqueue(tx, evento) — inserta en eventos_pendientes dentro de la misma transacción
     outbox-dispatcher.service.ts                   despachador @Interval(): entrega a n8n, reintentos 5s/30s/120s, procesos_fallidos al agotarlos
     eventos-pendientes.controller.ts               GET/POST /eventos-pendientes (solo administrador)
+    procesos-fallidos.controller.ts                GET /procesos-fallidos, PATCH /:id/estado (solo administrador)
 ```
 
 ## Capa de datos: Drizzle sobre el mismo pool de mysql2
@@ -100,10 +101,12 @@ Probado con datos reales: se mapeó la base de 30 prospectos industriales de STE
 
 ## Qué falta (siguiente avance sugerido)
 
-Esta sección estaba desactualizada: automatización (los 17 endpoints para n8n), oportunidades/pipeline, cotizaciones, documentos y reportes/dashboards ya están implementados (ver secciones arriba), aunque no quedaron documentados aquí cuando se construyeron. Lo que de verdad falta hoy:
+Esta sección estaba desactualizada: automatización (los 18 endpoints para n8n, incluyendo B4 Error Workflow), oportunidades/pipeline, cotizaciones, documentos, reportes/dashboards, `usuarios` y `auditoria` ya están implementados (ver secciones arriba), aunque no siempre quedaron documentados aquí cuando se construyeron. Lo que de verdad falta hoy (confirmado por la auditoría global del 14-sep-2026):
 
-- Módulo `usuarios` — alta y gestión de cuentas vía API; por ahora el único usuario se crea con `/auth/bootstrap`.
-- CRUD independiente de `/contactos` — hoy solo se crean/editan dentro de `/empresas/:id/contactos`.
-- Endpoint `/auditoria` — la tabla existe y ya se escribe desde varios servicios, pero no hay forma de consultarla vía API todavía.
+- CRUD independiente de `/contactos` — hoy solo se crean/editan dentro de `/empresas/:id/contactos` (decisión de diseño, no un olvido).
+- `/catalogos` (sesión, CRM) incompleto — solo existe `/api/v1/oportunidades/catalogos` (etapas, motivos de pérdida); faltan catálogos de tipo de documento, giro y tamaño de empresa.
 - `catalogo_tipo_documento` y `metricas_comerciales_diarias` (tablas mencionadas en `PLAN_CRM_DEFINITIVO.md` que no llegaron a crearse); los reportes de momento se calculan en vivo en cada consulta, no desde un job diario.
+- Jobs internos pendientes de `PLAN_API_DEFINITIVO.md`: métricas diarias, revisión de documentos pendientes, alertas de SLA de tareas (el despachador de `eventos_pendientes` y la limpieza de borradores vencidos ya están).
+- Sin suite de pruebas automatizadas (Jest/Vitest) — toda la verificación de este proyecto ha sido manual/smoke-test contra MySQL real.
+- Sin rate limiting en `/auth/login`/`/auth/bootstrap`.
 - Confirmar con B1 de `PLAN_N8N_DEFINITIVO.md` si n8n ya sustituyó sus nodos MOCK por los endpoints reales de `/api/v1/automatizacion` (eso vive del lado del flujo de n8n, no de este repo).
