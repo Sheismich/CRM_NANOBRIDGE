@@ -1,4 +1,12 @@
 import { z } from "zod";
+import { tieneDigitosSuficientes } from "../../shared/normalize.js";
+
+// min(7)/max(40) sobre el texto crudo no basta para "parece un teléfono"
+// (ver tieneDigitosSuficientes en shared/normalize.ts, hallazgo de code
+// review, 14-sep-2026): sin el .refine, un valor como "no-phone" pasaba la
+// validación pero normalizePhone() lo dejaba en "" e insertarMediosContacto()
+// lo descartaba en silencio.
+const telefonoSchema = z.string().trim().min(7).max(40).refine(tieneDigitosSuficientes, { message: "El teléfono debe contener al menos 7 dígitos" });
 
 export const contactInputSchema = z.object({
   nombre: z.string().trim().min(2).max(160),
@@ -6,8 +14,8 @@ export const contactInputSchema = z.object({
   area: z.string().trim().max(160).optional(),
   linkedinUrl: z.string().trim().url().max(2048).optional(),
   correo: z.string().trim().email().max(254).optional(),
-  telefono: z.string().trim().min(7).max(40).optional(),
-  whatsapp: z.string().trim().min(7).max(40).optional()
+  telefono: telefonoSchema.optional(),
+  whatsapp: telefonoSchema.optional()
 }).refine((input) => input.correo || input.telefono || input.whatsapp, { message: "Cada contacto requiere al menos un medio de contacto" });
 
 export const companyInputSchema = z.object({
@@ -19,8 +27,8 @@ export const companyInputSchema = z.object({
   estado: z.string().trim().max(120).optional(),
   ciudad: z.string().trim().max(120).optional(),
   pais: z.string().length(2).default("MX"),
-  sitioWeb: z.string().url().max(2048).optional(),
-  linkedinUrl: z.string().url().max(2048).optional(),
+  sitioWeb: z.string().trim().url().max(2048).optional(),
+  linkedinUrl: z.string().trim().url().max(2048).optional(),
   contactos: z.array(contactInputSchema).min(1).max(50)
 });
 
@@ -44,8 +52,8 @@ export const updateCompanySchema = z.object({
   estado: z.string().trim().max(120).nullable().optional(),
   ciudad: z.string().trim().max(120).nullable().optional(),
   pais: z.string().length(2).optional(),
-  sitioWeb: z.string().url().max(2048).nullable().optional(),
-  linkedinUrl: z.string().url().max(2048).nullable().optional()
+  sitioWeb: z.string().trim().url().max(2048).nullable().optional(),
+  linkedinUrl: z.string().trim().url().max(2048).nullable().optional()
 }).refine((data) => Object.keys(data).length > 0, { message: "Debes incluir al menos un campo para actualizar" });
 
 // --- Alta y edición de contacto --------------------------------------------
@@ -59,8 +67,8 @@ export const updateContactSchema = z.object({
   area: z.string().trim().max(160).nullable().optional(),
   linkedinUrl: z.string().trim().url().max(2048).nullable().optional(),
   correo: z.string().trim().email().max(254).nullable().optional(),
-  telefono: z.string().trim().min(7).max(40).nullable().optional(),
-  whatsapp: z.string().trim().min(7).max(40).nullable().optional()
+  telefono: telefonoSchema.nullable().optional(),
+  whatsapp: telefonoSchema.nullable().optional()
 }).refine((data) => Object.keys(data).length > 0, { message: "Debes incluir al menos un campo para actualizar" });
 
 export type CompanyInput = z.infer<typeof companyInputSchema>;

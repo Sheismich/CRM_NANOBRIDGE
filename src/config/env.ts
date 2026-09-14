@@ -80,6 +80,27 @@ const schema = z.object({
   if (data.STORAGE_DRIVER === "gcs" && !data.GCS_BUCKET) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["GCS_BUCKET"], message: "GCS_BUCKET es obligatorio cuando STORAGE_DRIVER=gcs" });
   }
+
+  // Estos tres secretos protegen superficies distintas (callback del CRM,
+  // intake de webhooks de n8n, firma de URLs de descarga locales); antes
+  // nada impedía que un copy-paste accidental pusiera el mismo valor en
+  // dos de ellos, lo que dejaría una credencial pensada para un uso
+  // sirviendo también para autenticarse en el otro (hallazgo de code
+  // review, 14-sep-2026).
+  const secretos: [string, string][] = [
+    ["CRM_CALLBACK_API_KEY", data.CRM_CALLBACK_API_KEY],
+    ["WEBHOOK_ENTRADA_API_KEY", data.WEBHOOK_ENTRADA_API_KEY],
+    ["STORAGE_LOCAL_SIGNING_SECRET", data.STORAGE_LOCAL_SIGNING_SECRET]
+  ];
+  for (let i = 0; i < secretos.length; i++) {
+    for (let j = i + 1; j < secretos.length; j++) {
+      const [nombreA, valorA] = secretos[i]!;
+      const [nombreB, valorB] = secretos[j]!;
+      if (valorA === valorB) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [nombreB], message: `${nombreB} no puede tener el mismo valor que ${nombreA} -- son secretos para propósitos distintos` });
+      }
+    }
+  }
 });
 
 export const env = schema.parse(process.env);

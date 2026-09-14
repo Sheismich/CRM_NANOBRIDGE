@@ -23,12 +23,21 @@ export type PartidaInput = z.infer<typeof partidaInputSchema>;
 // cuenta en los dos) porque ambos se usan directamente con .parse() en el
 // controller.
 function validarMontos(data: { descuento: number; impuestos: number; partidas: PartidaInput[] }, ctx: z.RefinementCtx) {
-  const subtotal = data.partidas.reduce((acc, p) => acc + p.cantidad * p.precioUnitario, 0);
+  // Cada línea se redondea a 2 decimales ANTES de sumar -- igual que
+  // CotizacionesService.calcular() hace al persistir (cotizacion_partidas.
+  // importe es DECIMAL(12,2)). Antes este subtotal se calculaba sobre
+  // cantidad*precioUnitario SIN redondear por línea, así que una
+  // combinación de partidas que aquí validaba total=0.00 (o cualquier
+  // valor no negativo) podía, una vez que calcular() redondea cada línea
+  // por separado, terminar sumando un total negativo que este guard
+  // debía haber rechazado pero nunca vio (hallazgo de code review,
+  // 14-sep-2026).
+  const subtotal = Number(data.partidas.reduce((acc, p) => acc + Number((p.cantidad * p.precioUnitario).toFixed(2)), 0).toFixed(2));
   if (subtotal > MAX_MONTO) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["partidas"], message: `El subtotal (suma de cantidad × precio unitario) no puede exceder ${MAX_MONTO}` });
     return;
   }
-  const total = subtotal - data.descuento + data.impuestos;
+  const total = Number((subtotal - data.descuento + data.impuestos).toFixed(2));
   if (total < 0) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["descuento"], message: "El descuento no puede exceder subtotal + impuestos" });
   } else if (total > MAX_MONTO) {

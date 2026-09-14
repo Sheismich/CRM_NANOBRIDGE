@@ -5,11 +5,15 @@ import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { eventosPendientes, procesosFallidos } from "../database/schema.js";
 import { env } from "../config/env.js";
 
-// Reintentos idempotentes: 3 intentos como máximo, con backoff 5s / 30s /
-// 120s (PLAN_API_DEFINITIVO.md, PLAN_CRM_DEFINITIVO.md #5, MATRICES: "Tres
-// intentos: 5 s, 30 s y 120 s").
+// Reintentos idempotentes con backoff 5s / 30s / 120s (PLAN_API_DEFINITIVO.md,
+// PLAN_CRM_DEFINITIVO.md #5, MATRICES: "Tres intentos: 5 s, 30 s y 120 s"):
+// 3 reintentos DESPUÉS del intento inicial (4 intentos en total), cada uno
+// precedido por el backoff correspondiente -- RETRY_BACKOFF_MS.length ya
+// no se usa como tope de intentos (ver handleFailure) porque eso dejaba
+// el backoff de 120s como código muerto: con MAX_ATTEMPTS=3, el evento se
+// marcaba 'fallido' definitivo justo al fallar el 3er intento, sin llegar
+// nunca a esperar esos 120s (hallazgo de code review, 14-sep-2026).
 const RETRY_BACKOFF_MS = [5_000, 30_000, 120_000];
-const MAX_ATTEMPTS = RETRY_BACKOFF_MS.length;
 const BATCH_SIZE = 20;
 
 /**
@@ -69,9 +73,25 @@ export class OutboxDispatcherService {
   private async dispatchOne(event: typeof eventosPendientes.$inferSelect) {
     try {
       await this.deliver(event);
-      await this.db.update(eventosPendientes).set({ estado: "enviado" }).where(eq(eventosPendientes.id, event.id));
     } catch (error) {
       await this.handleFailure(event, error);
+      return;
+    }
+
+    // La entrega YA se confirmó (deliver() no tronó, n8n respondió ok) --
+    // si este UPDATE de bookkeeping falla, NO se trata como una falla de
+    // entrega: handleFailure() reprogramaría un reintento y volvería a
+    // mandar el mismo evento a n8n una segunda vez (entrega duplicada; el
+    // payload de deliver() no lleva ningún idempotency key que n8n pueda
+    // usar para deduplicar del otro lado) -- hallazgo de code review,
+    // 14-sep-2026. Un fallo aquí es casi siempre un problema transitorio
+    // de la propia base (no de n8n), así que solo se deja constancia para
+    // revisión manual en vez de arriesgar un reenvío duplicado.
+    try {
+      await this.db.update(eventosPendientes).set({ estado: "enviado" }).where(eq(eventosPendientes.id, event.id));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Evento ${event.id} (${event.tipo}) se entregó a n8n pero no se pudo marcar 'enviado' en la base -- revisar manualmente para no reenviarlo: ${message}`);
     }
   }
 
@@ -99,8 +119,12 @@ export class OutboxDispatcherService {
   private async handleFailure(event: typeof eventosPendientes.$inferSelect, error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     const attempts = event.intentos + 1;
+    // delayMs es el backoff a esperar antes del PRÓXIMO intento; undefined
+    // cuando ya se usaron los 3 backoffs documentados (5s/30s/120s) y este
+    // intento (el 4°) también falló -- ahí sí se agotan los reintentos.
+    const delayMs = RETRY_BACKOFF_MS[attempts - 1];
 
-    if (attempts >= MAX_ATTEMPTS) {
+    if (delayMs === undefined) {
       await this.db.transaction(async (tx) => {
         await tx.update(eventosPendientes).set({
           estado: "fallido",
@@ -115,17 +139,16 @@ export class OutboxDispatcherService {
           error: message
         });
       });
-      this.logger.error(`Evento ${event.id} (${event.tipo}) agotó reintentos: ${message}`);
+      this.logger.error(`Evento ${event.id} (${event.tipo}) agotó reintentos tras ${attempts} intentos: ${message}`);
       return;
     }
 
-    const delayMs = RETRY_BACKOFF_MS[attempts - 1];
     await this.db.update(eventosPendientes).set({
       estado: "pendiente",
       intentos: attempts,
       ultimoError: message,
       proximoIntentoEn: sql`DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${delayMs / 1000} SECOND)`
     }).where(eq(eventosPendientes.id, event.id));
-    this.logger.warn(`Evento ${event.id} (${event.tipo}) falló (intento ${attempts}/${MAX_ATTEMPTS}): ${message}`);
+    this.logger.warn(`Evento ${event.id} (${event.tipo}) falló (intento ${attempts}), reintenta en ${delayMs / 1000}s: ${message}`);
   }
 }

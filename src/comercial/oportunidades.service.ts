@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, catalogoEtapaEmbudo, catalogoMotivoPerdida, empresas, historialEtapaOportunidad, oportunidades } from "../database/schema.js";
+import { auditoria, catalogoEtapaEmbudo, catalogoMotivoPerdida, contactos, empresas, historialEtapaOportunidad, oportunidades, prospectos } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
@@ -78,6 +78,27 @@ export class OportunidadesService {
     return { page: query.page, limit: query.limit, data: rows.map((row) => toRow({ ...row.oportunidad, etapaClave: row.etapaClave, etapaNombre: row.etapaNombre, probabilidad: row.probabilidad })) };
   }
 
+  private async validarContacto(empresaId: number, contactoId: number) {
+    const [row] = await this.db.select({ id: contactos.id }).from(contactos).where(and(eq(contactos.id, contactoId), eq(contactos.empresaId, empresaId), eq(contactos.activo, true))).limit(1);
+    if (!row) throw new HttpError(404, "Contacto no encontrado en esa empresa");
+  }
+
+  private async validarProspecto(empresaId: number, prospectoId: number) {
+    // eq(contactos.activo, true) agregado (hallazgo de code review,
+    // 14-sep-2026): sin él, un prospecto cuyo contacto ya se desactivó
+    // (EmpresasService.deactivateContact) seguía pudiendo vincularse a una
+    // oportunidad nueva -- validarContacto(), agregado en este mismo
+    // cambio para el path directo por contactoId, sí lo exigía; este path
+    // por prospectoId se quedó sin la misma protección.
+    const [row] = await this.db
+      .select({ id: prospectos.id })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .where(and(eq(prospectos.id, prospectoId), eq(contactos.empresaId, empresaId), eq(contactos.activo, true)))
+      .limit(1);
+    if (!row) throw new HttpError(404, "Prospecto no encontrado en esa empresa");
+  }
+
   private async findScoped(user: CurrentUser, id: number) {
     const [row] = await this.db
       .select({
@@ -139,6 +160,17 @@ export class OportunidadesService {
     const [etapaInicial] = await this.db.select({ id: catalogoEtapaEmbudo.id }).from(catalogoEtapaEmbudo).where(eq(catalogoEtapaEmbudo.clave, "calificada")).limit(1);
     if (!etapaInicial) throw new HttpError(500, "Catálogo de etapas sin sembrar");
 
+    // Antes contactoId/prospectoId se insertaban tal cual venían del
+    // input, sin comprobar que pertenecieran a empresaId -- se podía
+    // vincular a una oportunidad un contacto (o el prospecto de un
+    // contacto) de OTRA empresa (hallazgo de code review, 14-sep-2026),
+    // mismo tipo de validación que ya hace CotizacionesService.
+    // validarContacto para cotizaciones.
+    await Promise.all([
+      input.contactoId ? this.validarContacto(input.empresaId, input.contactoId) : Promise.resolve(),
+      input.prospectoId ? this.validarProspecto(input.empresaId, input.prospectoId) : Promise.resolve()
+    ]);
+
     // Un agente solo puede tomar la oportunidad para sí mismo, igual que
     // TareasService.scopedFilters restringe la bandeja por responsable.
     const responsableId = user.rol === "agente" ? user.id : (input.responsableId ?? user.id);
@@ -189,12 +221,22 @@ export class OportunidadesService {
     }
 
     await this.db.transaction(async (tx) => {
-      await tx.update(oportunidades).set({
+      // eq(cerrada, false) + affectedRows agregados (hallazgo de code
+      // review, 14-sep-2026): sin esto, dos PATCH .../etapa concurrentes
+      // sobre la misma oportunidad abierta (ej. uno a "ganada" y otro a
+      // "perdida") pasaban ambos el guard de lectura de arriba y los dos
+      // escribían -- el último en llegar ganaba en silencio, sin ningún
+      // 409, con dos filas de historial/auditoría contradictorias. Mismo
+      // patrón CAS que ya usan cotizaciones/tareas/empresas.
+      const [result] = await tx.update(oportunidades).set({
         etapaId: nuevaEtapa.id,
         cerrada: nuevaEtapa.esCierre,
         motivoPerdidaId: nuevaEtapa.clave === "perdida" ? motivoPerdidaId : null,
         motivoPerdidaDetalle: nuevaEtapa.clave === "perdida" ? (input.motivoPerdidaDetalle ?? null) : null
-      }).where(eq(oportunidades.id, id));
+      }).where(and(eq(oportunidades.id, id), eq(oportunidades.cerrada, false)));
+      if (result.affectedRows === 0) {
+        throw new HttpError(409, "La oportunidad cambió de estado, vuelve a intentarlo");
+      }
 
       await tx.insert(historialEtapaOportunidad).values({
         oportunidadId: id,
@@ -230,12 +272,22 @@ export class OportunidadesService {
     if (!nuevaEtapa) throw new HttpError(404, "Etapa no encontrada");
 
     await this.db.transaction(async (tx) => {
-      await tx.update(oportunidades).set({
+      // eq(cerrada, true) + eq(etapaId, ...) + affectedRows (hallazgo de
+      // code review, 14-sep-2026): mismo motivo que cambiarEtapa() --
+      // condicionar por cerrada=true no basta solo, porque "ganada"
+      // también es cerrada=true; se exige además que la etapa siga siendo
+      // exactamente la "perdida" ya leída arriba, para que un cambiarEtapa
+      // concurrente (ej. a "ganada") no deje reabrir() reabriendo el
+      // cierre equivocado.
+      const [result] = await tx.update(oportunidades).set({
         etapaId: nuevaEtapa.id,
         cerrada: false,
         motivoPerdidaId: null,
         motivoPerdidaDetalle: null
-      }).where(eq(oportunidades.id, id));
+      }).where(and(eq(oportunidades.id, id), eq(oportunidades.cerrada, true), eq(oportunidades.etapaId, actual.oportunidad.etapaId)));
+      if (result.affectedRows === 0) {
+        throw new HttpError(409, "La oportunidad cambió de estado, vuelve a intentarlo");
+      }
 
       await tx.insert(historialEtapaOportunidad).values({
         oportunidadId: id,

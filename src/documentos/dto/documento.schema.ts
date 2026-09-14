@@ -13,6 +13,21 @@ export const TIPOS_MIME_PERMITIDOS = [
   "image/jpeg" // .jpg / .jpeg
 ] as const;
 
+// Extensión de storage derivada del mimetype YA VALIDADO contra la lista de
+// arriba, no del nombre de archivo que manda el cliente (originalname es
+// 100% controlado por quien sube): antes DocumentosService.buildStorageKey
+// tomaba extname(originalName) directo, así que un archivo con mimetype
+// "image/png" (el único campo que de verdad se valida) podía llamarse
+// "shell.php" y terminar guardado como "....php" en el storage real
+// (hallazgo de code review, 14-sep-2026).
+export const EXTENSION_POR_MIME: Record<(typeof TIPOS_MIME_PERMITIDOS)[number], string> = {
+  "application/pdf": ".pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+  "image/png": ".png",
+  "image/jpeg": ".jpg"
+};
+
 // Campos de multipart/form-data llegan como texto plano en req.body -- por
 // eso z.coerce en los ids, igual patrón que el resto de los controllers.
 export const subirDocumentoSchema = z.object({

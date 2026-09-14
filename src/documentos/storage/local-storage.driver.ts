@@ -39,7 +39,24 @@ export class LocalStorageDriver implements StorageService {
   async subir(key: string, archivo: ArchivoParaSubir): Promise<void> {
     const path = this.resolvePath(key);
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, archivo.buffer);
+    try {
+      await writeFile(path, archivo.buffer);
+    } catch (error) {
+      // Si writeFile truena a medias (disco lleno, proceso matado, etc.)
+      // puede quedar un archivo truncado/corrupto en `path` sin ninguna
+      // fila en `documentos` que lo referencie -- distinto del caso ya
+      // documentado de "blob huérfano" (documentos.service.ts), que
+      // asume una escritura COMPLETA y exitosa seguida de un fallo en el
+      // insert a MySQL. Aquí se intenta limpiar ese archivo a medio
+      // escribir antes de propagar el error (hallazgo de code review,
+      // 14-sep-2026); si el propio rm también falla (ej. el mismo disco
+      // lleno que causó el problema original), no hay nada más que hacer
+      // desde aquí -- se deja rastro y se propaga el error original.
+      await rm(path, { force: true }).catch((rmError) => {
+        console.error(`[local-storage] no se pudo limpiar el archivo parcial ${path}:`, rmError);
+      });
+      throw error;
+    }
   }
 
   async urlFirmada(key: string, opciones: OpcionesUrlFirmada): Promise<string> {
