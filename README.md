@@ -21,7 +21,7 @@ mockea la base, mismo criterio que toda la verificación manual de este
 proyecto), le aplica las migraciones reales, prueba contra él por HTTP con
 `supertest`, y al final lo apaga solo — no toca tu `.env` ni tu MySQL local.
 
-Cobertura (15-sep-2026, 32 pruebas en 11 archivos): `SessionAuthGuard`/
+Cobertura (15-sep-2026, 35 pruebas en 12 archivos): `SessionAuthGuard`/
 `RolesGuard`/`ApiKeyGuard` (401/403), `POST /auth/bootstrap` de un solo uso,
 la regla "no dejar el sistema sin al menos un administrador activo"
 (`usuarios.service.ts`) incluyendo el arreglo de interbloqueo por orden fijo
@@ -31,8 +31,9 @@ concurrentes reales, no solo secuenciales), el backoff de reintentos del
 despachador outbox (5s/30s/120s), la "promoción" de idempotencia en
 `registrarErrorWorkflow`, empresas/contactos (scoping por dueño para
 agentes, cascada al desactivar una empresa, preservación de `no_contactar`,
-409 por correo duplicado) y oportunidades (scoping por responsable, cierre/
-reapertura, el guard CAS contra dos cambios de etapa concurrentes). Es una
+409 por correo duplicado), oportunidades (scoping por responsable, cierre/
+reapertura, el guard CAS contra dos cambios de etapa concurrentes) y el job
+diario de métricas comerciales. Es una
 base incremental, no cobertura completa — ver "Qué falta" más abajo.
 
 ## Estructura del proyecto
@@ -128,7 +129,7 @@ Esta sección estaba desactualizada: automatización (los 18 endpoints para n8n,
 
 - CRUD independiente de `/contactos` — hoy solo se crean/editan dentro de `/empresas/:id/contactos` (decisión de diseño, no un olvido).
 - `/catalogos` (sesión, CRM) incompleto — solo existe `/api/v1/oportunidades/catalogos` (etapas, motivos de pérdida); faltan catálogos de tipo de documento, giro y tamaño de empresa.
-- `catalogo_tipo_documento` y `metricas_comerciales_diarias` (tablas mencionadas en `PLAN_CRM_DEFINITIVO.md` que no llegaron a crearse); los reportes de momento se calculan en vivo en cada consulta, no desde un job diario.
-- Jobs internos pendientes de `PLAN_API_DEFINITIVO.md`: métricas diarias, revisión de documentos pendientes, alertas de SLA de tareas (el despachador de `eventos_pendientes` y la limpieza de borradores vencidos ya están).
-- Suite de pruebas automatizadas (Vitest, ver "Pruebas automatizadas" arriba) sigue creciendo — cubre auth, usuarios, cotizaciones, outbox, automatización (promoción de errores), empresas/contactos y oportunidades. Documentos, tareas/cola de clasificación y el resto de automatización siguen verificados solo a mano/smoke-test contra MySQL real.
+- `catalogo_tipo_documento` (tabla mencionada en `PLAN_CRM_DEFINITIVO.md` que no llegó a crearse); `metricas_comerciales_diarias` ya existe y tiene su job diario (ver arriba).
+- Jobs internos pendientes de `PLAN_API_DEFINITIVO.md`: revisión de documentos pendientes, alertas de SLA de tareas (el despachador de `eventos_pendientes`, la limpieza de borradores vencidos y el job diario de métricas ya están).
+- Suite de pruebas automatizadas (Vitest, ver "Pruebas automatizadas" arriba) sigue creciendo — cubre auth, usuarios, cotizaciones, outbox, automatización (promoción de errores), empresas/contactos, oportunidades y el job diario de métricas. Documentos, tareas/cola de clasificación y el resto de automatización siguen verificados solo a mano/smoke-test contra MySQL real.
 - Confirmar con B1 de `PLAN_N8N_DEFINITIVO.md` si n8n ya sustituyó sus nodos MOCK por los endpoints reales de `/api/v1/automatizacion` — todavía no, pendiente (mismo equipo que este repo, solo falta hacerlo del lado del flujo de n8n).
