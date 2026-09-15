@@ -33,6 +33,14 @@ process.env.GCS_KEY_FILE = "";
 process.env.PORT = "3000";
 process.env.SESSION_COOKIE_NAME = "nanobridge_session";
 process.env.SESSION_TTL_HOURS = "12";
-process.env.OUTBOX_DISPATCH_INTERVAL_MS = "15000";
+// Una hora, no el default de 15s: OutboxDispatcherService corre por
+// @Interval() en CUALQUIER app de pruebas creada (nada en create-app.ts lo
+// desactiva), así que con el intervalo real de producción, ese timer de
+// fondo podía dispararse solo a mitad de una prueba que maneja
+// eventos_pendientes a mano (ej. 50-outbox-dispatcher-retry.spec.ts) y
+// adelantar/reprocesar el mismo evento fuera de secuencia -- hallazgo de
+// code-review, 15-sep-2026. Una hora es más que cualquier corrida real de
+// la suite, así que en la práctica nunca dispara durante las pruebas.
+process.env.OUTBOX_DISPATCH_INTERVAL_MS = String(60 * 60 * 1000);
 process.env.STORAGE_MAX_FILE_SIZE_MB = "25";
 process.env.STORAGE_SIGNED_URL_TTL_SECONDS = "300";
