@@ -36,3 +36,19 @@ export async function ensureSeedAdmin(app: INestApplication) {
   }
   return loginAs(app, SEED_ADMIN.correo, SEED_ADMIN.password);
 }
+
+// Crea un usuario con rol "agente" (vía la sesión de un administrador) e
+// inicia sesión con él. Antes estaba copiado casi igual en varios archivos
+// de prueba (70-empresas-contactos.spec.ts, 80-oportunidades.spec.ts) --
+// si POST /usuarios cambia de contrato, había que actualizar cada copia a
+// mano (hallazgo de code-review, 15-sep-2026).
+export async function crearAgente(app: INestApplication, adminCookie: string[], correo: string, password = "password_agente_1") {
+  const crear = await request(app.getHttpServer())
+    .post("/api/v1/usuarios")
+    .set("Cookie", adminCookie)
+    .send({ nombre: "Agente de prueba", correo, password, rol: "agente" });
+  if (crear.status !== 201) {
+    throw new Error(`crearAgente(${correo}) falló con status ${crear.status}: ${JSON.stringify(crear.body)}`);
+  }
+  return loginAs(app, correo, password);
+}

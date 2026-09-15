@@ -3,7 +3,7 @@ import request from "supertest";
 import { and, eq } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
-import { ensureSeedAdmin, loginAs } from "./support/seed.js";
+import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
 import { contactos, mediosContacto } from "../src/database/schema.js";
 
@@ -22,18 +22,9 @@ describe("empresas + contactos", () => {
     await closeTestDb();
   });
 
-  async function crearAgente(correo: string) {
-    const crear = await request(app.getHttpServer())
-      .post("/api/v1/usuarios")
-      .set("Cookie", adminCookie)
-      .send({ nombre: "Agente de prueba", correo, password: "password_agente_1", rol: "agente" });
-    expect(crear.status).toBe(201);
-    return loginAs(app, correo, "password_agente_1");
-  }
-
   it("un agente no puede ver una empresa de otro agente (404), pero sí la suya; administrador ve cualquiera", async () => {
-    const agente1Cookie = await crearAgente(`agente1.${Date.now()}@test.local`);
-    const agente2Cookie = await crearAgente(`agente2.${Date.now()}@test.local`);
+    const agente1Cookie = await crearAgente(app, adminCookie, `agente1.${Date.now()}@test.local`);
+    const agente2Cookie = await crearAgente(app, adminCookie, `agente2.${Date.now()}@test.local`);
 
     const crear = await request(app.getHttpServer())
       .post("/api/v1/empresas")
