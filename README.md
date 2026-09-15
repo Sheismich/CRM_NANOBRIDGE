@@ -13,6 +13,21 @@ Implementado con **NestJS** (módulos, controladores, servicios, guards) sobre E
 
 El health check queda disponible en `GET /health`.
 
+## Pruebas automatizadas
+
+`npm test` corre la suite con Vitest. Requiere **Docker Desktop corriendo**:
+cada corrida levanta un contenedor MySQL 8 desechable real (nunca se
+mockea la base, mismo criterio que toda la verificación manual de este
+proyecto), le aplica las migraciones reales, prueba contra él por HTTP con
+`supertest`, y al final lo apaga solo — no toca tu `.env` ni tu MySQL local.
+
+Cobertura inicial (15-sep-2026, primera base de la suite): `SessionAuthGuard`/
+`RolesGuard`/`ApiKeyGuard` (401/403), `POST /auth/bootstrap` de un solo uso,
+y la regla "no dejar el sistema sin al menos un administrador activo"
+(`usuarios.service.ts`) incluyendo el arreglo de interbloqueo por orden fijo
+de locks, verificado con peticiones concurrentes reales. Es una base
+incremental, no cobertura completa — ver "Qué falta" más abajo.
+
 ## Estructura del proyecto
 
 ```
@@ -107,6 +122,6 @@ Esta sección estaba desactualizada: automatización (los 18 endpoints para n8n,
 - `/catalogos` (sesión, CRM) incompleto — solo existe `/api/v1/oportunidades/catalogos` (etapas, motivos de pérdida); faltan catálogos de tipo de documento, giro y tamaño de empresa.
 - `catalogo_tipo_documento` y `metricas_comerciales_diarias` (tablas mencionadas en `PLAN_CRM_DEFINITIVO.md` que no llegaron a crearse); los reportes de momento se calculan en vivo en cada consulta, no desde un job diario.
 - Jobs internos pendientes de `PLAN_API_DEFINITIVO.md`: métricas diarias, revisión de documentos pendientes, alertas de SLA de tareas (el despachador de `eventos_pendientes` y la limpieza de borradores vencidos ya están).
-- Sin suite de pruebas automatizadas (Jest/Vitest) — toda la verificación de este proyecto ha sido manual/smoke-test contra MySQL real.
+- Suite de pruebas automatizadas (Vitest, ver "Pruebas automatizadas" arriba) apenas arrancó — solo cubre guards de auth y la regla de último administrador. El resto de los módulos (empresas, oportunidades, cotizaciones, documentos, automatización, outbox) sigue verificado solo a mano/smoke-test contra MySQL real.
 - Sin rate limiting en `/auth/login`/`/auth/bootstrap`.
 - Confirmar con B1 de `PLAN_N8N_DEFINITIVO.md` si n8n ya sustituyó sus nodos MOCK por los endpoints reales de `/api/v1/automatizacion` (eso vive del lado del flujo de n8n, no de este repo).

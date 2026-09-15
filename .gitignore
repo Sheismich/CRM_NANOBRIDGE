@@ -6,8 +6,15 @@ dist/
 # src/documentos/storage/ -- el código fuente de los drivers -- y lo deja
 # fuera del repo (hallazgo de code review, 11-sep-2026).
 /storage/
+# STORAGE_LOCAL_DIR de prueba (test/setup/setup-env.ts) -- mismo motivo
+# que /storage/ arriba, ningún test escribe ahí hoy pero por si acaso.
+/storage-test/
 .env
 .env.*
 !.env.example
 coverage/
 *.tsbuildinfo
+# Escrito por test/setup/global-setup.ts (Vitest) para pasarle la conexión
+# del contenedor MySQL desechable a cada archivo de prueba; se borra solo al
+# terminar la corrida, pero si algo interrumpe el proceso puede quedar.
+test/setup/.test-env.json
