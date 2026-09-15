@@ -1,11 +1,12 @@
-import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Interval } from "@nestjs/schedule";
+import { and, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { actividades, catalogoEtapaEmbudo, historialEtapaOportunidad, oportunidades, tareas, usuarios } from "../database/schema.js";
+import { actividades, catalogoEtapaEmbudo, historialEtapaOportunidad, metricasComercialesDiarias, oportunidades, tareas, usuarios } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { toCsv } from "../shared/csv.js";
-import type { ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
+import type { MetricasDiariasQuery, ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). A diferencia de los
 // demás módulos comerciales, aquí no hay "scoping por responsable" en el
@@ -21,8 +22,27 @@ function condicionRangoFecha(columna: unknown, fechaInicio?: string, fechaFin?: 
   return condiciones;
 }
 
+// Igual criterio que toRow() en oportunidades.service.ts/cotizaciones.service.ts:
+// la respuesta HTTP usa snake_case aunque las columnas de schema.ts estén en
+// camelCase -- calcularMetricasDelDia() y historicoMetricasDiarias() comparten
+// este mapeo para que las dos rutas devuelvan exactamente la misma forma.
+function metricaDiariaToRow(row: typeof metricasComercialesDiarias.$inferSelect) {
+  return {
+    fecha: row.fecha,
+    oportunidades_abiertas: row.oportunidadesAbiertas,
+    valor_pipeline: row.valorPipeline,
+    oportunidades_ganadas: row.oportunidadesGanadas,
+    ingresos_cerrados: row.ingresosCerrados,
+    oportunidades_perdidas: row.oportunidadesPerdidas,
+    valor_perdido: row.valorPerdido,
+    calculado_en: row.calculadoEn
+  };
+}
+
 @Injectable()
 export class ReportesService {
+  private readonly logger = new Logger(ReportesService.name);
+
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
 
   // "Actividades por agente" (PLAN_CRM_DEFINITIVO.md #9) -- cuenta cada
@@ -181,38 +201,121 @@ export class ReportesService {
   // cerrados" se calcula como la suma de valor_estimado de las ganadas.
   async pipelineResumen(query: ReporteQuery) {
     const condicionResponsable = query.responsableId ? eq(oportunidades.responsableId, query.responsableId) : undefined;
-
-    const condicionesCierre = compactConditions([
-      eq(oportunidades.cerrada, true),
-      condicionResponsable,
-      ...condicionRangoFecha(oportunidades.actualizadoEn, query.fechaInicio, query.fechaFin)
-    ]);
+    const condicionesFecha = condicionRangoFecha(oportunidades.actualizadoEn, query.fechaInicio, query.fechaFin);
 
     // Las tres consultas son independientes entre sí (ninguna depende del
     // resultado de otra), así que se corren en paralelo en vez de
     // esperarlas una tras otra (hallazgo de code review, 11-sep-2026).
-    const [[abiertas], [ganadas], [perdidas]] = await Promise.all([
-      this.db
-        .select({ cantidad: sql<number>`COUNT(*)`, valor: sql<string>`COALESCE(SUM(${oportunidades.valorEstimado}), 0)` })
-        .from(oportunidades)
-        .where(and(eq(oportunidades.cerrada, false), ...(condicionResponsable ? [condicionResponsable] : []))),
-      this.db
-        .select({ cantidad: sql<number>`COUNT(*)`, valor: sql<string>`COALESCE(SUM(${oportunidades.valorEstimado}), 0)` })
-        .from(oportunidades)
-        .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
-        .where(and(...condicionesCierre, eq(catalogoEtapaEmbudo.esGanada, true))),
-      this.db
-        .select({ cantidad: sql<number>`COUNT(*)`, valor: sql<string>`COALESCE(SUM(${oportunidades.valorEstimado}), 0)` })
-        .from(oportunidades)
-        .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
-        .where(and(...condicionesCierre, eq(catalogoEtapaEmbudo.esGanada, false)))
+    const [abiertas, ganadas, perdidas] = await Promise.all([
+      this.contarOportunidadesAbiertas(condicionResponsable),
+      this.contarOportunidadesCerradas(true, condicionResponsable, ...condicionesFecha),
+      this.contarOportunidadesCerradas(false, condicionResponsable, ...condicionesFecha)
     ]);
 
     return {
-      abiertas: { cantidad: Number(abiertas.cantidad), valor_pipeline: abiertas.valor },
-      ganadas: { cantidad: Number(ganadas.cantidad), ingresos_cerrados: ganadas.valor },
-      perdidas: { cantidad: Number(perdidas.cantidad), valor_perdido: perdidas.valor }
+      abiertas: { cantidad: abiertas.cantidad, valor_pipeline: abiertas.valor },
+      ganadas: { cantidad: ganadas.cantidad, ingresos_cerrados: ganadas.valor },
+      perdidas: { cantidad: perdidas.cantidad, valor_perdido: perdidas.valor }
     };
+  }
+
+  // Compartido por pipelineResumen() y calcularMetricasDelDia(): "abiertas"
+  // es la MISMA foto del momento en los dos casos (sin rango de fechas),
+  // solo que aquí nunca se filtra por responsable -- antes estaba copiada
+  // verbatim en los dos métodos (hallazgo de code-review, 15-sep-2026): si
+  // la definición de "abierta" cambia algún día, había que acordarse de
+  // tocar los dos lados.
+  private async contarOportunidadesAbiertas(condicionResponsable: ReturnType<typeof eq> | undefined) {
+    const [row] = await this.db
+      .select({ cantidad: sql<number>`COUNT(*)`, valor: sql<string>`COALESCE(SUM(${oportunidades.valorEstimado}), 0)` })
+      .from(oportunidades)
+      .where(and(eq(oportunidades.cerrada, false), ...(condicionResponsable ? [condicionResponsable] : [])));
+    return { cantidad: Number(row.cantidad), valor: row.valor };
+  }
+
+  // Mismo motivo que contarOportunidadesAbiertas(): "ganada"/"perdida" son
+  // la misma cuenta (cerrada=true + catalogo_etapa_embudo.es_ganada) tanto
+  // en pipelineResumen() (con responsable/rango de fechas opcionales) como
+  // en calcularMetricasDelDia() (siempre "hoy") -- antes estaba copiada en
+  // los dos (hallazgo de code-review, 15-sep-2026).
+  private async contarOportunidadesCerradas(esGanada: boolean, ...condicionesExtra: (ReturnType<typeof eq> | undefined)[]) {
+    const [row] = await this.db
+      .select({ cantidad: sql<number>`COUNT(*)`, valor: sql<string>`COALESCE(SUM(${oportunidades.valorEstimado}), 0)` })
+      .from(oportunidades)
+      .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
+      .where(and(eq(oportunidades.cerrada, true), eq(catalogoEtapaEmbudo.esGanada, esGanada), ...compactConditions(condicionesExtra)));
+    return { cantidad: Number(row.cantidad), valor: row.valor };
+  }
+
+  // Job diario de métricas comerciales (PLAN_API_DEFINITIVO.md, "Jobs
+  // internos"; tabla metricas_comerciales_diarias, PLAN_CRM_DEFINITIVO.md):
+  // pipelineResumen() de arriba es siempre en vivo, sin foto histórica de
+  // "cómo estaba el pipeline el día X". @Interval fijo (no env var), mismo
+  // criterio que ProspectosService.limpiarBorradoresVencidos.
+  //
+  // "hoy" se resuelve UNA sola vez en MySQL (no Node, por el desfase de
+  // zona horaria de siempre) y se reusa en el filtro de ganadas/perdidas,
+  // el UPSERT y el valor devuelto -- evaluar CURDATE() por separado en
+  // cada consulta podía escribir en un día y no encontrar la fila si la
+  // corrida caía justo a medianoche (hallazgo de code-review, 15-sep-2026).
+  //
+  // No relee la fila después del UPSERT: dos invocaciones (el @Interval y
+  // el endpoint manual de abajo) pueden solaparse, y una relectura después
+  // de escribir no es atómica con la propia escritura -- se devuelve
+  // directo lo que esta invocación calculó, con el mismo `calculadoEn`
+  // forzado en el INSERT/UPDATE (no vía el ON UPDATE CURRENT_TIMESTAMP de
+  // la columna, que MySQL no dispara si nada más cambió) y en la respuesta.
+  // Sigue existiendo una carrera de "última escritura gana" entre dos
+  // invocaciones concurrentes -- aceptada a propósito: es una foto
+  // informativa que se autocorrige en la siguiente corrida, no un
+  // invariante de negocio que amerite un lock como el de usuarios.service.ts.
+  @Interval(24 * 60 * 60 * 1000)
+  async calcularMetricasDelDia() {
+    const [rows] = (await this.db.execute<{ hoy: string }[]>(sql`SELECT CURDATE() AS hoy`)) as unknown as [{ hoy: string }[], unknown];
+    const hoy = rows[0]!.hoy;
+
+    const condicionHoy = sql`DATE(${oportunidades.actualizadoEn}) = ${hoy}`;
+    const [abiertas, ganadas, perdidas] = await Promise.all([
+      this.contarOportunidadesAbiertas(undefined),
+      this.contarOportunidadesCerradas(true, condicionHoy),
+      this.contarOportunidadesCerradas(false, condicionHoy)
+    ]);
+
+    const valores = {
+      oportunidadesAbiertas: abiertas.cantidad,
+      valorPipeline: abiertas.valor,
+      oportunidadesGanadas: ganadas.cantidad,
+      ingresosCerrados: ganadas.valor,
+      oportunidadesPerdidas: perdidas.cantidad,
+      valorPerdido: perdidas.valor
+    };
+    const calculadoEn = new Date();
+
+    await this.db
+      .insert(metricasComercialesDiarias)
+      .values({ fecha: hoy, ...valores, calculadoEn })
+      .onDuplicateKeyUpdate({ set: { ...valores, calculadoEn } });
+
+    this.logger.log(`Métricas comerciales del ${hoy} calculadas: ${valores.oportunidadesAbiertas} abiertas, ${valores.oportunidadesGanadas} ganadas, ${valores.oportunidadesPerdidas} perdidas`);
+    return metricaDiariaToRow({ fecha: hoy, ...valores, calculadoEn });
+  }
+
+  // Lectura del histórico que deja calcularMetricasDelDia() -- a diferencia
+  // del resto de este servicio, no hay responsableId (la tabla es un
+  // agregado diario, no por agente).
+  async historicoMetricasDiarias(query: MetricasDiariasQuery) {
+    const condiciones = compactConditions([
+      query.fechaInicio ? gte(metricasComercialesDiarias.fecha, query.fechaInicio) : undefined,
+      query.fechaFin ? lte(metricasComercialesDiarias.fecha, query.fechaFin) : undefined
+    ]);
+
+    const rows = await this.db
+      .select()
+      .from(metricasComercialesDiarias)
+      .where(condiciones.length > 0 ? and(...condiciones) : undefined)
+      .orderBy(desc(metricasComercialesDiarias.fecha));
+
+    return rows.map(metricaDiariaToRow);
   }
 
   // "Forecast mensual: monto por probabilidad y fecha estimada de cierre"

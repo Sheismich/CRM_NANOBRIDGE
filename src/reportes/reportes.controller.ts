@@ -1,10 +1,10 @@
-import { Controller, Get, Param, Query, Res, UseGuards } from "@nestjs/common";
+import { Controller, Get, HttpCode, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { ReportesService } from "./reportes.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
-import { reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
+import { metricasDiariasQuerySchema, reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). Criterio de acceso
 // (el plan no lo especifica para este módulo, así que se define aquí):
@@ -49,6 +49,27 @@ export class ReportesController {
   forecast(@Query() query: Record<string, unknown>) {
     const input = reporteQuerySchema.parse(query);
     return this.reportesService.forecastMensual(input);
+  }
+
+  // Histórico del job diario de métricas comerciales -- a diferencia de los
+  // reportes de arriba (siempre calculados en vivo), esto lee la foto que
+  // ya dejó calcularMetricasDelDia(), así que responde igual de rápido sin
+  // importar el rango de fechas. Schema propio (sin responsableId): la
+  // tabla es un agregado global, no por agente -- ver el comentario en
+  // dto/reporte.schema.ts.
+  @Get("metricas-diarias")
+  metricasDiarias(@Query() query: Record<string, unknown>) {
+    const input = metricasDiariasQuerySchema.parse(query);
+    return this.reportesService.historicoMetricasDiarias(input);
+  }
+
+  // Recalcula la foto de HOY sin esperar al próximo @Interval -- mismo
+  // criterio que POST /eventos-pendientes/despachar (forzar un job interno
+  // a mano). Idempotente: repetirlo el mismo día solo actualiza esa fila.
+  @Post("metricas-diarias/calcular")
+  @HttpCode(200)
+  calcularMetricasDelDia() {
+    return this.reportesService.calcularMetricasDelDia();
   }
 
   // Exportación de reportes (PLAN_CRM_DEFINITIVO.md #9). @Res() sin

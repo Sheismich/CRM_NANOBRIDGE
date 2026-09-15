@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+// Compartido por reporteQuerySchema y metricasDiariasQuerySchema, para que
+// la regla de validación no pueda divergir entre los dos.
+function fechaInicioAntesDeFechaFin(input: { fechaInicio?: string; fechaFin?: string }) {
+  return !input.fechaInicio || !input.fechaFin || input.fechaInicio <= input.fechaFin;
+}
+const ERROR_RANGO_FECHA = { message: "fechaInicio debe ser anterior o igual a fechaFin", path: ["fechaFin"] };
+
 // Filtro común a todos los reportes: rango de fechas (ambos extremos
 // opcionales -- sin filtro, el reporte cubre todo el historial) y agente.
 // responsableId no se restringe por rol aquí: ReportesController ya exige
@@ -10,11 +17,17 @@ export const reporteQuerySchema = z.object({
   fechaInicio: z.string().date().optional(),
   fechaFin: z.string().date().optional(),
   responsableId: z.coerce.number().int().positive().optional()
-}).refine((input) => !input.fechaInicio || !input.fechaFin || input.fechaInicio <= input.fechaFin, {
-  message: "fechaInicio debe ser anterior o igual a fechaFin",
-  path: ["fechaFin"]
-});
+}).refine(fechaInicioAntesDeFechaFin, ERROR_RANGO_FECHA);
 export type ReporteQuery = z.infer<typeof reporteQuerySchema>;
+
+// metricas_comerciales_diarias es un agregado global (job diario, sin
+// dimensión por agente) -- sin responsableId, a diferencia de
+// reporteQuerySchema.
+export const metricasDiariasQuerySchema = z.object({
+  fechaInicio: z.string().date().optional(),
+  fechaFin: z.string().date().optional()
+}).refine(fechaInicioAntesDeFechaFin, ERROR_RANGO_FECHA);
+export type MetricasDiariasQuery = z.infer<typeof metricasDiariasQuerySchema>;
 
 // Reportes disponibles para exportación CSV (GET /reportes/export/:reporte).
 // Mismo set que los 5 endpoints de lectura -- ver ReportesController.
