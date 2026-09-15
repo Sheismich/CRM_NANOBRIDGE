@@ -13,6 +13,10 @@ async function bootstrap() {
   // servidor http subyacente).
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   app.disable("x-powered-by");
+  // Ver TRUST_PROXY en config/env.ts: sin esto, request.ip (que usa
+  // RateLimitGuard) es la IP del proxy para todo el tráfico real cuando la
+  // API corre detrás de uno.
+  if (env.TRUST_PROXY) app.set("trust proxy", 1);
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
   // CORS_ORIGINS vacío (default) => origin:false: ningún navegador puede

@@ -18,6 +18,7 @@ process.env.WEBHOOK_ENTRADA_API_KEY = "test_webhook_entrada_api_key_0002";
 process.env.STORAGE_LOCAL_SIGNING_SECRET = "test_storage_signing_secret_0003";
 process.env.N8N_WEBHOOK_URL = "";
 process.env.CORS_ORIGINS = "";
+process.env.TRUST_PROXY = "false";
 // Fijados explícitamente (no solo los de arriba): dotenv/config, que
 // src/config/env.ts carga después, NUNCA sobreescribe una variable que ya
 // esté en process.env -- sin esto, cualquier valor real presente en el

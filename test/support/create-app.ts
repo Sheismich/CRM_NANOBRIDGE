@@ -18,6 +18,7 @@ export async function createTestApp() {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ bodyParser: false });
   app.disable("x-powered-by");
+  if (env.TRUST_PROXY) app.set("trust proxy", 1);
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
   app.enableCors({ origin: env.CORS_ORIGINS.length > 0 ? env.CORS_ORIGINS : false, credentials: true });

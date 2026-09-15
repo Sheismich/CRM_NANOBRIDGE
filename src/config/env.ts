@@ -29,6 +29,20 @@ const schema = z.object({
     (v) => (v === "" || v === undefined ? [] : String(v).split(",").map((origin) => origin.trim()).filter(Boolean)),
     z.array(z.string().url().transform((origin) => new URL(origin).origin))
   ).default([]),
+  // RateLimitGuard (auth/guards/rate-limit.guard.ts) cuenta intentos por
+  // request.ip -- sin decirle a Express que confíe en el proxy, esa IP es
+  // la del propio proxy para TODO el tráfico real (nginx, balanceador,
+  // etc.), y el límite "por IP" se vuelve sin querer un límite GLOBAL
+  // compartido por todos los usuarios (hallazgo de code-review,
+  // 15-sep-2026). Apagado por default: confiar en X-Forwarded-For sin
+  // saber que de verdad hay un proxy delante permitiría spoofear la IP y
+  // saltarse el límite.
+  // z.preprocess normaliza "" a undefined (mismo motivo que N8N_WEBHOOK_URL
+  // arriba, mismo bug ya corregido una vez: hallazgo de code-review,
+  // 15-sep-2026) -- sin esto, dejar TRUST_PROXY= vacío en el .env (en vez
+  // de omitirlo del todo) tumbaba el arranque completo con un ZodError, ya
+  // que "" no es ni "true" ni "false".
+  TRUST_PROXY: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["true", "false"]).default("false")).transform((v) => v === "true"),
   CRM_CALLBACK_API_KEY: z.string().min(16),
   WEBHOOK_ENTRADA_API_KEY: z.string().min(16),
   // Despachador de eventos_pendientes (patrón outbox, PLAN_CRM_DEFINITIVO.md
