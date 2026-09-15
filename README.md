@@ -21,15 +21,17 @@ mockea la base, mismo criterio que toda la verificación manual de este
 proyecto), le aplica las migraciones reales, prueba contra él por HTTP con
 `supertest`, y al final lo apaga solo — no toca tu `.env` ni tu MySQL local.
 
-Cobertura (15-sep-2026, 24 pruebas en 9 archivos): `SessionAuthGuard`/
+Cobertura (15-sep-2026, 28 pruebas en 10 archivos): `SessionAuthGuard`/
 `RolesGuard`/`ApiKeyGuard` (401/403), `POST /auth/bootstrap` de un solo uso,
 la regla "no dejar el sistema sin al menos un administrador activo"
 (`usuarios.service.ts`) incluyendo el arreglo de interbloqueo por orden fijo
 de locks, el redondeo de montos en cotizaciones, `RateLimitGuard` en
 `/auth/login`/`/auth/bootstrap` (incluida una prueba con peticiones
 concurrentes reales, no solo secuenciales), el backoff de reintentos del
-despachador outbox (5s/30s/120s) y la "promoción" de idempotencia en
-`registrarErrorWorkflow`. Es una base incremental, no cobertura completa —
+despachador outbox (5s/30s/120s), la "promoción" de idempotencia en
+`registrarErrorWorkflow`, y empresas/contactos (scoping por dueño para
+agentes, cascada al desactivar una empresa, preservación de `no_contactar`,
+409 por correo duplicado). Es una base incremental, no cobertura completa —
 ver "Qué falta" más abajo.
 
 ## Estructura del proyecto
