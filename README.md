@@ -21,7 +21,7 @@ mockea la base, mismo criterio que toda la verificación manual de este
 proyecto), le aplica las migraciones reales, prueba contra él por HTTP con
 `supertest`, y al final lo apaga solo — no toca tu `.env` ni tu MySQL local.
 
-Cobertura (17-sep-2026, 42 pruebas en 14 archivos): `SessionAuthGuard`/
+Cobertura (17-sep-2026, 47 pruebas en 15 archivos): `SessionAuthGuard`/
 `RolesGuard`/`ApiKeyGuard` (401/403), `POST /auth/bootstrap` de un solo uso,
 la regla "no dejar el sistema sin al menos un administrador activo"
 (`usuarios.service.ts`) incluyendo el arreglo de interbloqueo por orden fijo
@@ -34,9 +34,11 @@ agentes, cascada al desactivar una empresa, preservación de `no_contactar`,
 409 por correo duplicado), oportunidades (scoping por responsable, cierre/
 reapertura, el guard CAS contra dos cambios de etapa concurrentes), el job
 diario de métricas comerciales, `/catalogos` de sesión (paridad exacta de
-contenido contra el endpoint de automatización) y `catalogo_tipo_documento`
+contenido contra el endpoint de automatización), `catalogo_tipo_documento`
 (subida real contra el driver local de storage, 404 por tipo inexistente,
-herencia del tipo al versionar). Es una
+herencia del tipo al versionar) y los dos jobs de alerta (documentos
+pendientes de revisión, tareas con SLA vencido — idempotencia diaria y el
+caso de archivar/reactivar un documento). Es una
 base incremental, no cobertura completa — ver "Qué falta" más abajo.
 
 ## Estructura del proyecto
@@ -133,6 +135,6 @@ Esta sección estaba desactualizada: automatización (los 18 endpoints para n8n,
 - CRUD independiente de `/contactos` — hoy solo se crean/editan dentro de `/empresas/:id/contactos` (decisión de diseño, no un olvido).
 - `GET /api/v1/catalogos` (sesión, CRM) ✅ ya existe (17-sep-2026) — expone los mismos catálogos ENUM que `/automatizacion/catalogos` (tamaño de empresa, tipo/estado de medio de contacto, prioridad de prospecto, tipo/prioridad de tarea, etc.) sin requerir `X-API-Key`. El de etapa del embudo/motivo de pérdida sigue aparte, en `/api/v1/oportunidades/catalogos` (propio de ese módulo).
 - `catalogo_tipo_documento` ✅ ya existe (17-sep-2026, migración `018_catalogo_tipo_documento.sql`) — seis tipos semilla (contrato, identificación oficial, comprobante de domicilio, acta constitutiva, cotización firmada, otro). `documentos.tipo_documento_id` es opcional (no rompe documentos ya subidos); `GET /api/v1/documentos/catalogos` lo expone con `id` (a diferencia de `/oportunidades/catalogos`, aquí el cliente sí necesita el id numérico, no solo la clave, porque así es como `subirDocumentoSchema` lo recibe de vuelta). `metricas_comerciales_diarias` ya existe y tiene su job diario (ver arriba).
-- Jobs internos pendientes de `PLAN_API_DEFINITIVO.md`: revisión de documentos pendientes, alertas de SLA de tareas (el despachador de `eventos_pendientes`, la limpieza de borradores vencidos y el job diario de métricas ya están).
-- Suite de pruebas automatizadas (Vitest, ver "Pruebas automatizadas" arriba) sigue creciendo — cubre auth, usuarios, cotizaciones, outbox, automatización (promoción de errores), empresas/contactos, oportunidades, el job diario de métricas, `/catalogos` y (parcial) documentos: `test/110-documentos-tipo.spec.ts` prueba la subida real contra el driver local de storage y `tipo_documento_id`, pero el resto de `DocumentosService` (versionado, cambio de estado, revisión, borrado, el driver GCS) sigue sin cobertura automatizada. Tareas/cola de clasificación y el resto de automatización siguen verificados solo a mano/smoke-test contra MySQL real.
+- Jobs internos de `PLAN_API_DEFINITIVO.md` ✅ los 6 ya existen (17-sep-2026): despachador de `eventos_pendientes`, limpieza de borradores vencidos, job diario de métricas, revisión de procesos fallidos (pantalla `/procesos-fallidos`, no un `@Interval` — es triage humano, no automatizable), y los dos últimos, `DocumentosService.alertarDocumentosPendientes()` (documentos vigentes sin revisar tras 7 días) y `TareasService.alertarTareasSlaVencidas()` (tareas abiertas con `fecha_limite` vencida) — migración `019_alertas_sla.sql`. Ninguno de los dos llama a n8n directo: encolan en `eventos_pendientes` (mismo patrón outbox que cerrar/clasificar tareas) y el despachador existente los entrega; n8n decide el canal real de aviso. Sin endpoint de disparo manual (housekeeping, mismo criterio que la limpieza de borradores).
+- Suite de pruebas automatizadas (Vitest, ver "Pruebas automatizadas" arriba) sigue creciendo, pero no es cobertura completa: el resto de `DocumentosService` más allá de lo ya probado (versionado más allá de tipo, cambio de estado, revisión, borrado, el driver GCS), cotizaciones (versionado/transiciones), y tareas/cola de clasificación siguen verificados solo a mano/smoke-test contra MySQL real.
 - Confirmar con B1 de `PLAN_N8N_DEFINITIVO.md` si n8n ya sustituyó sus nodos MOCK por los endpoints reales de `/api/v1/automatizacion` — todavía no, pendiente (mismo equipo que este repo, solo falta hacerlo del lado del flujo de n8n).
