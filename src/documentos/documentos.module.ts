@@ -6,9 +6,10 @@ import { LocalStorageDriver } from "./storage/local-storage.driver.js";
 import { GcsStorageDriver } from "./storage/gcs-storage.driver.js";
 import { storageServiceProvider } from "./storage/storage.provider.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { OutboxModule } from "../outbox/outbox.module.js";
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, OutboxModule],
   controllers: [DocumentosController, LocalStorageController],
   // LocalStorageDriver y GcsStorageDriver se registran los dos siempre;
   // storageServiceProvider (STORAGE_SERVICE) decide cuál de los dos

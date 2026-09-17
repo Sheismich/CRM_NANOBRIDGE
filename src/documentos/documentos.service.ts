@@ -1,12 +1,15 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Interval } from "@nestjs/schedule";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, catalogoTipoDocumento, contactos, documentos, empresas, oportunidades } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { env } from "../config/env.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
+import { OutboxService } from "../outbox/outbox.service.js";
+import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { STORAGE_SERVICE } from "./storage/storage.constants.js";
 import type { StorageService } from "./storage/storage.types.js";
 import { EXTENSION_POR_MIME, TIPOS_MIME_PERMITIDOS, type CambiarEstadoDocumentoInput, type ListDocumentosQuery, type NuevaVersionDocumentoInput, type RevisarDocumentoInput, type SubirDocumentoInput } from "./dto/documento.schema.js";
@@ -23,6 +26,11 @@ const TRANSICIONES: Record<string, string[]> = {
   archivado: ["vigente"],
   obsoleto: []
 };
+
+// "Revisión de documentos pendientes" (PLAN_API_DEFINITIVO.md, "Jobs
+// internos"): días sin PATCH .../revisar antes de alertar -- confirmado con
+// Fabián (17-sep-2026), el plan no lo detalla.
+const DIAS_PENDIENTE_REVISION = 7;
 
 function toRow(row: typeof documentos.$inferSelect) {
   return {
@@ -48,9 +56,12 @@ function toRow(row: typeof documentos.$inferSelect) {
 
 @Injectable()
 export class DocumentosService {
+  private readonly logger = new Logger(DocumentosService.name);
+
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDb,
-    @Inject(STORAGE_SERVICE) private readonly storageService: StorageService
+    @Inject(STORAGE_SERVICE) private readonly storageService: StorageService,
+    private readonly outboxService: OutboxService
   ) {}
 
   // Scoping (PLAN_CRM_DEFINITIVO.md no lo detalla para este módulo; se
@@ -351,8 +362,17 @@ export class DocumentosService {
 
     await this.db.transaction(async (tx) => {
       // Misma revalidación con affectedRows que nuevaVersion() -- ver
-      // comentario ahí.
-      const [result] = await tx.update(documentos).set({ estado: input.estado }).where(and(eq(documentos.id, id), eq(documentos.estado, documento.estado)));
+      // comentario ahí. Al volver a 'vigente' se limpia alertado_en: sin
+      // esto, un documento nunca revisado que se archiva y se reactiva
+      // queda excluido de alertarDocumentosPendientes() para siempre --
+      // esa consulta filtra alertado_en IS NULL, y esta era la única fila
+      // que lo dejaba en NULL o no según haya pasado por el job antes de
+      // archivarse (hallazgo de code-review, 17-sep-2026). revisado_en NO
+      // se toca: si ya se había revisado antes de archivar, sigue revisado.
+      const [result] = await tx.update(documentos).set({
+        estado: input.estado,
+        ...(input.estado === "vigente" ? { alertadoEn: null } : {})
+      }).where(and(eq(documentos.id, id), eq(documentos.estado, documento.estado)));
       if (result.affectedRows === 0) {
         throw new HttpError(409, "El estado del documento cambió, vuelve a intentarlo");
       }
@@ -398,6 +418,55 @@ export class DocumentosService {
     });
 
     return this.get(user, id);
+  }
+
+  // "Revisión de documentos pendientes" (PLAN_API_DEFINITIVO.md, "Jobs
+  // internos"): documentos vigentes con más de DIAS_PENDIENTE_REVISION días
+  // sin que nadie los marque revisados. @Interval fijo diario, mismo
+  // criterio que ProspectosService.limpiarBorradoresVencidos -- sin
+  // endpoint de disparo manual, porque es housekeeping y no algo que
+  // alguien necesite forzar a mano (a diferencia del despachador de
+  // outbox o del job de métricas). No llama a n8n directamente: encola un
+  // evento en eventos_pendientes (mismo patrón outbox que
+  // TareasService.cerrar/clasificar) para que n8n decida el canal real de
+  // aviso. alertado_en evita reencolar el mismo documento cada día -- ver
+  // comentario en 019_alertas_sla.sql.
+  @Interval(24 * 60 * 60 * 1000)
+  async alertarDocumentosPendientes() {
+    const candidatos = await this.db
+      .select({ id: documentos.id, empresaId: documentos.empresaId, nombreOriginal: documentos.nombreOriginal, creadoEn: documentos.creadoEn })
+      .from(documentos)
+      .where(and(
+        eq(documentos.estado, "vigente"),
+        eq(documentos.activo, true),
+        isNull(documentos.revisadoEn),
+        isNull(documentos.alertadoEn),
+        sql`${documentos.creadoEn} < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ${DIAS_PENDIENTE_REVISION} DAY)`
+      ))
+      .limit(ALERTAS_BATCH_SIZE);
+
+    let alertados = 0;
+    for (const documento of candidatos) {
+      const encolado = await this.db.transaction(async (tx) => {
+        // CAS: mismo criterio que cualquier otro UPDATE-y-efecto-colateral
+        // de este proyecto (nuevaVersion, cambiarEstado, tareas.cerrar) --
+        // cierra la carrera teórica de dos corridas del job solapándose.
+        const [result] = await tx.update(documentos).set({ alertadoEn: sql`CURRENT_TIMESTAMP` }).where(and(eq(documentos.id, documento.id), isNull(documentos.alertadoEn)));
+        if (result.affectedRows === 0) return false;
+
+        await this.outboxService.enqueue(tx, {
+          tipo: "documento_pendiente_revision",
+          entidadTipo: "documento",
+          entidadId: documento.id,
+          payload: { documento_id: documento.id, empresa_id: documento.empresaId, nombre_original: documento.nombreOriginal, creado_en: documento.creadoEn }
+        });
+        return true;
+      });
+      if (encolado) alertados++;
+    }
+
+    if (alertados > 0) this.logger.log(`${alertados} documento(s) pendiente(s) de revisión alertados`);
+    return alertados;
   }
 
   // Soft-delete, mismo patrón que empresas/contactos (activo=false) -- ver

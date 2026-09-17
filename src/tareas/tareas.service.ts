@@ -1,11 +1,13 @@
-import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Interval } from "@nestjs/schedule";
+import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, contactos, prospectos, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
+import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
 import type { TareaAutomatizacionInput } from "../automatizacion/dto/automatizacion.schema.js";
@@ -41,6 +43,8 @@ function toRow(row: typeof tareas.$inferSelect) {
 
 @Injectable()
 export class TareasService {
+  private readonly logger = new Logger(TareasService.name);
+
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDb,
     private readonly outboxService: OutboxService
@@ -242,5 +246,48 @@ export class TareasService {
       }
       throw error;
     }
+  }
+
+  // "Alertas de tareas SLA vencidas" (PLAN_API_DEFINITIVO.md, "Jobs
+  // internos"; ya anticipado en el comentario de createFromAutomation
+  // arriba: "alerta con SLA para el Equipo CRM"). Mismo criterio que
+  // DocumentosService.alertarDocumentosPendientes -- ver comentario ahí y
+  // en 019_alertas_sla.sql: @Interval fijo diario, sin endpoint de disparo
+  // manual, encola en eventos_pendientes en vez de llamar a n8n directo, y
+  // alertado_en evita reencolar la misma tarea cada día. fecha_limite es
+  // NULLABLE -- una tarea sin fecha límite nunca puede "vencer", y
+  // lt(tareas.fechaLimite, ...) ya la excluye sola (NULL < X es falso en
+  // SQL, no hace falta un isNotNull aparte).
+  @Interval(24 * 60 * 60 * 1000)
+  async alertarTareasSlaVencidas() {
+    const candidatas = await this.db
+      .select({ id: tareas.id, tipo: tareas.tipo, responsableId: tareas.responsableId, fechaLimite: tareas.fechaLimite })
+      .from(tareas)
+      .where(and(
+        sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`,
+        isNull(tareas.alertadoEn),
+        lt(tareas.fechaLimite, sql`CURRENT_TIMESTAMP`)
+      ))
+      .limit(ALERTAS_BATCH_SIZE);
+
+    let alertadas = 0;
+    for (const tarea of candidatas) {
+      const encolado = await this.db.transaction(async (tx) => {
+        const [result] = await tx.update(tareas).set({ alertadoEn: sql`CURRENT_TIMESTAMP` }).where(and(eq(tareas.id, tarea.id), isNull(tareas.alertadoEn)));
+        if (result.affectedRows === 0) return false;
+
+        await this.outboxService.enqueue(tx, {
+          tipo: "tarea_sla_vencida",
+          entidadTipo: "tarea",
+          entidadId: tarea.id,
+          payload: { tarea_id: tarea.id, tipo: tarea.tipo, responsable_id: tarea.responsableId, fecha_limite: tarea.fechaLimite }
+        });
+        return true;
+      });
+      if (encolado) alertadas++;
+    }
+
+    if (alertadas > 0) this.logger.log(`${alertadas} tarea(s) con SLA vencido alertada(s)`);
+    return alertadas;
   }
 }

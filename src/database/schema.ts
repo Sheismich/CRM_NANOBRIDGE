@@ -257,6 +257,7 @@ export const tareas = mysqlTable("tareas", {
   prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }),
   executionId: varchar("execution_id", { length: 100 }),
   fechaLimite: datetime("fecha_limite"),
+  alertadoEn: datetime("alertado_en"),
   clasificacion: varchar("clasificacion", { length: 60 }),
   resultado: text("resultado"),
   cerradaEn: datetime("cerrada_en"),
@@ -267,7 +268,8 @@ export const tareas = mysqlTable("tareas", {
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
   index("idx_tareas_responsable_estado").on(table.responsableId, table.estado),
-  index("idx_tareas_tipo_estado").on(table.tipo, table.estado)
+  index("idx_tareas_tipo_estado").on(table.tipo, table.estado),
+  index("idx_tareas_fecha_limite").on(table.fechaLimite)
 ]);
 
 export const eventosPendientes = mysqlTable("eventos_pendientes", {
@@ -481,6 +483,7 @@ export const documentos = mysqlTable("documentos", {
   subidoPor: bigint("subido_por", { mode: "number", unsigned: true }).notNull(),
   revisadoPor: bigint("revisado_por", { mode: "number", unsigned: true }),
   revisadoEn: datetime("revisado_en"),
+  alertadoEn: datetime("alertado_en"),
   activo: boolean("activo").notNull().default(true),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
@@ -488,7 +491,8 @@ export const documentos = mysqlTable("documentos", {
   index("idx_documentos_empresa").on(table.empresaId),
   index("idx_documentos_oportunidad").on(table.oportunidadId),
   index("idx_documentos_contacto").on(table.contactoId),
-  index("idx_documentos_raiz").on(table.documentoRaizId)
+  index("idx_documentos_raiz").on(table.documentoRaizId),
+  index("idx_documentos_alertado").on(table.estado, table.alertadoEn)
 ]);
 
 export const auditoria = mysqlTable("auditoria", {
