@@ -21,7 +21,7 @@ mockea la base, mismo criterio que toda la verificación manual de este
 proyecto), le aplica las migraciones reales, prueba contra él por HTTP con
 `supertest`, y al final lo apaga solo — no toca tu `.env` ni tu MySQL local.
 
-Cobertura (15-sep-2026, 35 pruebas en 12 archivos): `SessionAuthGuard`/
+Cobertura (17-sep-2026, 38 pruebas en 13 archivos): `SessionAuthGuard`/
 `RolesGuard`/`ApiKeyGuard` (401/403), `POST /auth/bootstrap` de un solo uso,
 la regla "no dejar el sistema sin al menos un administrador activo"
 (`usuarios.service.ts`) incluyendo el arreglo de interbloqueo por orden fijo
@@ -32,8 +32,9 @@ despachador outbox (5s/30s/120s), la "promoción" de idempotencia en
 `registrarErrorWorkflow`, empresas/contactos (scoping por dueño para
 agentes, cascada al desactivar una empresa, preservación de `no_contactar`,
 409 por correo duplicado), oportunidades (scoping por responsable, cierre/
-reapertura, el guard CAS contra dos cambios de etapa concurrentes) y el job
-diario de métricas comerciales. Es una
+reapertura, el guard CAS contra dos cambios de etapa concurrentes), el job
+diario de métricas comerciales y `/catalogos` de sesión (paridad exacta de
+contenido contra el endpoint de automatización). Es una
 base incremental, no cobertura completa — ver "Qué falta" más abajo.
 
 ## Estructura del proyecto
@@ -128,8 +129,8 @@ Probado con datos reales: se mapeó la base de 30 prospectos industriales de STE
 Esta sección estaba desactualizada: automatización (los 18 endpoints para n8n, incluyendo B4 Error Workflow), oportunidades/pipeline, cotizaciones, documentos, reportes/dashboards, `usuarios` y `auditoria` ya están implementados (ver secciones arriba), aunque no siempre quedaron documentados aquí cuando se construyeron. Lo que de verdad falta hoy (confirmado por la auditoría global del 14-sep-2026):
 
 - CRUD independiente de `/contactos` — hoy solo se crean/editan dentro de `/empresas/:id/contactos` (decisión de diseño, no un olvido).
-- `/catalogos` (sesión, CRM) incompleto — solo existe `/api/v1/oportunidades/catalogos` (etapas, motivos de pérdida); faltan catálogos de tipo de documento, giro y tamaño de empresa.
-- `catalogo_tipo_documento` (tabla mencionada en `PLAN_CRM_DEFINITIVO.md` que no llegó a crearse); `metricas_comerciales_diarias` ya existe y tiene su job diario (ver arriba).
+- `GET /api/v1/catalogos` (sesión, CRM) ✅ ya existe (17-sep-2026) — expone los mismos catálogos ENUM que `/automatizacion/catalogos` (tamaño de empresa, tipo/estado de medio de contacto, prioridad de prospecto, tipo/prioridad de tarea, etc.) sin requerir `X-API-Key`. El de etapa del embudo/motivo de pérdida sigue aparte, en `/api/v1/oportunidades/catalogos` (propio de ese módulo).
+- `catalogo_tipo_documento` (tabla mencionada en `PLAN_CRM_DEFINITIVO.md` que no llegó a crearse — a diferencia de `tamano_empresa`, no es un ENUM existente en ninguna columna, así que no puede resolverse solo con el patrón de `/catalogos`; requiere tabla + migración propia si se decide construirla). `metricas_comerciales_diarias` ya existe y tiene su job diario (ver arriba).
 - Jobs internos pendientes de `PLAN_API_DEFINITIVO.md`: revisión de documentos pendientes, alertas de SLA de tareas (el despachador de `eventos_pendientes`, la limpieza de borradores vencidos y el job diario de métricas ya están).
-- Suite de pruebas automatizadas (Vitest, ver "Pruebas automatizadas" arriba) sigue creciendo — cubre auth, usuarios, cotizaciones, outbox, automatización (promoción de errores), empresas/contactos, oportunidades y el job diario de métricas. Documentos, tareas/cola de clasificación y el resto de automatización siguen verificados solo a mano/smoke-test contra MySQL real.
+- Suite de pruebas automatizadas (Vitest, ver "Pruebas automatizadas" arriba) sigue creciendo — cubre auth, usuarios, cotizaciones, outbox, automatización (promoción de errores), empresas/contactos, oportunidades, el job diario de métricas y `/catalogos`. Documentos, tareas/cola de clasificación y el resto de automatización siguen verificados solo a mano/smoke-test contra MySQL real.
 - Confirmar con B1 de `PLAN_N8N_DEFINITIVO.md` si n8n ya sustituyó sus nodos MOCK por los endpoints reales de `/api/v1/automatizacion` — todavía no, pendiente (mismo equipo que este repo, solo falta hacerlo del lado del flujo de n8n).
