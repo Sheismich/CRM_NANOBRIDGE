@@ -51,6 +51,14 @@ export class DocumentosController {
     return this.documentosService.subir(user, input, archivo);
   }
 
+  // Declarado ANTES de @Get(":id") -- si no, Nest intentaría resolver
+  // "catalogos" como el parámetro :id (mismo cuidado que en
+  // OportunidadesController).
+  @Get("catalogos")
+  catalogos() {
+    return this.documentosService.catalogos();
+  }
+
   @Get(":id")
   get(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
     const id = idParamSchema.parse(idParam);

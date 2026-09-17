@@ -34,6 +34,9 @@ export const subirDocumentoSchema = z.object({
   empresaId: z.coerce.number().int().positive(),
   oportunidadId: z.coerce.number().int().positive().optional(),
   contactoId: z.coerce.number().int().positive().optional(),
+  // Opcional a propósito (018_catalogo_tipo_documento.sql): clasificar el
+  // documento es informativo, no un requisito para poder subirlo.
+  tipoDocumentoId: z.coerce.number().int().positive().optional(),
   // Texto libre a propósito: "La política de retención será configurable y
   // aprobada por la empresa" (PLAN_CRM_DEFINITIVO.md #8) -- no hay un
   // catálogo cerrado que este alcance deba inventar.
@@ -42,6 +45,9 @@ export const subirDocumentoSchema = z.object({
 export type SubirDocumentoInput = z.infer<typeof subirDocumentoSchema>;
 
 export const nuevaVersionDocumentoSchema = z.object({
+  // Si no se manda, la nueva versión hereda el tipo_documento_id de la
+  // versión anterior -- mismo criterio que politicaRetencion abajo.
+  tipoDocumentoId: z.coerce.number().int().positive().optional(),
   politicaRetencion: z.string().trim().min(1).max(60).optional()
 });
 export type NuevaVersionDocumentoInput = z.infer<typeof nuevaVersionDocumentoSchema>;

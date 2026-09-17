@@ -454,9 +454,19 @@ export const borradoresCaptura = mysqlTable("borradores_captura", {
   index("idx_borradores_estado_expira").on(table.estado, table.expiraEn)
 ]);
 
+export const catalogoTipoDocumento = mysqlTable("catalogo_tipo_documento", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  clave: varchar("clave", { length: 40 }).notNull(),
+  nombre: varchar("nombre", { length: 120 }).notNull(),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  uniqueIndex("uq_tipo_documento_clave").on(table.clave)
+]);
+
 export const documentos = mysqlTable("documentos", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   empresaId: bigint("empresa_id", { mode: "number", unsigned: true }).notNull(),
+  tipoDocumentoId: bigint("tipo_documento_id", { mode: "number", unsigned: true }),
   oportunidadId: bigint("oportunidad_id", { mode: "number", unsigned: true }),
   contactoId: bigint("contacto_id", { mode: "number", unsigned: true }),
   documentoRaizId: bigint("documento_raiz_id", { mode: "number", unsigned: true }),

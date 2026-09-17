@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, contactos, documentos, empresas, oportunidades } from "../database/schema.js";
+import { auditoria, catalogoTipoDocumento, contactos, documentos, empresas, oportunidades } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { env } from "../config/env.js";
@@ -34,6 +34,7 @@ function toRow(row: typeof documentos.$inferSelect) {
     version: row.version,
     nombre_original: row.nombreOriginal,
     mime_type: row.mimeType,
+    tipo_documento_id: row.tipoDocumentoId,
     tamano_bytes: row.tamanoBytes,
     estado: row.estado,
     politica_retencion: row.politicaRetencion,
@@ -78,6 +79,25 @@ export class DocumentosService {
     if (!row || row.empresaId !== empresaId || (user.rol === "agente" && row.responsableId !== user.id)) {
       throw new HttpError(404, "Oportunidad no encontrada en esa empresa");
     }
+  }
+
+  private async validarTipoDocumento(tipoDocumentoId: number) {
+    const [row] = await this.db.select({ id: catalogoTipoDocumento.id }).from(catalogoTipoDocumento).where(eq(catalogoTipoDocumento.id, tipoDocumentoId)).limit(1);
+    if (!row) throw new HttpError(404, "Tipo de documento no encontrado");
+  }
+
+  // A diferencia de catalogos() en OportunidadesService (donde el resto de
+  // la API referencia la etapa por clave, nunca por id), aquí se expone
+  // también el id: subirDocumentoSchema/nuevaVersionDocumentoSchema piden
+  // tipoDocumentoId numérico, mismo patrón que empresaId/oportunidadId/
+  // contactoId en ese mismo body -- así que el cliente necesita el id, no
+  // solo la clave, para poder enviarlo de vuelta.
+  async catalogos() {
+    const tiposDocumento = await this.db
+      .select({ id: catalogoTipoDocumento.id, clave: catalogoTipoDocumento.clave, nombre: catalogoTipoDocumento.nombre })
+      .from(catalogoTipoDocumento)
+      .orderBy(catalogoTipoDocumento.nombre);
+    return { tipos_documento: tiposDocumento };
   }
 
   private async validarContacto(empresaId: number, contactoId: number) {
@@ -146,14 +166,15 @@ export class DocumentosService {
 
   async subir(user: CurrentUser, input: SubirDocumentoInput, archivo: ArchivoSubido | undefined) {
     this.validarArchivo(archivo);
-    // Las tres validaciones son independientes entre sí (ninguna depende
+    // Las cuatro validaciones son independientes entre sí (ninguna depende
     // del resultado de otra) -- Promise.all en vez de esperarlas una tras
     // otra, mismo criterio que ya se aplicó en reportes.service.ts
     // (hallazgo de code review, 11-sep-2026).
     await Promise.all([
       this.validarEmpresaScoped(user, input.empresaId),
       input.oportunidadId ? this.validarOportunidad(user, input.empresaId, input.oportunidadId) : Promise.resolve(),
-      input.contactoId ? this.validarContacto(input.empresaId, input.contactoId) : Promise.resolve()
+      input.contactoId ? this.validarContacto(input.empresaId, input.contactoId) : Promise.resolve(),
+      input.tipoDocumentoId ? this.validarTipoDocumento(input.tipoDocumentoId) : Promise.resolve()
     ]);
 
     const key = this.buildStorageKey(input.empresaId, archivo.mimetype);
@@ -174,6 +195,7 @@ export class DocumentosService {
         version: 1,
         nombreOriginal: archivo.originalname,
         mimeType: archivo.mimetype,
+        tipoDocumentoId: input.tipoDocumentoId ?? null,
         tamanoBytes: archivo.size,
         storageDriver: env.STORAGE_DRIVER,
         storageKey: key,
@@ -271,6 +293,7 @@ export class DocumentosService {
     this.validarArchivo(archivo);
     const actual = await this.obtenerScoped(user, id);
     if (actual.estado === "obsoleto") throw new HttpError(409, "No se puede versionar un documento ya obsoleto");
+    if (input.tipoDocumentoId) await this.validarTipoDocumento(input.tipoDocumentoId);
 
     const raizId = actual.documentoRaizId ?? actual.id;
     const nuevaVersionNum = actual.version + 1;
@@ -298,6 +321,7 @@ export class DocumentosService {
         version: nuevaVersionNum,
         nombreOriginal: archivo.originalname,
         mimeType: archivo.mimetype,
+        tipoDocumentoId: input.tipoDocumentoId ?? actual.tipoDocumentoId,
         tamanoBytes: archivo.size,
         storageDriver: env.STORAGE_DRIVER,
         storageKey: key,
