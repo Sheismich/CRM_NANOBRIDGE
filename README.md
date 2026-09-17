@@ -13,6 +13,22 @@ Implementado con **NestJS** (módulos, controladores, servicios, guards) sobre E
 
 El health check queda disponible en `GET /health`.
 
+## Despliegue (Cloud Run + Cloud SQL)
+
+**✅ Desplegado (17-sep-2026)**, proyecto GCP `crm-prospeccion-outbound`, región `us-central1`:
+
+- Cloud Run (`nanobridge-api`) sirve la imagen construida desde `Dockerfile` (multi-stage sobre `node:20-bookworm-slim` — `argon2` necesita compilar un binario nativo, requiere `python3 make g++` en la etapa de build).
+- Cloud SQL (`nanobridge-db`, MySQL 8.0) conectado vía el socket nativo de Cloud Run (`--add-cloudsql-instances`), sin exponer IP privada a la app.
+- Documentos usan `STORAGE_DRIVER=gcs` en producción (no `local`: el filesystem de Cloud Run es efímero y no persiste entre reinicios ni se comparte entre instancias).
+- Secretos (`CRM_CALLBACK_API_KEY`, `WEBHOOK_ENTRADA_API_KEY`, `STORAGE_LOCAL_SIGNING_SECRET`, `DATABASE_URL`) viven en Secret Manager, nunca en el código ni en variables de entorno planas.
+- El servicio es públicamente alcanzable (requirió una excepción a la política organizacional `iam.allowedPolicyMemberDomains`, aprobada por el Owner del proyecto) — la seguridad real la sigue haciendo la propia API (`ApiKeyGuard`/`SessionAuthGuard`), no el borde de Cloud Run.
+
+Redesplegar tras un cambio de código:
+```bash
+gcloud builds submit --tag us-central1-docker.pkg.dev/crm-prospeccion-outbound/nanobridge-repo/nanobridge-api:v1
+gcloud run deploy nanobridge-api --image=us-central1-docker.pkg.dev/crm-prospeccion-outbound/nanobridge-repo/nanobridge-api:v1 --region=us-central1
+```
+
 ## Pruebas automatizadas
 
 `npm test` corre la suite con Vitest. Requiere **Docker Desktop corriendo**:
@@ -137,4 +153,4 @@ Esta sección estaba desactualizada: automatización (los 18 endpoints para n8n,
 - `catalogo_tipo_documento` ✅ ya existe (17-sep-2026, migración `018_catalogo_tipo_documento.sql`) — seis tipos semilla (contrato, identificación oficial, comprobante de domicilio, acta constitutiva, cotización firmada, otro). `documentos.tipo_documento_id` es opcional (no rompe documentos ya subidos); `GET /api/v1/documentos/catalogos` lo expone con `id` (a diferencia de `/oportunidades/catalogos`, aquí el cliente sí necesita el id numérico, no solo la clave, porque así es como `subirDocumentoSchema` lo recibe de vuelta). `metricas_comerciales_diarias` ya existe y tiene su job diario (ver arriba).
 - Jobs internos de `PLAN_API_DEFINITIVO.md` ✅ los 6 ya existen (17-sep-2026): despachador de `eventos_pendientes`, limpieza de borradores vencidos, job diario de métricas, revisión de procesos fallidos (pantalla `/procesos-fallidos`, no un `@Interval` — es triage humano, no automatizable), y los dos últimos, `DocumentosService.alertarDocumentosPendientes()` (documentos vigentes sin revisar tras 7 días) y `TareasService.alertarTareasSlaVencidas()` (tareas abiertas con `fecha_limite` vencida) — migración `019_alertas_sla.sql`. Ninguno de los dos llama a n8n directo: encolan en `eventos_pendientes` (mismo patrón outbox que cerrar/clasificar tareas) y el despachador existente los entrega; n8n decide el canal real de aviso. Sin endpoint de disparo manual (housekeeping, mismo criterio que la limpieza de borradores).
 - Suite de pruebas automatizadas (Vitest, ver "Pruebas automatizadas" arriba) sigue creciendo, pero no es cobertura completa: el resto de `DocumentosService` más allá de lo ya probado (versionado más allá de tipo, cambio de estado, revisión, borrado, el driver GCS), cotizaciones (versionado/transiciones), y tareas/cola de clasificación siguen verificados solo a mano/smoke-test contra MySQL real.
-- Confirmar con B1 de `PLAN_N8N_DEFINITIVO.md` si n8n ya sustituyó sus nodos MOCK por los endpoints reales de `/api/v1/automatizacion` — todavía no, pendiente (mismo equipo que este repo, solo falta hacerlo del lado del flujo de n8n).
+- Confirmar con B1 de `PLAN_N8N_DEFINITIVO.md` si n8n ya sustituyó sus nodos MOCK por los endpoints reales de `/api/v1/automatizacion` — todavía no, pendiente (mismo equipo que este repo, solo falta hacerlo del lado del flujo de n8n). Ya no está bloqueado por infraestructura: la API vive en `https://nanobridge-api-165032456965.us-central1.run.app` (ver "Despliegue" arriba), así que n8n Cloud ya puede alcanzarla — el trabajo pendiente es revisar/reconectar el workflow de n8n nodo por nodo contra esta URL real.
