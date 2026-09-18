@@ -5,6 +5,8 @@ import { OutboxDispatcherService } from "./outbox-dispatcher.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
+import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
+import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { listEventosQuerySchema } from "./dto/eventos.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
@@ -29,9 +31,9 @@ export class EventosPendientesController {
 
   @Post(":id/reintentar")
   @HttpCode(204)
-  async retry(@Param("id") idParam: string) {
+  async retry(@Param("id") idParam: string, @CurrentUser() actor: CurrentUserType) {
     const id = idParamSchema.parse(idParam);
-    await this.outboxService.retry(id);
+    await this.outboxService.retry(actor, id);
   }
 
   @Post("despachar")

@@ -1,9 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { eventosPendientes, procesosFallidos } from "../database/schema.js";
+import { auditoria, eventosPendientes, procesosFallidos } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
+import type { CurrentUser } from "../auth/current-user.type.js";
 
 export type OutboxEventInput = {
   tipo: string;
@@ -65,17 +66,32 @@ export class OutboxService {
     };
   }
 
-  async retry(id: number) {
-    const [event] = await this.db.select().from(eventosPendientes).where(eq(eventosPendientes.id, id)).limit(1);
-    if (!event) throw new HttpError(404, "Evento no encontrado");
-    if (event.estado !== "fallido") throw new HttpError(409, "Solo se pueden reintentar eventos en estado fallido");
+  // Auditado (PLAN_API_DEFINITIVO.md, "Reglas técnicas obligatorias":
+  // "reintentos manuales" es una de las cinco categorías que exige
+  // auditoría explícitamente, junto con comercial/documentos/permisos/
+  // supresiones -- hallazgo de la auditoría global del plan, 18-sep-2026).
+  async retry(actor: CurrentUser, id: number) {
+    await this.db.transaction(async (tx) => {
+      const [event] = await tx.select().from(eventosPendientes).where(eq(eventosPendientes.id, id)).limit(1).for("update");
+      if (!event) throw new HttpError(404, "Evento no encontrado");
+      if (event.estado !== "fallido") throw new HttpError(409, "Solo se pueden reintentar eventos en estado fallido");
 
-    await this.db.update(eventosPendientes).set({
-      estado: "pendiente",
-      intentos: 0,
-      proximoIntentoEn: null,
-      ultimoError: null
-    }).where(eq(eventosPendientes.id, id));
+      await tx.update(eventosPendientes).set({
+        estado: "pendiente",
+        intentos: 0,
+        proximoIntentoEn: null,
+        ultimoError: null
+      }).where(eq(eventosPendientes.id, id));
+
+      await tx.insert(auditoria).values({
+        usuarioId: actor.id,
+        entidad: "evento_pendiente",
+        entidadId: id,
+        accion: "reintentar",
+        antes: { estado: event.estado, intentos: event.intentos, ultimo_error: event.ultimoError },
+        despues: { estado: "pendiente", intentos: 0 }
+      });
+    });
   }
 
   // "Revisión de procesos fallidos" (job/pantalla de PLAN_API_DEFINITIVO.md,
@@ -124,10 +140,23 @@ export class OutboxService {
   // diferencia de retry() de arriba, esto NO reintenta nada automáticamente
   // (un proceso_fallido puede no tener evento_id, ej. los que crea
   // registrarErrorWorkflow, así que no siempre hay algo que reintentar).
-  async actualizarEstadoProcesoFallido(id: number, estado: "abierto" | "en_revision" | "resuelto") {
-    const [proceso] = await this.db.select({ id: procesosFallidos.id }).from(procesosFallidos).where(eq(procesosFallidos.id, id)).limit(1);
-    if (!proceso) throw new HttpError(404, "Proceso fallido no encontrado");
+  // Auditado por el mismo motivo que retry() arriba: es la otra mitad de
+  // "reintentos manuales" que PLAN_API_DEFINITIVO.md exige auditar.
+  async actualizarEstadoProcesoFallido(actor: CurrentUser, id: number, estado: "abierto" | "en_revision" | "resuelto") {
+    await this.db.transaction(async (tx) => {
+      const [proceso] = await tx.select({ id: procesosFallidos.id, estado: procesosFallidos.estado }).from(procesosFallidos).where(eq(procesosFallidos.id, id)).limit(1).for("update");
+      if (!proceso) throw new HttpError(404, "Proceso fallido no encontrado");
 
-    await this.db.update(procesosFallidos).set({ estado }).where(eq(procesosFallidos.id, id));
+      await tx.update(procesosFallidos).set({ estado }).where(eq(procesosFallidos.id, id));
+
+      await tx.insert(auditoria).values({
+        usuarioId: actor.id,
+        entidad: "proceso_fallido",
+        entidadId: id,
+        accion: "cambiar_estado",
+        antes: { estado: proceso.estado },
+        despues: { estado }
+      });
+    });
   }
 }

@@ -37,7 +37,7 @@ mockea la base, mismo criterio que toda la verificación manual de este
 proyecto), le aplica las migraciones reales, prueba contra él por HTTP con
 `supertest`, y al final lo apaga solo — no toca tu `.env` ni tu MySQL local.
 
-Cobertura (17-sep-2026, 47 pruebas en 15 archivos): `SessionAuthGuard`/
+Cobertura (18-sep-2026, 51 pruebas en 16 archivos): `SessionAuthGuard`/
 `RolesGuard`/`ApiKeyGuard` (401/403), `POST /auth/bootstrap` de un solo uso,
 la regla "no dejar el sistema sin al menos un administrador activo"
 (`usuarios.service.ts`) incluyendo el arreglo de interbloqueo por orden fijo
@@ -54,7 +54,10 @@ contenido contra el endpoint de automatización), `catalogo_tipo_documento`
 (subida real contra el driver local de storage, 404 por tipo inexistente,
 herencia del tipo al versionar) y los dos jobs de alerta (documentos
 pendientes de revisión, tareas con SLA vencido — idempotencia diaria y el
-caso de archivar/reactivar un documento). Es una
+caso de archivar/reactivar un documento) y la auditoría de reintentos
+manuales (`eventos_pendientes` y `procesos_fallidos`: la fila en
+`auditoria` con antes/después correctos en el camino feliz, y que un 409/404
+no deje rastro). Es una
 base incremental, no cobertura completa — ver "Qué falta" más abajo.
 
 ## Estructura del proyecto

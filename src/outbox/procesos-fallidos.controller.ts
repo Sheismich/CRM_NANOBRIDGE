@@ -4,6 +4,8 @@ import { OutboxService } from "./outbox.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
+import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
+import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { actualizarEstadoProcesoFallidoSchema, listProcesosFallidosQuerySchema } from "./dto/procesos-fallidos.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
@@ -24,10 +26,10 @@ export class ProcesosFallidosController {
 
   @Patch(":id/estado")
   @HttpCode(200)
-  async actualizarEstado(@Param("id") idParam: string, @Body() body: unknown) {
+  async actualizarEstado(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() actor: CurrentUserType) {
     const id = idParamSchema.parse(idParam);
     const { estado } = actualizarEstadoProcesoFallidoSchema.parse(body);
-    await this.outboxService.actualizarEstadoProcesoFallido(id, estado);
+    await this.outboxService.actualizarEstadoProcesoFallido(actor, id, estado);
     return { id, estado };
   }
 }
