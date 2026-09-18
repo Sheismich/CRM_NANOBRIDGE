@@ -9,11 +9,14 @@
 - Frontend CRM: sesión de usuario y roles.
 - n8n: `X-API-Key` con `CRM_CALLBACK_API_KEY`.
 - CRM hacia n8n: `WEBHOOK_ENTRADA_API_KEY`.
-- ORM: Drizzle (decisión del equipo CRM al migrar a NestJS). Pendiente
-  definir si `schema.ts` + `drizzle-kit` reemplaza a las migraciones SQL
-  manuales como fuente de verdad, o si el SQL manual se mantiene y Drizzle
-  solo aporta queries tipadas. Hasta resolverlo, las tablas nuevas se
-  siguen creando en SQL plano en `src/database/migrations/`.
+- ORM: Drizzle (decisión del equipo CRM al migrar a NestJS). **Confirmado
+  18-sep-2026: Drizzle se queda, definitivo, no se evalúan alternativas.**
+  Pendiente para mañana (🔴 prioridad #1 de la próxima sesión): definir si
+  `schema.ts` + `drizzle-kit` reemplaza a las migraciones SQL manuales como
+  fuente de verdad, o si el SQL manual se mantiene (como hasta ahora, 19
+  archivos en `src/database/migrations/`) y Drizzle solo aporta queries
+  tipadas sobre un `schema.ts` actualizado a mano. Hasta resolverlo, las
+  tablas nuevas se siguen creando en SQL plano.
 
 ## Módulos
 
