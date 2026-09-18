@@ -17,7 +17,8 @@ Todos los endpoints viven bajo `/api/v1/*` salvo `GET /health`. Dos mecanismos d
 ## CRM — Empresas y contactos (`src/crm/empresas.controller.ts`)
 
 - `GET/POST /empresas`, `GET/PATCH/DELETE /empresas/:id`.
-- `POST/PATCH/DELETE /empresas/:id/contactos/:contactoId` — los contactos se gestionan anidados bajo su empresa; no existe un `/contactos` independiente todavía.
+- `POST/PATCH/DELETE /empresas/:id/contactos/:contactoId` — gestión de contactos anidada bajo su empresa.
+- `GET/POST /contactos`, `GET/PATCH/DELETE /contactos/:id` (`src/crm/contactos.controller.ts`) — vista plana para buscar/abrir un contacto sin conocer su empresa (filtros `empresaId`, `q` por nombre; paginado por contacto). Las escrituras delegan en `EmpresasService`, así que comparten validaciones, bloqueo, 409 por medio duplicado y auditoría con las rutas anidadas. Diferencia de contrato: los medios de contacto van anidados en `medios` (una fila por contacto), no una fila por medio como en `GET /empresas/:id`. Mismo scoping: un agente solo ve/edita contactos de sus empresas; lo ajeno responde 404.
 - Cada empresa tiene un `propietarioId`: un `agente` solo ve/edita las suyas; `supervisor`/`administrador` ven todas.
 - Borrado es lógico (`activo`), nunca físico — consistente con "no se borra información; se desactiva" del plan.
 
@@ -90,7 +91,7 @@ Reglas clave:
 
 - Solo `administrador`/`supervisor` (un `agente` ya ve lo suyo filtrado en `/oportunidades`, `/tareas`, `/cotizaciones` — estos reportes cruzan datos de *todos* los agentes).
 - `GET /actividades`, `/tareas`, `/pipeline/conversion-etapas`, `/pipeline/resumen`, `/forecast`, `/export/:reporte` (CSV).
-- Se calculan **en vivo** en cada consulta — no existe todavía el job diario ni la tabla `metricas_comerciales_diarias` que menciona el plan (ver "Qué falta" en el README).
+- Los reportes se calculan **en vivo** en cada consulta. Aparte, la tabla `metricas_comerciales_diarias` ya existe y se llena con un job diario (ver README).
 - La conversión por etapa identifica la etapa de entrada por su clave (`"calificada"`), no por un número de orden que podría cambiar si se reordena el catálogo.
 
 ## Health (`src/health/`)
@@ -99,4 +100,4 @@ Reglas clave:
 
 ## Lo que todavía no existe como módulo propio
 
-Ver README, sección "Qué falta": `/contactos` independiente (hoy solo anidado bajo `/empresas/:id/contactos`, decisión de diseño), `catalogo_tipo_documento`, `metricas_comerciales_diarias` (los reportes se calculan en vivo, no desde un job diario).
+Ver README, sección "Qué falta" para lo pendiente real (cobertura de pruebas y reconectar n8n a los endpoints reales).

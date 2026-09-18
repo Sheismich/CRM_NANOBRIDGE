@@ -45,7 +45,7 @@ de locks, el redondeo de montos en cotizaciones, `RateLimitGuard` en
 `/auth/login`/`/auth/bootstrap` (incluida una prueba con peticiones
 concurrentes reales, no solo secuenciales), el backoff de reintentos del
 despachador outbox (5s/30s/120s), la "promoción" de idempotencia en
-`registrarErrorWorkflow`, empresas/contactos (scoping por dueño para
+`registrarErrorWorkflow`, empresas/contactos y `/contactos` (scoping por dueño para
 agentes, cascada al desactivar una empresa, preservación de `no_contactar`,
 409 por correo duplicado), oportunidades (scoping por responsable, cierre/
 reapertura, el guard CAS contra dos cambios de etapa concurrentes), el job
@@ -88,8 +88,9 @@ src/
     dto/credentials.schema.ts          esquemas Zod de entrada
   crm/
     crm.module.ts, empresas.controller.ts, empresas.service.ts   GET/POST /empresas, GET /empresas/:id
+    contactos.controller.ts, contactos.service.ts   GET/POST /contactos, GET/PATCH/DELETE /contactos/:id (vista plana; delega las escrituras a EmpresasService)
     prospectos.controller.ts, prospectos.service.ts   alta manual e importación CSV vía borradores_captura (ver sección propia abajo)
-    dto/empresa.schema.ts, dto/prospecto.schema.ts   esquemas Zod de entrada
+    dto/empresa.schema.ts, dto/contacto.schema.ts, dto/prospecto.schema.ts   esquemas Zod de entrada
   tareas/
     tareas.module.ts, tareas.controller.ts, tareas.service.ts   GET/POST /tareas, GET /tareas/:id, PATCH /tareas/:id/cerrar
     cola-clasificacion.controller.ts   GET /cola-clasificacion, POST /cola-clasificacion/:id/clasificar
@@ -151,7 +152,7 @@ Probado con datos reales: se mapeó la base de 30 prospectos industriales de STE
 
 Esta sección estaba desactualizada: automatización (los 18 endpoints para n8n, incluyendo B4 Error Workflow), oportunidades/pipeline, cotizaciones, documentos, reportes/dashboards, `usuarios` y `auditoria` ya están implementados (ver secciones arriba), aunque no siempre quedaron documentados aquí cuando se construyeron. Lo que de verdad falta hoy (confirmado por la auditoría global del 14-sep-2026):
 
-- CRUD independiente de `/contactos` — hoy solo se crean/editan dentro de `/empresas/:id/contactos` (decisión de diseño, no un olvido).
+- CRUD independiente de `/contactos` ✅ ya existe (18-sep-2026): `GET/POST /api/v1/contactos` y `GET/PATCH/DELETE /api/v1/contactos/:id`, para buscar/abrir un contacto sin conocer antes su empresa (filtros `empresaId` y `q` por nombre, paginado). Las rutas anidadas `/empresas/:id/contactos/*` se mantienen y comparten la misma lógica: las escrituras de `/contactos` delegan en `EmpresasService`, así que validaciones, 409 por medio duplicado, `no_contactar` y auditoría son las mismas. Único cambio de contrato: aquí cada contacto trae sus medios anidados en `medios: [...]` (una fila por contacto), no una fila por medio como devuelve `/empresas/:id`. `POST` recibe `empresaId` en el cuerpo. Un agente solo ve/edita contactos de sus empresas (lo ajeno responde 404).
 - `GET /api/v1/catalogos` (sesión, CRM) ✅ ya existe (17-sep-2026) — expone los mismos catálogos ENUM que `/automatizacion/catalogos` (tamaño de empresa, tipo/estado de medio de contacto, prioridad de prospecto, tipo/prioridad de tarea, etc.) sin requerir `X-API-Key`. El de etapa del embudo/motivo de pérdida sigue aparte, en `/api/v1/oportunidades/catalogos` (propio de ese módulo).
 - `catalogo_tipo_documento` ✅ ya existe (17-sep-2026, migración `018_catalogo_tipo_documento.sql`) — seis tipos semilla (contrato, identificación oficial, comprobante de domicilio, acta constitutiva, cotización firmada, otro). `documentos.tipo_documento_id` es opcional (no rompe documentos ya subidos); `GET /api/v1/documentos/catalogos` lo expone con `id` (a diferencia de `/oportunidades/catalogos`, aquí el cliente sí necesita el id numérico, no solo la clave, porque así es como `subirDocumentoSchema` lo recibe de vuelta). `metricas_comerciales_diarias` ya existe y tiene su job diario (ver arriba).
 - Jobs internos de `PLAN_API_DEFINITIVO.md` ✅ los 6 ya existen (17-sep-2026): despachador de `eventos_pendientes`, limpieza de borradores vencidos, job diario de métricas, revisión de procesos fallidos (pantalla `/procesos-fallidos`, no un `@Interval` — es triage humano, no automatizable), y los dos últimos, `DocumentosService.alertarDocumentosPendientes()` (documentos vigentes sin revisar tras 7 días) y `TareasService.alertarTareasSlaVencidas()` (tareas abiertas con `fecha_limite` vencida) — migración `019_alertas_sla.sql`. Ninguno de los dos llama a n8n directo: encolan en `eventos_pendientes` (mismo patrón outbox que cerrar/clasificar tareas) y el despachador existente los entrega; n8n decide el canal real de aviso. Sin endpoint de disparo manual (housekeeping, mismo criterio que la limpieza de borradores).
