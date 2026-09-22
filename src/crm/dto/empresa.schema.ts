@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { tieneDigitosSuficientes } from "../../shared/normalize.js";
+import { httpUrlSchema } from "../../shared/http-url.js";
 
 // min(7)/max(40) sobre el texto crudo no basta para "parece un teléfono"
 // (ver tieneDigitosSuficientes en shared/normalize.ts, hallazgo de code
@@ -12,7 +13,9 @@ export const contactInputSchema = z.object({
   nombre: z.string().trim().min(2).max(160),
   puesto: z.string().trim().max(160).optional(),
   area: z.string().trim().max(160).optional(),
-  linkedinUrl: z.string().trim().url().max(2048).optional(),
+  linkedinUrl: httpUrlSchema.optional(),
+  facebookUrl: httpUrlSchema.optional(),
+  instagramUrl: httpUrlSchema.optional(),
   correo: z.string().trim().email().max(254).optional(),
   telefono: telefonoSchema.optional(),
   whatsapp: telefonoSchema.optional()
@@ -27,8 +30,10 @@ export const companyInputSchema = z.object({
   estado: z.string().trim().max(120).optional(),
   ciudad: z.string().trim().max(120).optional(),
   pais: z.string().length(2).default("MX"),
-  sitioWeb: z.string().trim().url().max(2048).optional(),
-  linkedinUrl: z.string().trim().url().max(2048).optional(),
+  sitioWeb: httpUrlSchema.optional(),
+  linkedinUrl: httpUrlSchema.optional(),
+  facebookUrl: httpUrlSchema.optional(),
+  instagramUrl: httpUrlSchema.optional(),
   contactos: z.array(contactInputSchema).min(1).max(50)
 });
 
@@ -52,8 +57,10 @@ export const updateCompanySchema = z.object({
   estado: z.string().trim().max(120).nullable().optional(),
   ciudad: z.string().trim().max(120).nullable().optional(),
   pais: z.string().length(2).optional(),
-  sitioWeb: z.string().trim().url().max(2048).nullable().optional(),
-  linkedinUrl: z.string().trim().url().max(2048).nullable().optional()
+  sitioWeb: httpUrlSchema.nullable().optional(),
+  linkedinUrl: httpUrlSchema.nullable().optional(),
+  facebookUrl: httpUrlSchema.nullable().optional(),
+  instagramUrl: httpUrlSchema.nullable().optional()
 }).refine((data) => Object.keys(data).length > 0, { message: "Debes incluir al menos un campo para actualizar" });
 
 // --- Alta y edición de contacto --------------------------------------------
@@ -65,7 +72,9 @@ export const updateContactSchema = z.object({
   nombre: z.string().trim().min(2).max(160).optional(),
   puesto: z.string().trim().max(160).nullable().optional(),
   area: z.string().trim().max(160).nullable().optional(),
-  linkedinUrl: z.string().trim().url().max(2048).nullable().optional(),
+  linkedinUrl: httpUrlSchema.nullable().optional(),
+  facebookUrl: httpUrlSchema.nullable().optional(),
+  instagramUrl: httpUrlSchema.nullable().optional(),
   correo: z.string().trim().email().max(254).nullable().optional(),
   telefono: telefonoSchema.nullable().optional(),
   whatsapp: telefonoSchema.nullable().optional()

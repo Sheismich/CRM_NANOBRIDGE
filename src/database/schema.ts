@@ -58,6 +58,8 @@ export const empresas = mysqlTable("empresas", {
   pais: char("pais", { length: 2 }).notNull().default("MX"),
   sitioWeb: varchar("sitio_web", { length: 2048 }),
   linkedinUrl: varchar("linkedin_url", { length: 2048 }),
+  facebookUrl: varchar("facebook_url", { length: 2048 }),
+  instagramUrl: varchar("instagram_url", { length: 2048 }),
   propietarioId: bigint("propietario_id", { mode: "number", unsigned: true }),
   activo: boolean("activo").notNull().default(true),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -73,6 +75,8 @@ export const contactos = mysqlTable("contactos", {
   puesto: varchar("puesto", { length: 160 }),
   area: varchar("area", { length: 160 }),
   linkedinUrl: varchar("linkedin_url", { length: 2048 }),
+  facebookUrl: varchar("facebook_url", { length: 2048 }),
+  instagramUrl: varchar("instagram_url", { length: 2048 }),
   activo: boolean("activo").notNull().default(true),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)

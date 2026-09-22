@@ -59,6 +59,8 @@ export class EmpresasService {
         pais: input.pais.toUpperCase(),
         sitioWeb: input.sitioWeb ?? null,
         linkedinUrl: input.linkedinUrl ?? null,
+        facebookUrl: input.facebookUrl ?? null,
+        instagramUrl: input.instagramUrl ?? null,
         propietarioId: user.id
       });
 
@@ -94,6 +96,8 @@ export class EmpresasService {
       pais: company.pais,
       sitio_web: company.sitioWeb,
       linkedin_url: company.linkedinUrl,
+      facebook_url: company.facebookUrl,
+      instagram_url: company.instagramUrl,
       propietario_id: company.propietarioId,
       activo: true,
       creado_en: company.creadoEn,
@@ -123,6 +127,8 @@ export class EmpresasService {
       if (input.pais !== undefined) set.pais = input.pais.toUpperCase();
       if (input.sitioWeb !== undefined) set.sitioWeb = input.sitioWeb;
       if (input.linkedinUrl !== undefined) set.linkedinUrl = input.linkedinUrl;
+      if (input.facebookUrl !== undefined) set.facebookUrl = input.facebookUrl;
+      if (input.instagramUrl !== undefined) set.instagramUrl = input.instagramUrl;
 
       // eq(activo, true) es una defensa adicional, no la protección
       // principal contra la carrera (esa ya la da el FOR UPDATE de arriba):
@@ -231,7 +237,7 @@ export class EmpresasService {
       // deactivateContact() concurrente podía colarse entre este SELECT y
       // los UPDATE de abajo (hallazgo de code review, 14-sep-2026).
       const [before] = await tx
-        .select({ id: contactos.id, nombre: contactos.nombre, puesto: contactos.puesto, area: contactos.area, linkedinUrl: contactos.linkedinUrl })
+        .select({ id: contactos.id, nombre: contactos.nombre, puesto: contactos.puesto, area: contactos.area, linkedinUrl: contactos.linkedinUrl, facebookUrl: contactos.facebookUrl, instagramUrl: contactos.instagramUrl })
         .from(contactos)
         .where(and(eq(contactos.id, contactoId), eq(contactos.empresaId, empresaId), eq(contactos.activo, true)))
         .limit(1)
@@ -243,6 +249,8 @@ export class EmpresasService {
       if (input.puesto !== undefined) set.puesto = input.puesto;
       if (input.area !== undefined) set.area = input.area;
       if (input.linkedinUrl !== undefined) set.linkedinUrl = input.linkedinUrl;
+      if (input.facebookUrl !== undefined) set.facebookUrl = input.facebookUrl;
+      if (input.instagramUrl !== undefined) set.instagramUrl = input.instagramUrl;
 
       if (Object.keys(set).length > 0) {
         await tx.update(contactos).set(set).where(and(eq(contactos.id, contactoId), eq(contactos.activo, true)));
@@ -418,7 +426,9 @@ export class EmpresasService {
       nombre: contact.nombre,
       puesto: contact.puesto ?? null,
       area: contact.area ?? null,
-      linkedinUrl: contact.linkedinUrl ?? null
+      linkedinUrl: contact.linkedinUrl ?? null,
+      facebookUrl: contact.facebookUrl ?? null,
+      instagramUrl: contact.instagramUrl ?? null
     });
 
     try {
@@ -447,6 +457,8 @@ export class EmpresasService {
         puesto: contactos.puesto,
         area: contactos.area,
         linkedin_url: contactos.linkedinUrl,
+        facebook_url: contactos.facebookUrl,
+        instagram_url: contactos.instagramUrl,
         activo: contactos.activo,
         creado_en: contactos.creadoEn,
         actualizado_en: contactos.actualizadoEn,
@@ -482,6 +494,8 @@ export class EmpresasService {
         pais: empresas.pais,
         sitioWeb: empresas.sitioWeb,
         linkedinUrl: empresas.linkedinUrl,
+        facebookUrl: empresas.facebookUrl,
+        instagramUrl: empresas.instagramUrl,
         propietarioId: empresas.propietarioId,
         creadoEn: empresas.creadoEn,
         actualizadoEn: empresas.actualizadoEn

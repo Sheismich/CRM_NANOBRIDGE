@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { httpUrlSchema } from "../../shared/http-url.js";
 
 // Campos comunes a una fila de prospecto, vengan de un alta manual
 // (prospectoInputSchema, un solo registro) o de una fila de CSV
@@ -13,7 +14,7 @@ const camposProspecto = {
   empresaEstado: z.string().trim().max(120).optional(),
   empresaCiudad: z.string().trim().max(120).optional(),
   empresaPais: z.string().length(2).default("MX"),
-  empresaSitioWeb: z.string().trim().url().max(2048).optional(),
+  empresaSitioWeb: httpUrlSchema.optional(),
 
   contactoNombre: z.string().trim().min(2).max(160),
   contactoPuesto: z.string().trim().max(160).optional(),
@@ -29,7 +30,7 @@ const camposProspecto = {
   confianza: z.enum(["alta", "media", "baja"]).optional(),
   prioridad: z.enum(["alta", "media", "baja"]).optional(),
   score: z.coerce.number().min(0).max(100).optional(),
-  fuenteUrl: z.string().trim().url().max(2048).optional(),
+  fuenteUrl: httpUrlSchema.optional(),
   observaciones: z.string().trim().max(2000).optional(),
   campanaId: z.coerce.number().int().positive().optional()
 };
@@ -61,7 +62,7 @@ export const filaCsvSchema = refinarProspecto(z.object({
   empresaEstado: vacioComoUndefined(z.string().trim().max(120)),
   empresaCiudad: vacioComoUndefined(z.string().trim().max(120)),
   empresaPais: z.string().trim().length(2).default("MX"),
-  empresaSitioWeb: vacioComoUndefined(z.string().trim().url().max(2048)),
+  empresaSitioWeb: vacioComoUndefined(httpUrlSchema),
 
   contactoNombre: z.string().trim().min(2).max(160),
   contactoPuesto: vacioComoUndefined(z.string().trim().max(160)),
@@ -73,7 +74,7 @@ export const filaCsvSchema = refinarProspecto(z.object({
   confianza: vacioComoUndefined(z.enum(["alta", "media", "baja"])),
   prioridad: vacioComoUndefined(z.enum(["alta", "media", "baja"])),
   score: vacioComoUndefined(z.coerce.number().min(0).max(100)),
-  fuenteUrl: vacioComoUndefined(z.string().trim().url().max(2048)),
+  fuenteUrl: vacioComoUndefined(httpUrlSchema),
   observaciones: vacioComoUndefined(z.string().trim().max(2000)),
   campanaId: vacioComoUndefined(z.coerce.number().int().positive())
 }));

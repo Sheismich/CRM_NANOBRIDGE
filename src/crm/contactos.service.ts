@@ -115,6 +115,8 @@ export class ContactosService {
       puesto: contactos.puesto,
       area: contactos.area,
       linkedin_url: contactos.linkedinUrl,
+      facebook_url: contactos.facebookUrl,
+      instagram_url: contactos.instagramUrl,
       creado_en: contactos.creadoEn,
       actualizado_en: contactos.actualizadoEn
     };

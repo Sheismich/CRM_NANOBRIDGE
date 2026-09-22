@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { httpUrlSchema } from "../../shared/http-url.js";
 import { tieneDigitosSuficientes } from "../../shared/normalize.js";
 
 // --- Scoring -----------------------------------------------------------------
@@ -56,8 +57,8 @@ export const registroProspectoInputSchema = z.object({
     estado: z.string().trim().max(120).optional(),
     ciudad: z.string().trim().max(120).optional(),
     pais: z.string().length(2).default("MX"),
-    sitioWeb: z.string().url().max(2048).optional(),
-    linkedinUrl: z.string().url().max(2048).optional()
+    sitioWeb: httpUrlSchema.optional(),
+    linkedinUrl: httpUrlSchema.optional()
   }),
   contacto: z.object({
     nombre: z.string().trim().min(2).max(160),
@@ -69,7 +70,7 @@ export const registroProspectoInputSchema = z.object({
     telefono: z.string().trim().min(7).max(40).refine(tieneDigitosSuficientes, { message: "El teléfono debe contener al menos 7 dígitos" }).optional()
   }).refine((input) => input.correo || input.telefono, { message: "El contacto requiere correo o teléfono para poder deduplicar" }),
   campana_id: z.coerce.number().int().positive().optional(),
-  fuente_url: z.string().url().max(2048).optional(),
+  fuente_url: httpUrlSchema.optional(),
   confianza: z.enum(["alta", "media", "baja"]).optional()
 });
 export type RegistroProspectoInput = z.infer<typeof registroProspectoInputSchema>;
