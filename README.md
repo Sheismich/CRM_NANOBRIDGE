@@ -35,34 +35,52 @@ migraciones contra Cloud SQL, secretos, pendientes de hardening): ver
 
 ## Pruebas automatizadas
 
-`npm test` corre la suite con Vitest. Requiere **Docker Desktop corriendo**:
-cada corrida levanta un contenedor MySQL 8 desechable real (nunca se
-mockea la base, mismo criterio que toda la verificación manual de este
-proyecto), le aplica las migraciones reales, prueba contra él por HTTP con
-`supertest`, y al final lo apaga solo — no toca tu `.env` ni tu MySQL local.
+`npm test` corre la suite con Vitest. Por default requiere **Docker Desktop
+corriendo**: cada corrida levanta un contenedor MySQL 8 desechable real
+(nunca se mockea la base, mismo criterio que toda la verificación manual de
+este proyecto), le aplica las migraciones reales, prueba contra él por HTTP
+con `supertest`, y al final lo apaga solo — no toca tu `.env` ni tu MySQL
+local. Si Docker no está disponible (ej. Windows sin WSL2) o se prefiere un
+MySQL ya levantado, `TEST_DATABASE_URL` apunta a uno propio en vez de crear
+un contenedor -- esa base se **borra y se recrea** al inicio de cada
+corrida, así que solo se acepta si su nombre contiene `test` (ver
+`test/setup/global-setup.ts`), ej.:
+`TEST_DATABASE_URL="mysql://root@127.0.0.1:3306/nanobridge_test" npm test`.
 
-Cobertura (18-sep-2026, 51 pruebas en 16 archivos): `SessionAuthGuard`/
+Cobertura (22-sep-2026, 115 pruebas en 21 archivos): `SessionAuthGuard`/
 `RolesGuard`/`ApiKeyGuard` (401/403), `POST /auth/bootstrap` de un solo uso,
 la regla "no dejar el sistema sin al menos un administrador activo"
 (`usuarios.service.ts`) incluyendo el arreglo de interbloqueo por orden fijo
-de locks, el redondeo de montos en cotizaciones, `RateLimitGuard` en
-`/auth/login`/`/auth/bootstrap` (incluida una prueba con peticiones
-concurrentes reales, no solo secuenciales), el backoff de reintentos del
-despachador outbox (5s/30s/120s), la "promoción" de idempotencia en
-`registrarErrorWorkflow`, empresas/contactos y `/contactos` (scoping por dueño para
-agentes, cascada al desactivar una empresa, preservación de `no_contactar`,
-409 por correo duplicado), oportunidades (scoping por responsable, cierre/
-reapertura, el guard CAS contra dos cambios de etapa concurrentes), el job
-diario de métricas comerciales, `/catalogos` de sesión (paridad exacta de
-contenido contra el endpoint de automatización), `catalogo_tipo_documento`
-(subida real contra el driver local de storage, 404 por tipo inexistente,
-herencia del tipo al versionar) y los dos jobs de alerta (documentos
-pendientes de revisión, tareas con SLA vencido — idempotencia diaria y el
-caso de archivar/reactivar un documento) y la auditoría de reintentos
-manuales (`eventos_pendientes` y `procesos_fallidos`: la fila en
-`auditoria` con antes/después correctos en el camino feliz, y que un 409/404
-no deje rastro). Es una
-base incremental, no cobertura completa — ver "Qué falta" más abajo.
+de locks, `RateLimitGuard` en `/auth/login`/`/auth/bootstrap` (incluida una
+prueba con peticiones concurrentes reales, no solo secuenciales), el
+backoff de reintentos del despachador outbox (5s/30s/120s), la "promoción"
+de idempotencia en `registrarErrorWorkflow`, empresas/contactos y
+`/contactos` (scoping por dueño para agentes, cascada al desactivar una
+empresa, preservación de `no_contactar`, 409 por correo duplicado),
+oportunidades (scoping por responsable, cierre/reapertura, el guard CAS
+contra dos cambios de etapa concurrentes), cotizaciones (redondeo de
+montos, la máquina de estados completa incluidos los saltos inválidos,
+versionado con CAS contra dos versiones concurrentes, scoping por
+responsable y las reglas de negocio al crear), documentos (validación de
+archivo -- tipo/tamaño/vacío/nombre largo, los 5 tipos permitidos, que la
+extensión de storage sale del mimetype y no del nombre del archivo,
+estados, versionado con CAS, revisión, baja lógica, descarga por URL
+firmada del driver local incluido un token alterado/vencido/con el archivo
+ya borrado, y scoping por agente), tareas y cola de clasificación (cierre
+con CAS, el endpoint de automatización para n8n con idempotencia por
+`execution_id`, y las reglas propias de clasificar -- tipo y prospecto
+asociado obligatorios), el job diario de métricas comerciales, `/catalogos`
+de sesión (paridad exacta de contenido contra el endpoint de
+automatización), `catalogo_tipo_documento` (subida real contra el driver
+local de storage, 404 por tipo inexistente, herencia del tipo al
+versionar), los dos jobs de alerta (documentos pendientes de revisión,
+tareas con SLA vencido -- idempotencia diaria y el caso de archivar/
+reactivar un documento), la auditoría de reintentos manuales
+(`eventos_pendientes` y `procesos_fallidos`) y `/reportes/desempeno-por-agente`
+(agrupado por agente en una sola consulta por métrica, agentes sin
+actividad en el rango incluidos en ceros, filtro por `responsableId` y por
+rango de fechas, exportación CSV). Es una base incremental, no cobertura
+completa — ver "Qué falta" más abajo.
 
 ## Estructura del proyecto
 
@@ -160,5 +178,7 @@ Esta sección estaba desactualizada: automatización (los 18 endpoints para n8n,
 - `GET /api/v1/catalogos` (sesión, CRM) ✅ ya existe (17-sep-2026) — expone los mismos catálogos ENUM que `/automatizacion/catalogos` (tamaño de empresa, tipo/estado de medio de contacto, prioridad de prospecto, tipo/prioridad de tarea, etc.) sin requerir `X-API-Key`. El de etapa del embudo/motivo de pérdida sigue aparte, en `/api/v1/oportunidades/catalogos` (propio de ese módulo).
 - `catalogo_tipo_documento` ✅ ya existe (17-sep-2026, migración `018_catalogo_tipo_documento.sql`) — seis tipos semilla (contrato, identificación oficial, comprobante de domicilio, acta constitutiva, cotización firmada, otro). `documentos.tipo_documento_id` es opcional (no rompe documentos ya subidos); `GET /api/v1/documentos/catalogos` lo expone con `id` (a diferencia de `/oportunidades/catalogos`, aquí el cliente sí necesita el id numérico, no solo la clave, porque así es como `subirDocumentoSchema` lo recibe de vuelta). `metricas_comerciales_diarias` ya existe y tiene su job diario (ver arriba).
 - Jobs internos de `PLAN_API_DEFINITIVO.md` ✅ los 6 ya existen (17-sep-2026): despachador de `eventos_pendientes`, limpieza de borradores vencidos, job diario de métricas, revisión de procesos fallidos (pantalla `/procesos-fallidos`, no un `@Interval` — es triage humano, no automatizable), y los dos últimos, `DocumentosService.alertarDocumentosPendientes()` (documentos vigentes sin revisar tras 7 días) y `TareasService.alertarTareasSlaVencidas()` (tareas abiertas con `fecha_limite` vencida) — migración `019_alertas_sla.sql`. Ninguno de los dos llama a n8n directo: encolan en `eventos_pendientes` (mismo patrón outbox que cerrar/clasificar tareas) y el despachador existente los entrega; n8n decide el canal real de aviso. Sin endpoint de disparo manual (housekeeping, mismo criterio que la limpieza de borradores).
-- Suite de pruebas automatizadas (Vitest, ver "Pruebas automatizadas" arriba) sigue creciendo, pero no es cobertura completa: el resto de `DocumentosService` más allá de lo ya probado (versionado más allá de tipo, cambio de estado, revisión, borrado, el driver GCS), cotizaciones (versionado/transiciones), y tareas/cola de clasificación siguen verificados solo a mano/smoke-test contra MySQL real.
+- Cobertura de pruebas de cotizaciones (versionado/transiciones), documentos (versionado, cambio de estado, revisión, borrado) y tareas/cola de clasificación ✅ cerrada (22-sep-2026, ver "Pruebas automatizadas" arriba) -- lo único de esos tres módulos que sigue sin probar automatizado es el driver GCS (`gcs-storage.driver.ts`, no probado en ningún entorno por falta de bucket real, ver el comentario en ese archivo). Lo que sigue sin cobertura automatizada: la superficie completa de `/api/v1/automatizacion/*` (los 18 endpoints que consume n8n -- solo `errores-workflow` y, de paso, `prospectos`/`tareas` como semilla de otras pruebas, tienen prueba propia hoy).
+- Redes sociales en empresas/contactos ✅ ya existen (22-sep-2026, migración `021_redes_sociales.sql`): `facebook_url`/`instagram_url` además de `linkedin_url`/`sitio_web` -- ver `docs/planes/PLAN_FRONTEND.md` §2. De paso se corrigió que esos cuatro campos de URL (antes solo `linkedinUrl`/`sitioWeb`, ahora también `facebookUrl`/`instagramUrl`) aceptaban cualquier esquema (`javascript:`, `data:`) en vez de solo `http`/`https` -- ver `src/shared/http-url.ts`.
+- `GET /api/v1/reportes/desempeno-por-agente` ✅ ya existe (22-sep-2026): junta actividades + tareas cerradas/vencidas + oportunidades ganadas/ingresos por agente en una sola llamada -- antes armar esa tabla exigía llamar `/tareas` y `/pipeline/resumen` una vez por agente. Ver la sección de Reportes más abajo.
 - Confirmar con B1 de `PLAN_N8N_DEFINITIVO.md` si n8n ya sustituyó sus nodos MOCK por los endpoints reales de `/api/v1/automatizacion` — todavía no, pendiente (mismo equipo que este repo, solo falta hacerlo del lado del flujo de n8n). Ya no está bloqueado por infraestructura: la API vive en `https://nanobridge-api-165032456965.us-central1.run.app` (ver "Despliegue" arriba), así que n8n Cloud ya puede alcanzarla — el trabajo pendiente es revisar/reconectar el workflow de n8n nodo por nodo contra esta URL real.

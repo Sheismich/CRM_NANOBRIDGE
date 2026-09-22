@@ -21,6 +21,7 @@ Todos los endpoints viven bajo `/api/v1/*` salvo `GET /health`. Dos mecanismos d
 - `GET/POST /contactos`, `GET/PATCH/DELETE /contactos/:id` (`src/crm/contactos.controller.ts`) — vista plana para buscar/abrir un contacto sin conocer su empresa (filtros `empresaId`, `q` por nombre; paginado por contacto). Las escrituras delegan en `EmpresasService`, así que comparten validaciones, bloqueo, 409 por medio duplicado y auditoría con las rutas anidadas. Diferencia de contrato: los medios de contacto van anidados en `medios` (una fila por contacto), no una fila por medio como en `GET /empresas/:id`. Mismo scoping: un agente solo ve/edita contactos de sus empresas; lo ajeno responde 404.
 - Cada empresa tiene un `propietarioId`: un `agente` solo ve/edita las suyas; `supervisor`/`administrador` ven todas.
 - Borrado es lógico (`activo`), nunca físico — consistente con "no se borra información; se desactiva" del plan.
+- Redes sociales (22-sep-2026, migración `021_redes_sociales.sql`): además de `linkedin_url`/`sitio_web`, empresas y contactos tienen `facebook_url`/`instagram_url`. Los cuatro campos son `http`/`https` únicamente (`src/shared/http-url.ts`) — antes aceptaban cualquier esquema, incluido `javascript:`.
 
 ## CRM — Actividades (`src/crm/actividades.controller.ts`)
 
@@ -86,11 +87,13 @@ Reglas clave:
 - La extensión del archivo guardado sale del mimetype ya validado, no del nombre que manda el cliente (evita que alguien suba un `.exe` renombrado a `.pdf`).
 - `GET /:id/descarga` — URL firmada de corta duración, el archivo lo sirve GCS directamente una vez emitida (el backend no hace de proxy del binario).
 - `POST /:id/version`, `PATCH /:id/estado`, `PATCH /:id/revisar` — versionado y flujo de revisión; cada acción queda en `auditoria`.
+- `FileInterceptor` fuerza `defParamCharset: "utf8"` (22-sep-2026) — multer decodifica el nombre del archivo subido como `latin1` por default, así que un archivo con acentos o "ñ" en el nombre (`Cotización firmada.pdf`) se guardaba ya con `nombre_original` corrupto sin esto.
 
 ## Reportes (`src/reportes/`)
 
 - Solo `administrador`/`supervisor` (un `agente` ya ve lo suyo filtrado en `/oportunidades`, `/tareas`, `/cotizaciones` — estos reportes cruzan datos de *todos* los agentes).
-- `GET /actividades`, `/tareas`, `/pipeline/conversion-etapas`, `/pipeline/resumen`, `/forecast`, `/export/:reporte` (CSV).
+- `GET /actividades`, `/tareas`, `/pipeline/conversion-etapas`, `/pipeline/resumen`, `/forecast`, `/desempeno-por-agente`, `/export/:reporte` (CSV).
+- `GET /desempeno-por-agente` (22-sep-2026): junta actividades + tareas cerradas/vencidas + oportunidades ganadas/ingresos, ya agrupadas por agente, en una sola llamada — antes armar esa tabla exigía llamar `/tareas` y `/pipeline/resumen` una vez por agente (ninguno de los dos acepta una lista de `responsableId`) y unir todo a mano en el frontend. Incluye a todos los agentes activos aunque no tengan ninguna fila en el rango (aparecen en ceros, no desaparecen de la tabla). `metricas_comerciales_diarias` queda fuera: es un agregado global del día, sin desglose por agente.
 - Los reportes se calculan **en vivo** en cada consulta. Aparte, la tabla `metricas_comerciales_diarias` ya existe y se llena con un job diario (ver README).
 - La conversión por etapa identifica la etapa de entrada por su clave (`"calificada"`), no por un número de orden que podría cambiar si se reordena el catálogo.
 

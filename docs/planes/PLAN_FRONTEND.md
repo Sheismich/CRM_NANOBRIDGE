@@ -12,19 +12,19 @@ El correo pide cinco cosas. Las cinco ya tienen soporte en el backend — no hay
 
 | Lo que pidió el jefe | Dónde ya vive en el backend | Nota |
 | --- | --- | --- |
-| 1. Info de empresa y región demográfica (nombre, empresa, medios de contacto, puestos, redes sociales) | `GET/POST /api/v1/empresas`, `GET /:id` (trae contactos + medios de contacto anidados), `POST/PATCH/DELETE /:id/contactos/:contactoId` | "Redes sociales" hoy solo cubre LinkedIn (`medios_contacto.tipo`) — ver pregunta abierta §3. |
+| 1. Info de empresa y región demográfica (nombre, empresa, medios de contacto, puestos, redes sociales) | `GET/POST /api/v1/empresas`, `GET /:id` (trae contactos + medios de contacto anidados), `POST/PATCH/DELETE /:id/contactos/:contactoId`, además de `GET/POST /api/v1/contactos` y `GET/PATCH/DELETE /:id` (vista plana, sin pasar por la empresa — ver README) | "Redes sociales" ✅ resuelto (22-sep-2026, migración `021_redes_sociales.sql`): `empresas` y `contactos` ahora tienen `facebook_url`/`instagram_url` además de `linkedin_url`/`sitio_web` (`facebookUrl`/`instagramUrl` en los payloads de alta/edición) — ver pregunta abierta §2 resuelta abajo. |
 | 2. Historial de interacciones (correo/WhatsApp/llamada, documentos enviados, comentarios, confirmación de revisión, negativas) | `GET/POST /api/v1/actividades` — **ya es una línea de tiempo unificada**: mezcla llamadas/WhatsApp/comentarios capturados a mano con correos y respuestas automáticas (`envios`/`respuestas`) que vienen de n8n. Documentos y su revisión viven en `/api/v1/documentos` (`revisado_por`/`revisado_en`). | Este es el módulo más completo de los cinco — no hace falta nada nuevo de backend. |
 | 3. Gestión de ventas (etapa del embudo, negociación, cierre) | `GET/POST /api/v1/oportunidades`, `PATCH /:id/etapa`, `PATCH /:id/reabrir`, `GET /oportunidades/catalogos` (etapas y motivos de pérdida, ya en tabla, no hardcodeados) | Etapas actuales: calificada → descubrimiento → propuesta → negociación → verbalmente ganada → ganada / perdida. |
 | 4. Cotizaciones (montos estimados, presupuestos enviados, previstos a cierre) | `GET/POST /api/v1/cotizaciones`, `GET /:id`, `POST /:id/version`, `PATCH /:id/estado` | Cada edición crea una versión nueva; nunca se edita en sitio. |
-| 5. Desempeño del CRM (actividades y ventas por agente, proyecciones de ingreso) | `GET /api/v1/reportes/{actividades, tareas, pipeline/resumen, pipeline/conversion-etapas, forecast, metricas-diarias}` (todos filtrables por agente y rango de fechas) | Solo `administrador`/`supervisor` — un agente ya ve lo suyo filtrado directo en `/oportunidades`, `/tareas`, `/cotizaciones`. |
+| 5. Desempeño del CRM (actividades y ventas por agente, proyecciones de ingreso) | `GET /api/v1/reportes/{actividades, tareas, pipeline/resumen, pipeline/conversion-etapas, forecast, metricas-diarias, desempeno-por-agente}` (todos filtrables por agente y rango de fechas) | Solo `administrador`/`supervisor` — un agente ya ve lo suyo filtrado directo en `/oportunidades`, `/tareas`, `/cotizaciones`. La tabla "Desempeño por agente" de la sección 5 (pantallas) usa `/desempeno-por-agente` ✅ (22-sep-2026): antes de este endpoint, armarla exigía llamar `/tareas` y `/pipeline/resumen` una vez POR AGENTE (ninguno acepta una lista de `responsableId`) y unir todo a mano en el cliente — hallazgo de la persona a cargo de este frontend al intentar construir esa pantalla. Ahora es una sola llamada que ya trae, por cada agente activo, actividades + tareas cerradas/vencidas + oportunidades ganadas/ingresos. |
 
 El "sistema de control de información documentada como reportes de cada cliente" que el jefe menciona sin estar seguro — **sí se puede, y no necesita backend nuevo**: es una pantalla de "ficha de cliente" que combina `GET /empresas/:id` + `/actividades?empresa_id=` + `/oportunidades?empresa_id=` + `/cotizaciones?empresa_id=` + `/documentos?empresa_id=` en una sola vista. Ver §5, "Ficha de cliente".
 
 ## 2. Preguntas abiertas antes de construir
 
-Dos puntos del correo del jefe son ambiguos de una forma que vale la pena aclarar con él antes de construir algo que no sea lo que imagina, en vez de adivinar:
+Un punto del correo del jefe sigue siendo ambiguo de una forma que vale la pena aclarar con él antes de construir algo que no sea lo que imagina, en vez de adivinar:
 
-1. **"Redes sociales" (plural)** — el modelo de datos hoy solo distingue LinkedIn como red social (`medios_contacto.tipo`); no hay Instagram, Facebook, X, etc. Es un cambio menor (agregar valores al ENUM), pero hay que confirmar si de verdad los necesita o si LinkedIn es lo único relevante en un contexto B2B industrial.
+1. ~~**"Redes sociales" (plural)**~~ — resuelto (22-sep-2026): se agregaron `facebook_url`/`instagram_url` a `empresas` y `contactos` (migración `021_redes_sociales.sql`), junto a `linkedin_url`/`sitio_web` que ya existían. Las tres son campos de URL (`http`/`https` únicamente — antes se aceptaba cualquier esquema, incluido `javascript:`, corregido de paso al mismo tiempo, ver `src/shared/http-url.ts`), no un catálogo cerrado de redes: si el jefe pide otra red (X, TikTok) es agregar otra columna, no tocar un ENUM. **No se agregó X/TikTok todavía** — no se pidieron, y agregar columnas "por si acaso" no está en el criterio de este proyecto (ver el resto de la documentación: se construye lo que se pidió, no lo que se anticipa).
 2. **"Proyecciones de ingreso conforme a los cierres con los mismos clientes"** — esto suena a negocio repetido/expansión con clientes que **ya cerraron** antes, que es distinto de lo que ya existe (`/reportes/forecast`, que proyecta el pipeline **abierto**, no negocio futuro con cuentas ya ganadas). Si es lo segundo, es una vista nueva (agrupar oportunidades ganadas por empresa a lo largo del tiempo) que no está en ningún plan todavía. Vale la pena confirmar antes de construir el forecast agregado como si fuera suficiente.
 
 ## 3. Stack técnico recomendado
@@ -58,7 +58,8 @@ Login
 │   ├─ Alta / edición
 │   └─ Ficha de cliente (detalle) ── responde al punto #1 y al "reporte por
 │       cliente" del jefe (§1) ── pestañas:
-│         ├─ Información y contactos (medios de contacto, puestos)
+│         ├─ Información y contactos (medios de contacto, puestos,
+│         │   sitio web, LinkedIn, Facebook, Instagram — §2 punto 1)
 │         ├─ Historial (línea de tiempo unificada — punto #2)
 │         ├─ Oportunidades de esta empresa — punto #3
 │         ├─ Cotizaciones de esta empresa — punto #4
@@ -111,4 +112,4 @@ Sin fechas fijas (ver §0). Orden sugerido por dependencia, no por semana:
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend.
 - **Diseño visual de marca** (colores, logotipo, tono): no definido en ningún documento del proyecto; se necesita antes de la fase 1 o se avanza con un estilo neutro de placeholder.
-- Todo lo que el backend mismo marca como pendiente en su README (`/contactos` independiente sin aplicar todavía, cobertura de pruebas incompleta) — no bloquea el frontend, pero conviene que quien lo construya lo sepa antes de toparse con la ruta anidada de contactos en vez de la independiente.
+- Todo lo que el backend mismo marca como pendiente en su README ("Qué falta") — no bloquea el frontend, pero conviene que quien lo construya lo sepa: reconectar n8n a los endpoints reales de `/automatizacion` (sigue en MOCK del lado de n8n), el driver de GCS sin probar contra un bucket real (el frontend no lo nota, usa la misma `GET /:id/descarga` con cualquier driver), y la superficie de `/automatizacion/*` (los 18 endpoints que consume n8n, no el frontend) sin cobertura de pruebas todavía.
