@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq } from "drizzle-orm";
@@ -38,6 +39,7 @@ describe("Auditoría de reintentos manuales (eventos_pendientes y procesos_falli
 
   it("reintentar un evento fallido queda auditado con el estado anterior y el nuevo", async () => {
     const [seed] = await db.insert(eventosPendientes).values({
+      eventoUuid: randomUUID(),
       tipo: "test_auditoria_retry",
       entidadTipo: "test",
       entidadId: 1,
@@ -62,6 +64,7 @@ describe("Auditoría de reintentos manuales (eventos_pendientes y procesos_falli
 
   it("reintentar un evento que NO está en 'fallido' responde 409 y no deja rastro en auditoría", async () => {
     const [seed] = await db.insert(eventosPendientes).values({
+      eventoUuid: randomUUID(),
       tipo: "test_auditoria_retry_rechazado",
       entidadTipo: "test",
       entidadId: 2,

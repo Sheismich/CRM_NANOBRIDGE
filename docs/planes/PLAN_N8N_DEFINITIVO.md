@@ -41,7 +41,21 @@ Sustituir uno por uno y probar cada endpoint antes de conectarlo:
 
 No conectar un nodo HTTP hasta que su endpoint pase pruebas contra el stub. El registro de una nueva supresión (`no_contactar`) no es parte de esta secuencia: se conecta en B2, al procesar una respuesta clasificada como negativa.
 
-**✅ B1 completado (10-sep-2026).** Los 17 endpoints de `PLAN_API_DEFINITIVO.md` (incluyendo B2: Consulta de prospecto para scoring, Ventanas vencidas, Respuesta recibida, Respuesta clasificada) están construidos y probados. Pendiente del lado n8n: conectar cada nodo HTTP real contra estos endpoints (ya no contra el stub).
+**✅ B1 completado del lado API (10-sep-2026).** Los 17 endpoints de `PLAN_API_DEFINITIVO.md` (incluyendo B2: Consulta de prospecto para scoring, Ventanas vencidas, Respuesta recibida, Respuesta clasificada) están construidos y probados.
+
+**Estado real del lado n8n (workflow "PT1. ingesta y scoring", verificado 21-sep-2026 contra la API en producción y Gemini real, no contra el stub):**
+
+1-2. Parámetros / Catálogos — no aplican a este workflow (no los usa).
+3. Registro de prospecto — ✅ conectado y probado en real.
+4. Validaciones — ✅ conectado y probado en real (21-sep-2026), ambas ramas: prospecto válido (sigue el flujo normal hacia Gemini/scoring) y prospecto excluido (sin giro/tamaño/medio de contacto activo → corta ahí, no gasta Gemini, decisión de diseño confirmada con Fabián).
+5. Tareas — ✅ conectado y probado en real (incluye la rama de "2 intentos fallidos → tarea manual").
+6. Scoring — ✅ conectado y probado en real, ambas ramas (Gemini exitoso y solo-reglas).
+7. Incidencias — conectado, pero sin probar en vivo todavía (Gemini no ha fallado en ninguna corrida real hasta ahora).
+8. Consulta de supresión — no es un paso separado en este workflow: va integrado dentro de la verificación de envío (paso 9), por diseño.
+9. Verificación de envío — ✅ conectado y probado en real.
+10. Estado de prospecto — conectado, pero la rama de exclusión (`puede_enviar: false`) aún no se ha probado en vivo.
+11. Campaña activa — ✅ conectado y probado en real (21-sep-2026), ambas ramas: campaña activa (llega hasta el envío real) y campaña finalizada (marca `estado: "inactivo"` con motivo).
+12. Registro de envío — ✅ conectado y probado en real.
 
 ## B2 Respuestas, clasificación y seguimiento
 
@@ -67,6 +81,7 @@ Decisión (10-sep-2026): **un solo webhook**, no tres. `OutboxDispatcherService`
 
 ```json
 {
+  "evento_uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "tipo": "tarea_cerrada",
   "entidad_tipo": "tarea",
   "entidad_id": 3,
@@ -81,7 +96,14 @@ Construir en n8n:
 
 No se construyen `/webhook/v1/reingreso-validacion`, `/webhook/v1/reingreso-clasificacion` ni `/webhook/v1/reactivacion` por separado — quedan reemplazados por el branching interno de este único webhook. El despachador de la API no cambia para acomodar esto (ya lo hacía así).
 
-Idempotencia: por ahora el despachador no manda un `evento_id` explícito en el body (usa `entidad_id` + `tipo` + timestamp del payload); si n8n necesita deduplicar del lado de la clasificación por sí mismo, puede usar `entidad_id` + `tipo` como clave.
+**Idempotencia (cerrado 22-sep-2026, era un hueco real, no solo documental):**
+el despachador ahora manda `evento_uuid` (UUID generado al encolar el evento,
+columna `eventos_pendientes.evento_uuid`) en la raíz del body de cada
+entrega. Cierra el caso donde la entrega a n8n tiene éxito pero el `UPDATE`
+que marca el evento `enviado` falla en la propia API: el evento se
+reintenta y se reenvía, pero ahora con el mismo `evento_uuid` — el nodo de
+n8n debe deduplicar por esa clave (no por `entidad_id` + `tipo`, que se
+repite en reactivaciones legítimas del mismo prospecto/tarea).
 
 ## B4 Error Workflow
 

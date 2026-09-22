@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
@@ -27,6 +28,7 @@ export class OutboxService {
   /** tx: la transacción de Drizzle activa (o this.db si no hay una en curso). */
   async enqueue(tx: DrizzleTx, event: OutboxEventInput) {
     await tx.insert(eventosPendientes).values({
+      eventoUuid: randomUUID(),
       tipo: event.tipo,
       entidadTipo: event.entidadTipo,
       entidadId: event.entidadId,
@@ -53,6 +55,7 @@ export class OutboxService {
       limit,
       data: rows.map((row) => ({
         id: row.id,
+        evento_uuid: row.eventoUuid,
         tipo: row.tipo,
         entidad_tipo: row.entidadTipo,
         entidad_id: row.entidadId,

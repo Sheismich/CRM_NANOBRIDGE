@@ -11,12 +11,11 @@
 - CRM hacia n8n: `WEBHOOK_ENTRADA_API_KEY`.
 - ORM: Drizzle (decisión del equipo CRM al migrar a NestJS). **Confirmado
   18-sep-2026: Drizzle se queda, definitivo, no se evalúan alternativas.**
-  Pendiente para mañana (🔴 prioridad #1 de la próxima sesión): definir si
-  `schema.ts` + `drizzle-kit` reemplaza a las migraciones SQL manuales como
-  fuente de verdad, o si el SQL manual se mantiene (como hasta ahora, 19
-  archivos en `src/database/migrations/`) y Drizzle solo aporta queries
-  tipadas sobre un `schema.ts` actualizado a mano. Hasta resolverlo, las
-  tablas nuevas se siguen creando en SQL plano.
+  **Resuelto (18-sep-2026, sesión posterior):** la fuente de verdad del
+  esquema sigue siendo el SQL manual versionado en
+  `src/database/migrations/`; Drizzle solo aporta queries tipadas sobre un
+  `schema.ts` actualizado a mano en cada migración nueva. No se adopta
+  `drizzle-kit generate`/`push`.
 
 ## Módulos
 
@@ -102,13 +101,25 @@ CORS: el frontend CRM (React) vive en un origen distinto al backend; configurar 
 
 ### `eventos_pendientes` (outbox)
 
+Nombres reales de columnas (corregido 22-sep-2026 tras auditoría contra
+`002_tareas_outbox.sql`; la versión anterior de esta sección documentaba
+nombres que nunca existieron en la tabla):
+
 - `id` BIGINT UNSIGNED PK.
-- `evento_id` CHAR(36) UNIQUE — UUID, clave de idempotencia hacia los webhooks de n8n (B3).
-- `tipo_evento` VARCHAR(60) — p. ej. `reingreso_validacion`, `reingreso_clasificacion`, `reactivacion`.
-- `entidad` VARCHAR(60), `entidad_id` BIGINT UNSIGNED — referencia genérica (prospecto, tarea, etc.).
+- `evento_uuid` CHAR(36) UNIQUE NOT NULL — UUID generado en `OutboxService.enqueue()`
+  (`randomUUID()`), clave de idempotencia hacia los webhooks de n8n (B3);
+  se manda en el payload de cada entrega para que n8n pueda deduplicar un
+  reintento que reenvía un evento ya entregado. Agregada en
+  `020_eventos_pendientes_uuid.sql` — llamada `evento_uuid`, no `evento_id`,
+  para no chocar con `procesos_fallidos.evento_id` (FK BIGINT, significado
+  distinto).
+- `tipo` VARCHAR(100) — p. ej. `tarea_cerrada`, `prospecto_clasificado`.
+- `entidad_tipo` VARCHAR(50), `entidad_id` BIGINT UNSIGNED — referencia genérica (prospecto, tarea, etc.).
 - `payload` JSON.
-- `estado` ENUM(`pendiente`, `enviado`, `fallido`, `descartado`) DEFAULT `pendiente`.
-- `intentos` TINYINT UNSIGNED DEFAULT 0, `proximo_intento_en` DATETIME NULL.
+- `estado` ENUM(`pendiente`, `procesando`, `enviado`, `fallido`) DEFAULT `pendiente`
+  (`procesando` es el claim atómico del despachador vía `SELECT ... FOR UPDATE SKIP LOCKED`;
+  no existe `descartado`).
+- `intentos` INT UNSIGNED DEFAULT 0, `proximo_intento_en` DATETIME NULL.
 - `ultimo_error` TEXT NULL.
 - `creado_en`, `actualizado_en` DATETIME.
 

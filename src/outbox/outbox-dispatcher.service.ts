@@ -81,12 +81,13 @@ export class OutboxDispatcherService {
     // La entrega YA se confirmó (deliver() no tronó, n8n respondió ok) --
     // si este UPDATE de bookkeeping falla, NO se trata como una falla de
     // entrega: handleFailure() reprogramaría un reintento y volvería a
-    // mandar el mismo evento a n8n una segunda vez (entrega duplicada; el
-    // payload de deliver() no lleva ningún idempotency key que n8n pueda
-    // usar para deduplicar del otro lado) -- hallazgo de code review,
-    // 14-sep-2026. Un fallo aquí es casi siempre un problema transitorio
-    // de la propia base (no de n8n), así que solo se deja constancia para
-    // revisión manual en vez de arriesgar un reenvío duplicado.
+    // mandar el mismo evento a n8n una segunda vez. deliver() ya manda
+    // evento_uuid en el payload (020_eventos_pendientes_uuid.sql) para que
+    // n8n pueda deduplicar ese reenvío del otro lado -- hallazgo de code
+    // review, 14-sep-2026, cerrado con la columna UUID. Un fallo aquí sigue
+    // siendo casi siempre un problema transitorio de la propia base (no de
+    // n8n), así que solo se deja constancia para revisión manual en vez de
+    // depender exclusivamente de la deduplicación de n8n.
     try {
       await this.db.update(eventosPendientes).set({ estado: "enviado" }).where(eq(eventosPendientes.id, event.id));
     } catch (error) {
@@ -104,6 +105,7 @@ export class OutboxDispatcherService {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": env.WEBHOOK_ENTRADA_API_KEY },
       body: JSON.stringify({
+        evento_uuid: event.eventoUuid,
         tipo: event.tipo,
         entidad_tipo: event.entidadTipo,
         entidad_id: event.entidadId,

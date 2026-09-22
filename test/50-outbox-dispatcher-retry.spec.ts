@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq } from "drizzle-orm";
@@ -58,6 +59,7 @@ describe("OutboxDispatcherService: reintentos con backoff", () => {
 
   it("agota los 3 reintentos con backoff creciente y termina en 'fallido' + procesos_fallidos", async () => {
     const [seed] = await db.insert(eventosPendientes).values({
+      eventoUuid: randomUUID(),
       tipo: "test_outbox_retry",
       entidadTipo: "test",
       entidadId: 1,

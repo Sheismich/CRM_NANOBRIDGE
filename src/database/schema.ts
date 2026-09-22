@@ -272,8 +272,14 @@ export const tareas = mysqlTable("tareas", {
   index("idx_tareas_fecha_limite").on(table.fechaLimite)
 ]);
 
+// eventoUuid (020_eventos_pendientes_uuid.sql): clave de idempotencia hacia
+// los webhooks de n8n (B3) -- se manda en el payload de deliver() para que
+// n8n pueda deduplicar si un reintento reenvía un evento ya entregado.
+// Nombrada evento_uuid (no evento_id) para no chocar con
+// procesosFallidos.eventoId, que es una FK BIGINT con significado distinto.
 export const eventosPendientes = mysqlTable("eventos_pendientes", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  eventoUuid: char("evento_uuid", { length: 36 }).notNull(),
   tipo: varchar("tipo", { length: 100 }).notNull(),
   entidadTipo: varchar("entidad_tipo", { length: 50 }).notNull(),
   entidadId: bigint("entidad_id", { mode: "number", unsigned: true }).notNull(),
@@ -285,6 +291,7 @@ export const eventosPendientes = mysqlTable("eventos_pendientes", {
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
+  uniqueIndex("uq_eventos_pendientes_uuid").on(table.eventoUuid),
   index("idx_eventos_estado_intento").on(table.estado, table.proximoIntentoEn),
   index("idx_eventos_entidad").on(table.entidadTipo, table.entidadId)
 ]);
