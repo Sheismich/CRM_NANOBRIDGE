@@ -18,3 +18,10 @@ coverage/
 # del contenedor MySQL desechable a cada archivo de prueba; se borra solo al
 # terminar la corrida, pero si algo interrumpe el proceso puede quedar.
 test/setup/.test-env.json
+# Tooling de Claude Code (skills de terceros descargadas con `npx skills`)
+# y su lock file -- no es código del proyecto, no debe subirse desde
+# ninguna máquina (hallazgo: .claude/settings.local.json solo estaba
+# protegido por el gitignore global de esta máquina, no por el del repo).
+.agents/
+.claude/
+skills-lock.json
