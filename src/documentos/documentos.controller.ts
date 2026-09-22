@@ -28,7 +28,17 @@ const idParamSchema = z.coerce.number().int().positive();
 // completo.
 const uploadInterceptor = FileInterceptor("archivo", {
   storage: memoryStorage(),
-  limits: { fileSize: env.STORAGE_MAX_FILE_SIZE_MB * 1024 * 1024 }
+  limits: { fileSize: env.STORAGE_MAX_FILE_SIZE_MB * 1024 * 1024 },
+  // multer decodifica los nombres de campo/archivo del multipart como
+  // 'latin1' por default (busboy, del que depende) -- todo navegador
+  // moderno manda el filename como bytes UTF-8 crudos en el header (no hay
+  // un estándar real para esto), así que sin esto cualquier archivo con
+  // acentos o "ñ" en el nombre ("Cotización firmada.pdf", nada raro en
+  // este proyecto) se guardaba con nombre_original ya corrupto -- se
+  // encontró al escribir 150-documentos-flujo.spec.ts (18-sep-2026): el
+  // Content-Disposition de la descarga terminaba con bytes doblemente
+  // codificados en vez del nombre real.
+  defParamCharset: "utf8"
 });
 
 @Controller("api/v1/documentos")
