@@ -51,6 +51,17 @@ export class ReportesController {
     return this.reportesService.forecastMensual(input);
   }
 
+  // Tabla "Desempeño por agente": actividades + tareas cerradas/vencidas +
+  // oportunidades ganadas/ingresos, ya unidas por agente en una sola
+  // respuesta -- ver el comentario largo en ReportesService.desempenoPorAgente
+  // sobre por qué hacía falta este endpoint en vez de componerlo en el
+  // frontend a partir de /actividades, /tareas y /pipeline/resumen.
+  @Get("desempeno-por-agente")
+  desempenoPorAgente(@Query() query: Record<string, unknown>) {
+    const input = reporteQuerySchema.parse(query);
+    return this.reportesService.desempenoPorAgente(input);
+  }
+
   // Histórico del job diario de métricas comerciales -- a diferencia de los
   // reportes de arriba (siempre calculados en vivo), esto lee la foto que
   // ya dejó calcularMetricasDelDia(), así que responde igual de rápido sin

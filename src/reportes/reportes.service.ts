@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import { and, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { actividades, catalogoEtapaEmbudo, historialEtapaOportunidad, metricasComercialesDiarias, oportunidades, tareas, usuarios } from "../database/schema.js";
+import { actividades, catalogoEtapaEmbudo, historialEtapaOportunidad, metricasComercialesDiarias, oportunidades, roles, tareas, usuarios } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { toCsv } from "../shared/csv.js";
@@ -247,6 +247,134 @@ export class ReportesService {
     return { cantidad: Number(row.cantidad), valor: row.valor };
   }
 
+  // "Desempeño por agente": una sola tabla que junta actividades + tareas
+  // cerradas/vencidas + oportunidades ganadas/ingresos, por agente. Antes
+  // de este endpoint, armar esa tabla en el frontend exigía llamar
+  // actividadesPorAgente() una vez (sí agrupa por agente) más
+  // tareasReporte() y pipelineResumen() UNA VEZ POR AGENTE cada uno
+  // (ninguno de los dos acepta una lista de responsableId, solo uno a la
+  // vez) -- 1 + 2*N llamadas para N agentes, y encima unirlas a mano por
+  // responsable_id en el cliente (hallazgo de revisión de la persona a
+  // cargo del frontend, 22-sep-2026). Aquí las tres métricas se agrupan por
+  // responsable_id en una sola consulta cada una (3 queries totales, sin
+  // importar cuántos agentes haya) y se combinan del lado del servidor.
+  //
+  // metricas_comerciales_diarias queda FUERA a propósito: es un agregado
+  // global del día (ver comentario en historicoMetricasDiarias más abajo),
+  // sin ninguna columna de agente en la tabla -- no hay nada que agrupar.
+  async desempenoPorAgente(query: ReporteQuery) {
+    const agentes = await this.listarAgentesBase(query.responsableId);
+    if (agentes.length === 0) return [];
+
+    const ids = agentes.map((a) => a.id);
+    const [actividadPorAgente, tareasPorAgente, oportunidadesPorAgente] = await Promise.all([
+      this.actividadesAgrupadasPorAgente(ids, query),
+      this.tareasAgrupadasPorAgente(ids, query),
+      this.oportunidadesGanadasAgrupadasPorAgente(ids, query)
+    ]);
+
+    return agentes.map((agente) => ({
+      responsable_id: agente.id,
+      responsable_nombre: agente.nombre,
+      actividades: actividadPorAgente.get(agente.id) ?? { llamada: 0, whatsapp: 0, comentario: 0, total: 0 },
+      tareas: tareasPorAgente.get(agente.id) ?? { cerradas: 0, vencidas: 0 },
+      oportunidades: oportunidadesPorAgente.get(agente.id) ?? { ganadas: 0, ingresos_cerrados: "0.00" }
+    }));
+  }
+
+  // Roster base de desempenoPorAgente(): usuarios con rol 'agente' activos
+  // -- "desempeño por agente" no aplica a un administrador/supervisor, que
+  // no trae asignaciones propias del mismo modo (ver comentario del módulo
+  // de reportes, arriba). Devuelve TODOS los agentes activos, no solo los
+  // que ya tienen alguna fila en el rango pedido: un agente sin actividad
+  // debe seguir apareciendo en la tabla con ceros, no desaparecer de ella
+  // -- distinto de actividadesPorAgente(), que arma su lista a partir de
+  // quien SÍ tiene filas (INNER JOIN). Si se pide un responsableId puntual
+  // que no sea un agente, el resultado es una lista vacía a propósito: es
+  // la respuesta correcta a "el desempeño del agente X" cuando X no lo es.
+  private async listarAgentesBase(responsableId?: number) {
+    const condiciones = compactConditions([eq(roles.clave, "agente"), eq(usuarios.activo, true), responsableId ? eq(usuarios.id, responsableId) : undefined]);
+    return this.db
+      .select({ id: usuarios.id, nombre: usuarios.nombre })
+      .from(usuarios)
+      .innerJoin(roles, eq(roles.id, usuarios.rolId))
+      .where(and(...condiciones))
+      .orderBy(usuarios.nombre);
+  }
+
+  private async actividadesAgrupadasPorAgente(ids: number[], query: ReporteQuery) {
+    const condiciones = compactConditions([inArray(actividades.responsableId, ids), ...condicionRangoFecha(actividades.ocurridaEn, query.fechaInicio, query.fechaFin)]);
+    const rows = await this.db
+      .select({ responsableId: actividades.responsableId, tipo: actividades.tipo, cantidad: sql<number>`COUNT(*)` })
+      .from(actividades)
+      .where(and(...condiciones))
+      .groupBy(actividades.responsableId, actividades.tipo);
+
+    const porAgente = new Map<number, { llamada: number; whatsapp: number; comentario: number; total: number }>();
+    for (const row of rows) {
+      const cantidad = Number(row.cantidad);
+      const entry = porAgente.get(row.responsableId) ?? { llamada: 0, whatsapp: 0, comentario: 0, total: 0 };
+      entry[row.tipo] = cantidad;
+      entry.total += cantidad;
+      porAgente.set(row.responsableId, entry);
+    }
+    return porAgente;
+  }
+
+  // Igual que tareasReporte() (cerradas por cerrada_en, vencidas como foto
+  // del momento sin rango -- ver comentario ahí), pero agrupado por
+  // responsable_id en vez de por tipo, y con inArray(ids) en vez de un
+  // eq(responsableId) de a uno.
+  private async tareasAgrupadasPorAgente(ids: number[], query: ReporteQuery) {
+    const condicionesCerradas = compactConditions([
+      inArray(tareas.responsableId, ids),
+      eq(tareas.estado, "cerrada"),
+      ...condicionRangoFecha(tareas.cerradaEn, query.fechaInicio, query.fechaFin)
+    ]);
+    const condicionesVencidas = compactConditions([
+      inArray(tareas.responsableId, ids),
+      sql`${tareas.fechaLimite} < CURRENT_TIMESTAMP`,
+      sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`
+    ]);
+
+    const [cerradas, vencidas] = await Promise.all([
+      this.db.select({ responsableId: tareas.responsableId, cantidad: sql<number>`COUNT(*)` }).from(tareas).where(and(...condicionesCerradas)).groupBy(tareas.responsableId),
+      this.db.select({ responsableId: tareas.responsableId, cantidad: sql<number>`COUNT(*)` }).from(tareas).where(and(...condicionesVencidas)).groupBy(tareas.responsableId)
+    ]);
+
+    const porAgente = new Map<number, { cerradas: number; vencidas: number }>();
+    // responsableId no puede venir NULL aquí: inArray(ids) ya lo excluye
+    // (tareas.responsableId es nullable en el schema -- tareas creadas por
+    // automatización sin asignar -- pero NULL nunca hace match contra una
+    // lista de ids reales), el ! solo declara lo que el filtro ya garantiza.
+    for (const row of cerradas) porAgente.set(row.responsableId!, { cerradas: Number(row.cantidad), vencidas: 0 });
+    for (const row of vencidas) {
+      const entry = porAgente.get(row.responsableId!) ?? { cerradas: 0, vencidas: 0 };
+      entry.vencidas = Number(row.cantidad);
+      porAgente.set(row.responsableId!, entry);
+    }
+    return porAgente;
+  }
+
+  // Igual que contarOportunidadesCerradas(true, ...) pero agrupado por
+  // responsable_id en vez de sumado en un solo total.
+  private async oportunidadesGanadasAgrupadasPorAgente(ids: number[], query: ReporteQuery) {
+    const condiciones = compactConditions([
+      inArray(oportunidades.responsableId, ids),
+      eq(oportunidades.cerrada, true),
+      eq(catalogoEtapaEmbudo.esGanada, true),
+      ...condicionRangoFecha(oportunidades.actualizadoEn, query.fechaInicio, query.fechaFin)
+    ]);
+    const rows = await this.db
+      .select({ responsableId: oportunidades.responsableId, cantidad: sql<number>`COUNT(*)`, valor: sql<string>`COALESCE(SUM(${oportunidades.valorEstimado}), 0)` })
+      .from(oportunidades)
+      .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
+      .where(and(...condiciones))
+      .groupBy(oportunidades.responsableId);
+
+    return new Map(rows.map((row) => [row.responsableId, { ganadas: Number(row.cantidad), ingresos_cerrados: row.valor }]));
+  }
+
   // Job diario de métricas comerciales (PLAN_API_DEFINITIVO.md, "Jobs
   // internos"; tabla metricas_comerciales_diarias, PLAN_CRM_DEFINITIVO.md):
   // pipelineResumen() de arriba es siempre en vivo, sin foto histórica de
@@ -399,6 +527,36 @@ export class ReportesService {
       case "forecast": {
         const datos = await this.forecastMensual(query);
         return { nombreArchivo: "forecast_mensual.csv", contenido: toCsv(datos, ["mes", "cantidad", "valor_estimado_total", "valor_ponderado"]) };
+      }
+      case "desempeno-por-agente": {
+        const datos = await this.desempenoPorAgente(query);
+        const filas = datos.map((d) => ({
+          responsable_id: d.responsable_id,
+          responsable_nombre: d.responsable_nombre,
+          actividades_llamada: d.actividades.llamada,
+          actividades_whatsapp: d.actividades.whatsapp,
+          actividades_comentario: d.actividades.comentario,
+          actividades_total: d.actividades.total,
+          tareas_cerradas: d.tareas.cerradas,
+          tareas_vencidas: d.tareas.vencidas,
+          oportunidades_ganadas: d.oportunidades.ganadas,
+          oportunidades_ingresos_cerrados: d.oportunidades.ingresos_cerrados
+        }));
+        return {
+          nombreArchivo: "desempeno_por_agente.csv",
+          contenido: toCsv(filas, [
+            "responsable_id",
+            "responsable_nombre",
+            "actividades_llamada",
+            "actividades_whatsapp",
+            "actividades_comentario",
+            "actividades_total",
+            "tareas_cerradas",
+            "tareas_vencidas",
+            "oportunidades_ganadas",
+            "oportunidades_ingresos_cerrados"
+          ])
+        };
       }
       default: {
         const exhaustivo: never = reporte;

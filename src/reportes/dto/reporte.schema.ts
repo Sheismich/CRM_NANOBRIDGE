@@ -30,7 +30,7 @@ export const metricasDiariasQuerySchema = z.object({
 export type MetricasDiariasQuery = z.infer<typeof metricasDiariasQuerySchema>;
 
 // Reportes disponibles para exportación CSV (GET /reportes/export/:reporte).
-// Mismo set que los 5 endpoints de lectura -- ver ReportesController.
-export const REPORTES_EXPORTABLES = ["actividades", "tareas", "conversion-etapas", "pipeline", "forecast"] as const;
+// Mismo set que los 6 endpoints de lectura -- ver ReportesController.
+export const REPORTES_EXPORTABLES = ["actividades", "tareas", "conversion-etapas", "pipeline", "forecast", "desempeno-por-agente"] as const;
 export const reporteExportableSchema = z.enum(REPORTES_EXPORTABLES);
 export type ReporteExportable = z.infer<typeof reporteExportableSchema>;
