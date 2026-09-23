@@ -31,7 +31,7 @@ gcloud run deploy nanobridge-api --image=us-central1-docker.pkg.dev/crm-prospecc
 
 Explicación completa (qué es cada recurso, Docker local vs. producción,
 migraciones contra Cloud SQL, secretos, pendientes de hardening): ver
-`docs/RUNBOOK_DEPLOY.md` (copia local, `docs/` no se versiona).
+[`docs/RUNBOOK_DEPLOY.md`](docs/RUNBOOK_DEPLOY.md).
 
 ## Pruebas automatizadas
 
