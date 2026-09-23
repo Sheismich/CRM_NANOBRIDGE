@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray, lte, ne, sql } from "drizzle-orm";
-import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
+import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, procesosFallidos, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
@@ -18,6 +18,20 @@ const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
 
 function normalizarValor(tipo: "correo" | "telefono" | "whatsapp", valor: string): string {
   return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
+}
+
+// Política de contactos (PLAN_N8N_DEFINITIVO.md): máximo tres contactos
+// totales POR PERSONA (contacto), no por prospecto -- la misma persona
+// puede entrar varias veces al flujo de ingesta y cada entrada crea un
+// prospecto nuevo. Tras MESES_ENFRIAMIENTO sin ningún contacto, la persona
+// puede arrancar un ciclo nuevo (decisión de negocio, 23-sep-2026).
+const MAX_CONTACTOS_POR_CICLO = 3;
+const MESES_ENFRIAMIENTO = 6;
+
+function sumarMeses(fecha: Date, meses: number): Date {
+  const result = new Date(fecha);
+  result.setMonth(result.getMonth() + meses);
+  return result;
 }
 
 // Política de contactos (PLAN_N8N_DEFINITIVO.md): "cinco días hábiles de
@@ -503,6 +517,33 @@ export class AutomatizacionService {
     return !!suprimido;
   }
 
+  // Compartido por verificarEnvio(), registrarEnvio() y
+  // listarVentanasVencidas(): envíos del ciclo actual de la PERSONA en este
+  // canal, sumando todos sus prospectos, del más reciente al más antiguo.
+  // Antes se contaba por prospecto_id, así que un reingreso de la misma
+  // persona (prospecto nuevo, mismo contacto) arrancaba otra vez en 0
+  // envíos y sin ventana abierta (hallazgo de la auditoría del workflow
+  // "PT1. ingesta y scoring", 22-sep-2026). El ciclo se corta en el primer
+  // hueco de MESES_ENFRIAMIENTO o más: si el último envío ya tiene esa
+  // antigüedad, el ciclo está vacío y la persona vuelve a empezar.
+  private async cicloActualDePersona(db: DrizzleDb | DrizzleTx, contactoId: number, canal: "correo" | "whatsapp") {
+    const rows = await db
+      .select({ id: envios.id, enviadoEn: envios.enviadoEn, ventanaEstado: envios.ventanaEstado, ventanaVenceEn: envios.ventanaVenceEn })
+      .from(envios)
+      .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+      .where(and(eq(prospectos.contactoId, contactoId), eq(envios.canal, canal)))
+      .orderBy(desc(envios.enviadoEn), desc(envios.id));
+
+    const ciclo: typeof rows = [];
+    let referencia = new Date();
+    for (const row of rows) {
+      if (sumarMeses(row.enviadoEn, MESES_ENFRIAMIENTO) <= referencia) break;
+      ciclo.push(row);
+      referencia = row.enviadoEn;
+    }
+    return ciclo;
+  }
+
   // --- Verificación de envío ----------------------------------------------------------
   // B1, paso 9 (PLAN_N8N_DEFINITIVO.md): gate antes de enviar. Bloquea por
   // canal apagado (política de contactos: WhatsApp sigue desactivado hasta
@@ -511,7 +552,7 @@ export class AutomatizacionService {
   // envío que sigue abierta y vigente.
   async verificarEnvio(query: VerificacionEnvioQuery) {
     if (query.canal === "whatsapp") {
-      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Canal WhatsApp desactivado (pendiente proveedor aprobado)", numero_contacto_siguiente: null, ventana_vence_en: null };
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Canal WhatsApp desactivado (pendiente proveedor aprobado)", numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
     // Join contra contactos/empresas para exigir que ambos sigan activos
@@ -521,7 +562,7 @@ export class AutomatizacionService {
     // empresa se desactivara después -- la automatización podía seguir
     // enviándole correos a una empresa ya dada de baja en el CRM.
     const [prospecto] = await this.db
-      .select({ id: prospectos.id, contactoActivo: contactos.activo, empresaActiva: empresas.activo })
+      .select({ id: prospectos.id, contactoId: prospectos.contactoId, contactoActivo: contactos.activo, empresaActiva: empresas.activo })
       .from(prospectos)
       .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
       .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
@@ -530,7 +571,7 @@ export class AutomatizacionService {
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
 
     if (!prospecto.contactoActivo || !prospecto.empresaActiva) {
-      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto o la empresa fueron desactivados", numero_contacto_siguiente: null, ventana_vence_en: null };
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto o la empresa fueron desactivados", numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
     // Consulta directa a lista_supresion agregada (hallazgo de code
@@ -542,27 +583,22 @@ export class AutomatizacionService {
     // pasar el envío sin ninguna comprobación de supresión propia. Mismo
     // chequeo en registrarEnvio() más abajo.
     if (await this.estaSuprimido(query.prospecto_id, query.canal)) {
-      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto está en la lista de supresión", numero_contacto_siguiente: null, ventana_vence_en: null };
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto está en la lista de supresión", numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
-    const [ultimo] = await this.db
-      .select({ numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn, ventanaEstado: envios.ventanaEstado })
-      .from(envios)
-      .where(and(eq(envios.prospectoId, query.prospecto_id), eq(envios.canal, query.canal)))
-      .orderBy(desc(envios.numeroContacto))
-      .limit(1);
+    const ciclo = await this.cicloActualDePersona(this.db, prospecto.contactoId, query.canal);
+    const ultimo = ciclo[0];
+    const total = ciclo.length;
 
-    const total = ultimo?.numeroContacto ?? 0;
-
-    if (total >= 3) {
-      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Máximo de 3 contactos alcanzado", numero_contacto_siguiente: null, ventana_vence_en: null };
+    if (total >= MAX_CONTACTOS_POR_CICLO) {
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Máximo de 3 contactos alcanzado", numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
     if (ultimo && ultimo.ventanaEstado === "abierta" && ultimo.ventanaVenceEn > new Date()) {
-      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Ventana de espera activa", numero_contacto_siguiente: total + 1, ventana_vence_en: ultimo.ventanaVenceEn };
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Ventana de espera activa", numero_en_ciclo_siguiente: total + 1, ventana_vence_en: ultimo.ventanaVenceEn };
     }
 
-    return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: true, motivo: null, numero_contacto_siguiente: total + 1, ventana_vence_en: null };
+    return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: true, motivo: null, numero_en_ciclo_siguiente: total + 1, ventana_vence_en: null };
   }
 
   // --- Registro de envío --------------------------------------------------------------
@@ -570,20 +606,27 @@ export class AutomatizacionService {
   // (B0, punto 3: "crear ventanas de espera al registrar envíos").
   // numero_contacto se recalcula en el servidor en vez de confiar en lo
   // que mande n8n, para no desincronizarse de Verificación de envío si
-  // algo se salta el orden del flujo.
+  // algo se salta el orden del flujo. Ojo: numero_contacto sigue siendo el
+  // consecutivo DENTRO del prospecto (lo exige el UNIQUE de migración 011);
+  // el número que cuenta para la política es numero_en_ciclo, por persona.
+  // Aquí se repiten el límite y la ventana de espera de verificarEnvio()
+  // porque los recordatorios (Ventanas vencidas) llegan directo a este
+  // endpoint sin pasar por la verificación.
   async registrarEnvio(input: RegistroEnvioInput) {
     const [existing] = await this.db
       .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn })
       .from(envios)
       .where(eq(envios.executionId, input.execution_id))
       .limit(1);
-    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, ventana_vence_en: existing.ventanaVenceEn, ya_existia: true as const };
+    // numero_en_ciclo: null en los reintentos idempotentes -- recalcularlo
+    // después del hecho no es confiable (el ciclo pudo avanzar desde entonces).
+    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, numero_en_ciclo: null, ventana_vence_en: existing.ventanaVenceEn, ya_existia: true as const };
 
     if (input.canal === "whatsapp") {
       throw new HttpError(409, "Canal WhatsApp desactivado (pendiente proveedor aprobado)");
     }
 
-    const [prospecto] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
+    const [prospecto] = await this.db.select({ id: prospectos.id, contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
 
     const ventanaVenceEn = addBusinessDays(new Date(), 5);
@@ -627,6 +670,18 @@ export class AutomatizacionService {
             if (suprimido) throw new HttpError(409, "El contacto está en la lista de supresión");
           }
 
+          // Va DESPUÉS del FOR UPDATE de arriba a propósito: todos los
+          // prospectos de la misma persona bloquean la misma fila de
+          // medios_contacto, así que dos envíos concurrentes para la misma
+          // persona (desde prospectos distintos, donde el UNIQUE de
+          // numero_contacto no los detecta) se serializan aquí.
+          const ciclo = await this.cicloActualDePersona(tx, prospecto.contactoId, input.canal);
+          if (ciclo.length >= MAX_CONTACTOS_POR_CICLO) throw new HttpError(409, "Máximo de 3 contactos alcanzado para esta persona y canal");
+          const ultimoDePersona = ciclo[0];
+          if (ultimoDePersona && ultimoDePersona.ventanaEstado === "abierta" && ultimoDePersona.ventanaVenceEn > new Date()) {
+            throw new HttpError(409, "Ventana de espera activa para esta persona y canal");
+          }
+
           const [ultimo] = await tx
             .select({ numeroContacto: envios.numeroContacto })
             .from(envios)
@@ -634,17 +689,16 @@ export class AutomatizacionService {
             .orderBy(desc(envios.numeroContacto))
             .limit(1);
 
-          const total = ultimo?.numeroContacto ?? 0;
-          if (total >= 3) throw new HttpError(409, "Máximo de 3 contactos alcanzado para este prospecto y canal");
+          const numeroContacto = (ultimo?.numeroContacto ?? 0) + 1;
 
           const [result] = await tx.insert(envios).values({
             prospectoId: input.prospecto_id,
             canal: input.canal,
-            numeroContacto: total + 1,
+            numeroContacto,
             ventanaVenceEn,
             executionId: input.execution_id
           });
-          return { id: result.insertId, numero_contacto: total + 1, ventana_vence_en: ventanaVenceEn, ya_existia: false as const };
+          return { id: result.insertId, numero_contacto: numeroContacto, numero_en_ciclo: ciclo.length + 1, ventana_vence_en: ventanaVenceEn, ya_existia: false as const };
         });
       } catch (error) {
         if (error instanceof HttpError) throw error;
@@ -655,7 +709,7 @@ export class AutomatizacionService {
           .from(envios)
           .where(eq(envios.executionId, input.execution_id))
           .limit(1);
-        if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, ventana_vence_en: retry.ventanaVenceEn, ya_existia: true as const };
+        if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, numero_en_ciclo: null, ventana_vence_en: retry.ventanaVenceEn, ya_existia: true as const };
 
         // No fue nuestro propio execution_id el que chocó -- fue el
         // UNIQUE de numero_contacto contra otra llamada concurrente.
@@ -674,9 +728,12 @@ export class AutomatizacionService {
   // concurrente (o el siguiente ciclo) no las vuelva a traer. Si n8n falla
   // después de reclamarlas, el Error Workflow (B4) es la red de
   // recuperación, no un reintento automático de este endpoint.
-  // es_ultimo_contacto=true (numero_contacto ya llegó a 3) le dice a n8n
-  // que debe marcar inactividad (Estado de prospecto) en vez de mandar
-  // otro recordatorio.
+  // es_ultimo_contacto=true (la PERSONA ya llegó a 3 contactos en su ciclo
+  // actual) le dice a n8n que debe marcar inactividad (Estado de
+  // prospecto) en vez de mandar otro recordatorio. Si la persona tiene un
+  // envío más reciente desde otro prospecto (reingreso), la fila vieja se
+  // reclama igual pero no se devuelve: el seguimiento continúa desde la
+  // ventana del envío más reciente, no desde esta.
   async listarVentanasVencidas(query: VentanasVencidasQuery) {
     return this.db.transaction(async (tx) => {
       const rows = await tx
@@ -704,16 +761,32 @@ export class AutomatizacionService {
 
       await tx.update(envios).set({ ventanaEstado: "vencida" }).where(inArray(envios.id, rows.map((row) => row.id)));
 
-      return {
-        data: rows.map((row) => ({
+      // contacto_id en una consulta aparte, no con un JOIN en el SELECT de
+      // arriba: con FOR UPDATE SKIP LOCKED, el JOIN también bloquearía las
+      // filas de prospectos y se saltaría envíos solo porque otra
+      // transacción está tocando su prospecto.
+      const duenos = await tx
+        .select({ id: prospectos.id, contactoId: prospectos.contactoId })
+        .from(prospectos)
+        .where(inArray(prospectos.id, [...new Set(rows.map((row) => row.prospectoId))]));
+      const contactoDe = new Map(duenos.map((d) => [d.id, d.contactoId]));
+
+      const data = [];
+      for (const row of rows) {
+        const ciclo = await this.cicloActualDePersona(tx, contactoDe.get(row.prospectoId)!, row.canal);
+        if (ciclo[0]?.id !== row.id) continue;
+        data.push({
           envio_id: row.id,
           prospecto_id: row.prospectoId,
           canal: row.canal,
           numero_contacto: row.numeroContacto,
-          es_ultimo_contacto: row.numeroContacto >= 3,
+          numero_en_ciclo: ciclo.length,
+          es_ultimo_contacto: ciclo.length >= MAX_CONTACTOS_POR_CICLO,
           enviado_en: row.enviadoEn
-        }))
-      };
+        });
+      }
+
+      return { data };
     });
   }
 

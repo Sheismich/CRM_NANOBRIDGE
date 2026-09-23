@@ -90,7 +90,11 @@ reales.
 ## Política de contactos
 
 - Máximo tres contactos totales: envío inicial y dos recordatorios.
-- Cinco días hábiles de espera entre flujo y seguimiento.
+  **Se cuentan por persona (contacto), no por prospecto** (decidido 23-sep-2026): si la misma
+  persona reingresa al flujo de ingesta, sus envíos anteriores cuentan. Tras **6 meses sin
+  ningún contacto** puede arrancar un ciclo nuevo de 3. Lo aplica la API en
+  `envios/verificacion`, `POST /envios` y `envios/vencidas`; n8n no necesita lógica extra.
+- Cinco días hábiles de espera entre flujo y seguimiento (también por persona).
 - WhatsApp permanece apagado hasta contar con proveedor y reglas aprobadas.
 - Correo entra por webhook del proveedor; no usar polling.
 
