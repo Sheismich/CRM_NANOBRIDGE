@@ -29,6 +29,10 @@ gcloud builds submit --tag us-central1-docker.pkg.dev/crm-prospeccion-outbound/n
 gcloud run deploy nanobridge-api --image=us-central1-docker.pkg.dev/crm-prospeccion-outbound/nanobridge-repo/nanobridge-api:v1 --region=us-central1
 ```
 
+Explicación completa (qué es cada recurso, Docker local vs. producción,
+migraciones contra Cloud SQL, secretos, pendientes de hardening): ver
+`docs/RUNBOOK_DEPLOY.md` (copia local, `docs/` no se versiona).
+
 ## Pruebas automatizadas
 
 `npm test` corre la suite con Vitest. Requiere **Docker Desktop corriendo**:

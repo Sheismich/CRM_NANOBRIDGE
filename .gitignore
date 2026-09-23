@@ -25,3 +25,6 @@ test/setup/.test-env.json
 .agents/
 .claude/
 skills-lock.json
+# Planes y documentación de trabajo (PLAN_*.md, runbook, etc.): viven solo
+# en la copia local, no en el repo.
+/docs/
