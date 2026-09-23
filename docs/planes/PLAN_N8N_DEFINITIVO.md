@@ -15,7 +15,7 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 
 ## Reintento Gemini
 
-- Máximo tres intentos.
+- Máximo tres reintentos (4 llamadas a Gemini en total: 1 inicial + 3 reintentos).
 - Esperas: 5 s, 30 s y 120 s.
 - Desactivar `Retry On Fail` del nodo Gemini para no duplicar intentos.
 - Si Gemini falla definitivamente, usar scoring por reglas.
@@ -50,27 +50,37 @@ No conectar un nodo HTTP hasta que su endpoint pase pruebas contra el stub. El r
 4. Validaciones — ✅ conectado y probado en real (21-sep-2026), ambas ramas: prospecto válido (sigue el flujo normal hacia Gemini/scoring) y prospecto excluido (sin giro/tamaño/medio de contacto activo → corta ahí, no gasta Gemini, decisión de diseño confirmada con Fabián).
 5. Tareas — ✅ conectado y probado en real (incluye la rama de "2 intentos fallidos → tarea manual").
 6. Scoring — ✅ conectado y probado en real, ambas ramas (Gemini exitoso y solo-reglas).
-   **Verificado 22-sep-2026 contra el JSON exportado del workflow** (`/grill-me`, ya no es una
-   suposición): el nodo "HTTP Request" (Gemini) tiene `onError: continueErrorOutput` → error
-   branch entra a "reportar gemini" (IF `intento_gemini < 4`) → si aún quedan intentos, "Wait"
-   con `[5,30,120][intento_gemini-1]` segundos → "Edit Fields" incrementa `intento_gemini` →
-   reintenta. Con `intento_gemini` arrancando en 1, esto da exactamente 4 llamadas a Gemini
-   (1 inicial + 3 reintentos) con el backoff 5s/30s/120s documentado abajo — la forma del loop
-   es correcta. El nodo trae `waitBetweenTries: 2000` a nivel de nodo (residuo visible en el
-   JSON exportado, solo tiene efecto si "Retry On Fail" está activado) — **verificado a mano en
-   el editor de n8n (22-sep-2026): el toggle está apagado**, así que era un campo sin efecto,
-   no un riesgo activo. Cierre completo: forma del loop correcta + Retry On Fail apagado.
-7. Incidencias — conectado, pero sin probar en vivo todavía (Gemini no ha fallado en ninguna corrida real hasta ahora).
+   **Ciclo de reintentos de Gemini reconstruido y probado en vivo (23-sep-2026).** La
+   revisión del 22-sep había dado por buena la *forma* del loop, pero estaba roto por dentro y
+   nunca se había notado porque Gemini no había fallado en ninguna corrida real: la salida de
+   error del nodo "HTTP Request" solo trae `{ error }`, no los datos de entrada, así que
+   "reportar gemini", "Wait" y "Edit Fields" leían `intento_gemini` vacío (el contador nunca
+   avanzaba), los reintentos mandaban `body_gemini` vacío, y la incidencia salía con
+   `prospecto_id: ""` (400 de la API). Diseño actual:
+   - Nodo Code **"control reintento gemini"** en la salida de error: `intento = $runIndex + 1`,
+     toma `prospecto_id` y `body_gemini` de `$('preparar solicitud').first().json` (no de
+     `$json`), y calcula `espera_seg = [5, 30, 120][intento - 1]`.
+   - "reportar gemini" compara `$json.intento < 4`; "Wait" espera `$json.espera_seg` segundos
+     y regresa directo a "HTTP Request". "Edit Fields" se eliminó.
+   - "HTTP Request2" (incidencia) manda `prospecto_id` e `intentos` como números y tiene
+     `On Error = Continue`: si la incidencia falla, el prospecto igual se califica por reglas.
+   - Retry On Fail del nodo Gemini sigue apagado (su `waitBetweenTries: 2000` es un residuo sin
+     efecto).
+   Prueba real: URL de Gemini apuntada temporalmente a un modelo inexistente → 4 fallos, 3
+   esperas, incidencia `gemini_agotado` (id 1), scoring por reglas y envío registrado (id 8).
+   URL restaurada después.
+7. Incidencias — ✅ conectado y probado en real (23-sep-2026, ver punto 6).
 8. Consulta de supresión — no es un paso separado en este workflow: va integrado dentro de la verificación de envío (paso 9), por diseño.
 9. Verificación de envío — ✅ conectado y probado en real.
-10. Estado de prospecto — conectado, pero la rama de exclusión (`puede_enviar: false`) aún no se ha probado en vivo.
+10. Estado de prospecto — ✅ conectado y probado en real (23-sep-2026), incluida la rama de exclusión (`puede_enviar: false` → "HTTP Request4" marca `excluido`): la misma persona enviada dos veces seguidas con un correo nuevo dio `puede_enviar: true` la primera vez y "Ventana de espera activa" la segunda, y un correo de pruebas viejo dio "Máximo de 3 contactos alcanzado". Para probar el camino feliz hay que usar un correo nunca usado y sin teléfono (o uno nuevo): repetir cualquiera de los dos hace que la API lo trate como la misma persona.
 11. Campaña activa — ✅ conectado y probado en real (21-sep-2026), ambas ramas: campaña activa (llega hasta el envío real) y campaña finalizada (marca `estado: "inactivo"` con motivo).
 12. Registro de envío — ✅ conectado y probado en real.
 
 **Workflow intencionalmente en `active: false` (confirmado 22-sep-2026, `/grill-me`):** no
 activar hasta reemplazar "MOCK · envio de campana (7)" con el nodo real de SendGrid (ver B2)
 — activarlo hoy mandaría correos falsos (`proveedor_mensaje_id: "mock-msg-0001"`) a prospectos
-reales.
+reales. Los cambios del 23-sep-2026 (reintentos de Gemini, Retry On Fail, Error Workflow) están
+guardados en el **borrador** de n8n a propósito: no se publica hasta terminar de construirlo.
 
 ## B2 Respuestas, clasificación y seguimiento
 
@@ -128,7 +138,8 @@ construido en n8n" — significa que **cada evento que ya se está encolando en 
 `procesos_fallidos` sin que nada lo entregue a n8n. **Verificado 22-sep-2026:
 `procesos_fallidos` está vacía (`SELECT COUNT(*), tipo FROM procesos_fallidos GROUP BY tipo`
 → `Empty set`) — no hay tráfico real todavía, así que el hueco no ha perdido datos reales,
-pero sigue sin cerrarse. No configurar `N8N_WEBHOOK_URL` hasta que el nodo Webhook + Switch de
+pero sigue sin cerrarse. (Desde el 23-sep-2026 la tabla tiene 2 filas, ids 1 y 2, pero ambas
+son de las pruebas de B4, no eventos del outbox.) No configurar `N8N_WEBHOOK_URL` hasta que el nodo Webhook + Switch de
 este apartado exista de verdad en n8n — apuntarlo a una URL que no procesa el body
 correctamente sería peor que dejarlo sin configurar.
 
@@ -150,12 +161,51 @@ repite en reactivaciones legítimas del mismo prospecto/tarea).
 
 **✅ B4 completado (14-sep-2026).** `POST /api/v1/automatizacion/errores-workflow` hace "registrar incidencia" + "crear `procesos_fallidos` si es crítico" en una sola llamada atómica (una transacción), en vez de dos llamadas condicionales separadas. Idempotente por `execution_id` (obligatorio en este endpoint, a diferencia del resto de incidencias).
 
-**🔴 URGENTE, sigue pendiente del lado n8n (elevado de prioridad 22-sep-2026, `/grill-me`):**
-apuntar el nodo del Error Trigger global a este endpoint. Esto no es la red de seguridad de un
-solo workflow, es la de **todos** — mientras no esté conectado, cualquier fallo real en
-cualquier nodo de cualquier workflow de n8n (incluyendo "PT1. ingesta y scoring") no genera
-incidencia ni `procesos_fallidos`: se pierde sin dejar rastro, sin que nadie se entere hasta
-que un prospecto se pierde silenciosamente en algún punto del flujo.
+**✅ Lado n8n completado y probado de punta a punta (23-sep-2026).**
+
+Decisiones de diseño (`/grill-me`, 23-sep-2026):
+
+1. **Reintentos en el nodo, no en el Error Workflow.** Cada nodo de "PT1. ingesta y scoring"
+   que llama a la API tiene `Retry On Fail` = 3 intentos con 5 s entre cada uno (HTTP Request1,
+   Validaciones, HTTP Request6, HTTP Request3, Consultar campaña actual, Marcar prospecto
+   inactivo por campaña, HTTP Request5, HTTP Request4, Tareas, HTTP Request2). Excepción: el
+   nodo de Gemini, que tiene su propio ciclo. Así los errores pasajeros (Cloud Run arrancando,
+   un 500 momentáneo) se resuelven solos. Es seguro repetir estas llamadas: los endpoints que
+   crean registros son idempotentes por `execution_id`, y los que cambian estado solo lo vuelven
+   a poner igual. El Error Workflow **no** relanza ejecuciones: lo que sobrevive a 3 intentos
+   casi seguro no es pasajero, y una persona decide si le da "Retry" desde n8n.
+2. **Todo lo que llega al Error Workflow es crítico** (`critico: true` → incidencia +
+   `procesos_fallidos`). El Webhook contesta 202 antes de procesar, así que cualquier fallo a
+   medio flujo deja un prospecto atorado. Lo accesorio (ej. registrar la incidencia de Gemini)
+   ya está configurado con `On Error = Continue` y nunca llega aquí.
+3. **Un solo Error Workflow global**, `B4 · Error Workflow global` (n8n id
+   `pL9iXvgOB7cSgTNJ`, **publicado**; no despublicar, porque es la red de seguridad y no tiene
+   ninguna entrada pública). Cada workflow nuevo solo necesita elegirlo en Settings → Error
+   Workflow. "PT1. ingesta y scoring" ya lo tiene.
+4. **Sin aviso por ahora:** alguien revisa la bandeja `GET /api/v1/procesos-fallidos`
+   (solo administrador). Agregar aviso por correo al Error Workflow cuando SendGrid esté
+   conectado.
+
+Estructura: `Error Trigger` → Code `armar reporte de error` (arma `execution_id`, `workflow`,
+`nodo`, `codigo_http`, `mensaje`, `critico: true` y `detalle` con el link de la ejecución)
+→ HTTP `registrar error en API` (`POST /automatizacion/errores-workflow`, credencial
+`Nanobridge-ApiKey`, Retry On Fail 3×5 s). No manda `prospecto_id`: el Error Trigger no lo
+trae; se encuentra abriendo `detalle.execution_url`.
+
+Un "Retry" manual en n8n crea una ejecución con **otro** `execution_id`, así que un paso que sí
+alcanzó a guardarse antes de fallar puede repetirse. Lo peligroso (mandarle dos correos a la
+misma persona) ya lo bloquea la política de contactos por persona; lo demás (una fila de
+scoring o de auditoría repetida) es inofensivo.
+
+**Cómo probarlo (n8n NO dispara el Error Workflow en ejecuciones manuales o de prueba, solo en
+reales):** existe el workflow desechable `B4 · prueba de error` (Webhook `POST
+/webhook/b4-prueba-error`, sin auth → GET a una ruta inexistente de la API → 404). Publicarlo,
+dispararlo una vez y **despublicarlo enseguida** (su webhook es público y sin contraseña).
+Prueba del 23-sep-2026: ejecución #102 falló con 404 → n8n disparó solo el Error Workflow
+(ejecución #103) → incidencia id 3 + proceso fallido id 2.
+
+Pendiente menor: los procesos fallidos 1 y 2 son de estas pruebas; marcarlos `resuelto`
+(`PATCH /api/v1/procesos-fallidos/:id/estado`).
 
 ## Criterio de terminado
 
