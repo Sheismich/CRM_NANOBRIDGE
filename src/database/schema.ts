@@ -276,7 +276,8 @@ export const tareas = mysqlTable("tareas", {
 }, (table) => [
   index("idx_tareas_responsable_estado").on(table.responsableId, table.estado),
   index("idx_tareas_tipo_estado").on(table.tipo, table.estado),
-  index("idx_tareas_fecha_limite").on(table.fechaLimite)
+  index("idx_tareas_fecha_limite").on(table.fechaLimite),
+  index("idx_tareas_respuesta").on(table.respuestaId)
 ]);
 
 // eventoUuid (020_eventos_pendientes_uuid.sql): clave de idempotencia hacia

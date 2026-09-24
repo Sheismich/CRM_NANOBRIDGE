@@ -6,15 +6,24 @@
 -- solo prospecto_id, así que con dos respuestas del mismo prospecto no había
 -- forma de saber cuál estaba resolviendo la persona. NULL para todo lo que no
 -- nace de una respuesta (tareas de seguimiento, de corrección, las creadas a
--- mano, y las de clasificación anteriores a esta migración).
+-- mano).
+--
+-- Columna, índice y FK en un solo ALTER: si falla, no queda nada aplicado a
+-- medias (MySQL no deshace DDL entre sentencias, ver apply-migrations.ts).
+-- La FK copia la tabla en MySQL 8; tareas es chica.
 ALTER TABLE tareas
-  ADD COLUMN respuesta_id BIGINT UNSIGNED NULL AFTER prospecto_id;
+  ADD COLUMN respuesta_id BIGINT UNSIGNED NULL AFTER prospecto_id,
+  ADD KEY idx_tareas_respuesta (respuesta_id),
+  ADD CONSTRAINT fk_tareas_respuesta FOREIGN KEY (respuesta_id) REFERENCES respuestas(id);
 
 -- statement-break
--- Aparte de la columna: la FK sí copia la tabla en MySQL 8 (con
--- foreign_key_checks activo), la columna sola no. tareas es chica.
-ALTER TABLE tareas
-  ADD CONSTRAINT fk_tareas_respuesta FOREIGN KEY (respuesta_id) REFERENCES respuestas(id);
+-- Backfill de las tareas de clasificación que ya existían: clasificarRespuesta
+-- las crea con execution_id = 'resp-clasif-' + execution_id de la
+-- clasificación de la respuesta, y ese valor es único en las dos tablas.
+UPDATE tareas t
+  JOIN respuestas r ON t.execution_id = CONCAT('resp-clasif-', r.execution_id_clasificacion)
+  SET t.respuesta_id = r.id
+  WHERE t.tipo = 'clasificacion' AND t.respuesta_id IS NULL;
 
 -- statement-break
 -- 2) Los dos valores que solo existen en la clasificación manual. Agregados

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
@@ -72,6 +73,27 @@ describe("respuestas: clasificación automática y manual", () => {
       expect(tarea.body.tipo).toBe("clasificacion");
       expect(tarea.body.prospecto_id).toBe(prospecto.id);
       expect(tarea.body.respuesta_id).toBe(respuestaId);
+    });
+
+    // Las tareas de clasificación creadas antes de 022 no tienen
+    // respuesta_id; la migración las liga por el execution_id que les pone
+    // clasificarRespuesta ("resp-clasif-" + execution_id de la
+    // clasificación). Se simula una tarea "vieja" y se corre la sentencia
+    // de backfill tal cual está en el archivo de la migración.
+    it("el backfill de la migración 022 liga las tareas de clasificación anteriores con su respuesta", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "respuesta de antes de la migración");
+      const res = await clasificarAutomatica(respuestaId, "ambigua");
+      const tareaId = res.body.tarea_id as number;
+      await db.update(tareas).set({ respuestaId: null }).where(eq(tareas.id, tareaId));
+
+      const archivo = await readFile(new URL("../src/database/migrations/022_clasificacion_manual.sql", import.meta.url), "utf8");
+      const backfill = archivo.split("-- statement-break").find((s) => /UPDATE\s+tareas/i.test(s));
+      expect(backfill).toBeDefined();
+      await db.execute(sql.raw(backfill!));
+
+      const [tarea] = await db.select({ respuestaId: tareas.respuestaId }).from(tareas).where(eq(tareas.id, tareaId));
+      expect(tarea!.respuestaId).toBe(respuestaId);
     });
 
     it("respuestas.clasificacion admite los valores que solo usa la clasificación manual (invalido, reagendar)", async () => {
