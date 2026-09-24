@@ -1054,6 +1054,7 @@ export class AutomatizacionService {
         const tarea = await this.tareasService.createFromAutomation({
           execution_id: `resp-clasif-${input.execution_id}`,
           prospecto_id: respuesta.prospectoId,
+          respuesta_id: respuesta.id,
           tipo: "clasificacion",
           titulo: "Clasificar respuesta ambigua",
           descripcion: input.comentario ?? respuesta.contenido ?? undefined,

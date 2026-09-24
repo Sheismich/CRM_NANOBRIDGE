@@ -259,6 +259,9 @@ export const tareas = mysqlTable("tareas", {
   empresaId: bigint("empresa_id", { mode: "number", unsigned: true }),
   contactoId: bigint("contacto_id", { mode: "number", unsigned: true }),
   prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }),
+  // 022_clasificacion_manual.sql: la respuesta que originó una tarea de
+  // clasificación ("ambigua"); NULL en cualquier otra tarea.
+  respuestaId: bigint("respuesta_id", { mode: "number", unsigned: true }),
   executionId: varchar("execution_id", { length: 100 }),
   fechaLimite: datetime("fecha_limite"),
   alertadoEn: datetime("alertado_en"),
@@ -359,7 +362,9 @@ export const respuestas = mysqlTable("respuestas", {
   contenido: text("contenido"),
   tardia: boolean("tardia").notNull().default(false),
   estado: mysqlEnum("estado", ["pendiente_clasificacion", "clasificada"]).notNull().default("pendiente_clasificacion"),
-  clasificacion: mysqlEnum("clasificacion", ["interesado", "no_interesado", "baja", "automatica", "ambigua"]),
+  // invalido/reagendar (022_clasificacion_manual.sql) solo los pone la
+  // clasificación manual; n8n sigue limitado a los 5 primeros.
+  clasificacion: mysqlEnum("clasificacion", ["interesado", "no_interesado", "baja", "automatica", "ambigua", "invalido", "reagendar"]),
   comentario: varchar("comentario", { length: 500 }),
   executionId: varchar("execution_id", { length: 100 }),
   executionIdClasificacion: varchar("execution_id_clasificacion", { length: 100 }),

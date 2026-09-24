@@ -31,6 +31,7 @@ function toRow(row: typeof tareas.$inferSelect) {
     empresa_id: row.empresaId,
     contacto_id: row.contactoId,
     prospecto_id: row.prospectoId,
+    respuesta_id: row.respuestaId,
     fecha_limite: row.fechaLimite,
     clasificacion: row.clasificacion,
     resultado: row.resultado,
@@ -206,7 +207,12 @@ export class TareasService {
   // resto de escrituras, en vez de quedar como una escritura suelta que
   // puede sobrevivir aunque el resto haga rollback (o viceversa) — hallazgo
   // de code review, 10-sep-2026.
-  async createFromAutomation(input: TareaAutomatizacionInput, db: DrizzleDb | DrizzleTx = this.db) {
+  //
+  // `respuesta_id` NO es parte del contrato de POST /automatizacion/tareas
+  // (n8n no lo manda): solo lo pasa AutomatizacionService.clasificarRespuesta
+  // al crear la tarea de una respuesta "ambigua", para que la clasificación
+  // manual sepa qué respuesta está resolviendo.
+  async createFromAutomation(input: TareaAutomatizacionInput & { respuesta_id?: number }, db: DrizzleDb | DrizzleTx = this.db) {
     const [existing] = await db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
     if (existing) return { id: existing.id, ya_existia: true as const };
 
@@ -234,6 +240,7 @@ export class TareasService {
         empresaId,
         contactoId,
         prospectoId: input.prospecto_id ?? null,
+        respuestaId: input.respuesta_id ?? null,
         executionId: input.execution_id,
         fechaLimite: input.fecha_limite ? new Date(input.fecha_limite) : null,
         creadaPor: null
