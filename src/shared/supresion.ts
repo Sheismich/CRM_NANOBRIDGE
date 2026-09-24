@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, listaSupresion, mediosContacto } from "../database/schema.js";
+import { auditoria, listaSupresion, mediosContacto, prospectos } from "../database/schema.js";
 import { isDuplicateEntry } from "./database-errors.js";
 import { normalizeEmail, normalizePhone } from "./normalize.js";
 
@@ -77,4 +77,28 @@ export async function registrarSupresion(tx: DrizzleTx, input: SupresionNueva) {
   });
 
   return { id: insertId, ya_existia: false as const };
+}
+
+/**
+ * Una respuesta clasificada "baja" (por n8n o a mano): suprime todos los
+ * medios del contacto del prospecto por el canal de esa respuesta. No se
+ * sabe desde qué dirección contestó la persona, así que van todos los de
+ * ese canal. Devuelve los ids de lista_supresion (nuevos o ya existentes).
+ */
+export async function suprimirMediosDelProspecto(
+  tx: DrizzleTx,
+  input: { prospectoId: number; canal: "correo" | "whatsapp"; motivo: string; executionId: string | null; usuarioId: number | null }
+) {
+  const medios = await tx
+    .select({ valor: mediosContacto.valor })
+    .from(mediosContacto)
+    .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
+    .where(and(eq(prospectos.id, input.prospectoId), eq(mediosContacto.tipo, input.canal)));
+
+  const ids: number[] = [];
+  for (const medio of medios) {
+    const supresion = await registrarSupresion(tx, { tipo: input.canal, valor: medio.valor, motivo: input.motivo, executionId: input.executionId, usuarioId: input.usuarioId });
+    ids.push(supresion.id);
+  }
+  return ids;
 }

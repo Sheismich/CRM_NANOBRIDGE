@@ -86,6 +86,40 @@ describe("respuestas: clasificación automática y manual", () => {
     });
   });
 
+  // Antes la API solo cambiaba el estado del prospecto y dejaba a n8n
+  // llamar aparte a POST /automatizacion/supresion: una obligación legal
+  // dependiendo de un paso que se podía olvidar o fallar por separado.
+  describe("clasificación de n8n", () => {
+    it("'baja' deja el prospecto en baja y registra la supresión en la misma operación", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "ya no me escriban");
+
+      const res = await clasificarAutomatica(respuestaId, "baja");
+      expect(res.status).toBe(201);
+
+      const [fila] = await db.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, prospecto.id));
+      expect(fila!.estado).toBe("baja");
+      const supresion = await api().get("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).query({ tipo: "correo", valor: prospecto.correo });
+      expect(supresion.body.en_supresion).toBe(true);
+    });
+
+    it("'no_interesado' no suprime el correo", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "no gracias");
+      expect((await clasificarAutomatica(respuestaId, "no_interesado")).status).toBe(201);
+
+      const supresion = await api().get("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).query({ tipo: "correo", valor: prospecto.correo });
+      expect(supresion.body.en_supresion).toBe(false);
+    });
+
+    it("n8n no puede usar los valores que solo existen en la clasificación manual", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id);
+      expect((await clasificarAutomatica(respuestaId, "invalido")).status).toBe(400);
+      expect((await clasificarAutomatica(respuestaId, "reagendar")).status).toBe(400);
+    });
+  });
+
   // Antes la clasificación manual solo cerraba la tarea y encolaba un
   // evento para n8n: ni el prospecto ni la respuesta cambiaban, y un "ya no
   // me escriban" no tenía opción propia, así que el correo nunca llegaba a

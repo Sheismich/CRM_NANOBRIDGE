@@ -39,7 +39,7 @@ Sustituir uno por uno y probar cada endpoint antes de conectarlo:
 11. Campaña activa.
 12. Registro de envío.
 
-No conectar un nodo HTTP hasta que su endpoint pase pruebas contra el stub. El registro de una nueva supresión (`no_contactar`) no es parte de esta secuencia: se conecta en B2, al procesar una respuesta clasificada como negativa.
+No conectar un nodo HTTP hasta que su endpoint pase pruebas contra el stub. El registro de una nueva supresión (`no_contactar`) no es parte de esta secuencia. Desde el 24-sep-2026 la registra la propia API al clasificar una respuesta como `baja` (ver B2).
 
 **✅ B1 completado del lado API (10-sep-2026).** Los 17 endpoints de `PLAN_API_DEFINITIVO.md` (incluyendo B2: Consulta de prospecto para scoring, Ventanas vencidas, Respuesta recibida, Respuesta clasificada) están construidos y probados.
 
@@ -88,7 +88,17 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
 - Registrar respuesta mediante API.
 - Clasificar con IA o enviar a cola manual: el nodo llama siempre al endpoint "Respuesta clasificada"; si la clasificación es ambigua, ese mismo endpoint crea una `tarea` con `tipo=clasificacion` (no hay tabla `cola_clasificacion` aparte), que aparece en la bandeja `GET /api/v1/cola-clasificacion` para que el Equipo CRM la resuelva.
 - Procesar no interesado, baja, respuesta automática, ambigua e interesado.
-- Cuando la clasificación es "baja" o "no_contactar", invocar el endpoint de registro de supresión.
+- **La supresión por "baja" ya no es un paso de n8n (cambiado 24-sep-2026).** El endpoint
+  "Respuesta clasificada" registra en `lista_supresion` los medios del contacto por el canal de
+  la respuesta, en la misma transacción que fija el estado del prospecto. La clasificación
+  manual de la cola hace lo mismo cuando alguien elige `baja`. n8n **no** debe llamar a
+  `POST /automatizacion/supresion` después de clasificar. Si lo hiciera no se rompe nada
+  (responde `ya_existia`), pero es trabajo de más. Ese endpoint queda para supresiones que no
+  vienen de una respuesta clasificada, como el link de baja de SendGrid (ver "Envío real con
+  SendGrid").
+- La clasificación manual (cola de clasificación) aplica su decisión en la API y el evento
+  `prospecto_clasificado` llega a n8n **solo como aviso**: la rama del Switch de B3 no tiene que
+  cambiar estados ni registrar supresiones.
 - Recordatorios e inactividad son **una sola consulta con una rama, no dos mecanismos separados**
   (corregido 22-sep-2026, hallazgo de `/grill-me`): n8n hace polling de
   `GET /automatizacion/envios/vencidas` (ver `automatizacion.service.ts:670-679`); cada fila

@@ -6,7 +6,8 @@ import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
-import { normalizarValorSupresion, registrarSupresion } from "../shared/supresion.js";
+import { normalizarValorSupresion, registrarSupresion, suprimirMediosDelProspecto } from "../shared/supresion.js";
+import { ESTADO_PROSPECTO_POR_CLASIFICACION } from "../shared/clasificacion-respuesta.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
@@ -935,16 +936,17 @@ export class AutomatizacionService {
   // que use n8n) y decide qué pasa con el prospecto. El caso "ambigua" no
   // fija un estado final: crea una tarea tipo=clasificacion que cae en la
   // bandeja `/cola-clasificacion` para que el Equipo CRM decida
-  // manualmente (PLAN_N8N_DEFINITIVO.md B2). El resto de los casos
-  // (interesado, no_interesado, baja, automatica) es responsabilidad de
-  // este endpoint solo hasta fijar el estado del prospecto — invocar
-  // Registro de supresión cuando la clasificación es "baja" lo hace el
-  // propio flujo de n8n como paso aparte, no esta función.
+  // manualmente (PLAN_N8N_DEFINITIVO.md B2). El resto fija el estado del
+  // prospecto (mapa compartido con la clasificación manual), y "baja"
+  // además registra la supresión en esta misma transacción. Antes eso lo
+  // hacía n8n como paso aparte: una obligación legal que dependía de un
+  // segundo llamado que podía olvidarse o fallar solo (24-sep-2026).
   async clasificarRespuesta(input: RespuestaClasificadaInput) {
     const [respuesta] = await this.db
       .select({
         id: respuestas.id,
         prospectoId: respuestas.prospectoId,
+        canal: respuestas.canal,
         contenido: respuestas.contenido,
         estado: respuestas.estado,
         clasificacion: respuestas.clasificacion,
@@ -962,15 +964,7 @@ export class AutomatizacionService {
       throw new HttpError(409, "La respuesta ya fue clasificada");
     }
 
-    const estadoProspecto: Record<typeof input.clasificacion, string | null> = {
-      interesado: "interesado",
-      no_interesado: "no_interesado",
-      baja: "baja",
-      automatica: null,
-      ambigua: "en_revision"
-    };
-
-    const nuevoEstado = estadoProspecto[input.clasificacion];
+    const nuevoEstado = ESTADO_PROSPECTO_POR_CLASIFICACION[input.clasificacion];
 
     // Update de respuestas + update de prospectos + creación de la tarea
     // "ambigua" + auditoría van en una sola transacción: antes eran
@@ -1011,6 +1005,10 @@ export class AutomatizacionService {
         await tx.update(prospectos).set({ estado: nuevoEstado }).where(eq(prospectos.id, respuesta.prospectoId));
       }
 
+      const supresionIds = input.clasificacion === "baja"
+        ? await suprimirMediosDelProspecto(tx, { prospectoId: respuesta.prospectoId, canal: respuesta.canal, motivo: `Baja pedida en respuesta ${respuesta.id} (clasificación de n8n)`, executionId: input.execution_id, usuarioId: null })
+        : [];
+
       let tareaId: number | null = null;
       if (input.clasificacion === "ambigua") {
         const tarea = await this.tareasService.createFromAutomation({
@@ -1030,7 +1028,7 @@ export class AutomatizacionService {
         entidad: "respuesta",
         entidadId: input.respuesta_id,
         accion: "clasificar_respuesta",
-        despues: { execution_id: input.execution_id, clasificacion: input.clasificacion, tarea_id: tareaId }
+        despues: { execution_id: input.execution_id, clasificacion: input.clasificacion, tarea_id: tareaId, supresion_ids: supresionIds }
       });
 
       return { id: respuesta.id, prospecto_id: respuesta.prospectoId, clasificacion: input.clasificacion, tarea_id: tareaId, ya_existia: false as const };

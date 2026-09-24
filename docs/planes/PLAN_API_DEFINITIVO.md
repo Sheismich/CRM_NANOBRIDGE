@@ -44,7 +44,7 @@ Mantener los 18 endpoints de automatización (todos con auth `X-API-Key` / `CRM_
 10. Campaña activa.
 11. Registro de envío.
 12. Consulta de supresión (verificar antes de enviar).
-13. Registro de supresión (alta de baja / `no_contactar`; se invoca al procesar una respuesta clasificada como negativa en B2, no requiere endpoint aparte).
+13. Registro de supresión (alta de baja / `no_contactar`). Desde el 24-sep-2026, cuando una respuesta se clasifica `baja` (por n8n en "Respuesta clasificada" o a mano en la cola de clasificación), la API la registra en la misma transacción. El endpoint queda para supresiones que no vienen de una respuesta, como el link de baja del proveedor de correo.
 14. Consulta de prospecto para scoring.
 15. Ventanas vencidas.
 16. Respuesta recibida.

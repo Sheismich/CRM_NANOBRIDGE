@@ -2,10 +2,10 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, contactos, mediosContacto, prospectos, respuestas, tareas } from "../database/schema.js";
+import { auditoria, contactos, prospectos, respuestas, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
-import { registrarSupresion } from "../shared/supresion.js";
+import { suprimirMediosDelProspecto } from "../shared/supresion.js";
 import { ESTADO_PROSPECTO_POR_CLASIFICACION } from "../shared/clasificacion-respuesta.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
@@ -212,26 +212,9 @@ export class TareasService {
         await tx.update(prospectos).set({ estado: nuevoEstado }).where(eq(prospectos.id, prospectoId));
       }
 
-      const supresionIds: number[] = [];
-      if (input.clasificacion === "baja") {
-        // No se sabe desde qué dirección contestó la persona, así que se
-        // suprimen todos sus medios de ese canal.
-        const medios = await tx
-          .select({ valor: mediosContacto.valor })
-          .from(mediosContacto)
-          .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
-          .where(and(eq(prospectos.id, prospectoId), eq(mediosContacto.tipo, canal)));
-        for (const medio of medios) {
-          const supresion = await registrarSupresion(tx, {
-            tipo: canal,
-            valor: medio.valor,
-            motivo: `Baja pedida en respuesta (clasificación manual, tarea ${id})`,
-            executionId: null,
-            usuarioId: user.id
-          });
-          supresionIds.push(supresion.id);
-        }
-      }
+      const supresionIds = input.clasificacion === "baja"
+        ? await suprimirMediosDelProspecto(tx, { prospectoId, canal, motivo: `Baja pedida en respuesta (clasificación manual, tarea ${id})`, executionId: null, usuarioId: user.id })
+        : [];
 
       let tareaSeguimientoId: number | null = null;
       if (input.clasificacion === "reagendar") {
