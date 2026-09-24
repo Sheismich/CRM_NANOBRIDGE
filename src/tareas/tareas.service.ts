@@ -2,9 +2,11 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, contactos, prospectos, tareas } from "../database/schema.js";
+import { auditoria, contactos, mediosContacto, prospectos, respuestas, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
+import { registrarSupresion } from "../shared/supresion.js";
+import { ESTADO_PROSPECTO_POR_CLASIFICACION } from "../shared/clasificacion-respuesta.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
@@ -159,6 +161,17 @@ export class TareasService {
     return this.list(user, { tipo: "clasificacion", estado: "pendiente" }, page, limit);
   }
 
+  // La decisión de la persona se aplica aquí mismo, en una sola transacción
+  // (antes solo se cerraba la tarea y se encolaba el evento, y nada la
+  // aplicaba: n8n no tenía cómo -- hallazgo de revisión, 24-sep-2026):
+  // - la respuesta que originó la tarea (respuesta_id) queda con esta
+  //   clasificación;
+  // - el prospecto pasa al estado de ESTADO_PROSPECTO_POR_CLASIFICACION;
+  // - "baja" registra la supresión de los medios del contacto por el canal
+  //   de la respuesta (obligación legal: no puede depender de que n8n
+  //   reciba el evento);
+  // - "reagendar" crea una tarea de seguimiento para quien clasificó.
+  // El evento prospecto_clasificado sigue saliendo, solo como aviso.
   async clasificar(user: CurrentUser, id: number, input: ClasificarTareaInput) {
     const row = await this.findAssignable(user, id);
     if (row.tipo !== "clasificacion") {
@@ -167,9 +180,12 @@ export class TareasService {
     if (!row.prospectoId) {
       throw new HttpError(409, "La tarea de clasificación no tiene un prospecto asociado");
     }
+    const prospectoId = row.prospectoId;
 
     await this.db.transaction(async (tx) => {
-      // Misma revalidación que cerrar() -- ver comentario ahí.
+      // Misma revalidación que cerrar() -- ver comentario ahí. Va primero:
+      // si otra clasificación de la misma tarea ganó la carrera, esta
+      // termina aquí sin haber escrito nada más.
       const [result] = await tx.update(tareas).set({
         estado: "cerrada",
         clasificacion: input.clasificacion,
@@ -178,11 +194,67 @@ export class TareasService {
       }).where(and(eq(tareas.id, id), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
       if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada");
 
+      // Tareas de clasificación anteriores a 022_clasificacion_manual.sql, o
+      // creadas a mano, no tienen respuesta: el canal por omisión es correo.
+      let canal: "correo" | "whatsapp" = "correo";
+      if (row.respuestaId) {
+        const [respuesta] = await tx.select({ canal: respuestas.canal }).from(respuestas).where(eq(respuestas.id, row.respuestaId)).limit(1);
+        if (respuesta) canal = respuesta.canal;
+        await tx.update(respuestas).set({
+          estado: "clasificada",
+          clasificacion: input.clasificacion,
+          clasificadoEn: sql`CURRENT_TIMESTAMP`
+        }).where(eq(respuestas.id, row.respuestaId));
+      }
+
+      const nuevoEstado = ESTADO_PROSPECTO_POR_CLASIFICACION[input.clasificacion];
+      if (nuevoEstado) {
+        await tx.update(prospectos).set({ estado: nuevoEstado }).where(eq(prospectos.id, prospectoId));
+      }
+
+      const supresionIds: number[] = [];
+      if (input.clasificacion === "baja") {
+        // No se sabe desde qué dirección contestó la persona, así que se
+        // suprimen todos sus medios de ese canal.
+        const medios = await tx
+          .select({ valor: mediosContacto.valor })
+          .from(mediosContacto)
+          .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
+          .where(and(eq(prospectos.id, prospectoId), eq(mediosContacto.tipo, canal)));
+        for (const medio of medios) {
+          const supresion = await registrarSupresion(tx, {
+            tipo: canal,
+            valor: medio.valor,
+            motivo: `Baja pedida en respuesta (clasificación manual, tarea ${id})`,
+            executionId: null,
+            usuarioId: user.id
+          });
+          supresionIds.push(supresion.id);
+        }
+      }
+
+      let tareaSeguimientoId: number | null = null;
+      if (input.clasificacion === "reagendar") {
+        const [seguimiento] = await tx.insert(tareas).values({
+          tipo: "seguimiento",
+          titulo: "Seguimiento reagendado",
+          descripcion: input.comentario ?? null,
+          prioridad: "media",
+          responsableId: user.id,
+          empresaId: row.empresaId,
+          contactoId: row.contactoId,
+          prospectoId,
+          fechaLimite: input.fechaSeguimiento!,
+          creadaPor: user.id
+        });
+        tareaSeguimientoId = seguimiento.insertId;
+      }
+
       await this.outboxService.enqueue(tx, {
         tipo: "prospecto_clasificado",
         entidadTipo: "prospecto",
-        entidadId: row.prospectoId!,
-        payload: { tarea_id: id, prospecto_id: row.prospectoId, clasificacion: input.clasificacion, comentario: input.comentario ?? null, clasificado_por: user.id }
+        entidadId: prospectoId,
+        payload: { tarea_id: id, prospecto_id: prospectoId, respuesta_id: row.respuestaId, clasificacion: input.clasificacion, comentario: input.comentario ?? null, clasificado_por: user.id, tarea_seguimiento_id: tareaSeguimientoId }
       });
 
       await tx.insert(auditoria).values({
@@ -190,7 +262,7 @@ export class TareasService {
         entidad: "tarea",
         entidadId: id,
         accion: "clasificar",
-        despues: { clasificacion: input.clasificacion }
+        despues: { clasificacion: input.clasificacion, respuesta_id: row.respuestaId, estado_prospecto: nuevoEstado, supresion_ids: supresionIds, tarea_seguimiento_id: tareaSeguimientoId }
       });
     });
   }
