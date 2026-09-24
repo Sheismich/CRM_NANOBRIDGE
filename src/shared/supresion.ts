@@ -4,7 +4,7 @@ import { auditoria, listaSupresion, mediosContacto, prospectos } from "../databa
 import { isDuplicateEntry } from "./database-errors.js";
 import { normalizeEmail, normalizePhone } from "./normalize.js";
 
-export type TipoMedioSupresion = "correo" | "telefono" | "whatsapp";
+export type TipoMedioSupresion = typeof listaSupresion.$inferInsert["tipo"];
 
 export function normalizarValorSupresion(tipo: TipoMedioSupresion, valor: string): string {
   return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
@@ -12,7 +12,10 @@ export function normalizarValorSupresion(tipo: TipoMedioSupresion, valor: string
 
 export type SupresionNueva = {
   tipo: TipoMedioSupresion;
-  valor: string;
+  // Ya normalizado (normalizarValorSupresion, o el valor_normalizado
+  // guardado en medios_contacto): así se compara exactamente contra lo que
+  // leen los gates de envío, sin volver a normalizar algo ya normalizado.
+  valorNormalizado: string;
   motivo: string;
   // execution_id de n8n; NULL cuando la origina una persona desde el CRM.
   executionId: string | null;
@@ -34,49 +37,53 @@ export type SupresionNueva = {
  * fallo posterior la revierte junto con todo lo demás (24-sep-2026).
  *
  * Idempotente por (tipo, valor_normalizado): si el medio ya estaba
- * suprimido devuelve ya_existia sin tocar nada más. El ER_DUP_ENTRY se
- * atrapa aquí dentro: en InnoDB un error de llave duplicada solo revierte
- * esa sentencia, no la transacción, así que quien llama puede seguir
- * usándola. El SELECT posterior es de bloqueo (FOR SHARE) para ver la fila
- * ya confirmada por la otra transacción aunque la nuestra tenga un snapshot
- * más viejo (REPEATABLE READ).
+ * suprimido devuelve ya_existia sin nueva fila ni auditoría, pero igual
+ * marca el medio 'no_contactar' -- pudo darse de alta DESPUÉS de la
+ * supresión y haber nacido 'activo' (hallazgo de /code-review,
+ * 24-sep-2026). El ER_DUP_ENTRY se atrapa aquí dentro: en InnoDB un error
+ * de llave duplicada solo revierte esa sentencia, no la transacción, así
+ * que quien llama puede seguir usándola. El SELECT posterior es de bloqueo
+ * (FOR SHARE) para ver la fila ya confirmada por la otra transacción
+ * aunque la nuestra tenga un snapshot más viejo (REPEATABLE READ).
  */
 export async function registrarSupresion(tx: DrizzleTx, input: SupresionNueva) {
-  const valorNormalizado = normalizarValorSupresion(input.tipo, input.valor);
+  const { tipo, valorNormalizado } = input;
 
-  let insertId: number;
+  let id: number;
+  let yaExistia = false;
   try {
     const [result] = await tx.insert(listaSupresion).values({
-      tipo: input.tipo,
+      tipo,
       valorNormalizado,
       motivo: input.motivo,
       executionId: input.executionId
     });
-    insertId = result.insertId;
+    id = result.insertId;
   } catch (error) {
-    if (isDuplicateEntry(error)) {
-      const [existing] = await tx
-        .select({ id: listaSupresion.id })
-        .from(listaSupresion)
-        .where(and(eq(listaSupresion.tipo, input.tipo), eq(listaSupresion.valorNormalizado, valorNormalizado)))
-        .limit(1)
-        .for("share");
-      if (existing) return { id: existing.id, ya_existia: true as const };
-    }
-    throw error;
+    if (!isDuplicateEntry(error)) throw error;
+    const [existing] = await tx
+      .select({ id: listaSupresion.id })
+      .from(listaSupresion)
+      .where(and(eq(listaSupresion.tipo, tipo), eq(listaSupresion.valorNormalizado, valorNormalizado)))
+      .limit(1)
+      .for("share");
+    if (!existing) throw error;
+    id = existing.id;
+    yaExistia = true;
   }
 
-  await tx.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(and(eq(mediosContacto.tipo, input.tipo), eq(mediosContacto.valorNormalizado, valorNormalizado)));
+  await tx.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(and(eq(mediosContacto.tipo, tipo), eq(mediosContacto.valorNormalizado, valorNormalizado)));
+  if (yaExistia) return { id, ya_existia: true as const };
 
   await tx.insert(auditoria).values({
     usuarioId: input.usuarioId,
     entidad: "medio_contacto",
-    entidadId: insertId,
+    entidadId: id,
     accion: "registrar_supresion",
-    despues: { execution_id: input.executionId, tipo: input.tipo, motivo: input.motivo }
+    despues: { execution_id: input.executionId, tipo, motivo: input.motivo }
   });
 
-  return { id: insertId, ya_existia: false as const };
+  return { id, ya_existia: false as const };
 }
 
 /**
@@ -90,14 +97,14 @@ export async function suprimirMediosDelProspecto(
   input: { prospectoId: number; canal: "correo" | "whatsapp"; motivo: string; executionId: string | null; usuarioId: number | null }
 ) {
   const medios = await tx
-    .select({ valor: mediosContacto.valor })
+    .select({ valorNormalizado: mediosContacto.valorNormalizado })
     .from(mediosContacto)
     .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
     .where(and(eq(prospectos.id, input.prospectoId), eq(mediosContacto.tipo, input.canal)));
 
   const ids: number[] = [];
   for (const medio of medios) {
-    const supresion = await registrarSupresion(tx, { tipo: input.canal, valor: medio.valor, motivo: input.motivo, executionId: input.executionId, usuarioId: input.usuarioId });
+    const supresion = await registrarSupresion(tx, { tipo: input.canal, valorNormalizado: medio.valorNormalizado, motivo: input.motivo, executionId: input.executionId, usuarioId: input.usuarioId });
     ids.push(supresion.id);
   }
   return ids;

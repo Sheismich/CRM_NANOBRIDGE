@@ -74,6 +74,25 @@ describe("supresión", () => {
       expect(verificacion.body.motivo).toBe("El contacto está en la lista de supresión");
     });
 
+    // El medio puede darse de alta DESPUÉS de la supresión (nace 'activo'):
+    // registrarla otra vez debe dejarlo en no_contactar aunque la fila de
+    // lista_supresion ya existiera (hallazgo de /code-review, 24-sep-2026).
+    it("si el correo ya estaba suprimido pero su medio está 'activo', igual lo marca no_contactar", async () => {
+      const correo = `supresion.previa.${randomUUID()}@supresion.test`;
+      expect((await registrarPorEndpoint(correo)).status).toBe(201);
+
+      const res = await api()
+        .post("/api/v1/automatizacion/prospectos")
+        .set("X-API-Key", API_KEY)
+        .send({ execution_id: randomUUID(), empresa: { nombreLegal: `Empresa Supresión ${randomUUID()}` }, contacto: { nombre: "Persona Suprimida Antes", correo } });
+      const [prospecto] = await db.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, res.body.id));
+      expect(await estadoDelCorreo(prospecto!.contactoId)).toBe("activo");
+
+      const otra = await registrarPorEndpoint(correo);
+      expect(otra.body.ya_existia).toBe(true);
+      expect(await estadoDelCorreo(prospecto!.contactoId)).toBe("no_contactar");
+    });
+
     it("registrar el mismo correo otra vez es idempotente: 200 con el mismo id y ya_existia", async () => {
       const prospecto = await registrarProspecto();
       const primera = await registrarPorEndpoint(prospecto.correo);
@@ -88,7 +107,7 @@ describe("supresión", () => {
       const prospecto = await registrarProspecto();
 
       await expect(db.transaction(async (tx) => {
-        await registrarSupresion(tx, { tipo: "correo", valor: prospecto.correo, motivo: "prueba de rollback", executionId: null, usuarioId: null });
+        await registrarSupresion(tx, { tipo: "correo", valorNormalizado: prospecto.correo, motivo: "prueba de rollback", executionId: null, usuarioId: null });
         throw new Error("falla posterior de quien llama");
       })).rejects.toThrow("falla posterior de quien llama");
 
@@ -102,7 +121,7 @@ describe("supresión", () => {
       const primera = await registrarPorEndpoint(prospecto.correo);
 
       const resultado = await db.transaction(async (tx) => {
-        const r = await registrarSupresion(tx, { tipo: "correo", valor: prospecto.correo, motivo: "segunda vez", executionId: null, usuarioId: null });
+        const r = await registrarSupresion(tx, { tipo: "correo", valorNormalizado: prospecto.correo, motivo: "segunda vez", executionId: null, usuarioId: null });
         // La transacción sigue usable después del duplicado.
         await tx.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, prospecto.id));
         return r;
@@ -115,7 +134,7 @@ describe("supresión", () => {
       const adminCookie = await ensureSeedAdmin(app);
       const usuarioId = (await api().get("/api/v1/auth/me").set("Cookie", adminCookie)).body.id as number;
 
-      const resultado = await db.transaction((tx) => registrarSupresion(tx, { tipo: "correo", valor: prospecto.correo, motivo: "baja manual", executionId: null, usuarioId }));
+      const resultado = await db.transaction((tx) => registrarSupresion(tx, { tipo: "correo", valorNormalizado: prospecto.correo, motivo: "baja manual", executionId: null, usuarioId }));
       const [audit] = await db.select().from(auditoria).where(and(eq(auditoria.accion, "registrar_supresion"), eq(auditoria.entidadId, resultado.id)));
       expect(audit!.usuarioId).toBe(usuarioId);
     });

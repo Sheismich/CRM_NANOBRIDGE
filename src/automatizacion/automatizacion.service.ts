@@ -844,7 +844,7 @@ export class AutomatizacionService {
   async registrarSupresion(input: RegistroSupresionInput) {
     return this.db.transaction((tx) => registrarSupresion(tx, {
       tipo: input.tipo,
-      valor: input.valor,
+      valorNormalizado: normalizarValorSupresion(input.tipo, input.valor),
       motivo: input.motivo,
       executionId: input.execution_id,
       usuarioId: null
