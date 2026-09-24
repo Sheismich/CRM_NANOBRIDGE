@@ -97,6 +97,54 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
   de mandar otro. No hay que construir un job de "recordatorios" aparte de "ventanas vencidas".
 - Procesar respuestas tardías: crear tarea comercial, no reiniciar automáticamente el outbound.
 
+## Envío real con SendGrid (en planeación, `/grill-me` 24-sep-2026)
+
+Sustituye al nodo "MOCK · envio de campana (7)" de "PT1. ingesta y scoring". Decisiones de la
+ronda 1:
+
+1. **Alcance:** este bloque = **enviar + recepción mínima**. Recepción mínima: SendGrid Inbound
+   Parse → webhook de n8n → registrar la respuesta en la API (`POST /respuestas`, que cierra la
+   ventana de espera y detiene los recordatorios) → crear una tarea para que una persona la
+   atienda. La clasificación con IA, las bajas automáticas y los recordatorios automáticos
+   quedan para el resto de B2. **No se le escribe a ningún prospecto real hasta que la recepción
+   mínima funcione**: sin ella, alguien que respondió "sí me interesa" seguiría recibiendo los
+   recordatorios.
+2. **Cuenta y DNS:** el jefe de Fabián tiene acceso a la cuenta de correo y al DNS de
+   `nano-bridge-mex.com`; Fabián pide la autorización y lo gestiona. Propuesta: envío desde un
+   subdominio dedicado (ej. `contacto.nano-bridge-mex.com`) para no afectar la reputación del
+   correo normal de la empresa, y otro subdominio con registro MX para Inbound Parse (ej.
+   `respuestas.contacto.nano-bridge-mex.com`).
+3. **Redacción de los correos (inicial + 2 recordatorios): se prueban las dos opciones al
+   construir los nodos** y se decide con los resultados:
+   - **Opción A, por giro y escrita una vez:** plantilla fija (saludo, pie legal, link de baja)
+     + un párrafo por giro (11 giros × 3 correos) redactado una sola vez con ayuda de IA y
+     aprobado por el jefe. Nadie envía texto sin revisar; no se manda nada a Gemini al enviar.
+   - **Opción B, Gemini en vivo con candados:** Gemini escribe el párrafo en cada envío, con
+     reglas: solo datos de la empresa (giro, tamaño, región; nunca nombre, correo ni teléfono,
+     igual que en el scoring), largo máximo, prohibido mencionar precios, descuentos o plazos,
+     y texto de respaldo fijo si Gemini falla o tarda.
+   - **Cómo se prueba:** un interruptor en n8n elige A o B. Se mandan los mismos prospectos de
+     prueba (varios giros) por las dos opciones, **solo a buzones de Fabián**, y se compara:
+     calidad del texto, si B inventa algo indebido, si cumple los candados, qué pasa cuando
+     Gemini falla, tiempo y costo por correo. Fabián y su jefe eligen con esos ejemplos en la
+     mano.
+4. **Base legal y aviso de privacidad:** pendiente de Dirección. No bloquea construir; bloquea
+   encender los envíos reales. Preguntas: de dónde salen los contactos y si se les puede
+   escribir en frío (`CRM_09` exige base legal); texto o link del aviso de privacidad para el
+   pie; cómo se identifica la empresa en el correo. Baja: link de baja de SendGrid (bloquea
+   envíos futuros); sincronizarlo con `lista_supresion` en B2.
+5. **Pruebas:** primero el modo sandbox de SendGrid (no entrega nada), después solo a buzones de
+   Fabián. Además, un **interruptor "modo pruebas"** en n8n: encendido, solo envía a una lista
+   corta con los correos de Fabián y descarta cualquier otro destinatario; apagado, envía
+   normal. No es para clientes ni es permanente: se apaga al salir a producción. Motivo: la base
+   de producción tiene prospectos de prueba y ninguno debe recibir un correo por accidente. Los
+   correos `@pruebas-nanobridge.test` no existen y rebotarían, dañando la reputación del
+   dominio.
+
+Pendiente para la ronda 2 (cuando haya respuestas del jefe): formato de la dirección de
+respuesta para identificar al prospecto (ej. `r+<prospecto_id>@...`), orden entre enviar y
+registrar el envío y qué pasa si uno de los dos falla, y volumen y calentamiento del dominio.
+
 ## Política de contactos
 
 - Máximo tres contactos totales: envío inicial y dos recordatorios.
