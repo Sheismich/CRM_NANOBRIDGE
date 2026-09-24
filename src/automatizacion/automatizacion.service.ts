@@ -6,6 +6,7 @@ import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
+import { normalizarValorSupresion, registrarSupresion } from "../shared/supresion.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
@@ -15,10 +16,6 @@ import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresi
 // UNIQUE uq_incidencias_execution_tipo (004_scoring_e_incidencias.sql)
 // para que registrarErrorWorkflow() sea idempotente.
 const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
-
-function normalizarValor(tipo: "correo" | "telefono" | "whatsapp", valor: string): string {
-  return tipo === "correo" ? normalizeEmail(valor) : normalizePhone(valor);
-}
 
 // Política de contactos (PLAN_N8N_DEFINITIVO.md): máximo tres contactos
 // totales POR PERSONA (contacto), no por prospecto -- la misma persona
@@ -823,7 +820,7 @@ export class AutomatizacionService {
   // --- Consulta de supresión -------------------------------------------------------
   // B1, paso 8: "verificar antes de enviar" (PLAN_API_DEFINITIVO.md).
   async consultarSupresion(query: ConsultaSupresionQuery) {
-    const valorNormalizado = normalizarValor(query.tipo, query.valor);
+    const valorNormalizado = normalizarValorSupresion(query.tipo, query.valor);
     const [row] = await this.db
       .select({ motivo: listaSupresion.motivo })
       .from(listaSupresion)
@@ -834,58 +831,23 @@ export class AutomatizacionService {
   }
 
   // --- Registro de supresión ---------------------------------------------------------
-  // B2: se invoca al procesar una respuesta clasificada como "baja" o
-  // "no_contactar" (PLAN_N8N_DEFINITIVO.md). La baja aplica al medio de
-  // contacto específico, no a toda la empresa (PLAN_CRM_DEFINITIVO.md,
-  // decisiones de diseño cerradas) — por eso también actualiza el
-  // medios_contacto correspondiente si ya existe uno, además de dejar el
-  // registro en lista_supresion (que persiste aunque ese medio no exista
-  // todavía o el contacto se borre después).
+  // Endpoint para cuando n8n necesite suprimir un medio por su cuenta (p.
+  // ej. el link de baja de SendGrid, PLAN_N8N_DEFINITIVO.md B2). La lógica
+  // vive en shared/supresion.ts para que las clasificaciones "baja" (la de
+  // n8n y la manual del CRM) la usen dentro de su propia transacción.
+  //
+  // Las 3 escrituras (lista_supresion, medios_contacto, auditoría) corren en
+  // una sola transacción (hallazgo de code review, 14-sep-2026): si el
+  // UPDATE de medios_contacto tronaba después de confirmar el insert, un
+  // retry de n8n devolvía ya_existia sin volver a intentar ese UPDATE.
   async registrarSupresion(input: RegistroSupresionInput) {
-    const valorNormalizado = normalizarValor(input.tipo, input.valor);
-
-    // Las 3 escrituras ahora corren en una sola transacción (hallazgo de
-    // code review, 14-sep-2026): antes eran 3 sentencias sueltas -- si el
-    // insert a lista_supresion committaba pero el UPDATE de
-    // medios_contacto tronaba, la petición 500eaba, y un retry de n8n con
-    // el mismo tipo/valor chocaba con ER_DUP_ENTRY en el insert (ya
-    // comprometido) y devolvía ya_existia:true de inmediato -- sin volver
-    // a intentar el UPDATE que nunca se aplicó, dejando el medio de
-    // contacto "activo" pese a que la supresión sí quedó registrada. Con
-    // la transacción, cualquier fallo revierte las 3 y un retry vuelve a
-    // intentar las 3 desde cero.
-    try {
-      return await this.db.transaction(async (tx) => {
-        const [result] = await tx.insert(listaSupresion).values({
-          tipo: input.tipo,
-          valorNormalizado,
-          motivo: input.motivo,
-          executionId: input.execution_id
-        });
-
-        await tx.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(and(eq(mediosContacto.tipo, input.tipo), eq(mediosContacto.valorNormalizado, valorNormalizado)));
-
-        await tx.insert(auditoria).values({
-          usuarioId: null,
-          entidad: "medio_contacto",
-          entidadId: result.insertId,
-          accion: "registrar_supresion",
-          despues: { execution_id: input.execution_id, tipo: input.tipo, motivo: input.motivo }
-        });
-
-        return { id: result.insertId, ya_existia: false as const };
-      });
-    } catch (error) {
-      if (isDuplicateEntry(error)) {
-        const [existing] = await this.db
-          .select({ id: listaSupresion.id })
-          .from(listaSupresion)
-          .where(and(eq(listaSupresion.tipo, input.tipo), eq(listaSupresion.valorNormalizado, valorNormalizado)))
-          .limit(1);
-        if (existing) return { id: existing.id, ya_existia: true as const };
-      }
-      throw error;
-    }
+    return this.db.transaction((tx) => registrarSupresion(tx, {
+      tipo: input.tipo,
+      valor: input.valor,
+      motivo: input.motivo,
+      executionId: input.execution_id,
+      usuarioId: null
+    }));
   }
 
   // --- Respuesta recibida ---------------------------------------------------------------
