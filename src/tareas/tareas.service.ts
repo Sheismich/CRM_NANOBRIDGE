@@ -5,8 +5,7 @@ import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.con
 import { auditoria, contactos, prospectos, respuestas, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
-import { suprimirMediosDelProspecto } from "../shared/supresion.js";
-import { ESTADO_PROSPECTO_POR_CLASIFICACION } from "../shared/clasificacion-respuesta.js";
+import { aplicarClasificacionAlProspecto } from "../shared/clasificacion-respuesta.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
@@ -166,10 +165,10 @@ export class TareasService {
   // aplicaba: n8n no tenía cómo -- hallazgo de revisión, 24-sep-2026):
   // - la respuesta que originó la tarea (respuesta_id) queda con esta
   //   clasificación;
-  // - el prospecto pasa al estado de ESTADO_PROSPECTO_POR_CLASIFICACION;
-  // - "baja" registra la supresión de los medios del contacto por el canal
-  //   de la respuesta (obligación legal: no puede depender de que n8n
-  //   reciba el evento);
+  // - el prospecto cambia de estado y, con "baja", se suprimen todos los
+  //   medios de su contacto (aplicarClasificacionAlProspecto, compartida con
+  //   la clasificación de n8n; obligación legal: no puede depender de que
+  //   n8n reciba el evento);
   // - "reagendar" crea una tarea de seguimiento para quien clasificó.
   // El evento prospecto_clasificado sigue saliendo, solo como aviso.
   async clasificar(user: CurrentUser, id: number, input: ClasificarTareaInput) {
@@ -194,12 +193,9 @@ export class TareasService {
       }).where(and(eq(tareas.id, id), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
       if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada");
 
-      // Tareas de clasificación anteriores a 022_clasificacion_manual.sql, o
-      // creadas a mano, no tienen respuesta: el canal por omisión es correo.
-      let canal: "correo" | "whatsapp" = "correo";
+      // Las tareas de clasificación creadas a mano (POST /tareas) no tienen
+      // respuesta; las anteriores a 022 la recuperan con su backfill.
       if (row.respuestaId) {
-        const [respuesta] = await tx.select({ canal: respuestas.canal }).from(respuestas).where(eq(respuestas.id, row.respuestaId)).limit(1);
-        if (respuesta) canal = respuesta.canal;
         await tx.update(respuestas).set({
           estado: "clasificada",
           clasificacion: input.clasificacion,
@@ -207,14 +203,11 @@ export class TareasService {
         }).where(eq(respuestas.id, row.respuestaId));
       }
 
-      const nuevoEstado = ESTADO_PROSPECTO_POR_CLASIFICACION[input.clasificacion];
-      if (nuevoEstado) {
-        await tx.update(prospectos).set({ estado: nuevoEstado }).where(eq(prospectos.id, prospectoId));
-      }
-
-      const supresionIds = input.clasificacion === "baja"
-        ? await suprimirMediosDelProspecto(tx, { prospectoId, canal, motivo: `Baja pedida en respuesta (clasificación manual, tarea ${id})`, executionId: null, usuarioId: user.id })
-        : [];
+      const { estadoProspecto, supresionIds } = await aplicarClasificacionAlProspecto(tx, prospectoId, input.clasificacion, {
+        motivo: `Baja pedida en respuesta (clasificación manual, tarea ${id})`,
+        executionId: null,
+        usuarioId: user.id
+      });
 
       let tareaSeguimientoId: number | null = null;
       if (input.clasificacion === "reagendar") {
@@ -245,7 +238,7 @@ export class TareasService {
         entidad: "tarea",
         entidadId: id,
         accion: "clasificar",
-        despues: { clasificacion: input.clasificacion, respuesta_id: row.respuestaId, estado_prospecto: nuevoEstado, supresion_ids: supresionIds, tarea_seguimiento_id: tareaSeguimientoId }
+        despues: { clasificacion: input.clasificacion, respuesta_id: row.respuestaId, estado_prospecto: estadoProspecto, supresion_ids: supresionIds, tarea_seguimiento_id: tareaSeguimientoId }
       });
     });
   }

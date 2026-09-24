@@ -7,7 +7,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, eventosPendientes, prospectos, respuestas, tareas } from "../src/database/schema.js";
+import { auditoria, eventosPendientes, incidencias, mediosContacto, prospectos, respuestas, tareas } from "../src/database/schema.js";
 
 // Mismo valor fijado en test/setup/setup-env.ts.
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -33,13 +33,20 @@ describe("respuestas: clasificación automática y manual", () => {
 
   const api = () => request(app.getHttpServer());
 
-  async function registrarProspecto(correo = `respuesta.${randomUUID()}@respuestas.test`) {
+  async function registrarProspecto(opciones: { conTelefono?: boolean } = {}) {
+    const correo = `respuesta.${randomUUID()}@respuestas.test`;
+    const telefono = opciones.conTelefono ? `55${Math.floor(Math.random() * 1e8).toString().padStart(8, "0")}` : undefined;
     const res = await api()
       .post("/api/v1/automatizacion/prospectos")
       .set("X-API-Key", API_KEY)
-      .send({ execution_id: randomUUID(), empresa: { nombreLegal: `Empresa Respuestas ${randomUUID()}` }, contacto: { nombre: "Persona Respuesta", correo } });
+      .send({ execution_id: randomUUID(), empresa: { nombreLegal: `Empresa Respuestas ${randomUUID()}` }, contacto: { nombre: "Persona Respuesta", correo, telefono } });
     expect(res.status).toBe(201);
-    return { id: res.body.id as number, correo };
+    const [fila] = await db.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, res.body.id));
+    return { id: res.body.id as number, contactoId: fila!.contactoId, correo, telefono };
+  }
+
+  function enSupresion(tipo: "correo" | "telefono", valor: string) {
+    return api().get("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).query({ tipo, valor }).then((res) => res.body.en_supresion as boolean);
   }
 
   async function registrarRespuesta(prospectoId: number, contenido = "Gracias por escribir") {
@@ -112,8 +119,11 @@ describe("respuestas: clasificación automática y manual", () => {
   // llamar aparte a POST /automatizacion/supresion: una obligación legal
   // dependiendo de un paso que se podía olvidar o fallar por separado.
   describe("clasificación de n8n", () => {
-    it("'baja' deja el prospecto en baja y registra la supresión en la misma operación", async () => {
-      const prospecto = await registrarProspecto();
+    // Regla del 24-sep-2026: la persona pidió no ser contactada, no dejar
+    // un canal -- se suprimen TODOS sus medios (correo, teléfono,
+    // WhatsApp), no solo los del canal por el que respondió.
+    it("'baja' deja el prospecto en baja y suprime todos los medios del contacto en la misma operación", async () => {
+      const prospecto = await registrarProspecto({ conTelefono: true });
       const respuestaId = await registrarRespuesta(prospecto.id, "ya no me escriban");
 
       const res = await clasificarAutomatica(respuestaId, "baja");
@@ -121,17 +131,32 @@ describe("respuestas: clasificación automática y manual", () => {
 
       const [fila] = await db.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, prospecto.id));
       expect(fila!.estado).toBe("baja");
-      const supresion = await api().get("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).query({ tipo: "correo", valor: prospecto.correo });
-      expect(supresion.body.en_supresion).toBe(true);
+      expect(await enSupresion("correo", prospecto.correo)).toBe(true);
+      expect(await enSupresion("telefono", prospecto.telefono!)).toBe(true);
     });
 
-    it("'no_interesado' no suprime el correo", async () => {
-      const prospecto = await registrarProspecto();
+    it("'no_interesado' no suprime nada", async () => {
+      const prospecto = await registrarProspecto({ conTelefono: true });
       const respuestaId = await registrarRespuesta(prospecto.id, "no gracias");
       expect((await clasificarAutomatica(respuestaId, "no_interesado")).status).toBe(201);
 
-      const supresion = await api().get("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).query({ tipo: "correo", valor: prospecto.correo });
-      expect(supresion.body.en_supresion).toBe(false);
+      expect(await enSupresion("correo", prospecto.correo)).toBe(false);
+      expect(await enSupresion("telefono", prospecto.telefono!)).toBe(false);
+    });
+
+    it("'baja' de un contacto sin medios que suprimir: se aplica igual y queda una incidencia", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "bórrenme");
+      await db.delete(mediosContacto).where(eq(mediosContacto.contactoId, prospecto.contactoId));
+
+      const res = await clasificarAutomatica(respuestaId, "baja");
+      expect(res.status).toBe(201);
+
+      const [fila] = await db.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, prospecto.id));
+      expect(fila!.estado).toBe("baja");
+      const [incidencia] = await db.select().from(incidencias).where(and(eq(incidencias.prospectoId, prospecto.id), eq(incidencias.tipo, "baja_sin_medios")));
+      expect(incidencia).toBeDefined();
+      expect(incidencia!.severidad).toBe("alta");
     });
 
     it("n8n no puede usar los valores que solo existen en la clasificación manual", async () => {
@@ -148,7 +173,7 @@ describe("respuestas: clasificación automática y manual", () => {
   // lista_supresion (hallazgo de revisión, 24-sep-2026).
   describe("clasificación manual (cola de clasificación) aplica la decisión", () => {
     async function tareaDeRespuestaAmbigua() {
-      const prospecto = await registrarProspecto();
+      const prospecto = await registrarProspecto({ conTelefono: true });
       const respuestaId = await registrarRespuesta(prospecto.id, "mmm, no sé");
       const res = await clasificarAutomatica(respuestaId, "ambigua");
       expect(res.status).toBe(201);
@@ -169,10 +194,6 @@ describe("respuestas: clasificación automática y manual", () => {
       return fila!;
     }
 
-    function enSupresion(correo: string) {
-      return api().get("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).query({ tipo: "correo", valor: correo });
-    }
-
     it.each([
       ["interesado", "interesado"],
       ["no_interesado", "no_interesado"],
@@ -187,10 +208,10 @@ describe("respuestas: clasificación automática y manual", () => {
 
       expect(await clasificacionRespuesta(respuestaId)).toEqual({ clasificacion, estado: "clasificada" });
       expect(await estadoProspecto(prospecto.id)).toBe(estadoEsperado);
-      expect((await enSupresion(prospecto.correo)).body.en_supresion).toBe(false);
+      expect(await enSupresion("correo", prospecto.correo)).toBe(false);
     });
 
-    it("'baja' mete el correo a lista_supresion en la misma operación, bloquea el envío y audita a quien clasificó", async () => {
+    it("'baja' suprime todos los medios del contacto (correo y teléfono), bloquea el envío y audita a quien clasificó", async () => {
       const { prospecto, respuestaId, tareaId } = await tareaDeRespuestaAmbigua();
       const adminId = (await api().get("/api/v1/auth/me").set("Cookie", adminCookie)).body.id as number;
 
@@ -199,13 +220,39 @@ describe("respuestas: clasificación automática y manual", () => {
 
       expect(await clasificacionRespuesta(respuestaId)).toEqual({ clasificacion: "baja", estado: "clasificada" });
       expect(await estadoProspecto(prospecto.id)).toBe("baja");
-      expect((await enSupresion(prospecto.correo)).body.en_supresion).toBe(true);
+      expect(await enSupresion("correo", prospecto.correo)).toBe(true);
+      expect(await enSupresion("telefono", prospecto.telefono!)).toBe(true);
 
       const verificacion = await api().get("/api/v1/automatizacion/envios/verificacion").set("X-API-Key", API_KEY).query({ prospecto_id: prospecto.id, canal: "correo" });
       expect(verificacion.body.puede_enviar).toBe(false);
 
       const [audit] = await db.select().from(auditoria).where(and(eq(auditoria.accion, "registrar_supresion"), eq(auditoria.usuarioId, adminId))).orderBy(desc(auditoria.id)).limit(1);
       expect(audit).toBeDefined();
+    });
+
+    // Tareas de clasificación creadas a mano (POST /tareas) no tienen
+    // respuesta: antes una "baja" ahí suponía canal correo; con la regla de
+    // suprimir todos los medios ese caso ya no existe.
+    it("'baja' en una tarea sin respuesta (creada a mano) también suprime todos los medios del contacto", async () => {
+      const prospecto = await registrarProspecto({ conTelefono: true });
+      const adminId = (await api().get("/api/v1/auth/me").set("Cookie", adminCookie)).body.id as number;
+      const creada = await api().post("/api/v1/tareas").set("Cookie", adminCookie).send({ tipo: "clasificacion", titulo: "Clasificar a mano", responsableId: adminId, prospectoId: prospecto.id });
+      expect(creada.status).toBe(201);
+
+      expect((await clasificarManual(creada.body.id, { clasificacion: "baja" })).status).toBe(200);
+      expect(await estadoProspecto(prospecto.id)).toBe("baja");
+      expect(await enSupresion("correo", prospecto.correo)).toBe(true);
+      expect(await enSupresion("telefono", prospecto.telefono!)).toBe(true);
+    });
+
+    it("'baja' sin medios que suprimir: la clasificación se aplica y queda una incidencia", async () => {
+      const { prospecto, tareaId } = await tareaDeRespuestaAmbigua();
+      await db.delete(mediosContacto).where(eq(mediosContacto.contactoId, prospecto.contactoId));
+
+      expect((await clasificarManual(tareaId, { clasificacion: "baja" })).status).toBe(200);
+      expect(await estadoProspecto(prospecto.id)).toBe("baja");
+      const [incidencia] = await db.select().from(incidencias).where(and(eq(incidencias.prospectoId, prospecto.id), eq(incidencias.tipo, "baja_sin_medios")));
+      expect(incidencia).toBeDefined();
     });
 
     it("'reagendar' exige fecha de seguimiento, y la fecha solo se acepta con 'reagendar'", async () => {
@@ -258,7 +305,7 @@ describe("respuestas: clasificación automática y manual", () => {
       const ganadora = a.status === 200 ? "baja" : "interesado";
       expect((await clasificacionRespuesta(respuestaId)).clasificacion).toBe(ganadora);
       expect(await estadoProspecto(prospecto.id)).toBe(ganadora);
-      expect((await enSupresion(prospecto.correo)).body.en_supresion).toBe(ganadora === "baja");
+      expect(await enSupresion("correo", prospecto.correo)).toBe(ganadora === "baja");
     });
   });
 });

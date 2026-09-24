@@ -89,9 +89,13 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
 - Clasificar con IA o enviar a cola manual: el nodo llama siempre al endpoint "Respuesta clasificada"; si la clasificación es ambigua, ese mismo endpoint crea una `tarea` con `tipo=clasificacion` (no hay tabla `cola_clasificacion` aparte), que aparece en la bandeja `GET /api/v1/cola-clasificacion` para que el Equipo CRM la resuelva.
 - Procesar no interesado, baja, respuesta automática, ambigua e interesado.
 - **La supresión por "baja" ya no es un paso de n8n (cambiado 24-sep-2026).** El endpoint
-  "Respuesta clasificada" registra en `lista_supresion` los medios del contacto por el canal de
-  la respuesta, en la misma transacción que fija el estado del prospecto. La clasificación
-  manual de la cola hace lo mismo cuando alguien elige `baja`. n8n **no** debe llamar a
+  "Respuesta clasificada" registra en `lista_supresion` **todos** los medios del contacto
+  (correo, teléfono y WhatsApp), no solo los del canal por el que respondió: la persona pidió no
+  ser contactada, no dejar un canal. Lo hace en la misma transacción que fija el estado del
+  prospecto. Sigue siendo por contacto y por medio: no toca a otros contactos de la misma
+  empresa. Si el contacto no tiene ningún medio que suprimir, la clasificación se aplica igual y
+  queda una incidencia `baja_sin_medios` (severidad alta). La clasificación manual de la cola
+  hace lo mismo cuando alguien elige `baja`. n8n **no** debe llamar a
   `POST /automatizacion/supresion` después de clasificar. Si lo hiciera no se rompe nada
   (responde `ya_existia`), pero es trabajo de más. Ese endpoint queda para supresiones que no
   vienen de una respuesta clasificada, como el link de baja de SendGrid (ver "Envío real con

@@ -147,7 +147,7 @@ Siguiente prioridad del backlog (`MATRICES_Y_BACKLOG_DEFINITIVO.md`, "Prioridad 
 - **Bandeja de tareas** (`GET/POST /api/v1/tareas`, `GET /:id`, `PATCH /:id/cerrar`): filtra por estado, prioridad, tipo y responsable. El agente solo ve/gestiona lo asignado a sí mismo (`responsable_id`); administrador y supervisor ven y filtran libremente, igual que el criterio ya usado en `empresas`.
 - **Cola de clasificación** (`GET /api/v1/cola-clasificacion`, `POST /:id/clasificar`): las tareas con `tipo=clasificacion` pendientes, ligadas a un `prospecto_id` y, si nacieron de una respuesta "ambigua", a su `respuesta_id`. Clasificar cierra la tarea y **aplica la decisión en la misma transacción**: la respuesta queda con esa clasificación y el prospecto cambia de estado.
   - `interesado` / `no_interesado`: el prospecto pasa a ese estado.
-  - `baja`: el prospecto pasa a `baja` y los medios del contacto por el canal de la respuesta entran a `lista_supresion` (no depende de n8n).
+  - `baja`: el prospecto pasa a `baja` y **todos** los medios del contacto (correo, teléfono y WhatsApp) entran a `lista_supresion`, sin depender de n8n. Solo ese contacto, no los demás de la empresa. Si no tiene ninguno, se crea una incidencia `baja_sin_medios`.
   - `invalido`: el prospecto pasa a `descartado`.
   - `reagendar`: exige `fechaSeguimiento` (futura) y crea una tarea de seguimiento para esa fecha, asignada a quien clasificó; el estado del prospecto no cambia.
   - El evento `prospecto_clasificado` sigue saliendo hacia n8n, solo como aviso.

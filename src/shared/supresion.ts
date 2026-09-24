@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, listaSupresion, mediosContacto, prospectos } from "../database/schema.js";
+import { auditoria, incidencias, listaSupresion, mediosContacto, prospectos } from "../database/schema.js";
 import { isDuplicateEntry } from "./database-errors.js";
 import { normalizeEmail, normalizePhone } from "./normalize.js";
 
@@ -86,25 +86,51 @@ export async function registrarSupresion(tx: DrizzleTx, input: SupresionNueva) {
   return { id, ya_existia: false as const };
 }
 
+// De dónde viene una supresión: viaja igual para una sola supresión o para
+// la baja completa de un contacto.
+export type OrigenSupresion = Pick<SupresionNueva, "motivo" | "executionId" | "usuarioId">;
+
+const TIPOS_SUPRIMIBLES: TipoMedioSupresion[] = ["correo", "telefono", "whatsapp"];
+
 /**
- * Una respuesta clasificada "baja" (por n8n o a mano): suprime todos los
- * medios del contacto del prospecto por el canal de esa respuesta. No se
- * sabe desde qué dirección contestó la persona, así que van todos los de
- * ese canal. Devuelve los ids de lista_supresion (nuevos o ya existentes).
+ * Una respuesta clasificada "baja" (por n8n o a mano): suprime TODOS los
+ * medios contactables (correo, teléfono, WhatsApp) del contacto del
+ * prospecto, no solo los del canal por el que respondió -- la persona pidió
+ * no ser contactada, no dejar un canal (regla del 24-sep-2026). Sigue
+ * siendo por contacto y por medio: no toca a otros contactos de la misma
+ * empresa ni los medios de la empresa.
+ *
+ * Si el contacto no tiene ningún medio que suprimir, la clasificación NO se
+ * rechaza (la persona ya pidió la baja), pero queda una incidencia 'alta':
+ * si después se da de alta un correo o teléfono suyo, nada lo bloquearía, así
+ * que alguien tiene que registrarlo a mano.
+ *
+ * ORDER BY id: dos bajas simultáneas del mismo contacto bloquean las filas
+ * en el mismo orden y no pueden cruzarse en un deadlock.
  */
-export async function suprimirMediosDelProspecto(
-  tx: DrizzleTx,
-  input: { prospectoId: number; canal: "correo" | "whatsapp"; motivo: string; executionId: string | null; usuarioId: number | null }
-) {
+export async function suprimirContactoPorBaja(tx: DrizzleTx, prospectoId: number, origen: OrigenSupresion) {
   const medios = await tx
-    .select({ valorNormalizado: mediosContacto.valorNormalizado })
+    .select({ tipo: mediosContacto.tipo, valorNormalizado: mediosContacto.valorNormalizado })
     .from(mediosContacto)
     .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
-    .where(and(eq(prospectos.id, input.prospectoId), eq(mediosContacto.tipo, input.canal)));
+    .where(and(eq(prospectos.id, prospectoId), inArray(mediosContacto.tipo, TIPOS_SUPRIMIBLES)))
+    .orderBy(mediosContacto.id);
+
+  if (medios.length === 0) {
+    await tx.insert(incidencias).values({
+      executionId: origen.executionId,
+      prospectoId,
+      tipo: "baja_sin_medios",
+      severidad: "alta",
+      mensaje: "El prospecto pidió la baja pero su contacto no tiene correo, teléfono ni WhatsApp que suprimir: registrarlos a mano en lista_supresion si aparecen.",
+      detalle: { motivo: origen.motivo, usuario_id: origen.usuarioId }
+    });
+    return [];
+  }
 
   const ids: number[] = [];
   for (const medio of medios) {
-    const supresion = await registrarSupresion(tx, { tipo: input.canal, valorNormalizado: medio.valorNormalizado, motivo: input.motivo, executionId: input.executionId, usuarioId: input.usuarioId });
+    const supresion = await registrarSupresion(tx, { tipo: medio.tipo as TipoMedioSupresion, valorNormalizado: medio.valorNormalizado, ...origen });
     ids.push(supresion.id);
   }
   return ids;
