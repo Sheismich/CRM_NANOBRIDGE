@@ -1,0 +1,68 @@
+/* Mismas fuentes que los mockups (artifact "CRM NANOBRIDGE — Mockups"):
+   Anton para el logotipo, Montserrat para títulos de sección, Manrope
+   para el resto. Va ANTES que @import "tailwindcss": las reglas @import
+   deben preceder a cualquier otra regla salvo @charset/@layer, o el CSS
+   generado las descarta en silencio. */
+@import url("https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+/* Tokens calcados 1:1 de los .dc.html de los mockups (:root en cada
+   pantalla) -- mismo nombre y mismo valor, para que quien compare el
+   mockup contra la pantalla real no tenga que traducir nada. */
+:root {
+  --navy: #2a449b;
+  --navy-2: #1f3578;
+  --navy-dark: #1b2e73;
+  --navy-ink: #101733;
+  --cyan: #23bad3;
+  --mint: #41e198;
+  --violet: #4a3a7a;
+  --bg: #eef1f9;
+  --card: #ffffff;
+  --border: #e4e8f2;
+  --ink: #151c36;
+  --ink-2: #5b6482;
+  --ink-3: #8992ad;
+  --warn: #9a6a16;
+  --warn-bg: #fbefd9;
+  --danger: #b23a45;
+  --danger-bg: #fbe4e7;
+  --ok: #177a55;
+  --ok-bg: #e4f6ec;
+  --grad: linear-gradient(120deg, var(--mint) 0%, var(--cyan) 52%, var(--navy) 100%);
+}
+
+/* Registra los tokens de arriba como utilidades de Tailwind (bg-navy,
+   text-ink-2, border-border, etc.) en vez de escribir var(--navy) a mano
+   en cada componente. */
+@theme {
+  --color-navy: var(--navy);
+  --color-navy-2: var(--navy-2);
+  --color-navy-dark: var(--navy-dark);
+  --color-navy-ink: var(--navy-ink);
+  --color-cyan: var(--cyan);
+  --color-mint: var(--mint);
+  --color-violet: var(--violet);
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --font-display: "Anton", sans-serif;
+  --font-heading: "Montserrat", sans-serif;
+  --font-sans: "Manrope", system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}

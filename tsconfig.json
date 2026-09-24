@@ -18,5 +18,13 @@
     "strict": true,
     "strictPropertyInitialization": false,
     "types": ["node"]
-  }
+  },
+  // frontend/ es su propio proyecto TypeScript (React/JSX, su propio
+  // tsconfig.json con project references -- ver frontend/tsconfig*.json):
+  // sin este exclude, un `tsc -p tsconfig.json` corrido desde la raíz del
+  // repo (sin -b, así que ignora tsconfig.build.json/nest-cli.json)
+  // recogía también los .tsx de frontend/ y tronaba contra las opciones
+  // de este tsconfig (sin "jsx", sin lib DOM) -- hallazgo al integrar el
+  // frontend en este mismo repo (24-sep-2026).
+  "exclude": ["node_modules", "frontend"]
 }
