@@ -155,9 +155,31 @@ ronda 1:
    correos `@pruebas-nanobridge.test` no existen y rebotarían, dañando la reputación del
    dominio.
 
-Pendiente para la ronda 2 (cuando haya respuestas del jefe): formato de la dirección de
-respuesta para identificar al prospecto (ej. `r+<prospecto_id>@...`), orden entre enviar y
-registrar el envío y qué pasa si uno de los dos falla, y volumen y calentamiento del dominio.
+**Estado (25-sep-2026):** propuesta aprobada por Dirección. Cuenta de prueba de SendGrid
+abierta (con el correo de pasante; se migra a una cuenta definitiva antes de salir a
+producción), remitente único verificado para pruebas, y autenticación de
+`contacto.nano-bridge-mex.com` pendiente de que se agreguen los registros DNS. Inbound Parse
+disponible en la prueba; falta confirmar si el plan Essentials lo incluye.
+
+Decisiones de la ronda 2 (25-sep-2026):
+
+1. **Identificar al prospecto en cada respuesta:** cada correo sale con un Reply-To propio,
+   `r+<prospecto_id>@respuestas.contacto.nano-bridge-mex.com`. n8n lee el número de la
+   dirección a la que llegó la respuesta. Si no trae un número reconocible, crea una tarea
+   "respuesta no identificada" para que una persona la revise.
+2. **Orden: primero registrar el envío (`POST /envios`), luego enviar con SendGrid.** Si
+   SendGrid falla, la persona recibe un correo menos (daño menor). Al revés, un registro
+   fallido dejaría un correo enviado que no cuenta para el límite de 3 (daño mayor). Los
+   fallos de SendGrid pasan por los reintentos del nodo y, si se agotan, por el Error
+   Workflow.
+3. **Event Webhook de SendGrid en este bloque:** bajas por link, quejas de spam y rebotes
+   definitivos llegan a n8n y se registran con `POST /automatizacion/supresion`, para que el
+   CRM y SendGrid digan lo mismo.
+4. **Modo pruebas:** la lista de correos permitidos vive fija en un nodo de n8n (es temporal),
+   con un interruptor `modo_pruebas` visible al inicio del flujo.
+5. **Calentamiento del dominio:** arranque con 20 correos nuevos al día. Se duplica cada
+   semana mientras los rebotes queden debajo de 2% y las quejas debajo de 0.1%, hasta el
+   volumen que defina Dirección. Si algo se dispara, se congela y se revisa.
 
 ## Política de contactos
 
