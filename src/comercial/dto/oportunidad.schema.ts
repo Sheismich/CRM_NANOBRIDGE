@@ -21,6 +21,13 @@ export type CrearOportunidadInput = z.infer<typeof crearOportunidadSchema>;
 export const listOportunidadesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
+  // Falta desde la primera versión de este módulo -- documentos y
+  // cotizaciones (que cuelgan de una oportunidad) sí filtran por
+  // empresaId en su propio listado; sin este mismo filtro aquí, una
+  // pantalla de "oportunidades de esta empresa" (Ficha de cliente,
+  // PLAN_FRONTEND.md §5) no tenía forma de pedirlo al servidor (hallazgo
+  // al construir esa pantalla, 24-sep-2026).
+  empresaId: z.coerce.number().int().positive().optional(),
   etapaClave: z.enum(ETAPA_CLAVES).optional(),
   // z.coerce.boolean() hace Boolean(valor) sobre el string crudo -- "false"
   // es un string no vacío, así que coercionaría a true. Mapeo explícito en

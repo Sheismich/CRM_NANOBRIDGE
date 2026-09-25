@@ -57,6 +57,14 @@ export class OportunidadesService {
 
     const conditions = compactConditions([
       responsableId ? eq(oportunidades.responsableId, responsableId) : undefined,
+      // Sin validar que la empresa exista/esté activa a propósito: a
+      // diferencia de documentos/cotizaciones (que SÍ cuelgan de la
+      // propiedad de la empresa), el scoping de este módulo es siempre
+      // por responsable_id -- ver scopedResponsable() arriba. Un
+      // empresaId inexistente aquí simplemente no hace match con ninguna
+      // fila, mismo comportamiento que cualquier otra combinación de
+      // filtros sin resultados.
+      query.empresaId ? eq(oportunidades.empresaId, query.empresaId) : undefined,
       query.cerrada !== undefined ? eq(oportunidades.cerrada, query.cerrada) : undefined,
       query.etapaClave ? eq(catalogoEtapaEmbudo.clave, query.etapaClave) : undefined
     ]);

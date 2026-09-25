@@ -107,4 +107,23 @@ describe("oportunidades: pipeline, cierre/reapertura y scoping", () => {
       .send({ empresaId: otraEmpresa.body.id, contactoId, titulo: "Oportunidad con contacto cruzado" });
     expect(res.status).toBe(404);
   });
+
+  it("GET /oportunidades filtra por empresaId (para la ficha de cliente); una empresa sin oportunidades responde una lista vacía, no 404", async () => {
+    const propiaId = await crearOportunidad(adminCookie, "Oportunidad de esta empresa");
+
+    const otraEmpresa = await request(app.getHttpServer())
+      .post("/api/v1/empresas")
+      .set("Cookie", adminCookie)
+      .send({ nombreLegal: "Empresa Sin Oportunidades", contactos: [{ nombre: "Contacto", correo: `sin.oportunidades.${Date.now()}@test.local` }] });
+    await crearOportunidad(adminCookie, "Oportunidad de otra empresa"); // esta usa la empresaId de beforeAll, no otraEmpresa
+
+    const filtrada = await request(app.getHttpServer()).get(`/api/v1/oportunidades?empresaId=${empresaId}`).set("Cookie", adminCookie);
+    expect(filtrada.status).toBe(200);
+    expect(filtrada.body.data.every((o: { empresa_id: number }) => o.empresa_id === empresaId)).toBe(true);
+    expect(filtrada.body.data.map((o: { id: number }) => o.id)).toContain(propiaId);
+
+    const vacia = await request(app.getHttpServer()).get(`/api/v1/oportunidades?empresaId=${otraEmpresa.body.id}`).set("Cookie", adminCookie);
+    expect(vacia.status).toBe(200);
+    expect(vacia.body.data).toEqual([]);
+  });
 });
