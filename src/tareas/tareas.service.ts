@@ -123,6 +123,12 @@ export class TareasService {
   // directamente, solo se encola el evento en la misma transacción.
   async cerrar(user: CurrentUser, id: number, resultado: string) {
     const row = await this.findAssignable(user, id);
+    // Una tarea de clasificación cerrada por aquí quedaba "resuelta" sin
+    // aplicar nada: la respuesta sin clasificar y el prospecto en
+    // en_revision para siempre (hallazgo de /code-review, 25-sep-2026).
+    if (row.tipo === "clasificacion") {
+      throw new HttpError(409, "Las tareas de clasificación se resuelven clasificándolas (POST /cola-clasificacion/:id/clasificar)");
+    }
 
     await this.db.transaction(async (tx) => {
       // findAssignable ya validó el estado, pero fuera de cualquier

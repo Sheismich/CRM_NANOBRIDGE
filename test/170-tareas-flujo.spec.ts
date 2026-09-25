@@ -132,6 +132,20 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       expect((await cerrar(agente1.cookie, idCancelada)).status).toBe(409);
     });
 
+    // Cerrar una tarea de clasificación por aquí la dejaba "resuelta" sin
+    // aplicar nada: la respuesta sin clasificar y el prospecto en
+    // en_revision para siempre (hallazgo de /code-review, 25-sep-2026).
+    it("una tarea de clasificación no se cierra aquí (409): se resuelve clasificando", async () => {
+      const prospectoId = await crearProspecto();
+      const id = await crearTarea(adminCookie, { tipo: "clasificacion", titulo: "No cerrar por aquí", responsableId: agente1.id, prospectoId });
+
+      const res = await cerrar(adminCookie, id, "la cierro sin clasificar");
+      expect(res.status).toBe(409);
+
+      const [tarea] = await db.select({ estado: tareas.estado }).from(tareas).where(eq(tareas.id, id));
+      expect(tarea!.estado).toBe("pendiente");
+    });
+
     it("dos cierres simultáneos sobre la misma tarea: solo uno gana", async () => {
       const id = await crearTarea(adminCookie, { titulo: "Tarea cierre concurrente", responsableId: agente1.id });
       const [a, b] = await Promise.all([cerrar(adminCookie, id, "primero"), cerrar(adminCookie, id, "segundo")]);
@@ -145,14 +159,14 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       const idSeguimiento = await crearTarea(adminCookie, { tipo: "seguimiento", titulo: "No es clasificación", responsableId: agente1.id });
       const idClasificacion = await crearTarea(adminCookie, { tipo: "clasificacion", titulo: "Clasificar prospecto", responsableId: agente1.id, prospectoId });
 
-      const cola = await request(app.getHttpServer()).get("/api/v1/cola-clasificacion").set("Cookie", agente1.cookie);
+      const cola = await request(app.getHttpServer()).get("/api/v1/cola-clasificacion").set("Cookie", adminCookie);
       expect(cola.status).toBe(200);
       const ids = cola.body.data.map((t: { id: number }) => t.id);
       expect(ids).toContain(idClasificacion);
       expect(ids).not.toContain(idSeguimiento);
 
       await clasificar(adminCookie, idClasificacion);
-      const colaDespues = await request(app.getHttpServer()).get("/api/v1/cola-clasificacion").set("Cookie", agente1.cookie);
+      const colaDespues = await request(app.getHttpServer()).get("/api/v1/cola-clasificacion").set("Cookie", adminCookie);
       expect(colaDespues.body.data.map((t: { id: number }) => t.id)).not.toContain(idClasificacion);
     });
 
@@ -191,6 +205,12 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       expect((await clasificar(agente1.cookie, id)).status).toBe(403);
       expect((await clasificar(agente2.cookie, id)).status).toBe(403);
       expect((await clasificar(adminCookie, id)).status).toBe(200);
+    });
+
+    // Si un agente la veía pero no podía clasificarla, la cola le mostraba
+    // tareas que no puede resolver (hallazgo de /code-review, 25-sep-2026).
+    it("un agente no puede ver la cola de clasificación (403)", async () => {
+      expect((await request(app.getHttpServer()).get("/api/v1/cola-clasificacion").set("Cookie", agente1.cookie)).status).toBe(403);
     });
 
     it("sin sesión responde 401", async () => {

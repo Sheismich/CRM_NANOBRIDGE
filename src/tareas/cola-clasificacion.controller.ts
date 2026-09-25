@@ -23,7 +23,10 @@ const listQuerySchema = z.object({
 export class ColaClasificacionController {
   constructor(private readonly tareasService: TareasService) {}
 
+  // Mismos roles que clasificar: un agente veía tareas que luego no podía
+  // resolver (hallazgo de /code-review, 25-sep-2026).
   @Get()
+  @Roles("administrador", "supervisor")
   list(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
     const { page, limit } = listQuerySchema.parse(query);
     return this.tareasService.listColaClasificacion(user, page, limit);
