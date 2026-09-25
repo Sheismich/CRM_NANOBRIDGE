@@ -8,7 +8,7 @@
 - Una oportunidad comercial pertenece a una empresa y puede tener un contacto principal.
 - El backend es la única vía de acceso a MySQL. El frontend CRM nunca consulta la base directamente.
 - El CRM y la API viven en un backend modular único.
-- La baja aplica al contacto y al medio de contacto específico; no bloquea automáticamente a toda la empresa.
+- La baja aplica al contacto, no a toda la empresa. Cuando una persona pide la baja al responder un correo, se suprimen **todos** sus medios de contacto (correo, teléfono y WhatsApp), no solo el canal por el que respondió (regla del 25-sep-2026). Cada medio queda como una fila propia en `lista_supresion`, y los demás contactos de la misma empresa no se tocan. Una supresión que no nace de una respuesta (por ejemplo, el link de baja del proveedor de correo) sigue aplicando al medio específico.
 - Las llamadas y WhatsApp se registran manualmente en la primera versión.
 - Las oportunidades se crean cuando un prospecto interesado es tomado por un asesor, no automáticamente por score alto.
 
