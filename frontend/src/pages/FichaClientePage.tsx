@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
+import { HistorialTab } from "../components/ficha/HistorialTab";
+import { OportunidadesTab } from "../components/ficha/OportunidadesTab";
 import { Card, SectionTitle } from "../components/ui/Card";
 import { api } from "../lib/api";
 import type { ContactoConMedio, EmpresaDetalle } from "../types";
@@ -119,7 +121,10 @@ export function FichaClientePage() {
             </div>
           )}
 
-          {tab !== "info" && (
+          {tab === "historial" && <HistorialTab empresaId={empresa.id} />}
+          {tab === "oportunidades" && <OportunidadesTab empresaId={empresa.id} />}
+
+          {(tab === "cotizaciones" || tab === "documentos") && (
             <Card className="p-10 text-center text-sm text-ink-3">Esta pestaña todavía no está construida — llega en la siguiente fase (ver PLAN_FRONTEND.md §6).</Card>
           )}
         </div>

@@ -67,6 +67,35 @@ export type ContactoConMedio = {
   estado_contacto: MedioContacto["estado_contacto"] | null;
 };
 
+// GET /actividades?empresaId= (src/crm/actividades.service.ts): mezcla
+// actividades capturadas a mano con envíos/respuestas de n8n, tareas
+// cerradas y cambios de estado de prospecto. `detalle` cambia de forma
+// según `tipo`, por eso queda como registro abierto.
+export type TimelineEvento = {
+  tipo: "llamada" | "whatsapp" | "comentario" | "correo_enviado" | "correo_recibido" | "tarea" | "cambio_estado_prospecto";
+  fecha: string;
+  responsable_id: number | null;
+  canal: string | null;
+  resultado: string | null;
+  proxima_accion: string | null;
+  detalle: Record<string, unknown>;
+};
+
+export type Oportunidad = {
+  id: number;
+  empresa_id: number;
+  titulo: string;
+  etapa_clave: string;
+  etapa_nombre: string;
+  probabilidad: number;
+  responsable_id: number | null;
+  // DECIMAL de MySQL: llega como string ("125000.00"), no como number.
+  valor_estimado: string | null;
+  fecha_cierre_estimada: string | null;
+  cerrada: boolean;
+  actualizado_en: string;
+};
+
 export type Tarea = {
   id: number;
   tipo: "seguimiento" | "clasificacion" | "revision_documento" | "otro";
