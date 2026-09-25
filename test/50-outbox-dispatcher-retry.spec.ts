@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
@@ -46,6 +46,19 @@ describe("OutboxDispatcherService: reintentos con backoff", () => {
     await db.update(eventosPendientes).set({ proximoIntentoEn: new Date(0) }).where(eq(eventosPendientes.id, eventoId));
   }
 
+  // La base de pruebas es compartida y los demás archivos dejan eventos
+  // 'pendiente' (tarea_cerrada, prospecto_clasificado...). El despachador
+  // toma una tanda de BATCH_SIZE (20) sin orden, así que con más de 20
+  // pendientes el evento de esta prueba a veces no entraba y su contador
+  // se quedaba en 0: fallaba o no según el orden de los archivos (hallazgo
+  // del 25-sep-2026). Se sacan de turno los ajenos; ningún otro archivo
+  // despacha, así que no les afecta.
+  async function aislarDeEventosAjenos(eventoId: number) {
+    await db.update(eventosPendientes)
+      .set({ proximoIntentoEn: new Date("2100-01-01T00:00:00Z") })
+      .where(and(eq(eventosPendientes.estado, "pendiente"), ne(eventosPendientes.id, eventoId)));
+  }
+
   async function despachar() {
     const res = await request(app.getHttpServer()).post("/api/v1/eventos-pendientes/despachar").set("Cookie", adminCookie);
     expect(res.status).toBe(200);
@@ -66,6 +79,7 @@ describe("OutboxDispatcherService: reintentos con backoff", () => {
       payload: { motivo: "prueba de backoff" }
     });
     const eventoId = seed.insertId;
+    await aislarDeEventosAjenos(eventoId);
 
     // Intento 1: proximoIntentoEn arranca NULL -> ya es elegible sin forzar nada.
     await despachar();
