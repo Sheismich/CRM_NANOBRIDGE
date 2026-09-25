@@ -151,24 +151,24 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       expect(ids).toContain(idClasificacion);
       expect(ids).not.toContain(idSeguimiento);
 
-      await clasificar(agente1.cookie, idClasificacion);
+      await clasificar(adminCookie, idClasificacion);
       const colaDespues = await request(app.getHttpServer()).get("/api/v1/cola-clasificacion").set("Cookie", agente1.cookie);
       expect(colaDespues.body.data.map((t: { id: number }) => t.id)).not.toContain(idClasificacion);
     });
 
     it("clasificar exige tipo='clasificacion' (409) y un prospecto asociado (409)", async () => {
       const idSeguimiento = await crearTarea(adminCookie, { tipo: "seguimiento", titulo: "Tipo incorrecto", responsableId: agente1.id });
-      expect((await clasificar(agente1.cookie, idSeguimiento)).status).toBe(409);
+      expect((await clasificar(adminCookie, idSeguimiento)).status).toBe(409);
 
       const idSinProspecto = await crearTarea(adminCookie, { tipo: "clasificacion", titulo: "Sin prospecto", responsableId: agente1.id });
-      expect((await clasificar(agente1.cookie, idSinProspecto)).status).toBe(409);
+      expect((await clasificar(adminCookie, idSinProspecto)).status).toBe(409);
     });
 
     it("clasificar cierra la tarea, encola 'prospecto_clasificado' con el prospecto correcto y audita", async () => {
       const prospectoId = await crearProspecto();
       const id = await crearTarea(adminCookie, { tipo: "clasificacion", titulo: "Clasificar con comentario", responsableId: agente1.id, prospectoId });
 
-      const res = await clasificar(agente1.cookie, id, { clasificacion: "no_interesado", comentario: "ya tiene proveedor" });
+      const res = await clasificar(adminCookie, id, { clasificacion: "no_interesado", comentario: "ya tiene proveedor" });
       expect(res.status).toBe(200);
       expect(res.body.estado).toBe("cerrada");
       expect(res.body.clasificacion).toBe("no_interesado");
@@ -182,10 +182,15 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       expect(audit).toBeDefined();
     });
 
-    it("scoping: un agente no puede clasificar la tarea de otro agente", async () => {
+    // Decisión del 24-sep-2026 (README, "Quién clasifica"): solo
+    // administradores y supervisores clasifican. Antes un agente podía
+    // clasificar las tareas asignadas a él.
+    it("un agente no puede clasificar, ni siquiera una tarea asignada a él (403)", async () => {
       const prospectoId = await crearProspecto();
       const id = await crearTarea(adminCookie, { tipo: "clasificacion", titulo: "De agente 1", responsableId: agente1.id, prospectoId });
-      expect((await clasificar(agente2.cookie, id)).status).toBe(404);
+      expect((await clasificar(agente1.cookie, id)).status).toBe(403);
+      expect((await clasificar(agente2.cookie, id)).status).toBe(403);
+      expect((await clasificar(adminCookie, id)).status).toBe(200);
     });
 
     it("sin sesión responde 401", async () => {

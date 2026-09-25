@@ -29,9 +29,12 @@ export class ColaClasificacionController {
     return this.tareasService.listColaClasificacion(user, page, limit);
   }
 
+  // Solo administradores y supervisores clasifican (decisión del
+  // 24-sep-2026, README "Quién clasifica"): una "baja" registra supresiones
+  // y un "invalido" descarta al prospecto.
   @Post(":id/clasificar")
   @HttpCode(200)
-  @Roles("administrador", "supervisor", "agente")
+  @Roles("administrador", "supervisor")
   async clasificar(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
     const id = idParamSchema.parse(idParam);
     const input = clasificarTareaSchema.parse(body);
