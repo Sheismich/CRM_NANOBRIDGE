@@ -17,6 +17,18 @@ const ETIQUETA_TIPO: Record<TimelineEvento["tipo"], string> = {
 // distinto de lo capturado a mano, para que se note qué hizo una persona.
 const AUTOMATICOS = new Set<TimelineEvento["tipo"]>(["correo_enviado", "correo_recibido", "cambio_estado_prospecto"]);
 
+// Clasificaciones de respuestas y tareas de clasificación (n8n pone las 5
+// primeras; invalido/reagendar solo la clasificación manual, migración 022).
+const ETIQUETA_RESULTADO: Record<string, string> = {
+  interesado: "Interesado",
+  no_interesado: "No interesado",
+  baja: "Baja",
+  automatica: "Respuesta automática",
+  ambigua: "Ambigua",
+  invalido: "Inválido",
+  reagendar: "Reagendar"
+};
+
 const formatoFecha = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" });
 
 // El texto principal de cada evento vive en un campo distinto de `detalle`
@@ -53,7 +65,7 @@ export function HistorialTab({ empresaId }: { empresaId: number }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[13px] font-bold">{ETIQUETA_TIPO[evento.tipo] ?? evento.tipo}</span>
                     {AUTOMATICOS.has(evento.tipo) && <span className="rounded-full bg-bg px-2 py-0.5 text-[10px] font-semibold text-ink-3">Automático</span>}
-                    {evento.resultado && <span className="rounded-full bg-ok-bg px-2 py-0.5 text-[11px] font-semibold text-ok">{evento.resultado}</span>}
+                    {evento.resultado && <span className="rounded-full bg-ok-bg px-2 py-0.5 text-[11px] font-semibold text-ok">{ETIQUETA_RESULTADO[evento.resultado] ?? evento.resultado}</span>}
                     <span className="ml-auto text-xs text-ink-3">{formatoFecha.format(new Date(evento.fecha))}</span>
                   </div>
                   {texto && <p className="mt-1 whitespace-pre-line text-[13px] text-ink-2">{texto}</p>}

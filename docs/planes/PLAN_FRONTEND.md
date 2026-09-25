@@ -50,8 +50,10 @@ El backend expone JSON por HTTP con sesión por cookie (`credentials: true` en C
 Login
 │
 ├─ Inicio (dashboard)
-│   ├─ Agente: mis tareas pendientes, mi cola de clasificación
-│   └─ Admin/Supervisor: resumen de pipeline, forecast, actividad por agente
+│   ├─ Agente: mis tareas pendientes
+│   └─ Admin/Supervisor: resumen de pipeline, forecast, actividad por
+│       agente, cola de clasificación (solo ellos clasifican desde el
+│       24-sep-2026 — ver README del backend, "Quién clasifica")
 │
 ├─ Empresas (clientes)
 │   ├─ Lista (filtros: región, giro, tamaño — catálogos vía /catalogos)
@@ -74,7 +76,9 @@ Login
 │
 ├─ Tareas
 │   ├─ Bandeja (filtros: estado, prioridad, tipo)
-│   └─ Cola de clasificación
+│   └─ Cola de clasificación (solo admin/supervisor): interesado,
+│       no interesado, baja, inválido, reagendar (este último pide
+│       fecha de seguimiento futura)
 │
 ├─ Oportunidades ── punto #3
 │   └─ Vista por etapa (kanban o lista agrupada) + detalle con cambio de

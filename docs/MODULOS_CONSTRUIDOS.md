@@ -37,7 +37,7 @@ Alta manual e importación CSV vía `borradores_captura` — ver `docs/planes/S3
 - `GET/POST /tareas`, `GET /tareas/:id`, `PATCH /tareas/:id/cerrar`.
 - Tipos: `seguimiento`, `clasificacion`, `revision_documento`, `otro`. Prioridades: `baja`, `media`, `alta`, `urgente`.
 - `GET /cola-clasificacion` — atajo que filtra `tareas` a `tipo=clasificacion, estado=pendiente` (no es una tabla aparte).
-- `POST /cola-clasificacion/:id/clasificar` — cerrar una tarea de clasificación genera un evento en `eventos_pendientes` (outbox), nunca llama a n8n directo.
+- `POST /cola-clasificacion/:id/clasificar` — solo `administrador`/`supervisor`. Aplica la decisión (`interesado`, `no_interesado`, `baja`, `invalido`, `reagendar`) en la misma transacción y genera un evento en `eventos_pendientes` (outbox) como aviso, nunca llama a n8n directo. Detalle de cada clasificación en el README ("Cola de clasificación").
 
 ## Usuarios y auditoría (`src/usuarios/`)
 
@@ -68,6 +68,7 @@ Reglas clave:
 ## Comercial — Oportunidades (`src/comercial/oportunidades.controller.ts`)
 
 - Pipeline dinámico: las etapas viven en la tabla `catalogo_etapa_embudo` (con su `probabilidad`, `orden`, `es_cierre`, `es_ganada`), no como enum fijo en código — se pueden ajustar sin migrar.
+- `GET /oportunidades` — filtros `responsableId`, `empresaId` (para la ficha de cliente), `etapaClave`, `cerrada`. Un agente solo ve las que tiene asignadas.
 - `PATCH /:id/etapa` — cambiar de etapa; perder exige `motivo_perdida_id` (catálogo `catalogo_motivo_perdida`) y `motivo_perdida_detalle` si el motivo es "otro".
 - `PATCH /:id/reabrir` — una oportunidad perdida se puede reabrir conservando su historial (`historial_etapa_oportunidad`).
 - `create()` valida que el `contactoId`/`prospectoId` que le pasas de verdad pertenezcan a la `empresaId` dada — no se puede cruzar contactos de otra empresa.

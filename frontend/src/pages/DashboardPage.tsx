@@ -13,9 +13,9 @@ type PipelineResumen = {
 
 const formatoMoneda = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 
-// PLAN_FRONTEND.md §5: "Agente: mis tareas pendientes, mi cola de
-// clasificación" / "Admin/Supervisor: resumen de pipeline, forecast,
-// actividad por agente". Primera versión: solo el resumen de pipeline
+// PLAN_FRONTEND.md §5: "Agente: mis tareas pendientes" / "Admin/Supervisor:
+// resumen de pipeline, forecast, actividad por agente, cola de
+// clasificación". Primera versión: solo el resumen de pipeline
 // (admin/supervisor) o la bandeja propia (agente) -- forecast y actividad
 // por agente llegan en una fase posterior.
 export function DashboardPage() {
