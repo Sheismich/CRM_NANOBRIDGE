@@ -1000,7 +1000,7 @@ export class AutomatizacionService {
       }
 
       const { supresionIds } = await aplicarClasificacionAlProspecto(tx, respuesta.prospectoId, input.clasificacion, {
-        motivo: `Baja pedida en respuesta ${respuesta.id} (clasificación de n8n)`,
+        descripcion: `clasificación de n8n, respuesta ${respuesta.id}`,
         executionId: input.execution_id,
         usuarioId: null
       });

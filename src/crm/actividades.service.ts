@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { actividades, auditoria, contactos, empresas, envios, oportunidades, prospectos, respuestas, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
+import { ACCION_CAMBIO_ESTADO_POR_CLASIFICACION } from "../shared/clasificacion-respuesta.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearActividadInput, TimelineQuery } from "./dto/actividad.schema.js";
 
@@ -187,7 +188,9 @@ export class ActividadesService {
       const filasAuditoria = await this.db
         .select()
         .from(auditoria)
-        .where(and(eq(auditoria.entidad, "prospecto"), eq(auditoria.accion, "cambiar_estado_automatizacion"), inArray(auditoria.entidadId, prospectoIds)))
+        // Cambios de estado de POST /automatizacion/prospectos/estado y los
+        // que deja una clasificación (manual o de n8n).
+        .where(and(eq(auditoria.entidad, "prospecto"), inArray(auditoria.accion, ["cambiar_estado_automatizacion", ACCION_CAMBIO_ESTADO_POR_CLASIFICACION]), inArray(auditoria.entidadId, prospectoIds)))
         .orderBy(desc(auditoria.creadoEn))
         .limit(query.limit);
       eventos.push(...filasAuditoria.map(auditoriaToEvento));

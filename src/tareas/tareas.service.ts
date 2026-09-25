@@ -210,7 +210,7 @@ export class TareasService {
       }
 
       const { estadoProspecto, supresionIds } = await aplicarClasificacionAlProspecto(tx, prospectoId, input.clasificacion, {
-        motivo: `Baja pedida en respuesta (clasificación manual, tarea ${id})`,
+        descripcion: `clasificación manual, tarea ${id}`,
         executionId: null,
         usuarioId: user.id
       });

@@ -7,7 +7,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, eventosPendientes, incidencias, mediosContacto, prospectos, respuestas, tareas } from "../src/database/schema.js";
+import { auditoria, contactos, eventosPendientes, incidencias, mediosContacto, prospectos, respuestas, tareas } from "../src/database/schema.js";
 
 // Mismo valor fijado en test/setup/setup-env.ts.
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -306,6 +306,45 @@ describe("respuestas: clasificación automática y manual", () => {
       expect((await clasificacionRespuesta(respuestaId)).clasificacion).toBe(ganadora);
       expect(await estadoProspecto(prospecto.id)).toBe(ganadora);
       expect(await enSupresion("correo", prospecto.correo)).toBe(ganadora === "baja");
+    });
+  });
+
+  // El Historial de la ficha de cliente (GET /actividades) solo mostraba los
+  // cambios de estado hechos por POST /automatizacion/prospectos/estado: una
+  // clasificación cambiaba el estado del prospecto sin dejar ese rastro
+  // (hallazgo de /code-review, 25-sep-2026).
+  describe("Historial de la ficha de cliente", () => {
+    async function historial(contactoId: number) {
+      const [contacto] = await db.select({ empresaId: contactos.empresaId }).from(contactos).where(eq(contactos.id, contactoId));
+      const res = await api().get("/api/v1/actividades").set("Cookie", adminCookie).query({ empresaId: contacto!.empresaId, limit: 100 });
+      expect(res.status).toBe(200);
+      return res.body.data as { tipo: string; resultado: string | null; responsable_id: number | null; detalle: { motivo: string | null } }[];
+    }
+
+    it("una clasificación manual aparece como cambio de estado del prospecto, con quién la hizo", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "mmm, no sé");
+      const tareaId = (await clasificarAutomatica(respuestaId, "ambigua")).body.tarea_id as number;
+      const adminId = (await api().get("/api/v1/auth/me").set("Cookie", adminCookie)).body.id as number;
+
+      await api().post(`/api/v1/cola-clasificacion/${tareaId}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "no_interesado" });
+
+      const cambios = (await historial(prospecto.contactoId)).filter((e) => e.tipo === "cambio_estado_prospecto");
+      const manual = cambios.find((e) => e.resultado === "no_interesado");
+      expect(manual).toBeDefined();
+      expect(manual!.responsable_id).toBe(adminId);
+      expect(manual!.detalle.motivo).toMatch(/no_interesado/);
+      // La "ambigua" de n8n también dejó su rastro (en_revision).
+      expect(cambios.some((e) => e.resultado === "en_revision" && e.responsable_id === null)).toBe(true);
+    });
+
+    it("una 'baja' de n8n aparece como cambio de estado a 'baja'", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "ya no me escriban");
+      await clasificarAutomatica(respuestaId, "baja");
+
+      const cambios = (await historial(prospecto.contactoId)).filter((e) => e.tipo === "cambio_estado_prospecto");
+      expect(cambios.some((e) => e.resultado === "baja")).toBe(true);
     });
   });
 });
