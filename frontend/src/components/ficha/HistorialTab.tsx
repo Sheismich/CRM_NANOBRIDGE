@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Button } from "../ui/Button";
 import { Card, SectionTitle } from "../ui/Card";
+import { NuevaActividadForm } from "./NuevaActividadForm";
 import { api } from "../../lib/api";
 import type { TimelineEvento } from "../../types";
 
@@ -66,7 +69,8 @@ function claseEtiqueta(clave: string) {
   return "bg-bg text-ink-2";
 }
 
-export function HistorialTab({ empresaId }: { empresaId: number }) {
+export function HistorialTab({ empresaId, contactos }: { empresaId: number; contactos: { id: number; nombre: string }[] }) {
+  const [registrando, setRegistrando] = useState(false);
   const { data, isPending, isError } = useQuery({
     queryKey: ["timeline", empresaId],
     queryFn: () => api.get<{ data: TimelineEvento[] }>("/api/v1/actividades", { empresaId, limit: 100 })
@@ -74,7 +78,15 @@ export function HistorialTab({ empresaId }: { empresaId: number }) {
 
   return (
     <Card className="p-6">
-      <SectionTitle>Historial de interacciones</SectionTitle>
+      <div className="flex items-start justify-between">
+        <SectionTitle>Historial de interacciones</SectionTitle>
+        {!registrando && (
+          <Button variant="outline" onClick={() => setRegistrando(true)}>
+            Registrar interacción
+          </Button>
+        )}
+      </div>
+      {registrando && <NuevaActividadForm empresaId={empresaId} contactos={contactos} onDone={() => setRegistrando(false)} />}
       {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="text-sm text-danger">No se pudo cargar el historial.</div>}
       {data && data.data.length === 0 && <div className="text-sm text-ink-3">Sin interacciones registradas todavía.</div>}

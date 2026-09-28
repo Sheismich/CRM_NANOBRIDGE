@@ -96,6 +96,27 @@ export type Oportunidad = {
   actualizado_en: string;
 };
 
+// GET /oportunidades/:id
+export type OportunidadDetalle = Oportunidad & {
+  contacto_id: number | null;
+  motivo_perdida_detalle: string | null;
+  historial: {
+    id: number;
+    etapa_clave: string;
+    etapa_nombre: string;
+    usuario_id: number | null;
+    motivo_perdida_id: number | null;
+    comentario: string | null;
+    creado_en: string;
+  }[];
+};
+
+// GET /oportunidades/catalogos
+export type CatalogosOportunidad = {
+  etapas: { clave: string; nombre: string; probabilidad: number; orden: number; es_cierre: boolean; es_ganada: boolean }[];
+  motivos_perdida: { clave: string; nombre: string; requiere_explicacion: boolean }[];
+};
+
 export type Tarea = {
   id: number;
   tipo: "seguimiento" | "clasificacion" | "revision_documento" | "otro";

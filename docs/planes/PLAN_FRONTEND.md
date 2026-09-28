@@ -130,7 +130,7 @@ Sin fechas fijas (ver §0). Orden sugerido por dependencia, no por semana:
 Avance:
 
 - **Fase 1 ✅ (24-sep-2026):** login, layout con navegación por rol, lista de empresas y ficha con "Información y contactos". El inicio muestra el resumen de pipeline (admin/supervisor) o la bandeja propia (agente).
-- **Fase 2 en curso (25-sep-2026):** pestañas Historial y Oportunidades de la ficha, solo de lectura. Faltan registrar una llamada/WhatsApp/comentario desde el Historial, y el detalle de oportunidad con cambio de etapa y reapertura.
+- **Fase 2 construida (28-sep-2026), falta probarla en navegador contra datos reales:** pestañas Historial y Oportunidades de la ficha. Desde el Historial se registra una llamada, WhatsApp o comentario (`POST /actividades`). En Oportunidades se crea una nueva (`POST /oportunidades`) y, al abrir una, se ve su historial de etapas, se cambia de etapa (perder pide motivo) y se reabre si está perdida.
 - Fases 3 a 6: sin empezar. Las pestañas Cotizaciones y Documentos de la ficha muestran un aviso de "próxima fase".
 
 Relación con las fases de `PLAN_CRM_DEFINITIVO.md`: aquellas son las del backend y ya están construidas; estas son solo las de la interfaz.

@@ -49,6 +49,9 @@ export function FichaClientePage() {
   });
 
   const contactos = useMemo(() => (empresa ? agruparContactos(empresa.contactos) : []), [empresa]);
+  // Para los selects de "contacto" de los formularios: solo activos (el
+  // backend rechaza una oportunidad con un contacto desactivado).
+  const opcionesContacto = useMemo(() => contactos.filter(({ contacto }) => contacto.activo).map(({ contacto }) => ({ id: contacto.id, nombre: contacto.nombre })), [contactos]);
 
   return (
     <AppShell titulo="Ficha de cliente">
@@ -121,8 +124,8 @@ export function FichaClientePage() {
             </div>
           )}
 
-          {tab === "historial" && <HistorialTab empresaId={empresa.id} />}
-          {tab === "oportunidades" && <OportunidadesTab empresaId={empresa.id} />}
+          {tab === "historial" && <HistorialTab empresaId={empresa.id} contactos={opcionesContacto} />}
+          {tab === "oportunidades" && <OportunidadesTab empresaId={empresa.id} contactos={opcionesContacto} />}
 
           {(tab === "cotizaciones" || tab === "documentos") && (
             <Card className="p-10 text-center text-sm text-ink-3">Esta pestaña todavía no está construida — llega en la siguiente fase (ver PLAN_FRONTEND.md §6).</Card>
