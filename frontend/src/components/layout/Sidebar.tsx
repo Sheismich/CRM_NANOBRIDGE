@@ -18,7 +18,7 @@ export function Sidebar() {
 
       <div className="px-6 pb-5 pt-7">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--grad)] font-display text-sm text-white">N</div>
+          <img src="/logo-n.png" alt="" aria-hidden="true" className="h-8 w-8" />
           <div className="font-display text-[19px] tracking-wide text-navy">NANOBRIDGE</div>
         </div>
       </div>

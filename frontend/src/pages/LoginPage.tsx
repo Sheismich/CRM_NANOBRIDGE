@@ -48,8 +48,10 @@ export function LoginPage() {
         className="relative hidden min-w-[420px] flex-[0.9] overflow-hidden bg-bg shadow-[6px_0_24px_rgba(16,23,51,0.05)] lg:block"
         style={{ clipPath: "polygon(0 0, 100% 0, 84% 100%, 0 100%)" }}
       >
+        {/* Marca de agua: el logo completo en grande, casi transparente, detrás del título (mockup de login). */}
+        <img src="/logo-nanobridge.png" alt="" aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 w-[340px] -translate-x-[40%] -translate-y-[45%] opacity-[0.06]" />
         <div className="relative flex h-full flex-col justify-between p-13 pr-21">
-          <div className="font-display text-2xl text-navy">NANOBRIDGE</div>
+          <img src="/logo-nanobridge.png" alt="NANOBRIDGE — Conectando la ficción con la realidad" className="w-[170px]" />
           <div className="max-w-[440px]">
             <div className="mb-5 flex items-center gap-2.5">
               <Dot color="var(--mint)" />
@@ -63,7 +65,7 @@ export function LoginPage() {
               <br />
               outbound
             </div>
-            <div className="mt-4 text-[14.5px] font-medium leading-relaxed text-ink-2">Empresas, historial, ventas y cotizaciones en un solo lugar.</div>
+            <div className="mt-4 text-[14.5px] font-medium leading-relaxed text-ink-2">Conectando la ficción con la realidad — empresas, historial, ventas y cotizaciones en un solo lugar.</div>
           </div>
           <div className="text-xs text-ink-3">© 2026 NANOBRIDGE SA de CV</div>
         </div>
