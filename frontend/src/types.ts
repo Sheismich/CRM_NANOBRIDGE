@@ -163,6 +163,47 @@ export type Documento = {
   creado_en: string;
 };
 
+export type EstadoBorrador = "pendiente_revision" | "duplicado" | "importado" | "rechazado" | "expirado";
+
+// GET /prospectos/importaciones
+export type LoteImportacion = {
+  lote_id: string;
+  fuente: string;
+  creado_en: string;
+  creado_por: number;
+  total: number;
+  resumen: Record<EstadoBorrador, number>;
+};
+
+// Una fila de GET /prospectos/importaciones/:loteId
+export type Borrador = {
+  id: number;
+  fila_numero: number;
+  empresa_nombre_legal: string | null;
+  contacto_nombre: string | null;
+  correo: string | null;
+  telefono: string | null;
+  canal_inicial: "correo" | "telefono" | "whatsapp" | null;
+  prioridad: "alta" | "media" | "baja" | null;
+  estado: EstadoBorrador;
+  match_contacto_id: number | null;
+  match_motivo: "correo" | "telefono" | null;
+  errores: { campo: string; mensaje: string }[] | null;
+  prospecto_id: number | null;
+};
+
+// GET /prospectos
+export type ProspectoResumen = {
+  id: number;
+  estado: string;
+  score: string | null;
+  prioridad: "alta" | "media" | "baja" | null;
+  contacto_nombre: string;
+  empresa_id: number;
+  empresa_nombre_legal: string;
+  creado_en: string;
+};
+
 export type Tarea = {
   id: number;
   tipo: "seguimiento" | "clasificacion" | "revision_documento" | "otro";

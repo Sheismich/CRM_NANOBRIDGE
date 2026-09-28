@@ -4,6 +4,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { EmpresasListPage } from "./pages/EmpresasListPage";
 import { FichaClientePage } from "./pages/FichaClientePage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { ProspectosPage } from "./pages/ProspectosPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function App() {
@@ -19,7 +20,7 @@ function App() {
       {/* Resto de módulos: nav completa desde el inicio, contenido real
           llega fase por fase (ver PlaceholderPage.tsx). */}
       <Route path="/contactos" element={<ProtectedRoute><PlaceholderPage titulo="Contactos" fase="Fundacional" /></ProtectedRoute>} />
-      <Route path="/prospectos" element={<ProtectedRoute><PlaceholderPage titulo="Prospectos" fase="Prospectos" /></ProtectedRoute>} />
+      <Route path="/prospectos" element={<ProtectedRoute><ProspectosPage /></ProtectedRoute>} />
       <Route path="/tareas" element={<ProtectedRoute><PlaceholderPage titulo="Tareas" fase="Historial y ventas" /></ProtectedRoute>} />
       <Route path="/oportunidades" element={<ProtectedRoute><PlaceholderPage titulo="Oportunidades" fase="Historial y ventas" /></ProtectedRoute>} />
       <Route path="/cotizaciones" element={<ProtectedRoute><PlaceholderPage titulo="Cotizaciones" fase="Cotizaciones y documentos" /></ProtectedRoute>} />

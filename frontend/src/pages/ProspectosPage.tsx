@@ -1,0 +1,446 @@
+import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AppShell } from "../components/layout/AppShell";
+import { Button } from "../components/ui/Button";
+import { Card, SectionTitle } from "../components/ui/Card";
+import { ServerError, inputClass } from "../components/ui/Field";
+import { ApiError, api } from "../lib/api";
+import { formatoFecha, formatoFechaHora } from "../lib/formato";
+import type { Borrador, EstadoBorrador, LoteImportacion, Paginated, ProspectoResumen } from "../types";
+
+const TABS = [
+  { id: "importaciones", label: "Importaciones" },
+  { id: "prospectos", label: "Prospectos" }
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+export function ProspectosPage() {
+  const [tab, setTab] = useState<TabId>("importaciones");
+  return (
+    <AppShell titulo="Prospectos">
+      <div className="mb-5 flex gap-1 border-b border-border">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2.5 text-[13px] font-semibold ${tab === t.id ? "border-b-2 border-navy text-navy" : "text-ink-3"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "importaciones" ? <Importaciones /> : <ListaProspectos />}
+    </AppShell>
+  );
+}
+
+// --- Importaciones ----------------------------------------------------------
+
+// Mismos nombres de columna que filaCsvSchema (src/crm/dto/prospecto.schema.ts):
+// el encabezado del CSV debe usarlos tal cual.
+const COLUMNAS_CSV = [
+  "empresaNombreLegal",
+  "empresaGiro",
+  "empresaTamano",
+  "empresaRegion",
+  "empresaEstado",
+  "empresaCiudad",
+  "empresaPais",
+  "empresaSitioWeb",
+  "contactoNombre",
+  "contactoPuesto",
+  "correo",
+  "telefono",
+  "canalInicial",
+  "confianza",
+  "prioridad",
+  "score",
+  "fuenteUrl",
+  "observaciones",
+  "campanaId"
+];
+const EJEMPLO_CSV = ["Aceros del Bajío S.A. de C.V.", "Manufactura metalmecánica", "mediana", "Bajío", "Guanajuato", "León", "MX", "https://acerosdelbajio.mx", "Ricardo Peña", "Gerente de Mantenimiento", "ventas@acerosbajio.mx", "+52 477 123 4567", "correo", "alta", "alta", "", "", "", ""];
+
+function descargarPlantilla() {
+  const csv = "﻿" + [COLUMNAS_CSV.join(","), EJEMPLO_CSV.map((v) => (v.includes(",") ? `"${v}"` : v)).join(",")].join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "plantilla_prospectos.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const ETIQUETA_ESTADO: Record<EstadoBorrador, string> = {
+  pendiente_revision: "Pendiente",
+  duplicado: "Duplicada",
+  importado: "Importada",
+  rechazado: "Rechazada",
+  expirado: "Expirada"
+};
+const CLASE_ESTADO: Record<EstadoBorrador, string> = {
+  pendiente_revision: "bg-warn-bg text-warn",
+  duplicado: "bg-warn-bg text-warn",
+  importado: "bg-ok-bg text-ok",
+  rechazado: "bg-danger-bg text-danger",
+  expirado: "bg-bg text-ink-3"
+};
+const ETIQUETA_CANAL = { correo: "Correo", telefono: "Teléfono", whatsapp: "WhatsApp" } as const;
+
+function Importaciones() {
+  const queryClient = useQueryClient();
+  const archivoInput = useRef<HTMLInputElement>(null);
+  const [loteElegido, setLoteElegido] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<EstadoBorrador | "">("");
+  const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  const { data: lotes, isPending: cargandoLotes } = useQuery({
+    queryKey: ["lotes-importacion"],
+    queryFn: () => api.get<{ data: LoteImportacion[] }>("/api/v1/prospectos/importaciones")
+  });
+  // Por default, el lote más reciente ("Última importación" del mockup).
+  const loteId = loteElegido ?? lotes?.data[0]?.lote_id ?? null;
+  const lote = lotes?.data.find((l) => l.lote_id === loteId);
+
+  const { data: filas, isPending: cargandoFilas } = useQuery({
+    queryKey: ["lote", loteId],
+    queryFn: () => api.get<{ filas: Borrador[] }>(`/api/v1/prospectos/importaciones/${loteId}`),
+    enabled: Boolean(loteId)
+  });
+
+  async function refrescar() {
+    await Promise.all([queryClient.invalidateQueries({ queryKey: ["lotes-importacion"] }), queryClient.invalidateQueries({ queryKey: ["lote", loteId] }), queryClient.invalidateQueries({ queryKey: ["prospectos"] })]);
+  }
+
+  async function ejecutar(accion: () => Promise<void>) {
+    setError(null);
+    setAviso(null);
+    setOcupado(true);
+    try {
+      await accion();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  function importar(archivo: File | undefined) {
+    if (!archivo) return;
+    // Mismo tope que uploadCsvInterceptor en ProspectosController.
+    if (archivo.size > 2 * 1024 * 1024) {
+      setError("El CSV excede 2 MB");
+      return;
+    }
+    void ejecutar(async () => {
+      const form = new FormData();
+      form.append("archivo", archivo);
+      const res = await api.postForm<{ lote_id: string; total: number; resumen: Partial<Record<EstadoBorrador, number>> }>("/api/v1/prospectos/importaciones", form);
+      setLoteElegido(res.lote_id);
+      setFiltro("");
+      await refrescar();
+      setAviso(`Se leyeron ${res.total} filas: ${res.resumen.pendiente_revision ?? 0} listas para confirmar, ${res.resumen.duplicado ?? 0} duplicadas y ${res.resumen.rechazado ?? 0} rechazadas. Nada se crea hasta que las confirmes.`);
+    });
+  }
+
+  function confirmarFila(fila: Borrador, usarContactoExistente = false) {
+    void ejecutar(async () => {
+      await api.post(`/api/v1/prospectos/importaciones/${loteId}/filas/${fila.id}/confirmar`, { usarContactoExistente });
+      await refrescar();
+    });
+  }
+
+  function rechazarFila(fila: Borrador) {
+    void ejecutar(async () => {
+      await api.post(`/api/v1/prospectos/importaciones/${loteId}/filas/${fila.id}/rechazar`);
+      await refrescar();
+    });
+  }
+
+  function confirmarTodas() {
+    void ejecutar(async () => {
+      const res = await api.post<{ total: number; confirmados: number; resultados: { ok: boolean; error?: string }[] }>(`/api/v1/prospectos/importaciones/${loteId}/confirmar-todos`);
+      await refrescar();
+      const fallidas = res.resultados.filter((r) => !r.ok);
+      setAviso(`Se confirmaron ${res.confirmados} de ${res.total}.${fallidas.length ? ` ${fallidas.length} no se pudieron confirmar: ${fallidas[0]?.error}` : ""}`);
+    });
+  }
+
+  const pendientes = lote?.resumen.pendiente_revision ?? 0;
+  const filasVisibles = (filas?.filas ?? []).filter((f) => !filtro || f.estado === filtro);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <SectionTitle>{loteElegido ? "Importación" : "Última importación"}</SectionTitle>
+          {lote && (
+            <div className="-mt-2.5 text-xs text-ink-3">
+              {lote.fuente} · subido el {formatoFechaHora.format(new Date(lote.creado_en))}
+            </div>
+          )}
+          {lotes && lotes.data.length > 1 && (
+            <select aria-label="Elegir importación" className={`${inputClass} mt-2 w-auto`} value={loteId ?? ""} onChange={(e) => setLoteElegido(e.target.value)}>
+              {lotes.data.map((l) => (
+                <option key={l.lote_id} value={l.lote_id}>
+                  {l.fuente} — {formatoFecha.format(new Date(l.creado_en))}
+                  {l.resumen.pendiente_revision + l.resumen.duplicado > 0 ? ` (${l.resumen.pendiente_revision + l.resumen.duplicado} por revisar)` : ""}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={descargarPlantilla}>
+            Descargar plantilla
+          </Button>
+          <Button disabled={ocupado} onClick={() => archivoInput.current?.click()}>
+            + Importar CSV
+          </Button>
+          <input
+            ref={archivoInput}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              importar(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </div>
+
+      <ServerError message={error} />
+      {aviso && <div className="rounded-[9px] bg-ok-bg px-3.5 py-2.5 text-[13px] text-ok">{aviso}</div>}
+
+      {cargandoLotes && <div className="text-sm text-ink-2">Cargando…</div>}
+      {lotes && lotes.data.length === 0 && (
+        <Card className="flex flex-col items-center gap-2 p-12 text-center">
+          <div className="text-sm font-bold">Todavía no hay importaciones</div>
+          <div className="max-w-lg text-[13px] text-ink-3">
+            Sube un CSV con una fila por prospecto. Cada fila se valida y se busca como duplicada (por correo y después por teléfono); nada se crea hasta que la confirmes. Descarga la plantilla para ver las columnas.
+          </div>
+        </Card>
+      )}
+
+      {lote && (
+        <>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <Contador etiqueta="Total en el lote" valor={lote.total} />
+            <Contador etiqueta="Listas para confirmar" valor={lote.resumen.pendiente_revision} clase="text-ok" />
+            <Contador etiqueta="Duplicadas" valor={lote.resumen.duplicado} clase="text-warn" />
+            <Contador etiqueta="Rechazadas" valor={lote.resumen.rechazado} clase="text-danger" />
+          </div>
+
+          <Card className="overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+              <select aria-label="Filtrar por estado" className={`${inputClass} w-auto`} value={filtro} onChange={(e) => setFiltro(e.target.value as EstadoBorrador | "")}>
+                <option value="">Estado: Todas</option>
+                {Object.entries(ETIQUETA_ESTADO).map(([clave, etiqueta]) => (
+                  <option key={clave} value={clave}>
+                    {etiqueta}
+                  </option>
+                ))}
+              </select>
+              {pendientes > 0 && (
+                <Button variant="exito" disabled={ocupado} onClick={confirmarTodas}>
+                  Confirmar todas las pendientes ({pendientes})
+                </Button>
+              )}
+            </div>
+
+            {cargandoFilas && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
+            {filas && (
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-bg">
+                    {["Fila", "Empresa", "Contacto", "Canal", "Prioridad", "Estado", "Acciones"].map((h) => (
+                      <th key={h} className="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-ink-2">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filasVisibles.map((f) => (
+                    <tr key={f.id} className="border-t border-border align-top">
+                      <td className="px-4 py-3 text-[13px] text-ink-3">{f.fila_numero}</td>
+                      <td className="px-4 py-3 text-[13px] font-semibold">{f.empresa_nombre_legal ?? "—"}</td>
+                      <td className="px-4 py-3 text-[13px]">
+                        {f.contacto_nombre ?? "—"}
+                        <div className="text-xs text-ink-3">{[f.correo, f.telefono].filter(Boolean).join(" · ")}</div>
+                      </td>
+                      <td className="px-4 py-3 text-[13px] text-ink-2">{f.canal_inicial ? ETIQUETA_CANAL[f.canal_inicial] : "—"}</td>
+                      <td className="px-4 py-3 text-[13px] capitalize text-ink-2">{f.prioridad ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${CLASE_ESTADO[f.estado]}`}>{ETIQUETA_ESTADO[f.estado]}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <AccionesFila fila={f} ocupado={ocupado} onConfirmar={confirmarFila} onRechazar={rechazarFila} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {filas && <div className="border-t border-border px-5 py-3 text-xs text-ink-3">Mostrando {filasVisibles.length} de {filas.filas.length} filas</div>}
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Contador({ etiqueta, valor, clase = "text-ink" }: { etiqueta: string; valor: number; clase?: string }) {
+  return (
+    <Card className="px-5 py-4">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-2">{etiqueta}</div>
+      <div className={`mt-1 font-heading text-[26px] font-extrabold ${clase}`}>{valor}</div>
+    </Card>
+  );
+}
+
+// Qué se puede hacer con cada fila, según ProspectosService.confirmarFila():
+// - pendiente: confirmar o rechazar.
+// - duplicada contra un contacto que ya existe: confirmar reutilizándolo
+//   (usarContactoExistente, nunca por accidente) o rechazar.
+// - duplicada contra otra fila del mismo archivo: no se puede confirmar
+//   hasta resolver la otra; solo rechazar.
+// - rechazada/importada/expirada: nada.
+function AccionesFila({ fila, ocupado, onConfirmar, onRechazar }: { fila: Borrador; ocupado: boolean; onConfirmar: (f: Borrador, usarExistente?: boolean) => void; onRechazar: (f: Borrador) => void }) {
+  const motivo = fila.errores?.map((e) => e.mensaje).join("; ");
+  if (fila.estado === "pendiente_revision") {
+    return (
+      <div className="flex gap-1.5">
+        <Button variant="exito" disabled={ocupado} className="px-3 py-1.5" onClick={() => onConfirmar(fila)}>
+          Confirmar
+        </Button>
+        <Button variant="ghost" disabled={ocupado} className="border border-border px-3 py-1.5" onClick={() => onRechazar(fila)}>
+          Rechazar
+        </Button>
+      </div>
+    );
+  }
+  if (fila.estado === "duplicado") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {fila.match_contacto_id ? (
+          <span className="text-xs text-ink-2">Ya existe un contacto con el mismo {fila.match_motivo === "telefono" ? "teléfono" : "correo"}.</span>
+        ) : (
+          <span className="text-xs text-ink-2">{motivo}</span>
+        )}
+        <div className="flex gap-1.5">
+          {fila.match_contacto_id && (
+            <Button disabled={ocupado} variant="outline" className="px-3 py-1.5" onClick={() => onConfirmar(fila, true)}>
+              Usar contacto existente
+            </Button>
+          )}
+          <Button variant="ghost" disabled={ocupado} className="border border-border px-3 py-1.5" onClick={() => onRechazar(fila)}>
+            Rechazar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (fila.estado === "rechazado" && motivo) return <span className="text-xs text-ink-3">{motivo}</span>;
+  return null;
+}
+
+// --- Prospectos ya confirmados -------------------------------------------------
+
+const LIMIT = 25;
+
+function ListaProspectos() {
+  const [q, setQ] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [prioridad, setPrioridad] = useState("");
+  const [page, setPage] = useState(1);
+
+  // Un agente solo ve prospectos de sus empresas (ProspectosService.listProspectos).
+  const { data, isPending, isError } = useQuery({
+    queryKey: ["prospectos", { busqueda, prioridad, page }],
+    queryFn: () => api.get<Paginated<ProspectoResumen>>("/api/v1/prospectos", { q: busqueda || undefined, prioridad: prioridad || undefined, page, limit: LIMIT })
+  });
+
+  return (
+    <Card className="overflow-hidden">
+      <form
+        className="flex flex-wrap gap-3 px-5 py-3.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setPage(1);
+          setBusqueda(q.trim());
+        }}
+      >
+        <input aria-label="Buscar" placeholder="Buscar por empresa o contacto…" className={`${inputClass} w-72`} value={q} onChange={(e) => setQ(e.target.value)} />
+        <select
+          aria-label="Prioridad"
+          className={`${inputClass} w-auto`}
+          value={prioridad}
+          onChange={(e) => {
+            setPage(1);
+            setPrioridad(e.target.value);
+          }}
+        >
+          <option value="">Prioridad: Todas</option>
+          <option value="alta">Alta</option>
+          <option value="media">Media</option>
+          <option value="baja">Baja</option>
+        </select>
+        <Button type="submit" variant="outline">
+          Buscar
+        </Button>
+      </form>
+
+      {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
+      {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los prospectos.</div>}
+      {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">No hay prospectos{busqueda || prioridad ? " con ese filtro" : " confirmados todavía"}.</div>}
+
+      {data && data.data.length > 0 && (
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-bg">
+              {["Empresa", "Contacto", "Estado", "Prioridad", "Score", "Alta"].map((h) => (
+                <th key={h} className="px-5 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-ink-2">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.data.map((p) => (
+              <tr key={p.id} className="border-t border-border">
+                <td className="px-5 py-3 text-[13px] font-semibold">
+                  <Link to={`/empresas/${p.empresa_id}`} className="hover:text-navy hover:underline">
+                    {p.empresa_nombre_legal}
+                  </Link>
+                </td>
+                <td className="px-5 py-3 text-[13px]">{p.contacto_nombre}</td>
+                <td className="px-5 py-3 text-[13px] text-ink-2">{p.estado.replace(/_/g, " ")}</td>
+                <td className="px-5 py-3 text-[13px] capitalize text-ink-2">{p.prioridad ?? "—"}</td>
+                <td className="px-5 py-3 text-[13px] text-ink-2">{p.score != null ? Number(p.score) : "—"}</td>
+                <td className="px-5 py-3 text-[13px] text-ink-2">{formatoFecha.format(new Date(p.creado_en))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {data && (page > 1 || data.data.length === LIMIT) && (
+        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+          <Button variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            Anterior
+          </Button>
+          <span className="text-xs text-ink-3">Página {page}</span>
+          <Button variant="ghost" disabled={data.data.length < LIMIT} onClick={() => setPage((p) => p + 1)}>
+            Siguiente
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}

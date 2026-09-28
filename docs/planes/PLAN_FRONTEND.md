@@ -71,10 +71,11 @@ Login
 │
 ├─ Prospectos
 │   ├─ Lista + detalle
-│   └─ Importación CSV (subir archivo, revisar lote fila por fila,
-│       confirmar / rechazar, confirmar-todos) — el flujo completo ya
-│       construido y probado con datos reales de STEELSAFE, solo le
-│       falta pantalla
+│   └─ Importación CSV (subir archivo, elegir entre lotes anteriores,
+│       revisar lote fila por fila, confirmar / rechazar,
+│       confirmar-todos) — el flujo ya estaba construido y probado con
+│       datos reales de STEELSAFE; la lista de lotes
+│       (GET /prospectos/importaciones) se agregó con la pantalla
 │
 ├─ Tareas
 │   ├─ Bandeja (filtros: estado, prioridad, tipo; responsable para
@@ -132,7 +133,8 @@ Avance:
 - **Fase 1 ✅ (24-sep-2026):** login, layout con navegación por rol, lista de empresas y ficha con "Información y contactos". El inicio muestra el resumen de pipeline (admin/supervisor) o la bandeja propia (agente).
 - **Fase 2 construida (28-sep-2026), falta probarla en navegador contra datos reales:** pestañas Historial y Oportunidades de la ficha. Desde el Historial se registra una llamada, WhatsApp o comentario (`POST /actividades`). En Oportunidades se crea una nueva (`POST /oportunidades`) y, al abrir una, se ve su historial de etapas, se cambia de etapa (perder pide motivo) y se reabre si está perdida.
 - **Fase 3 construida (28-sep-2026), falta probarla en navegador contra datos reales:** pestañas Cotizaciones y Documentos de la ficha. Cotizaciones: lista de la versión vigente de cada una, alta con partidas contra una oportunidad abierta, detalle con partidas, totales y versiones, nueva versión (parte de la vigente) y cambio de estado según las transiciones del backend. Documentos: subir (tipo, oportunidad y contacto opcionales), descargar con la URL firmada, marcar revisado, archivar/reactivar, nueva versión y eliminar (solo admin/supervisor). Las pantallas generales de Cotizaciones y Documentos del menú siguen sin construir: como ambos listados exigen `empresaId`, hoy se trabajan desde la ficha.
-- Fases 4 a 6: sin empezar.
+- **Fase 4 construida (28-sep-2026), falta probarla en navegador con un CSV real:** pantalla Prospectos con dos pestañas. "Importaciones" sigue el mockup: la última importación (o cualquier anterior, con un selector), contadores por estado, revisión fila por fila (confirmar, rechazar; una duplicada contra un contacto existente se confirma solo con "Usar contacto existente"), "Confirmar todas las pendientes" y una plantilla CSV descargable con las columnas que espera el backend. "Prospectos" lista los ya confirmados, con búsqueda y prioridad, y lleva a la ficha de la empresa. Para esto se agregó al backend `GET /prospectos/importaciones` (lista de lotes): sin él no había forma de volver a un lote después de importarlo.
+- Fases 5 y 6: sin empezar.
 
 Relación con las fases de `PLAN_CRM_DEFINITIVO.md`: aquellas son las del backend y ya están construidas; estas son solo las de la interfaz.
 
