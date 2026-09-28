@@ -1,22 +1,13 @@
 import { Fragment, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { api } from "../../lib/api";
-import type { Oportunidad, Paginated } from "../../types";
+import { fechaLocal, formatoFecha, formatoMonedaEntera } from "../../lib/formato";
+import type { Oportunidad } from "../../types";
 import { NuevaOportunidadForm } from "./NuevaOportunidadForm";
 import { OportunidadDetallePanel } from "./OportunidadDetallePanel";
-
-const formatoMoneda = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
-const formatoFecha = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" });
+import { useOportunidadesEmpresa } from "./queries";
 
 const COLUMNAS = ["Oportunidad", "Etapa", "Probabilidad", "Valor estimado", "Cierre estimado"];
-
-// Columna DATE: "2026-10-01" solo, new Date() lo toma como medianoche UTC
-// y en México se mostraría como el día anterior.
-function fechaLocal(valor: string) {
-  return new Date(valor.length === 10 ? `${valor}T00:00:00` : valor);
-}
 
 function claseEtapa(o: Oportunidad) {
   if (o.etapa_clave === "ganada") return "bg-ok-bg text-ok";
@@ -28,13 +19,7 @@ export function OportunidadesTab({ empresaId, contactos }: { empresaId: number; 
   const [creando, setCreando] = useState(false);
   const [abiertaId, setAbiertaId] = useState<number | null>(null);
 
-  // Filtro empresaId en GET /oportunidades agregado para esta pestaña
-  // (oportunidad.schema.ts). Para un agente el backend además acota a las
-  // suyas -- puede haber otras oportunidades de la empresa que no vea.
-  const { data, isPending, isError } = useQuery({
-    queryKey: ["oportunidades", { empresaId }],
-    queryFn: () => api.get<Paginated<Oportunidad>>("/api/v1/oportunidades", { empresaId, limit: 100 })
-  });
+  const { data, isPending, isError } = useOportunidadesEmpresa(empresaId);
 
   return (
     <Card className="overflow-hidden">
@@ -75,7 +60,7 @@ export function OportunidadesTab({ empresaId, contactos }: { empresaId: number; 
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${claseEtapa(o)}`}>{o.etapa_nombre}</span>
                   </td>
                   <td className="px-5 py-3 text-[13px] text-ink-2">{o.probabilidad}%</td>
-                  <td className="px-5 py-3 text-[13px] text-ink-2">{o.valor_estimado ? formatoMoneda.format(Number(o.valor_estimado)) : "—"}</td>
+                  <td className="px-5 py-3 text-[13px] text-ink-2">{o.valor_estimado ? formatoMonedaEntera.format(Number(o.valor_estimado)) : "—"}</td>
                   <td className="px-5 py-3 text-[13px] text-ink-2">{o.fecha_cierre_estimada ? formatoFecha.format(fechaLocal(o.fecha_cierre_estimada)) : "—"}</td>
                 </tr>
                 {abiertaId === o.id && (

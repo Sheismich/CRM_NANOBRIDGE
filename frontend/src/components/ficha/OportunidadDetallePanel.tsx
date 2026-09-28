@@ -6,9 +6,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { Field, ServerError, inputClass } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
+import { formatoFechaHora } from "../../lib/formato";
 import type { CatalogosOportunidad, OportunidadDetalle } from "../../types";
 
-const formatoFecha = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" });
 
 // Mismas reglas que cambiarEtapaSchema (src/comercial/dto/oportunidad.schema.ts):
 // perder exige motivo, y el motivo "otro" exige explicación.
@@ -72,7 +72,7 @@ export function OportunidadDetallePanel({ id, onClose }: { id: number; onClose: 
                 <li key={h.id} className="rounded-[9px] border border-border bg-white px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[13px] font-semibold">{h.etapa_nombre}</span>
-                    <span className="text-xs text-ink-3">{formatoFecha.format(new Date(h.creado_en))}</span>
+                    <span className="text-xs text-ink-3">{formatoFechaHora.format(new Date(h.creado_en))}</span>
                   </div>
                   {h.comentario && <div className="mt-0.5 text-xs text-ink-2">{h.comentario}</div>}
                 </li>

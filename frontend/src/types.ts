@@ -117,6 +117,52 @@ export type CatalogosOportunidad = {
   motivos_perdida: { clave: string; nombre: string; requiere_explicacion: boolean }[];
 };
 
+export type EstadoCotizacion = "borrador" | "enviada" | "aceptada" | "rechazada" | "vencida" | "obsoleta";
+
+// GET /cotizaciones?empresaId= (solo la versión vigente de cada cadena).
+// Montos DECIMAL: llegan como string.
+export type Cotizacion = {
+  id: number;
+  empresa_id: number;
+  oportunidad_id: number;
+  contacto_id: number | null;
+  cotizacion_raiz_id: number | null;
+  version: number;
+  moneda: string;
+  subtotal: string;
+  descuento: string;
+  impuestos: string;
+  total: string;
+  fecha_emision: string;
+  fecha_envio: string | null;
+  fecha_esperada_cierre: string | null;
+  probabilidad: number | null;
+  estado: EstadoCotizacion;
+  creado_en: string;
+};
+
+export type CotizacionDetalle = Cotizacion & {
+  partidas: { id: number; descripcion: string; cantidad: string; precio_unitario: string; importe: string; orden: number }[];
+  versiones: { id: number; version: number; estado: EstadoCotizacion; total: string; creado_en: string }[];
+};
+
+export type Documento = {
+  id: number;
+  empresa_id: number;
+  oportunidad_id: number | null;
+  contacto_id: number | null;
+  version: number;
+  nombre_original: string;
+  mime_type: string;
+  tipo_documento_id: number | null;
+  tamano_bytes: number;
+  estado: "vigente" | "archivado" | "obsoleto";
+  subido_por: number | null;
+  revisado_por: number | null;
+  revisado_en: string | null;
+  creado_en: string;
+};
+
 export type Tarea = {
   id: number;
   tipo: "seguimiento" | "clasificacion" | "revision_documento" | "otro";

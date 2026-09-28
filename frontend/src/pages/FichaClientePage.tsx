@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
+import { CotizacionesTab } from "../components/ficha/CotizacionesTab";
+import { DocumentosTab } from "../components/ficha/DocumentosTab";
 import { HistorialTab } from "../components/ficha/HistorialTab";
 import { OportunidadesTab } from "../components/ficha/OportunidadesTab";
 import { Card, SectionTitle } from "../components/ui/Card";
@@ -127,9 +129,8 @@ export function FichaClientePage() {
           {tab === "historial" && <HistorialTab empresaId={empresa.id} contactos={opcionesContacto} />}
           {tab === "oportunidades" && <OportunidadesTab empresaId={empresa.id} contactos={opcionesContacto} />}
 
-          {(tab === "cotizaciones" || tab === "documentos") && (
-            <Card className="p-10 text-center text-sm text-ink-3">Esta pestaña todavía no está construida — llega en la siguiente fase (ver PLAN_FRONTEND.md §6).</Card>
-          )}
+          {tab === "cotizaciones" && <CotizacionesTab empresaId={empresa.id} contactos={opcionesContacto} />}
+          {tab === "documentos" && <DocumentosTab empresaId={empresa.id} contactos={opcionesContacto} />}
         </div>
       )}
     </AppShell>

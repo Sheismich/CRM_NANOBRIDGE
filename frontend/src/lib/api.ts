@@ -62,6 +62,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return payload as T;
 }
 
+// GET /documentos/:id/descarga devuelve una ruta relativa con el driver
+// local ("/api/v1/storage/local/descarga?token=...") y una URL absoluta con
+// GCS. La relativa es relativa a la API, no al frontend: en producción son
+// orígenes distintos.
+export function resolverUrlApi(url: string) {
+  return url.startsWith("/") ? `${BASE_URL}${url}` : url;
+}
+
 export const api = {
   get: <T>(path: string, query?: RequestOptions["query"]) => request<T>(path, { method: "GET", query }),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
