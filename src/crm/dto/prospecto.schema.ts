@@ -94,6 +94,11 @@ export const listProspectosQuerySchema = z.object({
 });
 export type ListProspectosQuery = z.infer<typeof listProspectosQuerySchema>;
 
+export const listLotesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20)
+});
+export type ListLotesQuery = z.infer<typeof listLotesQuerySchema>;
+
 export const listBorradoresQuerySchema = z.object({
   estado: z.enum(["pendiente_revision", "duplicado", "importado", "rechazado", "expirado"]).optional()
 });

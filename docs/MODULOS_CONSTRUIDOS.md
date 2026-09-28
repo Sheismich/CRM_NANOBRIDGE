@@ -32,6 +32,8 @@ Todos los endpoints viven bajo `/api/v1/*` salvo `GET /health`. Dos mecanismos d
 
 Alta manual e importación CSV vía `borradores_captura` — ver `docs/planes/S3_ESQUEMA_PROSPECTOS_Y_PLAN_PRUEBAS.md` para el detalle completo del esquema y las pruebas.
 
+- `GET /prospectos/importaciones` — lotes importados, más reciente primero, con conteo por estado (sin altas manuales; un agente solo ve los suyos). `GET /prospectos/importaciones/:loteId` — filas de un lote.
+
 ## Tareas y cola de clasificación (`src/tareas/`)
 
 - `GET/POST /tareas`, `GET /tareas/:id`, `PATCH /tareas/:id/cerrar`.

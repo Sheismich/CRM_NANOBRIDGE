@@ -8,7 +8,7 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { importarCsvBodySchema, listBorradoresQuerySchema, listProspectosQuerySchema, prospectoInputSchema } from "./dto/prospecto.schema.js";
+import { importarCsvBodySchema, listBorradoresQuerySchema, listLotesQuerySchema, listProspectosQuerySchema, prospectoInputSchema } from "./dto/prospecto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 const confirmarBodySchema = z.object({ usarContactoExistente: z.boolean().default(false) });
@@ -37,6 +37,16 @@ export class ProspectosController {
   list(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
     const input = listProspectosQuerySchema.parse(query);
     return this.prospectosService.listProspectos(user, input);
+  }
+
+  // Declarado ANTES de @Get(":id") -- si no, Nest intentaría resolver
+  // "importaciones" como el parámetro :id (mismo cuidado que en
+  // OportunidadesController/DocumentosController con "catalogos").
+  @Get("importaciones")
+  @Roles("administrador", "supervisor", "agente")
+  listarLotes(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
+    const input = listLotesQuerySchema.parse(query);
+    return this.prospectosService.listarLotes(user, input);
   }
 
   @Get(":id")

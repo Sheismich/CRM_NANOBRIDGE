@@ -10,7 +10,7 @@ import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { parseCsv } from "../shared/csv.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
-import { filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListProspectosQuery, type ProspectoInput } from "./dto/prospecto.schema.js";
+import { filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ProspectoInput } from "./dto/prospecto.schema.js";
 
 const BORRADORES_TTL_DIAS = 30;
 // Tope defensivo por importación: STEELSAFE (el primer caso de uso real)
@@ -198,6 +198,54 @@ export class ProspectosService {
 
     const [row] = await this.db.select().from(borradoresCaptura).where(eq(borradoresCaptura.id, inserted.insertId)).limit(1);
     return row!;
+  }
+
+  // --- Lotes de importación ---------------------------------------------------
+  // Sin esto, el lote_id que devuelve importarCsv() era la única forma de
+  // volver a un lote: al salir de la pantalla ya no había cómo encontrar uno
+  // con filas pendientes (hallazgo al construir la pantalla de Prospectos,
+  // 28-sep-2026). Resumen por lote, más reciente primero. Las altas manuales
+  // también son lotes (de una fila, fuente "manual", ver crearManual()) pero
+  // no son importaciones, así que no se listan. Un agente solo ve sus
+  // propios lotes, mismo criterio que listarBorradores().
+  async listarLotes(user: CurrentUser, query: ListLotesQuery) {
+    const conteo = (estado: string) => sql<string>`SUM(${borradoresCaptura.estado} = ${estado})`;
+    const rows = await this.db
+      .select({
+        loteId: borradoresCaptura.loteId,
+        fuente: sql<string>`MIN(${borradoresCaptura.fuente})`,
+        creadoEn: sql<Date>`MIN(${borradoresCaptura.creadoEn})`,
+        creadoPor: sql<number>`MIN(${borradoresCaptura.creadoPor})`,
+        total: sql<number>`COUNT(*)`,
+        pendientes: conteo("pendiente_revision"),
+        duplicados: conteo("duplicado"),
+        importados: conteo("importado"),
+        rechazados: conteo("rechazado"),
+        expirados: conteo("expirado")
+      })
+      .from(borradoresCaptura)
+      .where(and(...compactConditions([sql`${borradoresCaptura.fuente} <> 'manual'`, user.rol === "agente" ? eq(borradoresCaptura.creadoPor, user.id) : undefined])))
+      .groupBy(borradoresCaptura.loteId)
+      .orderBy(sql`MIN(${borradoresCaptura.id}) DESC`)
+      .limit(query.limit);
+
+    return {
+      data: rows.map((r) => ({
+        lote_id: r.loteId,
+        fuente: r.fuente,
+        creado_en: r.creadoEn,
+        creado_por: Number(r.creadoPor),
+        total: Number(r.total),
+        // SUM() de MySQL llega como string DECIMAL.
+        resumen: {
+          pendiente_revision: Number(r.pendientes),
+          duplicado: Number(r.duplicados),
+          importado: Number(r.importados),
+          rechazado: Number(r.rechazados),
+          expirado: Number(r.expirados)
+        }
+      }))
+    };
   }
 
   // --- Revisión de un lote -------------------------------------------------
