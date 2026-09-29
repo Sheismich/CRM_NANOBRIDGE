@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, contactos, prospectos, respuestas, tareas } from "../database/schema.js";
+import { auditoria, contactos, empresas, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { aplicarClasificacionAlProspecto } from "../shared/clasificacion-respuesta.js";
@@ -72,15 +72,18 @@ export class TareasService {
       scoped.responsableId ? eq(tareas.responsableId, scoped.responsableId) : undefined
     ]);
 
+    // empresa_nombre: la bandeja lo necesita para decir de quién es cada
+    // tarea sin pedir /empresas/:id por fila.
     const rows = await this.db
-      .select()
+      .select({ tarea: tareas, empresaNombre: empresas.nombreLegal })
       .from(tareas)
+      .leftJoin(empresas, eq(empresas.id, tareas.empresaId))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(tareas.prioridad), tareas.fechaLimite)
       .limit(limit)
       .offset(offset);
 
-    return { page, limit, data: rows.map(toRow) };
+    return { page, limit, data: rows.map((r) => ({ ...toRow(r.tarea), empresa_nombre: r.empresaNombre })) };
   }
 
   async create(user: CurrentUser, input: CrearTareaInput) {
@@ -116,6 +119,38 @@ export class TareasService {
       throw new HttpError(409, "La tarea ya está cerrada");
     }
     return row;
+  }
+
+  // Solo a una persona activa que pueda trabajarla (no a la cuenta
+  // "sistema" ni a un usuario desactivado), y solo mientras siga abierta.
+  // Misma revalidación del estado dentro del UPDATE que cerrar(): si otra
+  // persona la cerró entre la lectura y la escritura, no se reasigna.
+  async asignar(user: CurrentUser, id: number, responsableId: number) {
+    const row = await this.findAssignable(user, id);
+    const [destino] = await this.db
+      .select({ id: usuarios.id, activo: usuarios.activo, rol: roles.clave })
+      .from(usuarios)
+      .innerJoin(roles, eq(roles.id, usuarios.rolId))
+      .where(eq(usuarios.id, responsableId))
+      .limit(1);
+    if (!destino || !destino.activo || destino.rol === "sistema") {
+      throw new HttpError(409, "El responsable debe ser un usuario activo");
+    }
+    if (row.responsableId === responsableId) return;
+
+    await this.db.transaction(async (tx) => {
+      const [result] = await tx.update(tareas).set({ responsableId })
+        .where(and(eq(tareas.id, id), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
+      if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada");
+      await tx.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "tarea",
+        entidadId: id,
+        accion: "asignar",
+        antes: { responsable_id: row.responsableId },
+        despues: { responsable_id: responsableId }
+      });
+    });
   }
 
   // Cerrar una tarea genera un evento en eventos_pendientes (patrón outbox
@@ -162,8 +197,50 @@ export class TareasService {
   }
 
   // Cola de clasificación manual: solo tareas tipo 'clasificacion'.
+  // Para clasificar hay que leer lo que contestó el prospecto: cada tarea de
+  // la cola trae su empresa, su contacto y la respuesta que la originó
+  // (texto, canal y lo que sugirió n8n, normalmente "ambigua"). Antes
+  // devolvía la tarea sola y la pantalla no tenía qué mostrar. Las más
+  // viejas primero dentro de cada prioridad: es una cola.
   async listColaClasificacion(user: CurrentUser, page: number, limit: number) {
-    return this.list(user, { tipo: "clasificacion", estado: "pendiente" }, page, limit);
+    const scoped = this.scopedFilters(user, {});
+    const rows = await this.db
+      .select({
+        tarea: tareas,
+        empresaNombre: empresas.nombreLegal,
+        contactoNombre: contactos.nombre,
+        contactoPuesto: contactos.puesto,
+        respuestaCanal: respuestas.canal,
+        respuestaContenido: respuestas.contenido,
+        respuestaRecibidoEn: respuestas.recibidoEn,
+        respuestaClasificacion: respuestas.clasificacion
+      })
+      .from(tareas)
+      .leftJoin(empresas, eq(empresas.id, tareas.empresaId))
+      .leftJoin(contactos, eq(contactos.id, tareas.contactoId))
+      .leftJoin(respuestas, eq(respuestas.id, tareas.respuestaId))
+      .where(and(...compactConditions([
+        eq(tareas.tipo, "clasificacion"),
+        eq(tareas.estado, "pendiente"),
+        scoped.responsableId ? eq(tareas.responsableId, scoped.responsableId) : undefined
+      ])))
+      .orderBy(desc(tareas.prioridad), tareas.creadoEn, tareas.id)
+      .limit(limit)
+      .offset((page - 1) * limit);
+
+    return {
+      page,
+      limit,
+      data: rows.map((r) => ({
+        ...toRow(r.tarea),
+        empresa_nombre: r.empresaNombre,
+        contacto_nombre: r.contactoNombre,
+        contacto_puesto: r.contactoPuesto,
+        respuesta: r.tarea.respuestaId
+          ? { id: r.tarea.respuestaId, canal: r.respuestaCanal, contenido: r.respuestaContenido, recibido_en: r.respuestaRecibidoEn, clasificacion_sugerida: r.respuestaClasificacion }
+          : null
+      }))
+    };
   }
 
   // La decisión de la persona se aplica aquí mismo, en una sola transacción

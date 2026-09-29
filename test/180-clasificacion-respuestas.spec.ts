@@ -82,6 +82,26 @@ describe("respuestas: clasificación automática y manual", () => {
       expect(tarea.body.respuesta_id).toBe(respuestaId);
     });
 
+    it("la cola de clasificación trae la respuesta, la empresa y el contacto de cada tarea", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "¿Me pueden mandar precios?");
+      const res = await clasificarAutomatica(respuestaId, "ambigua");
+      expect(res.status).toBe(201);
+
+      const cola = await api().get("/api/v1/cola-clasificacion").query({ limit: 100 }).set("Cookie", adminCookie);
+      expect(cola.status).toBe(200);
+      const item = cola.body.data.find((t: { id: number }) => t.id === res.body.tarea_id);
+      expect(item).toMatchObject({
+        tipo: "clasificacion",
+        empresa_nombre: expect.stringMatching(/^Empresa Respuestas /),
+        contacto_nombre: "Persona Respuesta",
+        respuesta: { id: respuestaId, canal: "correo", contenido: "¿Me pueden mandar precios?", clasificacion_sugerida: "ambigua" }
+      });
+
+      const bandeja = await api().get("/api/v1/tareas").query({ tipo: "clasificacion", limit: 100 }).set("Cookie", adminCookie);
+      expect(bandeja.body.data.find((t: { id: number }) => t.id === res.body.tarea_id)?.empresa_nombre).toMatch(/^Empresa Respuestas /);
+    });
+
     // Las tareas de clasificación creadas antes de 022 no tienen
     // respuesta_id; la migración las liga por el execution_id que les pone
     // clasificarRespuesta ("resp-clasif-" + execution_id de la

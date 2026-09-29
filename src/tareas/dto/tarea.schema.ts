@@ -12,6 +12,10 @@ export const crearTareaSchema = z.object({
   fechaLimite: z.coerce.date().optional()
 });
 
+export const asignarTareaSchema = z.object({
+  responsableId: z.coerce.number().int().positive()
+});
+
 export const cerrarTareaSchema = z.object({
   resultado: z.string().trim().min(2).max(4000)
 });

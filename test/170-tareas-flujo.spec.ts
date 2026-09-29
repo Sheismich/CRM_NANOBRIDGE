@@ -99,6 +99,49 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
     });
   });
 
+  describe("asignar()", () => {
+    function asignar(cookie: string[], id: number, responsableId: number) {
+      return request(app.getHttpServer()).patch(`/api/v1/tareas/${id}/asignar`).set("Cookie", cookie).send({ responsableId });
+    }
+
+    it("una tarea sin responsable (de n8n) se asigna a un agente, que desde ese momento la ve, y queda en auditoría", async () => {
+      const creada = await request(app.getHttpServer())
+        .post("/api/v1/automatizacion/tareas")
+        .set("X-API-Key", API_KEY)
+        .send({ execution_id: `asignar-${randomUUID()}`, tipo: "seguimiento", titulo: "Tarea de n8n sin responsable" });
+      expect(creada.status).toBe(201);
+      const id = creada.body.id as number;
+      expect((await request(app.getHttpServer()).get(`/api/v1/tareas/${id}`).set("Cookie", agente1.cookie)).status).toBe(404);
+
+      const res = await asignar(adminCookie, id, agente1.id);
+      expect(res.status).toBe(200);
+      expect(res.body.responsable_id).toBe(agente1.id);
+      expect((await request(app.getHttpServer()).get(`/api/v1/tareas/${id}`).set("Cookie", agente1.cookie)).status).toBe(200);
+
+      const [audit] = await db.select().from(auditoria).where(and(eq(auditoria.entidad, "tarea"), eq(auditoria.entidadId, id), eq(auditoria.accion, "asignar")));
+      expect(audit?.antes).toEqual({ responsable_id: null });
+      expect(audit?.despues).toEqual({ responsable_id: agente1.id });
+    });
+
+    it("solo administrador/supervisor asignan (un agente recibe 403)", async () => {
+      const id = await crearTarea(adminCookie, { titulo: "No la reasigna un agente", responsableId: agente1.id });
+      expect((await asignar(agente1.cookie, id, agente2.id)).status).toBe(403);
+    });
+
+    it("no se asigna a un usuario inexistente o desactivado, ni una tarea ya cerrada (409)", async () => {
+      const id = await crearTarea(adminCookie, { titulo: "Asignación inválida", responsableId: agente1.id });
+      expect((await asignar(adminCookie, id, 999_999)).status).toBe(409);
+
+      const inactivo = await crearAgente(app, adminCookie, `tareas.inactivo.${sufijo}@test.local`);
+      const inactivoId = await idDe(inactivo);
+      expect((await request(app.getHttpServer()).delete(`/api/v1/usuarios/${inactivoId}`).set("Cookie", adminCookie)).status).toBeLessThan(300);
+      expect((await asignar(adminCookie, id, inactivoId)).status).toBe(409);
+
+      expect((await cerrar(adminCookie, id)).status).toBe(200);
+      expect((await asignar(adminCookie, id, agente2.id)).status).toBe(409);
+    });
+  });
+
   describe("cerrar()", () => {
     it("pasa a cerrada, fija cerrada_en, encola 'tarea_cerrada' y deja rastro en auditoría", async () => {
       const id = await crearTarea(adminCookie, { titulo: "Tarea a cerrar", responsableId: agente1.id });

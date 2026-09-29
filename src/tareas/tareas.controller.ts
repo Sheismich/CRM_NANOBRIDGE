@@ -6,7 +6,7 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { cerrarTareaSchema, crearTareaSchema, listTareasQuerySchema } from "./dto/tarea.schema.js";
+import { asignarTareaSchema, cerrarTareaSchema, crearTareaSchema, listTareasQuerySchema } from "./dto/tarea.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -33,6 +33,18 @@ export class TareasController {
   @Get(":id")
   get(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
     const id = idParamSchema.parse(idParam);
+    return this.tareasService.get(user, id);
+  }
+
+  // Reasignar una tarea abierta (PLAN_FRONTEND.md, hueco de la bandeja):
+  // las que crea n8n llegan sin responsable y ningún agente las veía.
+  @Patch(":id/asignar")
+  @HttpCode(200)
+  @Roles("administrador", "supervisor")
+  async asignar(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    const id = idParamSchema.parse(idParam);
+    const { responsableId } = asignarTareaSchema.parse(body);
+    await this.tareasService.asignar(user, id, responsableId);
     return this.tareasService.get(user, id);
   }
 
