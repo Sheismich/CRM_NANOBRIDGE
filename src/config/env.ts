@@ -80,6 +80,13 @@ const schema = z.object({
   // WEBHOOK_ENTRADA_API_KEY: un secreto de firma no debe tener un valor
   // conocido de fábrica.
   STORAGE_LOCAL_SIGNING_SECRET: z.string().min(16),
+  // Firma el Reply-To de cada correo (r+<envio_id>.<firma>@REPLY_TO_DOMAIN,
+  // src/shared/reply-to.ts). Vive aquí y no en n8n: n8n Cloud no tiene dónde
+  // guardar un secreto fuera de un nodo (ronda 3 de SendGrid, 29-sep-2026).
+  // Rotarlo invalida los Reply-To ya enviados: sus respuestas llegarían
+  // como "no identificadas".
+  REPLY_TO_SIGNING_SECRET: z.string().min(32),
+  REPLY_TO_DOMAIN: z.string().trim().toLowerCase().min(3).default("respuestas.contacto.nano-bridge-mex.com"),
   // "URLs firmadas de corta duración para descarga" (PLAN_CRM_DEFINITIVO.md
   // #8) -- aplica a ambos drivers (TTL que se le pide a GCS también).
   STORAGE_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().positive().max(3600).default(300),
@@ -99,8 +106,9 @@ const schema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["GCS_BUCKET"], message: "GCS_BUCKET es obligatorio cuando STORAGE_DRIVER=gcs" });
   }
 
-  // Estos tres secretos protegen superficies distintas (callback del CRM,
-  // intake de webhooks de n8n, firma de URLs de descarga locales); antes
+  // Estos secretos protegen superficies distintas (callback del CRM,
+  // intake de webhooks de n8n, firma de URLs de descarga locales, firma del
+  // Reply-To); antes
   // nada impedía que un copy-paste accidental pusiera el mismo valor en
   // dos de ellos, lo que dejaría una credencial pensada para un uso
   // sirviendo también para autenticarse en el otro (hallazgo de code
@@ -108,7 +116,8 @@ const schema = z.object({
   const secretos: [string, string][] = [
     ["CRM_CALLBACK_API_KEY", data.CRM_CALLBACK_API_KEY],
     ["WEBHOOK_ENTRADA_API_KEY", data.WEBHOOK_ENTRADA_API_KEY],
-    ["STORAGE_LOCAL_SIGNING_SECRET", data.STORAGE_LOCAL_SIGNING_SECRET]
+    ["STORAGE_LOCAL_SIGNING_SECRET", data.STORAGE_LOCAL_SIGNING_SECRET],
+    ["REPLY_TO_SIGNING_SECRET", data.REPLY_TO_SIGNING_SECRET]
   ];
   for (let i = 0; i < secretos.length; i++) {
     for (let j = i + 1; j < secretos.length; j++) {

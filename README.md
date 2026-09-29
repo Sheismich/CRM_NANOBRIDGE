@@ -20,7 +20,7 @@ El health check queda disponible en `GET /health`.
 - Cloud Run (`nanobridge-api`) sirve la imagen construida desde `Dockerfile` (multi-stage sobre `node:20-bookworm-slim` — `argon2` necesita compilar un binario nativo, requiere `python3 make g++` en la etapa de build).
 - Cloud SQL (`nanobridge-db`, MySQL 8.0) conectado vía el socket nativo de Cloud Run (`--add-cloudsql-instances`), sin exponer IP privada a la app.
 - Documentos usan `STORAGE_DRIVER=gcs` en producción (no `local`: el filesystem de Cloud Run es efímero y no persiste entre reinicios ni se comparte entre instancias).
-- Secretos (`CRM_CALLBACK_API_KEY`, `WEBHOOK_ENTRADA_API_KEY`, `STORAGE_LOCAL_SIGNING_SECRET`, `DATABASE_URL`) viven en Secret Manager, nunca en el código ni en variables de entorno planas.
+- Secretos (`CRM_CALLBACK_API_KEY`, `WEBHOOK_ENTRADA_API_KEY`, `STORAGE_LOCAL_SIGNING_SECRET`, `REPLY_TO_SIGNING_SECRET`, `DATABASE_URL`) viven en Secret Manager, nunca en el código ni en variables de entorno planas.
 - El servicio es públicamente alcanzable (requirió una excepción a la política organizacional `iam.allowedPolicyMemberDomains`, aprobada por el Owner del proyecto) — la seguridad real la sigue haciendo la propia API (`ApiKeyGuard`/`SessionAuthGuard`), no el borde de Cloud Run.
 
 Redesplegar tras un cambio de código:

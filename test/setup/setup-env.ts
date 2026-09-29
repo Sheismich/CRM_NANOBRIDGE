@@ -10,12 +10,14 @@ const { DATABASE_URL } = JSON.parse(await readFile(ENV_FILE, "utf8")) as { DATAB
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = DATABASE_URL;
-// Los 3 secretos deben ser distintos entre sí (env.ts lo exige con
+// Los secretos deben ser distintos entre sí (env.ts lo exige con
 // superRefine) -- valores fijos de prueba, sin relación con ningún secreto
 // real.
 process.env.CRM_CALLBACK_API_KEY = "test_crm_callback_api_key_0001";
 process.env.WEBHOOK_ENTRADA_API_KEY = "test_webhook_entrada_api_key_0002";
 process.env.STORAGE_LOCAL_SIGNING_SECRET = "test_storage_signing_secret_0003";
+process.env.REPLY_TO_SIGNING_SECRET = "test_reply_to_signing_secret_000000004";
+process.env.REPLY_TO_DOMAIN = "respuestas.contacto.nano-bridge-mex.com";
 process.env.N8N_WEBHOOK_URL = "";
 process.env.CORS_ORIGINS = "";
 process.env.TRUST_PROXY = "false";

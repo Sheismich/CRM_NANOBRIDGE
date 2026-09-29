@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
@@ -9,6 +10,7 @@ import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion } from "../shared/supresion.js";
 import { aplicarClasificacionAlProspecto } from "../shared/clasificacion-respuesta.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
+import { firmarReplyTo, leerReplyTo } from "../shared/reply-to.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
@@ -618,7 +620,7 @@ export class AutomatizacionService {
       .limit(1);
     // numero_en_ciclo: null en los reintentos idempotentes -- recalcularlo
     // después del hecho no es confiable (el ciclo pudo avanzar desde entonces).
-    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, numero_en_ciclo: null, ventana_vence_en: existing.ventanaVenceEn, ya_existia: true as const };
+    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, numero_en_ciclo: null, ventana_vence_en: existing.ventanaVenceEn, reply_to: firmarReplyTo(existing.id), ya_existia: true as const };
 
     if (input.canal === "whatsapp") {
       throw new HttpError(409, "Canal WhatsApp desactivado (pendiente proveedor aprobado)");
@@ -696,7 +698,7 @@ export class AutomatizacionService {
             ventanaVenceEn,
             executionId: input.execution_id
           });
-          return { id: result.insertId, numero_contacto: numeroContacto, numero_en_ciclo: ciclo.length + 1, ventana_vence_en: ventanaVenceEn, ya_existia: false as const };
+          return { id: result.insertId, numero_contacto: numeroContacto, numero_en_ciclo: ciclo.length + 1, ventana_vence_en: ventanaVenceEn, reply_to: firmarReplyTo(result.insertId), ya_existia: false as const };
         });
       } catch (error) {
         if (error instanceof HttpError) throw error;
@@ -707,7 +709,7 @@ export class AutomatizacionService {
           .from(envios)
           .where(eq(envios.executionId, input.execution_id))
           .limit(1);
-        if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, numero_en_ciclo: null, ventana_vence_en: retry.ventanaVenceEn, ya_existia: true as const };
+        if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, numero_en_ciclo: null, ventana_vence_en: retry.ventanaVenceEn, reply_to: firmarReplyTo(retry.id), ya_existia: true as const };
 
         // No fue nuestro propio execution_id el que chocó -- fue el
         // UNIQUE de numero_contacto contra otra llamada concurrente.
@@ -863,19 +865,30 @@ export class AutomatizacionService {
   // crear_tarea_clasificacion y automatica (ver respuestaRecibidaInputSchema).
   async registrarRespuesta(input: RespuestaRecibidaInput) {
     const [existing] = await this.db
-      .select({ id: respuestas.id, envioId: respuestas.envioId, tardia: respuestas.tardia })
+      .select({ id: respuestas.id, prospectoId: respuestas.prospectoId, envioId: respuestas.envioId, tardia: respuestas.tardia })
       .from(respuestas)
       .where(eq(respuestas.executionId, input.execution_id))
       .limit(1);
-    if (existing) return { id: existing.id, envio_id: existing.envioId, tardia: existing.tardia, ya_existia: true as const };
+    if (existing) return { id: existing.id, identificada: true as const, prospecto_id: existing.prospectoId, envio_id: existing.envioId, tardia: existing.tardia, ya_existia: true as const };
 
-    const [prospecto] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
+    let prospectoId = input.prospecto_id;
+    if (input.reply_to !== undefined) {
+      const envioFirmado = leerReplyTo(input.reply_to);
+      const [envio] = envioFirmado === null
+        ? []
+        : await this.db.select({ prospectoId: envios.prospectoId }).from(envios).where(eq(envios.id, envioFirmado)).limit(1);
+      if (!envio) return this.registrarRespuestaNoIdentificada(input);
+      prospectoId = envio.prospectoId;
+    }
+    if (prospectoId === undefined) throw new HttpError(400, "Especifica prospecto_id o reply_to");
+
+    const [prospecto] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
 
     const [ultimo] = await this.db
       .select({ id: envios.id, ventanaEstado: envios.ventanaEstado })
       .from(envios)
-      .where(and(eq(envios.prospectoId, input.prospecto_id), eq(envios.canal, input.canal)))
+      .where(and(eq(envios.prospectoId, prospectoId), eq(envios.canal, input.canal)))
       .orderBy(desc(envios.numeroContacto))
       .limit(1);
 
@@ -892,7 +905,7 @@ export class AutomatizacionService {
     try {
       return await this.db.transaction(async (tx) => {
         const [result] = await tx.insert(respuestas).values({
-          prospectoId: input.prospecto_id,
+          prospectoId,
           envioId,
           canal: input.canal,
           contenido: input.contenido ?? null,
@@ -905,7 +918,7 @@ export class AutomatizacionService {
           ...(input.automatica ? { estado: "clasificada" as const, clasificacion: "automatica" as const, clasificadoEn: sql`CURRENT_TIMESTAMP` } : {})
         });
         if (input.automatica) {
-          return { id: result.insertId, envio_id: envioId, tardia, tarea_id: null, ya_existia: false as const };
+          return { id: result.insertId, identificada: true as const, prospecto_id: prospectoId, envio_id: envioId, tardia, tarea_id: null, ya_existia: false as const };
         }
 
         if (ventanaAbierta && ultimo) {
@@ -919,7 +932,7 @@ export class AutomatizacionService {
           // de n8n: ese puede medir 100 caracteres, lo mismo que la columna.
           const tarea = await this.tareasService.createFromAutomation({
             execution_id: `resp-recibida-${result.insertId}`,
-            prospecto_id: input.prospecto_id,
+            prospecto_id: prospectoId,
             respuesta_id: result.insertId,
             tipo: "clasificacion",
             titulo: tardia ? "Clasificar respuesta tardía" : "Clasificar respuesta",
@@ -930,7 +943,7 @@ export class AutomatizacionService {
         } else if (tardia) {
           const tarea = await this.tareasService.createFromAutomation({
             execution_id: `resp-tardia-${input.execution_id}`,
-            prospecto_id: input.prospecto_id,
+            prospecto_id: prospectoId,
             tipo: "seguimiento",
             titulo: "Respuesta tardía de prospecto",
             descripcion: input.contenido,
@@ -939,19 +952,39 @@ export class AutomatizacionService {
           tareaId = tarea.id;
         }
 
-        return { id: result.insertId, envio_id: envioId, tardia, tarea_id: tareaId, ya_existia: false as const };
+        return { id: result.insertId, identificada: true as const, prospecto_id: prospectoId, envio_id: envioId, tardia, tarea_id: tareaId, ya_existia: false as const };
       });
     } catch (error) {
       if (isDuplicateEntry(error)) {
         const [retry] = await this.db
-          .select({ id: respuestas.id, envioId: respuestas.envioId, tardia: respuestas.tardia })
+          .select({ id: respuestas.id, prospectoId: respuestas.prospectoId, envioId: respuestas.envioId, tardia: respuestas.tardia })
           .from(respuestas)
           .where(eq(respuestas.executionId, input.execution_id))
           .limit(1);
-        if (retry) return { id: retry.id, envio_id: retry.envioId, tardia: retry.tardia, ya_existia: true as const };
+        if (retry) return { id: retry.id, identificada: true as const, prospecto_id: retry.prospectoId, envio_id: retry.envioId, tardia: retry.tardia, ya_existia: true as const };
       }
       throw error;
     }
+  }
+
+  // Una respuesta a una dirección sin firma válida (alterada, de otro
+  // dominio, de un envío que no existe) no se le atribuye a ningún
+  // prospecto: no se guarda en respuestas y deja una tarea para que una
+  // persona la revise. Las automáticas se descartan. El execution_id de la
+  // tarea es un hash del de n8n, que puede medir los mismos 100 caracteres
+  // que la columna.
+  private async registrarRespuestaNoIdentificada(input: RespuestaRecibidaInput) {
+    if (input.automatica) {
+      return { id: null, identificada: false as const, prospecto_id: null, envio_id: null, tardia: null, tarea_id: null, ya_existia: false as const };
+    }
+    const tarea = await this.tareasService.createFromAutomation({
+      execution_id: `resp-noid-${createHash("sha256").update(input.execution_id).digest("hex").slice(0, 40)}`,
+      tipo: "seguimiento",
+      titulo: "Respuesta no identificada",
+      descripcion: [`De: ${input.remitente ?? "(desconocido)"}`, `Para: ${input.reply_to}`, "", input.contenido ?? "(sin contenido)"].join("\n"),
+      prioridad: "media"
+    });
+    return { id: null, identificada: false as const, prospecto_id: null, envio_id: null, tardia: null, tarea_id: tarea.id, ya_existia: tarea.ya_existia };
   }
 
   // --- Respuesta clasificada -------------------------------------------------------------

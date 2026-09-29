@@ -123,6 +123,7 @@ antes de correr el comando, o falla con un error de Zod:
 export CRM_CALLBACK_API_KEY=$(gcloud secrets versions access latest --secret=CRM_CALLBACK_API_KEY --project=crm-prospeccion-outbound)
 export WEBHOOK_ENTRADA_API_KEY=$(gcloud secrets versions access latest --secret=WEBHOOK_ENTRADA_API_KEY --project=crm-prospeccion-outbound)
 export STORAGE_LOCAL_SIGNING_SECRET=$(gcloud secrets versions access latest --secret=STORAGE_LOCAL_SIGNING_SECRET --project=crm-prospeccion-outbound)
+export REPLY_TO_SIGNING_SECRET=$(gcloud secrets versions access latest --secret=REPLY_TO_SIGNING_SECRET --project=crm-prospeccion-outbound)
 ```
 
 **Paso 3 — armar el `DATABASE_URL` apuntando a la IP pública de Cloud SQL**
@@ -165,7 +166,35 @@ gcloud secrets versions access latest --secret=<NOMBRE> --project=crm-prospeccio
 ```
 
 Nombres válidos: `CRM_CALLBACK_API_KEY`, `WEBHOOK_ENTRADA_API_KEY`,
-`STORAGE_LOCAL_SIGNING_SECRET`, `DATABASE_URL`.
+`STORAGE_LOCAL_SIGNING_SECRET`, `REPLY_TO_SIGNING_SECRET`, `DATABASE_URL`.
+
+**Rotar `REPLY_TO_SIGNING_SECRET` invalida los Reply-To de los correos ya
+enviados:** sus respuestas llegarían como "Respuesta no identificada". Solo
+rotarlo si se filtró.
+
+## 8. Secreto nuevo `REPLY_TO_SIGNING_SECRET` (una sola vez)
+
+Desde el commit del Reply-To firmado (29-sep-2026), la API no arranca sin
+este secreto: firma el Reply-To de cada correo. Se crea **una vez**, antes
+del primer deploy que lo necesita. En Cloud Shell:
+
+```bash
+# 1. Crear el secreto con un valor aleatorio (nadie lo ve ni lo copia).
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets create REPLY_TO_SIGNING_SECRET --data-file=- --project=crm-prospeccion-outbound
+
+# 2. Darle permiso de leerlo al usuario robot de la API.
+gcloud secrets add-iam-policy-binding REPLY_TO_SIGNING_SECRET \
+  --member=serviceAccount:nanobridge-api-sa@crm-prospeccion-outbound.iam.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor --project=crm-prospeccion-outbound
+```
+
+3. En ese primer deploy, agregar al `gcloud run deploy` del punto 5 la línea
+`--update-secrets=REPLY_TO_SIGNING_SECRET=REPLY_TO_SIGNING_SECRET:latest`.
+Cloud Run la recuerda: los deploys siguientes ya no la necesitan.
+
+Si se olvida el paso 3, la revisión nueva no arranca y Cloud Run deja
+funcionando la anterior; no se cae nada, solo hay que repetir el deploy con
+la línea.
 
 Si necesitas la contraseña de MySQL y no la tienes, no es recuperable desde
 Cloud SQL directamente — resetéala con:

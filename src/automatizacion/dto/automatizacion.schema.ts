@@ -120,7 +120,14 @@ export type RegistroEnvioInput = z.infer<typeof registroEnvioInputSchema>;
 // --- Respuesta recibida --------------------------------------------------------------
 export const respuestaRecibidaInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),
-  prospecto_id: z.coerce.number().int().positive(),
+  // O el prospecto_id, o la dirección a la que llegó la respuesta (el
+  // Reply-To firmado que devolvió POST /envios): con reply_to la API
+  // identifica al prospecto, y si la firma no es válida deja una tarea
+  // "Respuesta no identificada" en vez de guardar la respuesta.
+  prospecto_id: z.coerce.number().int().positive().optional(),
+  reply_to: z.string().trim().min(3).max(320).optional(),
+  // Solo para la tarea de una respuesta no identificada.
+  remitente: z.string().trim().max(320).optional(),
   canal: z.enum(["correo", "whatsapp"]).default("correo"),
   contenido: z.string().trim().max(8000).optional(),
   // Modos de PT2 (ronda 3 de SendGrid, PLAN_N8N_DEFINITIVO.md, 29-sep-2026).
@@ -133,6 +140,9 @@ export const respuestaRecibidaInputSchema = z.object({
 }).refine((input) => !(input.crear_tarea_clasificacion && input.automatica), {
   message: "Una respuesta automática no lleva tarea de clasificación",
   path: ["automatica"]
+}).refine((input) => (input.prospecto_id === undefined) !== (input.reply_to === undefined), {
+  message: "Especifica prospecto_id o reply_to, no ambos",
+  path: ["reply_to"]
 });
 export type RespuestaRecibidaInput = z.infer<typeof respuestaRecibidaInputSchema>;
 

@@ -212,15 +212,22 @@ Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no
      `custom_args`), con `custom_args` `prospecto_id` y `envio_id`, y `sandbox_mode` en las
      primeras pruebas.
    - Reply-To con código de seguridad desde el primer día:
-     `r+<prospecto_id>.<hmac>@respuestas.contacto.nano-bridge-mex.com`. El HMAC va **recortado a
-     unos 16 caracteres**, porque la parte antes de la `@` admite máximo 64. La **clave del
-     HMAC vive en las credenciales o variables de n8n, nunca escrita dentro de un nodo**.
+     `r+<envio_id>.<firma>@respuestas.contacto.nano-bridge-mex.com`. La firma es un HMAC
+     **recortado a 16 caracteres**, porque la parte antes de la `@` admite máximo 64.
+     **La firma la hace la API, no n8n** (cambio del 29-sep-2026): n8n Cloud no tiene dónde
+     guardar la clave fuera de un nodo (`$vars` es del plan Pro y `$env` es solo para n8n
+     autoalojado). La clave vive en Secret Manager (`REPLY_TO_SIGNING_SECRET`,
+     RUNBOOK_DEPLOY.md §8) y `POST /envios` devuelve el campo `reply_to` ya firmado; PT1 solo
+     lo copia al correo.
 3. **PT2, respuestas (Inbound Parse):**
    - El webhook de n8n va protegido con usuario y contraseña (Basic Auth en la URL que se da
      de alta en SendGrid).
-   - Lee el destinatario de `envelope.to` y **valida el código HMAC**. Sin código válido, crea
-     una tarea "respuesta no identificada" de tipo seguimiento y sin prospecto. No hace falta
-     tocar la API: el `prospecto_id` de una tarea de automatización ya es opcional.
+   - Lee el destinatario de `envelope.to` y se lo pasa a `POST /respuestas` como `reply_to`
+     (en lugar de `prospecto_id`), junto con `remitente` y `contenido`. **La API valida la
+     firma** y saca de ahí el prospecto. Sin firma válida no guarda la respuesta: crea una
+     tarea "Respuesta no identificada" de tipo seguimiento, sin prospecto, con remitente,
+     dirección y contenido, y responde `identificada: false`. Si además es automática, la
+     descarta sin tarea.
    - **Detecta respuestas automáticas por varias marcas:** encabezados `Auto-Submitted`
      (distinto de `no`), `X-Autoreply`, `X-Auto-Response-Suppress` y asunto tipo "Respuesta
      automática" / "Fuera de oficina" / "Out of office". Esas van con la marca automática del
