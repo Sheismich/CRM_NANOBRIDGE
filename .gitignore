@@ -9,6 +9,9 @@ dist/
 # STORAGE_LOCAL_DIR de prueba (test/setup/setup-env.ts) -- mismo motivo
 # que /storage/ arriba, ningún test escribe ahí hoy pero por si acaso.
 /storage-test/
+# STORAGE_LOCAL_DIR del .env de desarrollo local: los documentos que se
+# suben probando el CRM en la máquina de cada quien.
+/storage-dev/
 .env
 .env.*
 !.env.example
