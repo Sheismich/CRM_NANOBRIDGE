@@ -161,6 +161,12 @@ producción), remitente único verificado para pruebas, y autenticación de
 `contacto.nano-bridge-mex.com` pendiente de que se agreguen los registros DNS. Inbound Parse
 disponible en la prueba; falta confirmar si el plan Essentials lo incluye.
 
+**Estado (29-sep-2026):** registros DNS agregados en Squarespace Domains y dominio
+**verificado** en SendGrid. Incluye el MX de `respuestas.contacto.nano-bridge-mex.com` →
+`mx.sendgrid.net` (prioridad 10), que ya resuelve públicamente: para recibir respuestas no
+hace falta más DNS. Falta dar de alta el host en SendGrid (Settings → Inbound Parse) con la URL
+del webhook de n8n, cuando se construya PT2.
+
 Decisiones de la ronda 2 (25-sep-2026):
 
 1. **Identificar al prospecto en cada respuesta:** cada correo sale con un Reply-To propio,
@@ -180,6 +186,74 @@ Decisiones de la ronda 2 (25-sep-2026):
 5. **Calentamiento del dominio:** arranque con 20 correos nuevos al día. Se duplica cada
    semana mientras los rebotes queden debajo de 2% y las quejas debajo de 0.1%, hasta el
    volumen que defina Dirección. Si algo se dispara, se congela y se revisa.
+
+Decisiones de la ronda 3 (29-sep-2026). Revisadas con `/code-review`, `/plan` y `/grill-me`.
+Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no construir.
+
+1. **Cambios chicos en la API (primero, con TDD):**
+   - `POST /respuestas` crea **exactamente una** tarea de clasificación en la misma
+     transacción, ligada a la respuesta (`respuesta_id`) y sin cambiar el estado del
+     prospecto. Aplica también a las respuestas tardías: ahí la tarea de clasificación
+     **sustituye** a la tarea de seguimiento "Respuesta tardía de prospecto" que se crea hoy,
+     para que no queden dos tareas por la misma respuesta.
+   - `POST /respuestas` acepta una marca **automática** (fuera de oficina, respuesta
+     automática): la respuesta se guarda **sin cerrar la ventana y sin crear tarea**. La marca
+     **se guarda en la base** (migración 023, columna nueva en `respuestas`) para que el
+     historial de la ficha la distinga de una respuesta real y no infle la tasa de respuesta.
+     Hay que avisarle al equipo del CRM para que el historial la muestre distinto.
+2. **PT1, envío real:**
+   - El filtro de **modo pruebas** va **antes** de `POST /envios`, para que un destinatario
+     descartado no gaste un envío.
+   - El envío es un **subflujo reutilizable** ("enviar a prospecto X"), que después usan los
+     recordatorios.
+   - Se envía con un nodo HTTP Request a `/v3/mail/send` (el nodo nativo de SendGrid no manda
+     `custom_args`), con `custom_args` `prospecto_id` y `envio_id`, y `sandbox_mode` en las
+     primeras pruebas.
+   - Reply-To con código de seguridad desde el primer día:
+     `r+<prospecto_id>.<hmac>@respuestas.contacto.nano-bridge-mex.com`. El HMAC va **recortado a
+     unos 16 caracteres**, porque la parte antes de la `@` admite máximo 64. La **clave del
+     HMAC vive en las credenciales o variables de n8n, nunca escrita dentro de un nodo**.
+3. **PT2, respuestas (Inbound Parse):**
+   - El webhook de n8n va protegido con usuario y contraseña (Basic Auth en la URL que se da
+     de alta en SendGrid).
+   - Lee el destinatario de `envelope.to` y **valida el código HMAC**. Sin código válido, crea
+     una tarea "respuesta no identificada" de tipo seguimiento y sin prospecto. No hace falta
+     tocar la API: el `prospecto_id` de una tarea de automatización ya es opcional.
+   - **Detecta respuestas automáticas por varias marcas:** encabezados `Auto-Submitted`
+     (distinto de `no`), `X-Autoreply`, `X-Auto-Response-Suppress` y asunto tipo "Respuesta
+     automática" / "Fuera de oficina" / "Out of office". Esas van con la marca automática del
+     punto 1. Si una se escapa, cae como respuesta normal y una persona la clasifica, que es
+     el error seguro.
+   - El `execution_id` se arma con el `Message-ID` del correo, para que un reenvío de SendGrid
+     no duplique la respuesta.
+4. **PT3, eventos de SendGrid:**
+   - Event Webhook **firmado**, con verificación de la firma en n8n.
+   - Bajas por link (`unsubscribe`, `group_unsubscribe`) y quejas de spam van a
+     `POST /automatizacion/supresion`. De los rebotes solo cuentan los definitivos (`bounce`
+     con tipo `bounce`, no `blocked`).
+   - `sg_event_id` sirve de `execution_id`. Un 409 de la API (ya registrado) se trata como
+     "saltar", no como error.
+5. **Pruebas en producción sin ensuciar:**
+   - Todos los prospectos de prueba van en una **campaña "PRUEBAS"**.
+   - Cada prueba de baja usa un **contacto separado** en el CRM (`correo+baja1@...`,
+     `correo+baja2@...`), porque una baja suprime todos los medios del contacto y dejaría
+     inservible el buzón principal de pruebas.
+   - Al terminar, la limpieza **cierra las ventanas** de los envíos de prueba en lugar de
+     borrar filas en producción.
+6. **Antes de encender (bloque aparte):**
+   - Tope diario de envíos que **no excluya** al prospecto. El camino actual de PT1 que marca
+     `excluido` es permanente y no sirve para esto.
+   - La ventana se cierra **por persona** al recibir respuesta. Hoy `registrarRespuesta` cierra
+     la del último envío del prospecto, no la de la persona.
+   - No volver a escribirle a quien ya respondió. Dirección decide si "no interesado" bloquea
+     6 meses o para siempre.
+   - Baja por link o spam suprime todos los medios y pasa el prospecto a baja. Un rebote
+     definitivo suprime solo ese correo.
+   - El flujo de recordatorios pregunta **si la campaña sigue activa** antes de mandar. Hoy
+     `listarVentanasVencidas` no revisa la campaña.
+   - Pendientes fuera del código: fuente de prospectos, base legal y aviso de privacidad,
+     cuenta definitiva de SendGrid (la prueba vence el 24-nov-2026) y confirmar Inbound Parse
+     en el plan Essentials.
 
 ## Política de contactos
 
