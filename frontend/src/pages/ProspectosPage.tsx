@@ -7,6 +7,7 @@ import { Card, SectionTitle } from "../components/ui/Card";
 import { ServerError, inputBaseClass, inputClass } from "../components/ui/Field";
 import { ApiError, api } from "../lib/api";
 import { formatoFecha, formatoFechaHora } from "../lib/formato";
+import { ETIQUETA_MEDIO, claseMedio } from "../lib/medios";
 import type { Borrador, EstadoBorrador, LoteImportacion, Paginated, ProspectoDetalle, ProspectoResumen } from "../types";
 
 const TABS = [
@@ -455,16 +456,6 @@ function ListaProspectos() {
   );
 }
 
-const ETIQUETA_MEDIO: Record<string, string> = {
-  correo: "Correo",
-  telefono: "Teléfono",
-  whatsapp: "WhatsApp",
-  linkedin: "LinkedIn",
-  sitio_web: "Sitio web",
-  facebook: "Facebook",
-  instagram: "Instagram"
-};
-
 function ProspectoDetallePanel({ id, onClose }: { id: number; onClose: () => void }) {
   const { data: p, isPending, isError } = useQuery({
     queryKey: ["prospecto", id],
@@ -518,9 +509,7 @@ function ProspectoDetallePanel({ id, onClose }: { id: number; onClose: () => voi
               {p.contacto.medios.map((m) => (
                 <span
                   key={`${m.tipo}:${m.valor}`}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                    m.estado_contacto === "no_contactar" ? "bg-danger-bg text-danger" : m.estado_contacto === "obsoleto" ? "bg-bg text-ink-3" : "bg-ok-bg text-ok"
-                  }`}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${claseMedio(m.estado_contacto)}`}
                 >
                   {ETIQUETA_MEDIO[m.tipo] ?? m.tipo}: {m.valor}
                   {m.estado_contacto === "no_contactar" && " (no contactar)"}

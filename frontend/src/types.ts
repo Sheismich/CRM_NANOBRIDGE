@@ -350,3 +350,18 @@ export type ProcesoFallido = {
   creado_en: string;
   actualizado_en: string;
 };
+
+// GET /contactos (src/crm/contactos.service.ts): cada contacto con su
+// empresa y todos sus medios (incluidos los no_contactar/obsoletos).
+export type ContactoLista = {
+  id: number;
+  empresa_id: number;
+  empresa_nombre: string;
+  nombre: string;
+  puesto: string | null;
+  area: string | null;
+  linkedin_url: string | null;
+  facebook_url: string | null;
+  instagram_url: string | null;
+  medios: { id: number; tipo: MedioContacto["tipo"]; valor: string; estado_contacto: MedioContacto["estado_contacto"] }[];
+};

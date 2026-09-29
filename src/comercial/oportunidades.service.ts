@@ -74,16 +74,24 @@ export class OportunidadesService {
         oportunidad: oportunidades,
         etapaClave: catalogoEtapaEmbudo.clave,
         etapaNombre: catalogoEtapaEmbudo.nombre,
-        probabilidad: catalogoEtapaEmbudo.probabilidad
+        probabilidad: catalogoEtapaEmbudo.probabilidad,
+        // Para el tablero de Oportunidades: cada tarjeta dice de qué empresa
+        // es sin pedir /empresas/:id por tarjeta.
+        empresaNombre: empresas.nombreLegal
       })
       .from(oportunidades)
       .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
+      .leftJoin(empresas, eq(empresas.id, oportunidades.empresaId))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(oportunidades.actualizadoEn))
       .limit(query.limit)
       .offset(offset);
 
-    return { page: query.page, limit: query.limit, data: rows.map((row) => toRow({ ...row.oportunidad, etapaClave: row.etapaClave, etapaNombre: row.etapaNombre, probabilidad: row.probabilidad })) };
+    return {
+      page: query.page,
+      limit: query.limit,
+      data: rows.map((row) => ({ ...toRow({ ...row.oportunidad, etapaClave: row.etapaClave, etapaNombre: row.etapaNombre, probabilidad: row.probabilidad }), empresa_nombre: row.empresaNombre }))
+    };
   }
 
   private async validarContacto(empresaId: number, contactoId: number) {

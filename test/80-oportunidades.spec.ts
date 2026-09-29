@@ -121,6 +121,8 @@ describe("oportunidades: pipeline, cierre/reapertura y scoping", () => {
     expect(filtrada.status).toBe(200);
     expect(filtrada.body.data.every((o: { empresa_id: number }) => o.empresa_id === empresaId)).toBe(true);
     expect(filtrada.body.data.map((o: { id: number }) => o.id)).toContain(propiaId);
+    // Cada fila trae el nombre de su empresa (tablero de Oportunidades).
+    expect(filtrada.body.data.find((o: { id: number }) => o.id === propiaId)?.empresa_nombre).toEqual(expect.any(String));
 
     const vacia = await request(app.getHttpServer()).get(`/api/v1/oportunidades?empresaId=${otraEmpresa.body.id}`).set("Cookie", adminCookie);
     expect(vacia.status).toBe(200);

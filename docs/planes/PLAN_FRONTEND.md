@@ -142,7 +142,12 @@ Avance:
   - **Integración con n8n** (solo administrador): eventos hacia n8n (por defecto los fallidos) con "Reintentar" y "Despachar ahora", y procesos fallidos (por defecto los abiertos) con su triage abierto → en revisión → resuelto y el payload al abrirlos.
 
   Se probó en navegador con datos sembrados: reintentar un evento, cambiar el estado de un proceso, crear un supervisor, el rechazo al quitarle el rol al único administrador y la vista del supervisor (sin Integración ni edición).
-- Pendiente fuera de las fases: las pantallas generales de Contactos, Oportunidades, Cotizaciones y Documentos del menú siguen como placeholder (las tres últimas se trabajan desde la ficha de cada empresa).
+- **Oportunidades y Contactos del menú (29-sep-2026):**
+  - **Oportunidades:** tablero del embudo con una columna por etapa abierta (conteo, monto y probabilidad), búsqueda por oportunidad o empresa y filtro por responsable (admin/supervisor). Las fechas de cierre ya pasadas salen en rojo. Al abrir una tarjeta se usa el mismo panel de detalle de la ficha (cambio de etapa, pérdida con motivo, reapertura). Otra pestaña lista las ganadas y perdidas. Para esto `GET /oportunidades` ahora trae `empresa_nombre` (aditivo). Las oportunidades nuevas se siguen creando desde la ficha, porque cuelgan de una empresa y sus contactos.
+  - **Contactos:** vista plana de `GET /contactos` con búsqueda por nombre, empresa (liga a la ficha), medios (los suprimidos en rojo) y redes.
+
+  Se probó en navegador mover una oportunidad de Propuesta a Negociación desde el tablero.
+- Pendiente: las pantallas generales de Cotizaciones y Documentos siguen como placeholder; se trabajan desde la ficha de cada empresa porque ambos listados exigen `empresaId`.
 
 Relación con las fases de `PLAN_CRM_DEFINITIVO.md`: aquellas son las del backend y ya están construidas; estas son solo las de la interfaz.
 

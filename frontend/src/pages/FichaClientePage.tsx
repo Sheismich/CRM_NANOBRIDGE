@@ -9,6 +9,7 @@ import { OportunidadesTab } from "../components/ficha/OportunidadesTab";
 import { Card, SectionTitle } from "../components/ui/Card";
 import { api } from "../lib/api";
 import type { ContactoConMedio, EmpresaDetalle } from "../types";
+import { ETIQUETA_MEDIO, claseMedio } from "../lib/medios";
 
 const TABS = [
   { id: "info", label: "Información y contactos" },
@@ -18,14 +19,6 @@ const TABS = [
   { id: "documentos", label: "Documentos" }
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
-
-const ETIQUETA_MEDIO: Record<string, string> = {
-  correo: "Correo",
-  telefono: "Teléfono",
-  whatsapp: "WhatsApp",
-  linkedin: "LinkedIn",
-  sitio_web: "Sitio web"
-};
 
 // Agrupa las filas de GET /empresas/:id (una por medio de contacto) en un
 // contacto con su arreglo de medios -- ver el comentario en types.ts sobre
@@ -109,9 +102,7 @@ export function FichaClientePage() {
                         {medios.map((m) => (
                           <span
                             key={m.medio_id}
-                            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                              m.estado_contacto === "no_contactar" ? "bg-danger-bg text-danger" : m.estado_contacto === "obsoleto" ? "bg-bg text-ink-3" : "bg-ok-bg text-ok"
-                            }`}
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${claseMedio(m.estado_contacto)}`}
                             title={m.medio_valor ?? undefined}
                           >
                             {ETIQUETA_MEDIO[m.medio_tipo ?? ""] ?? m.medio_tipo}: {m.medio_valor}
