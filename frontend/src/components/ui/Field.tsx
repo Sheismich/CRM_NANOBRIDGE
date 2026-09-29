@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 
 // Mismo estilo de input que LoginPage, para los formularios de la ficha.
-export const inputClass = "w-full rounded-[9px] border border-border bg-white px-3 py-2 text-[13px]";
+// inputBaseClass no fija el ancho: para filtros que llevan el suyo
+// ("w-auto", "w-72"). Agregarlo después de inputClass no sirve, porque en
+// el CSS generado w-full puede ganarle y el filtro ocupa toda la fila.
+export const inputBaseClass = "rounded-[9px] border border-border bg-white px-3 py-2 text-[13px]";
+export const inputClass = `w-full ${inputBaseClass}`;
 
 export function Field({ label, htmlFor, error, children }: { label: string; htmlFor: string; error?: string; children: ReactNode }) {
   return (

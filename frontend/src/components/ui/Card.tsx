@@ -12,7 +12,7 @@ export function Card({ children, className, ...rest }: HTMLAttributes<HTMLDivEle
 export function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-4 flex items-center text-sm font-bold">
-      <span className="mr-2.5 inline-block h-4 w-[5px] rounded-[3px] bg-[var(--grad)]" />
+      <span className="mr-2.5 inline-block h-4 w-[5px] rounded-[3px] bg-[image:var(--grad)]" />
       {children}
     </div>
   );

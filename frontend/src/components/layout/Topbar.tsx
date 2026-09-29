@@ -16,7 +16,7 @@ export function Topbar({ titulo }: { titulo: string }) {
 
   return (
     <div className="relative flex h-[66px] min-h-[66px] items-center justify-between bg-white px-7.5">
-      <div className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--grad)] opacity-50" />
+      <div className="absolute inset-x-0 bottom-0 h-0.5 bg-[image:var(--grad)] opacity-50" />
       <div className="font-heading text-[19px] font-bold">{titulo}</div>
       {user && (
         <div className="flex items-center gap-4">
@@ -25,7 +25,7 @@ export function Topbar({ titulo }: { titulo: string }) {
             type="button"
             onClick={() => void logout()}
             title="Cerrar sesión"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--grad)] text-[13px] font-bold text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[image:var(--grad)] text-[13px] font-bold text-white"
           >
             {iniciales(user.nombre)}
           </button>

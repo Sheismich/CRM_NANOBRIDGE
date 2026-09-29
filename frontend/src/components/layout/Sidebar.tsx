@@ -14,7 +14,7 @@ export function Sidebar() {
 
   return (
     <aside className="relative flex h-full w-[264px] min-w-[264px] flex-col overflow-hidden bg-white">
-      <div className="absolute left-0 top-0 h-full w-1 bg-[var(--grad)]" />
+      <div className="absolute left-0 top-0 h-full w-1 bg-[image:var(--grad)]" />
 
       <div className="px-6 pb-5 pt-7">
         <div className="flex items-center gap-2.5">
@@ -53,7 +53,7 @@ function NavItemLink({ to, label, icon, small }: { to: string; label: string; ic
     >
       {({ isActive }) => (
         <>
-          {isActive && <span className="absolute -left-3.5 top-2 bottom-2 w-[3px] rounded bg-[var(--grad)]" />}
+          {isActive && <span className="absolute -left-3.5 top-2 bottom-2 w-[3px] rounded bg-[image:var(--grad)]" />}
           <svg width={small ? 16 : 18} height={small ? 16 : 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
             {icon.split(" M").map((segment, i) => (
               <path key={i} d={i === 0 ? segment : `M${segment}`} />
