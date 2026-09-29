@@ -267,6 +267,7 @@ export type Usuario = {
   correo: string;
   rol: Rol;
   activo: boolean;
+  creado_en?: string;
 };
 
 export type PipelineResumen = {
@@ -305,4 +306,47 @@ export type MetricaDiaria = {
   oportunidades_perdidas: number;
   valor_perdido: string;
   calculado_en: string;
+};
+
+// --- Administración (src/usuarios, src/outbox) ---
+
+export type RegistroAuditoria = {
+  id: number;
+  usuario_id: number | null;
+  entidad: string;
+  entidad_id: number;
+  accion: string;
+  antes: unknown;
+  despues: unknown;
+  creado_en: string;
+};
+
+export type EventoPendiente = {
+  id: number;
+  evento_uuid: string;
+  tipo: string;
+  entidad_tipo: string;
+  entidad_id: number;
+  payload: unknown;
+  estado: "pendiente" | "procesando" | "enviado" | "fallido";
+  intentos: number;
+  proximo_intento_en: string | null;
+  ultimo_error: string | null;
+  creado_en: string;
+};
+
+export type ProcesoFallido = {
+  id: number;
+  evento_id: number | null;
+  execution_id: string | null;
+  workflow: string | null;
+  nodo: string | null;
+  endpoint: string | null;
+  codigo_http: number | null;
+  tipo: string;
+  payload: unknown;
+  mensaje: string | null;
+  estado: "abierto" | "en_revision" | "resuelto";
+  creado_en: string;
+  actualizado_en: string;
 };

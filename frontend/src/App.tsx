@@ -5,6 +5,7 @@ import { EmpresasListPage } from "./pages/EmpresasListPage";
 import { FichaClientePage } from "./pages/FichaClientePage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ProspectosPage } from "./pages/ProspectosPage";
+import { AdministracionPage } from "./pages/AdministracionPage";
 import { ReportesPage } from "./pages/ReportesPage";
 import { TareasPage } from "./pages/TareasPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -39,7 +40,7 @@ function App() {
         path="/administracion"
         element={
           <ProtectedRoute soloRoles={["administrador", "supervisor"]}>
-            <PlaceholderPage titulo="Administración" fase="Administración" />
+            <AdministracionPage />
           </ProtectedRoute>
         }
       />
