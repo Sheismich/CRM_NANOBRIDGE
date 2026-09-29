@@ -5,6 +5,8 @@ import { EmpresasListPage } from "./pages/EmpresasListPage";
 import { FichaClientePage } from "./pages/FichaClientePage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ProspectosPage } from "./pages/ProspectosPage";
+import { ReportesPage } from "./pages/ReportesPage";
+import { TareasPage } from "./pages/TareasPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function App() {
@@ -21,7 +23,7 @@ function App() {
           llega fase por fase (ver PlaceholderPage.tsx). */}
       <Route path="/contactos" element={<ProtectedRoute><PlaceholderPage titulo="Contactos" fase="Fundacional" /></ProtectedRoute>} />
       <Route path="/prospectos" element={<ProtectedRoute><ProspectosPage /></ProtectedRoute>} />
-      <Route path="/tareas" element={<ProtectedRoute><PlaceholderPage titulo="Tareas" fase="Historial y ventas" /></ProtectedRoute>} />
+      <Route path="/tareas" element={<ProtectedRoute><TareasPage /></ProtectedRoute>} />
       <Route path="/oportunidades" element={<ProtectedRoute><PlaceholderPage titulo="Oportunidades" fase="Historial y ventas" /></ProtectedRoute>} />
       <Route path="/cotizaciones" element={<ProtectedRoute><PlaceholderPage titulo="Cotizaciones" fase="Cotizaciones y documentos" /></ProtectedRoute>} />
       <Route path="/documentos" element={<ProtectedRoute><PlaceholderPage titulo="Documentos" fase="Cotizaciones y documentos" /></ProtectedRoute>} />
@@ -29,7 +31,7 @@ function App() {
         path="/reportes"
         element={
           <ProtectedRoute soloRoles={["administrador", "supervisor"]}>
-            <PlaceholderPage titulo="Reportes" fase="Desempeño" />
+            <ReportesPage />
           </ProtectedRoute>
         }
       />

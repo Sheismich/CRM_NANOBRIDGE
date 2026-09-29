@@ -1,13 +1,13 @@
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
 import { Button } from "../components/ui/Button";
 import { Card, SectionTitle } from "../components/ui/Card";
-import { ServerError, inputClass } from "../components/ui/Field";
+import { ServerError, inputBaseClass, inputClass } from "../components/ui/Field";
 import { ApiError, api } from "../lib/api";
 import { formatoFecha, formatoFechaHora } from "../lib/formato";
-import type { Borrador, EstadoBorrador, LoteImportacion, Paginated, ProspectoResumen } from "../types";
+import type { Borrador, EstadoBorrador, LoteImportacion, Paginated, ProspectoDetalle, ProspectoResumen } from "../types";
 
 const TABS = [
   { id: "importaciones", label: "Importaciones" },
@@ -238,7 +238,7 @@ function Importaciones() {
 
           <Card className="overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
-              <select aria-label="Filtrar por estado" className={`${inputClass} w-auto`} value={filtro} onChange={(e) => setFiltro(e.target.value as EstadoBorrador | "")}>
+              <select aria-label="Filtrar por estado" className={`${inputBaseClass} w-auto`} value={filtro} onChange={(e) => setFiltro(e.target.value as EstadoBorrador | "")}>
                 <option value="">Estado: Todas</option>
                 {Object.entries(ETIQUETA_ESTADO).map(([clave, etiqueta]) => (
                   <option key={clave} value={clave}>
@@ -353,12 +353,14 @@ function AccionesFila({ fila, ocupado, onConfirmar, onRechazar }: { fila: Borrad
 // --- Prospectos ya confirmados -------------------------------------------------
 
 const LIMIT = 25;
+const COLUMNAS_PROSPECTOS = ["Empresa", "Contacto", "Estado", "Prioridad", "Score", "Alta"];
 
 function ListaProspectos() {
   const [q, setQ] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [prioridad, setPrioridad] = useState("");
   const [page, setPage] = useState(1);
+  const [abiertoId, setAbiertoId] = useState<number | null>(null);
 
   // Un agente solo ve prospectos de sus empresas (ProspectosService.listProspectos).
   const { data, isPending, isError } = useQuery({
@@ -376,10 +378,10 @@ function ListaProspectos() {
           setBusqueda(q.trim());
         }}
       >
-        <input aria-label="Buscar" placeholder="Buscar por empresa o contacto…" className={`${inputClass} w-72`} value={q} onChange={(e) => setQ(e.target.value)} />
+        <input aria-label="Buscar" placeholder="Buscar por empresa o contacto…" className={`${inputBaseClass} w-72`} value={q} onChange={(e) => setQ(e.target.value)} />
         <select
           aria-label="Prioridad"
-          className={`${inputClass} w-auto`}
+          className={`${inputBaseClass} w-auto`}
           value={prioridad}
           onChange={(e) => {
             setPage(1);
@@ -404,7 +406,7 @@ function ListaProspectos() {
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-bg">
-              {["Empresa", "Contacto", "Estado", "Prioridad", "Score", "Alta"].map((h) => (
+              {COLUMNAS_PROSPECTOS.map((h) => (
                 <th key={h} className="px-5 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-ink-2">
                   {h}
                 </th>
@@ -413,18 +415,26 @@ function ListaProspectos() {
           </thead>
           <tbody>
             {data.data.map((p) => (
-              <tr key={p.id} className="border-t border-border">
-                <td className="px-5 py-3 text-[13px] font-semibold">
-                  <Link to={`/empresas/${p.empresa_id}`} className="hover:text-navy hover:underline">
-                    {p.empresa_nombre_legal}
-                  </Link>
-                </td>
-                <td className="px-5 py-3 text-[13px]">{p.contacto_nombre}</td>
-                <td className="px-5 py-3 text-[13px] text-ink-2">{p.estado.replace(/_/g, " ")}</td>
-                <td className="px-5 py-3 text-[13px] capitalize text-ink-2">{p.prioridad ?? "—"}</td>
-                <td className="px-5 py-3 text-[13px] text-ink-2">{p.score != null ? Number(p.score) : "—"}</td>
-                <td className="px-5 py-3 text-[13px] text-ink-2">{formatoFecha.format(new Date(p.creado_en))}</td>
-              </tr>
+              <Fragment key={p.id}>
+                <tr
+                  className={`cursor-pointer border-t border-border hover:bg-bg ${abiertoId === p.id ? "bg-bg" : ""}`}
+                  onClick={() => setAbiertoId(abiertoId === p.id ? null : p.id)}
+                >
+                  <td className="px-5 py-3 text-[13px] font-semibold">{p.empresa_nombre_legal}</td>
+                  <td className="px-5 py-3 text-[13px]">{p.contacto_nombre}</td>
+                  <td className="px-5 py-3 text-[13px] text-ink-2">{p.estado.replace(/_/g, " ")}</td>
+                  <td className="px-5 py-3 text-[13px] capitalize text-ink-2">{p.prioridad ?? "—"}</td>
+                  <td className="px-5 py-3 text-[13px] text-ink-2">{p.score != null ? Number(p.score) : "—"}</td>
+                  <td className="px-5 py-3 text-[13px] text-ink-2">{formatoFecha.format(new Date(p.creado_en))}</td>
+                </tr>
+                {abiertoId === p.id && (
+                  <tr>
+                    <td colSpan={COLUMNAS_PROSPECTOS.length} className="p-0">
+                      <ProspectoDetallePanel id={p.id} onClose={() => setAbiertoId(null)} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -442,5 +452,94 @@ function ListaProspectos() {
         </div>
       )}
     </Card>
+  );
+}
+
+const ETIQUETA_MEDIO: Record<string, string> = {
+  correo: "Correo",
+  telefono: "Teléfono",
+  whatsapp: "WhatsApp",
+  linkedin: "LinkedIn",
+  sitio_web: "Sitio web",
+  facebook: "Facebook",
+  instagram: "Instagram"
+};
+
+function ProspectoDetallePanel({ id, onClose }: { id: number; onClose: () => void }) {
+  const { data: p, isPending, isError } = useQuery({
+    queryKey: ["prospecto", id],
+    queryFn: () => api.get<ProspectoDetalle>(`/api/v1/prospectos/${id}`)
+  });
+
+  return (
+    <div className="border-t border-border bg-bg p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-bold">{p ? `${p.contacto.nombre} — ${p.empresa.nombre_legal}` : "Prospecto"}</div>
+          {p?.contacto.puesto && <div className="text-xs text-ink-3">{p.contacto.puesto}</div>}
+        </div>
+        <div className="flex gap-2">
+          {p && (
+            <Link to={`/empresas/${p.empresa.id}`} className="rounded-[9px] border-[1.5px] border-navy bg-white px-4 py-2.5 text-[13px] font-bold text-navy">
+              Ver ficha de la empresa
+            </Link>
+          )}
+          <Button variant="ghost" onClick={onClose}>
+            Cerrar detalle
+          </Button>
+        </div>
+      </div>
+
+      {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
+      {isError && <div className="text-sm text-danger">No se pudo cargar el prospecto.</div>}
+
+      {p && (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13px]">
+            <Dato etiqueta="Estado">{p.estado.replace(/_/g, " ")}</Dato>
+            <Dato etiqueta="Prioridad">{p.prioridad ?? "—"}</Dato>
+            <Dato etiqueta="Confianza">{p.confianza ?? "—"}</Dato>
+            <Dato etiqueta="Score">{p.score != null ? Number(p.score) : "—"}</Dato>
+            <Dato etiqueta="Campaña">{p.campana_id != null ? `#${p.campana_id}` : "—"}</Dato>
+            <Dato etiqueta="Fuente">
+              {p.fuente_url ? (
+                <a href={p.fuente_url} target="_blank" rel="noopener noreferrer" className="break-all text-navy hover:underline">
+                  {p.fuente_url}
+                </a>
+              ) : (
+                "—"
+              )}
+            </Dato>
+            <Dato etiqueta="Alta">{formatoFechaHora.format(new Date(p.creado_en))}</Dato>
+          </dl>
+          <div>
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-2">Medios de contacto</div>
+            <div className="flex flex-wrap gap-1.5">
+              {p.contacto.medios.map((m) => (
+                <span
+                  key={`${m.tipo}:${m.valor}`}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    m.estado_contacto === "no_contactar" ? "bg-danger-bg text-danger" : m.estado_contacto === "obsoleto" ? "bg-bg text-ink-3" : "bg-ok-bg text-ok"
+                  }`}
+                >
+                  {ETIQUETA_MEDIO[m.tipo] ?? m.tipo}: {m.valor}
+                  {m.estado_contacto === "no_contactar" && " (no contactar)"}
+                </span>
+              ))}
+              {p.contacto.medios.length === 0 && <span className="text-sm text-ink-3">Sin medios registrados.</span>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
+  return (
+    <>
+      <dt className="text-ink-3">{etiqueta}</dt>
+      <dd>{children}</dd>
+    </>
   );
 }

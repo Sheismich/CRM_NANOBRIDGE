@@ -204,6 +204,25 @@ export type ProspectoResumen = {
   creado_en: string;
 };
 
+// GET /prospectos/:id (ProspectosService.getProspecto).
+export type ProspectoDetalle = {
+  id: number;
+  estado: string;
+  score: string | null;
+  prioridad: "alta" | "media" | "baja" | null;
+  confianza: "alta" | "media" | "baja" | null;
+  fuente_url: string | null;
+  campana_id: number | null;
+  creado_en: string;
+  contacto: {
+    id: number;
+    nombre: string;
+    puesto: string | null;
+    medios: Pick<MedioContacto, "tipo" | "valor" | "estado_contacto">[];
+  };
+  empresa: { id: number; nombre_legal: string };
+};
+
 export type Tarea = {
   id: number;
   tipo: "seguimiento" | "clasificacion" | "revision_documento" | "otro";
@@ -213,6 +232,77 @@ export type Tarea = {
   prioridad: "baja" | "media" | "alta" | "urgente";
   responsable_id: number | null;
   empresa_id: number | null;
+  // Solo en GET /tareas y /cola-clasificacion (join con empresas).
+  empresa_nombre?: string | null;
+  prospecto_id: number | null;
+  respuesta_id: number | null;
   fecha_limite: string | null;
+  clasificacion: Clasificacion | null;
+  resultado: string | null;
+  cerrada_en: string | null;
   creado_en: string;
+};
+
+export type Clasificacion = "interesado" | "no_interesado" | "baja" | "invalido" | "reagendar";
+
+// GET /cola-clasificacion: la tarea más lo necesario para decidir.
+export type TareaClasificacion = Tarea & {
+  contacto_nombre: string | null;
+  contacto_puesto: string | null;
+  respuesta: {
+    id: number;
+    canal: "correo" | "whatsapp" | null;
+    contenido: string | null;
+    recibido_en: string | null;
+    // Lo que dijo n8n antes de mandarla a revisión (normalmente "ambigua").
+    clasificacion_sugerida: string | null;
+  } | null;
+};
+
+// --- Reportes (solo administrador/supervisor; src/reportes/reportes.service.ts) ---
+
+export type Usuario = {
+  id: number;
+  nombre: string;
+  correo: string;
+  rol: Rol;
+  activo: boolean;
+};
+
+export type PipelineResumen = {
+  abiertas: { cantidad: number; valor_pipeline: string };
+  ganadas: { cantidad: number; ingresos_cerrados: string };
+  perdidas: { cantidad: number; valor_perdido: string };
+};
+
+export type ReporteTareas = {
+  cerradas: { total: number; por_tipo: { tipo: Tarea["tipo"]; cantidad: number }[] };
+  vencidas: { total: number; por_tipo: { tipo: Tarea["tipo"]; cantidad: number }[] };
+};
+
+export type ConversionEtapas = {
+  base_calificadas: number;
+  etapas: { etapa_clave: string; etapa_nombre: string; orden: number; oportunidades_alcanzadas: number; conversion_desde_calificada_pct: number | null }[];
+  perdidas: { oportunidades: number; tasa_perdida_pct: number | null };
+};
+
+export type ForecastMes = { mes: string; cantidad: number; valor_estimado_total: string; valor_ponderado: string };
+
+export type DesempenoAgente = {
+  responsable_id: number;
+  responsable_nombre: string;
+  actividades: { llamada: number; whatsapp: number; comentario: number; total: number };
+  tareas: { cerradas: number; vencidas: number };
+  oportunidades: { ganadas: number; ingresos_cerrados: string };
+};
+
+export type MetricaDiaria = {
+  fecha: string;
+  oportunidades_abiertas: number;
+  valor_pipeline: string;
+  oportunidades_ganadas: number;
+  ingresos_cerrados: string;
+  oportunidades_perdidas: number;
+  valor_perdido: string;
+  calculado_en: string;
 };
