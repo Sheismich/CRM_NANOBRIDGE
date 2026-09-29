@@ -4,28 +4,13 @@ import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { ServerError } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
+import { ETIQUETA_ESTADO_COTIZACION, claseEstadoCotizacion } from "../../lib/cotizaciones";
 import { fechaLocal, formatoFecha, formatoMoneda } from "../../lib/formato";
 import type { Cotizacion, CotizacionDetalle, EstadoCotizacion, Paginated } from "../../types";
 import { CotizacionForm } from "./CotizacionForm";
 import { useOportunidadesEmpresa } from "./queries";
 
 const COLUMNAS = ["Oportunidad", "Versión", "Total", "Estado", "Emitida", "Cierre esperado"];
-
-const ETIQUETA_ESTADO: Record<EstadoCotizacion, string> = {
-  borrador: "Borrador",
-  enviada: "Enviada",
-  aceptada: "Aceptada",
-  rechazada: "Rechazada",
-  vencida: "Vencida",
-  obsoleta: "Obsoleta"
-};
-
-function claseEstado(estado: EstadoCotizacion) {
-  if (estado === "aceptada") return "bg-ok-bg text-ok";
-  if (estado === "rechazada" || estado === "vencida") return "bg-danger-bg text-danger";
-  if (estado === "enviada") return "bg-warn-bg text-warn";
-  return "bg-bg text-ink-2";
-}
 
 // Mismas transiciones que TRANSICIONES en cotizaciones.service.ts:
 // "obsoleta" nunca es destino manual, solo la fija una nueva versión.
@@ -91,7 +76,7 @@ export function CotizacionesTab({ empresaId, contactos }: { empresaId: number; c
                   <td className="px-5 py-3 text-[13px] text-ink-2">v{c.version}</td>
                   <td className="px-5 py-3 text-[13px] font-semibold">{formatoMoneda.format(Number(c.total))}</td>
                   <td className="px-5 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${claseEstado(c.estado)}`}>{ETIQUETA_ESTADO[c.estado]}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${claseEstadoCotizacion(c.estado)}`}>{ETIQUETA_ESTADO_COTIZACION[c.estado]}</span>
                   </td>
                   <td className="px-5 py-3 text-[13px] text-ink-2">{formatoFecha.format(fechaLocal(c.fecha_emision))}</td>
                   <td className="px-5 py-3 text-[13px] text-ink-2">{c.fecha_esperada_cierre ? formatoFecha.format(fechaLocal(c.fecha_esperada_cierre)) : "—"}</td>
@@ -221,7 +206,7 @@ function CotizacionDetallePanel({
               <div className="flex flex-wrap gap-2">
                 {cotizacion.versiones.map((v) => (
                   <span key={v.id} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${v.id === cotizacion.id ? "bg-navy text-white" : "bg-white text-ink-2"}`}>
-                    v{v.version} · {ETIQUETA_ESTADO[v.estado]} · {formatoMoneda.format(Number(v.total))}
+                    v{v.version} · {ETIQUETA_ESTADO_COTIZACION[v.estado]} · {formatoMoneda.format(Number(v.total))}
                   </span>
                 ))}
               </div>

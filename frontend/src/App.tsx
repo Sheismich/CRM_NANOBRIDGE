@@ -3,10 +3,11 @@ import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EmpresasListPage } from "./pages/EmpresasListPage";
 import { FichaClientePage } from "./pages/FichaClientePage";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ProspectosPage } from "./pages/ProspectosPage";
 import { AdministracionPage } from "./pages/AdministracionPage";
 import { ContactosPage } from "./pages/ContactosPage";
+import { CotizacionesPage } from "./pages/CotizacionesPage";
+import { DocumentosPage } from "./pages/DocumentosPage";
 import { OportunidadesPage } from "./pages/OportunidadesPage";
 import { ReportesPage } from "./pages/ReportesPage";
 import { TareasPage } from "./pages/TareasPage";
@@ -22,14 +23,12 @@ function App() {
       <Route path="/empresas" element={<ProtectedRoute><EmpresasListPage /></ProtectedRoute>} />
       <Route path="/empresas/:id" element={<ProtectedRoute><FichaClientePage /></ProtectedRoute>} />
 
-      {/* Resto de módulos: nav completa desde el inicio, contenido real
-          llega fase por fase (ver PlaceholderPage.tsx). */}
       <Route path="/contactos" element={<ProtectedRoute><ContactosPage /></ProtectedRoute>} />
       <Route path="/prospectos" element={<ProtectedRoute><ProspectosPage /></ProtectedRoute>} />
       <Route path="/tareas" element={<ProtectedRoute><TareasPage /></ProtectedRoute>} />
       <Route path="/oportunidades" element={<ProtectedRoute><OportunidadesPage /></ProtectedRoute>} />
-      <Route path="/cotizaciones" element={<ProtectedRoute><PlaceholderPage titulo="Cotizaciones" fase="Cotizaciones y documentos" /></ProtectedRoute>} />
-      <Route path="/documentos" element={<ProtectedRoute><PlaceholderPage titulo="Documentos" fase="Cotizaciones y documentos" /></ProtectedRoute>} />
+      <Route path="/cotizaciones" element={<ProtectedRoute><CotizacionesPage /></ProtectedRoute>} />
+      <Route path="/documentos" element={<ProtectedRoute><DocumentosPage /></ProtectedRoute>} />
       <Route
         path="/reportes"
         element={

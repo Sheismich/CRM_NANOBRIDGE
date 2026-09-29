@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useMemo } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
 import { CotizacionesTab } from "../components/ficha/CotizacionesTab";
@@ -35,7 +35,11 @@ function agruparContactos(filas: ContactoConMedio[]) {
 
 export function FichaClientePage() {
   const { id } = useParams<{ id: string }>();
-  const [tab, setTab] = useState<TabId>("info");
+  // ?tab= abre una pestaña directo (las listas generales de Cotizaciones y
+  // Documentos ligan a la pestaña de su empresa).
+  const [params, setParams] = useSearchParams();
+  const tab: TabId = TABS.find((t) => t.id === params.get("tab"))?.id ?? "info";
+  const setTab = (nuevo: TabId) => setParams(nuevo === "info" ? {} : { tab: nuevo }, { replace: true });
 
   const { data: empresa, isPending, isError } = useQuery({
     queryKey: ["empresa", id],

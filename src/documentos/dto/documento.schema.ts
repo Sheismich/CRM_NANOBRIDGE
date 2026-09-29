@@ -52,10 +52,17 @@ export const nuevaVersionDocumentoSchema = z.object({
 });
 export type NuevaVersionDocumentoInput = z.infer<typeof nuevaVersionDocumentoSchema>;
 
+// empresaId opcional desde la pantalla general de Documentos: sin él se
+// listan los de todas las empresas activas que la persona puede ver (un
+// agente, las suyas -- mismo scoping que validarEmpresaScoped).
 export const listDocumentosQuerySchema = z.object({
-  empresaId: z.coerce.number().int().positive(),
+  empresaId: z.coerce.number().int().positive().optional(),
   oportunidadId: z.coerce.number().int().positive().optional(),
   contactoId: z.coerce.number().int().positive().optional(),
+  estado: z.enum(["vigente", "archivado"]).optional(),
+  // Mismo mapeo explícito que `cerrada` en oportunidades: z.coerce.boolean()
+  // trataría "false" como true.
+  revisado: z.enum(["true", "false"]).optional().transform((v) => (v === undefined ? undefined : v === "true")),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25)
 });

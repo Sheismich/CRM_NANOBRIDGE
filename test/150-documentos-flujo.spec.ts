@@ -241,6 +241,41 @@ describe("documentos: archivos, estados, versionado y descarga", () => {
     });
   });
 
+  describe("listado general (sin empresaId)", () => {
+    it("un agente solo ve los documentos de sus empresas; cada fila trae empresa_nombre", async () => {
+      const agente = await crearAgente(app, adminCookie, `docs.agente.lista.${sufijo}@test.local`);
+      const empresaAgente = await crearEmpresa(agente, `Empresa Docs Agente ${sufijo}`, `docs.agente.empresa.${sufijo}@test.local`);
+      const propio = await subirOk(agente, { empresaId: empresaAgente });
+      const ajeno = await subirOk(adminCookie);
+
+      const comoAgente = await request(app.getHttpServer()).get("/api/v1/documentos").query({ limit: 100 }).set("Cookie", agente);
+      expect(comoAgente.status).toBe(200);
+      const idsAgente = comoAgente.body.data.map((d: { id: number }) => d.id);
+      expect(idsAgente).toContain(propio);
+      expect(idsAgente).not.toContain(ajeno);
+      expect(comoAgente.body.data.find((d: { id: number }) => d.id === propio).empresa_nombre).toBe(`Empresa Docs Agente ${sufijo}`);
+
+      const comoAdmin = await request(app.getHttpServer()).get("/api/v1/documentos").query({ limit: 100 }).set("Cookie", adminCookie);
+      expect(comoAdmin.body.data.map((d: { id: number }) => d.id)).toEqual(expect.arrayContaining([propio, ajeno]));
+    });
+
+    it("filtra por revisado y por estado", async () => {
+      const revisado = await subirOk();
+      const pendiente = await subirOk();
+      expect((await request(app.getHttpServer()).patch(`/api/v1/documentos/${revisado}/revisar`).set("Cookie", adminCookie).send({})).status).toBe(200);
+
+      const ids = async (query: Record<string, string>) =>
+        (await request(app.getHttpServer()).get("/api/v1/documentos").query({ empresaId, limit: 100, ...query }).set("Cookie", adminCookie)).body.data.map((d: { id: number }) => d.id);
+      expect(await ids({ revisado: "false" })).toContain(pendiente);
+      expect(await ids({ revisado: "false" })).not.toContain(revisado);
+      expect(await ids({ revisado: "true" })).toContain(revisado);
+
+      expect((await estado(adminCookie, pendiente, "archivado")).status).toBe(200);
+      expect(await ids({ estado: "archivado" })).toContain(pendiente);
+      expect(await ids({ estado: "vigente" })).not.toContain(pendiente);
+    });
+  });
+
   describe("eliminación (baja lógica)", () => {
     it("solo administrador/supervisor; después el documento deja de existir para la API", async () => {
       const agente = await crearAgente(app, adminCookie, `docs.agente.eliminar.${sufijo}@test.local`);

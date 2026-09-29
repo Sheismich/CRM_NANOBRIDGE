@@ -223,6 +223,23 @@ describe("cotizaciones: estados, versionado y scoping", () => {
       // Administrador ve cualquiera.
       expect((await request(app.getHttpServer()).get(`/api/v1/cotizaciones/${id}`).set("Cookie", adminCookie)).status).toBe(200);
     });
+
+    it("sin empresaId (lista general) cada agente sigue viendo solo las de sus oportunidades, con empresa y oportunidad", async () => {
+      const agente1 = await crearAgente(app, adminCookie, `cot.general1.${sufijo}@test.local`);
+      const agente2 = await crearAgente(app, adminCookie, `cot.general2.${sufijo}@test.local`);
+      const id = await crearCotizacion(agente1, await crearOportunidad(agente1));
+
+      const general = (cookie: string[], query: Record<string, string> = {}) => request(app.getHttpServer()).get("/api/v1/cotizaciones").query({ limit: 100, ...query }).set("Cookie", cookie);
+      const propia = await general(agente1);
+      expect(propia.status).toBe(200);
+      expect(propia.body.data.find((c: { id: number }) => c.id === id)).toMatchObject({ empresa_nombre: expect.any(String), oportunidad_titulo: expect.stringMatching(/^Oportunidad /) });
+      expect((await general(agente2)).body.data.map((c: { id: number }) => c.id)).not.toContain(id);
+
+      expect((await general(adminCookie, { estado: "borrador" })).body.data.map((c: { id: number }) => c.id)).toContain(id);
+      expect((await cambiarEstado(agente1, id, "enviada")).status).toBe(200);
+      expect((await general(adminCookie, { estado: "borrador" })).body.data.map((c: { id: number }) => c.id)).not.toContain(id);
+      expect((await general(adminCookie, { estado: "enviada" })).body.data.map((c: { id: number }) => c.id)).toContain(id);
+    });
   });
 
   describe("reglas de negocio al crear", () => {

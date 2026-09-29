@@ -68,9 +68,13 @@ export const crearCotizacionSchema = datosCotizacionShape
   .superRefine(validarMontos);
 export type CrearCotizacionInput = z.infer<typeof crearCotizacionSchema>;
 
+// empresaId opcional desde la pantalla general de Cotizaciones: sin él se
+// listan las de todas las empresas que la persona puede ver (un agente,
+// las de sus oportunidades -- mismo scoping que con empresaId).
 export const listCotizacionesQuerySchema = z.object({
-  empresaId: z.coerce.number().int().positive(),
+  empresaId: z.coerce.number().int().positive().optional(),
   oportunidadId: z.coerce.number().int().positive().optional(),
+  estado: z.enum(["borrador", "enviada", "aceptada", "rechazada", "vencida"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25)
 });

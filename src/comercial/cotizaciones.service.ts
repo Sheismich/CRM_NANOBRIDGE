@@ -216,12 +216,15 @@ export class CotizacionesService {
   }
 
   async list(user: CurrentUser, query: ListCotizacionesQuery) {
-    const [empresa] = await this.db.select({ id: empresas.id }).from(empresas).where(eq(empresas.id, query.empresaId)).limit(1);
-    if (!empresa) throw new HttpError(404, "Empresa no encontrada");
+    if (query.empresaId) {
+      const [empresa] = await this.db.select({ id: empresas.id }).from(empresas).where(eq(empresas.id, query.empresaId)).limit(1);
+      if (!empresa) throw new HttpError(404, "Empresa no encontrada");
+    }
 
     const offset = (query.page - 1) * query.limit;
     const conditions = compactConditions([
-      eq(cotizaciones.empresaId, query.empresaId),
+      query.empresaId ? eq(cotizaciones.empresaId, query.empresaId) : undefined,
+      query.estado ? eq(cotizaciones.estado, query.estado) : undefined,
       // Solo la versión vigente de cada cadena: una obsoleta solo se ve
       // explícitamente en GET /cotizaciones/:id (campo "versiones").
       ne(cotizaciones.estado, "obsoleta"),
@@ -229,16 +232,23 @@ export class CotizacionesService {
       user.rol === "agente" ? eq(oportunidades.responsableId, user.id) : undefined
     ]);
 
+    // empresa_nombre y oportunidad_titulo: para la lista general, donde cada
+    // fila tiene que decir de quién es sin una consulta extra por fila.
     const rows = await this.db
-      .select({ cotizacion: cotizaciones })
+      .select({ cotizacion: cotizaciones, empresaNombre: empresas.nombreLegal, oportunidadTitulo: oportunidades.titulo })
       .from(cotizaciones)
       .innerJoin(oportunidades, eq(oportunidades.id, cotizaciones.oportunidadId))
+      .leftJoin(empresas, eq(empresas.id, cotizaciones.empresaId))
       .where(and(...conditions))
       .orderBy(desc(cotizaciones.actualizadoEn))
       .limit(query.limit)
       .offset(offset);
 
-    return { page: query.page, limit: query.limit, data: rows.map((r) => toRow(r.cotizacion)) };
+    return {
+      page: query.page,
+      limit: query.limit,
+      data: rows.map((r) => ({ ...toRow(r.cotizacion), empresa_nombre: r.empresaNombre, oportunidad_titulo: r.oportunidadTitulo }))
+    };
   }
 
   async get(user: CurrentUser, id: number) {

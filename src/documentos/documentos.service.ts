@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, catalogoTipoDocumento, contactos, documentos, empresas, oportunidades } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
@@ -230,12 +230,18 @@ export class DocumentosService {
   }
 
   async list(user: CurrentUser, query: ListDocumentosQuery) {
-    await this.validarEmpresaScoped(user, query.empresaId);
+    if (query.empresaId) await this.validarEmpresaScoped(user, query.empresaId);
     const offset = (query.page - 1) * query.limit;
 
     const conditions = compactConditions([
-      eq(documentos.empresaId, query.empresaId),
+      query.empresaId ? eq(documentos.empresaId, query.empresaId) : undefined,
+      // Sin empresaId, el mismo alcance que validarEmpresaScoped aplicado a
+      // todas las filas: empresa activa y, para un agente, suya.
+      eq(empresas.activo, true),
+      user.rol === "agente" ? eq(empresas.propietarioId, user.id) : undefined,
       eq(documentos.activo, true),
+      query.estado ? eq(documentos.estado, query.estado) : undefined,
+      query.revisado === true ? isNotNull(documentos.revisadoEn) : query.revisado === false ? isNull(documentos.revisadoEn) : undefined,
       // Solo la versión vigente de cada cadena por default, igual criterio
       // que cotizaciones: una versión obsoleta solo aparece explícitamente
       // en GET /documentos/:id/versiones.
@@ -245,14 +251,15 @@ export class DocumentosService {
     ]);
 
     const rows = await this.db
-      .select()
+      .select({ documento: documentos, empresaNombre: empresas.nombreLegal })
       .from(documentos)
+      .innerJoin(empresas, eq(empresas.id, documentos.empresaId))
       .where(and(...conditions))
       .orderBy(desc(documentos.actualizadoEn))
       .limit(query.limit)
       .offset(offset);
 
-    return { page: query.page, limit: query.limit, data: rows.map(toRow) };
+    return { page: query.page, limit: query.limit, data: rows.map((r) => ({ ...toRow(r.documento), empresa_nombre: r.empresaNombre })) };
   }
 
   async get(user: CurrentUser, id: number) {

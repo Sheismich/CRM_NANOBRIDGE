@@ -147,7 +147,12 @@ Avance:
   - **Contactos:** vista plana de `GET /contactos` con búsqueda por nombre, empresa (liga a la ficha), medios (los suprimidos en rojo) y redes.
 
   Se probó en navegador mover una oportunidad de Propuesta a Negociación desde el tablero.
-- Pendiente: las pantallas generales de Cotizaciones y Documentos siguen como placeholder; se trabajan desde la ficha de cada empresa porque ambos listados exigen `empresaId`.
+- **Cotizaciones y Documentos del menú (29-sep-2026):** con esto ya no queda ninguna pantalla placeholder (se borró `PlaceholderPage.tsx`).
+  - `GET /cotizaciones` y `GET /documentos` ahora aceptan listar **sin `empresaId`**, con el mismo alcance que ya tenían. Un agente ve las cotizaciones de sus oportunidades y los documentos de sus empresas. Si llega `empresaId`, se valida igual que antes.
+  - Nuevos filtros: `estado` en cotizaciones; `estado` (vigente/archivado) y `revisado` en documentos. Las filas traen `empresa_nombre`, y las cotizaciones también `oportunidad_titulo`. Todo es aditivo.
+  - **Cotizaciones:** lista general filtrada por estado, por defecto las enviadas que esperan respuesta. Cada fila abre la pestaña Cotizaciones de su empresa.
+  - **Documentos:** lista general, por defecto los que faltan por revisar. Se descargan y se marcan revisados ahí mismo; subir, versionar y archivar siguen en la ficha.
+  - La ficha de cliente acepta `?tab=` para abrir una pestaña directo.
 
 Relación con las fases de `PLAN_CRM_DEFINITIVO.md`: aquellas son las del backend y ya están construidas; estas son solo las de la interfaz.
 
