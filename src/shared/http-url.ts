@@ -6,4 +6,10 @@ import { z } from "zod";
 // `data:text/html,...`, y un valor así guardado se volvía XSS almacenado en
 // cuanto una pantalla lo usara como href. Se comprobó en vivo el 18-sep-2026
 // que la validación anterior lo dejaba pasar.
-export const httpUrlSchema = z.string().trim().url({ protocol: /^https?$/ }).max(2048);
+// El mensaje va en español porque llega tal cual a la pantalla (ej. la
+// revisión fila por fila de una importación CSV).
+export const httpUrlSchema = z
+  .string()
+  .trim()
+  .url({ protocol: /^https?$/, error: "URL no válida; debe empezar con http:// o https://" })
+  .max(2048, "Máximo 2048 caracteres");

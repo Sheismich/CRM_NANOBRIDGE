@@ -54,29 +54,39 @@ export type ProspectoInput = z.infer<typeof prospectoInputSchema>;
 // undefined) son la diferencia principal contra prospectoInputSchema.
 const vacioComoUndefined = <T extends z.ZodTypeAny>(schema: T) => z.preprocess((v) => (v === "" ? undefined : v), schema.optional());
 
+// Los catálogos del CSV los escribe una persona en Excel: "MICRO",
+// "Pequeña" o "Teléfono" deben valer igual que "micro", "pequena" o
+// "telefono". El mensaje va en español y dice qué valores se aceptan,
+// porque se muestra tal cual en la revisión fila por fila.
+const catalogoCsv = <const T extends readonly [string, ...string[]]>(valores: T) =>
+  z.preprocess(
+    (v) => (typeof v === "string" ? v.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "") : v),
+    z.enum(valores, { error: `Valor no válido; usa ${valores.slice(0, -1).join(", ")} o ${valores.at(-1)}` })
+  );
+
 export const filaCsvSchema = refinarProspecto(z.object({
-  empresaNombreLegal: z.string().trim().min(2).max(255),
+  empresaNombreLegal: z.string({ error: "Falta el nombre de la empresa" }).trim().min(2, "Mínimo 2 caracteres").max(255, "Máximo 255 caracteres"),
   empresaGiro: vacioComoUndefined(z.string().trim().max(120)),
-  empresaTamano: vacioComoUndefined(z.enum(["micro", "pequena", "mediana", "grande"])),
+  empresaTamano: vacioComoUndefined(catalogoCsv(["micro", "pequena", "mediana", "grande"])),
   empresaRegion: vacioComoUndefined(z.string().trim().max(120)),
   empresaEstado: vacioComoUndefined(z.string().trim().max(120)),
   empresaCiudad: vacioComoUndefined(z.string().trim().max(120)),
-  empresaPais: z.string().trim().length(2).default("MX"),
+  empresaPais: z.string().trim().length(2, "Usa la clave de 2 letras del país (ej. MX)").default("MX"),
   empresaSitioWeb: vacioComoUndefined(httpUrlSchema),
 
-  contactoNombre: z.string().trim().min(2).max(160),
+  contactoNombre: z.string({ error: "Falta el nombre del contacto" }).trim().min(2, "Mínimo 2 caracteres").max(160, "Máximo 160 caracteres"),
   contactoPuesto: vacioComoUndefined(z.string().trim().max(160)),
 
-  correo: vacioComoUndefined(z.string().trim().email().max(254)),
-  telefono: vacioComoUndefined(z.string().trim().min(7).max(40)),
-  canalInicial: z.enum(["correo", "telefono", "whatsapp"]),
+  correo: vacioComoUndefined(z.string().trim().email("Correo no válido").max(254, "Máximo 254 caracteres")),
+  telefono: vacioComoUndefined(z.string().trim().min(7, "Teléfono demasiado corto").max(40, "Máximo 40 caracteres")),
+  canalInicial: catalogoCsv(["correo", "telefono", "whatsapp"]),
 
-  confianza: vacioComoUndefined(z.enum(["alta", "media", "baja"])),
-  prioridad: vacioComoUndefined(z.enum(["alta", "media", "baja"])),
-  score: vacioComoUndefined(z.coerce.number().min(0).max(100)),
+  confianza: vacioComoUndefined(catalogoCsv(["alta", "media", "baja"])),
+  prioridad: vacioComoUndefined(catalogoCsv(["alta", "media", "baja"])),
+  score: vacioComoUndefined(z.coerce.number({ error: "Debe ser un número" }).min(0, "Mínimo 0").max(100, "Máximo 100")),
   fuenteUrl: vacioComoUndefined(httpUrlSchema),
   observaciones: vacioComoUndefined(z.string().trim().max(2000)),
-  campanaId: vacioComoUndefined(z.coerce.number().int().positive())
+  campanaId: vacioComoUndefined(z.coerce.number({ error: "Debe ser un número" }).int("Debe ser un número entero").positive("Debe ser un número positivo"))
 }));
 export type FilaCsv = z.infer<typeof filaCsvSchema>;
 
