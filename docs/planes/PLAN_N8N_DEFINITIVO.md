@@ -190,17 +190,19 @@ Decisiones de la ronda 2 (25-sep-2026):
 Decisiones de la ronda 3 (29-sep-2026). Revisadas con `/code-review`, `/plan` y `/grill-me`.
 Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no construir.
 
-1. **Cambios chicos en la API (primero, con TDD):**
-   - `POST /respuestas` crea **exactamente una** tarea de clasificación en la misma
-     transacción, ligada a la respuesta (`respuesta_id`) y sin cambiar el estado del
-     prospecto. Aplica también a las respuestas tardías: ahí la tarea de clasificación
-     **sustituye** a la tarea de seguimiento "Respuesta tardía de prospecto" que se crea hoy,
-     para que no queden dos tareas por la misma respuesta.
-   - `POST /respuestas` acepta una marca **automática** (fuera de oficina, respuesta
-     automática): la respuesta se guarda **sin cerrar la ventana y sin crear tarea**. La marca
-     **se guarda en la base** (migración 023, columna nueva en `respuestas`) para que el
-     historial de la ficha la distinga de una respuesta real y no infle la tasa de respuesta.
-     Hay que avisarle al equipo del CRM para que el historial la muestre distinto.
+1. **Cambios chicos en la API (primero, con TDD). Hechos el 29-sep-2026:**
+   - `POST /respuestas` con `crear_tarea_clasificacion: true` crea **exactamente una** tarea
+     de clasificación en la misma transacción, ligada a la respuesta (`respuesta_id`) y sin
+     cambiar el estado del prospecto. Aplica también a las respuestas tardías: ahí la tarea
+     de clasificación **sustituye** a la tarea de seguimiento "Respuesta tardía de prospecto",
+     para que no queden dos tareas por la misma respuesta. Sin la marca, todo sigue igual.
+   - `POST /respuestas` con `automatica: true` (fuera de oficina, respuesta automática) guarda
+     la respuesta **sin cerrar la ventana y sin crear tarea**. La marca **se guarda en la
+     base** reutilizando el valor `automatica` que ya existía en `respuestas.clasificacion`
+     (queda `estado = clasificada`), así que no hizo falta migración. El historial de la
+     ficha ya la muestra con resultado `automatica`; hay que avisarle al equipo del CRM para
+     que la pinte distinta de una respuesta real. Las métricas de tasa de respuesta deben
+     excluir ese valor. Las dos marcas juntas dan 400.
 2. **PT1, envío real:**
    - El filtro de **modo pruebas** va **antes** de `POST /envios`, para que un destinatario
      descartado no gaste un envío.
@@ -225,7 +227,8 @@ Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no
      punto 1. Si una se escapa, cae como respuesta normal y una persona la clasifica, que es
      el error seguro.
    - El `execution_id` se arma con el `Message-ID` del correo, para que un reenvío de SendGrid
-     no duplique la respuesta.
+     no duplique la respuesta. Como un `Message-ID` puede pasar de 100 caracteres (el máximo
+     de la API), n8n manda un hash corto de él (por ejemplo `msg-` + SHA-256 recortado).
 4. **PT3, eventos de SendGrid:**
    - Event Webhook **firmado**, con verificación de la firma en n8n.
    - Bajas por link (`unsubscribe`, `group_unsubscribe`) y quejas de spam van a

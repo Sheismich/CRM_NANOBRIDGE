@@ -859,7 +859,8 @@ export class AutomatizacionService {
   // prospecto+canal, la marca como tardía y crea una tarea comercial en
   // vez de tocar el outbound (PLAN_N8N_DEFINITIVO.md: "procesar
   // respuestas tardías: crear tarea comercial, no reiniciar
-  // automáticamente el outbound").
+  // automáticamente el outbound"). PT2 usa además los modos
+  // crear_tarea_clasificacion y automatica (ver respuestaRecibidaInputSchema).
   async registrarRespuesta(input: RespuestaRecibidaInput) {
     const [existing] = await this.db
       .select({ id: respuestas.id, envioId: respuestas.envioId, tardia: respuestas.tardia })
@@ -896,15 +897,37 @@ export class AutomatizacionService {
           canal: input.canal,
           contenido: input.contenido ?? null,
           tardia,
-          executionId: input.execution_id
+          executionId: input.execution_id,
+          // Una respuesta automática (fuera de oficina) no es una respuesta
+          // de la persona: se guarda ya clasificada como "automatica" (el
+          // historial de la ficha la muestra así), sin cerrar la ventana
+          // para que los recordatorios sigan, y sin tarea.
+          ...(input.automatica ? { estado: "clasificada" as const, clasificacion: "automatica" as const, clasificadoEn: sql`CURRENT_TIMESTAMP` } : {})
         });
+        if (input.automatica) {
+          return { id: result.insertId, envio_id: envioId, tardia, tarea_id: null, ya_existia: false as const };
+        }
 
         if (ventanaAbierta && ultimo) {
           await tx.update(envios).set({ ventanaEstado: "cerrada" }).where(eq(envios.id, ultimo.id));
         }
 
         let tareaId: number | null = null;
-        if (tardia) {
+        if (input.crear_tarea_clasificacion) {
+          // Una sola tarea por respuesta, a tiempo o tardía, en esta misma
+          // transacción. Su execution_id usa el id de la respuesta y no el
+          // de n8n: ese puede medir 100 caracteres, lo mismo que la columna.
+          const tarea = await this.tareasService.createFromAutomation({
+            execution_id: `resp-recibida-${result.insertId}`,
+            prospecto_id: input.prospecto_id,
+            respuesta_id: result.insertId,
+            tipo: "clasificacion",
+            titulo: tardia ? "Clasificar respuesta tardía" : "Clasificar respuesta",
+            descripcion: input.contenido,
+            prioridad: "media"
+          }, tx);
+          tareaId = tarea.id;
+        } else if (tardia) {
           const tarea = await this.tareasService.createFromAutomation({
             execution_id: `resp-tardia-${input.execution_id}`,
             prospecto_id: input.prospecto_id,

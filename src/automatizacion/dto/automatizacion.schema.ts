@@ -122,7 +122,17 @@ export const respuestaRecibidaInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),
   prospecto_id: z.coerce.number().int().positive(),
   canal: z.enum(["correo", "whatsapp"]).default("correo"),
-  contenido: z.string().trim().max(8000).optional()
+  contenido: z.string().trim().max(8000).optional(),
+  // Modos de PT2 (ronda 3 de SendGrid, PLAN_N8N_DEFINITIVO.md, 29-sep-2026).
+  // crear_tarea_clasificacion: mientras no haya clasificación con IA, la
+  // respuesta deja UNA tarea de clasificación para la cola (también si es
+  // tardía, en lugar de la de "Respuesta tardía"). automatica: fuera de
+  // oficina y similares; se guarda sin cerrar la ventana ni crear tarea.
+  crear_tarea_clasificacion: z.boolean().default(false),
+  automatica: z.boolean().default(false)
+}).refine((input) => !(input.crear_tarea_clasificacion && input.automatica), {
+  message: "Una respuesta automática no lleva tarea de clasificación",
+  path: ["automatica"]
 });
 export type RespuestaRecibidaInput = z.infer<typeof respuestaRecibidaInputSchema>;
 
