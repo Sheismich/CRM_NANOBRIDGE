@@ -20,7 +20,9 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 - Desactivar `Retry On Fail` del nodo Gemini para no duplicar intentos.
 - Si Gemini falla definitivamente, usar scoring por reglas.
 - Registrar incidencia mediante API.
-- Nunca enviar correo, teléfono, descripción libre o documentos a Gemini.
+- Nunca enviar correo, teléfono, descripción libre o documentos a Gemini. (Para clasificar
+  respuestas hay una excepción propuesta, **pendiente de aprobar por Carlos**: ver B2, "Clasificación
+  con IA: modo sugerencia primero".)
 
 ## B1 Sustituir MOCK por API
 
@@ -110,6 +112,59 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
   si es `true` (ya llegó a 3 contactos), n8n marca inactividad (`POST /prospectos/estado`) en vez
   de mandar otro. No hay que construir un job de "recordatorios" aparte de "ventanas vencidas".
 - Procesar respuestas tardías: crear tarea comercial, no reiniciar automáticamente el outbound.
+
+### Clasificación con IA: modo sugerencia primero (decidido 30-sep-2026)
+
+**Decisiones de Fabián (30-sep-2026).** Construidas del lado API con TDD. El workflow de IA en n8n
+todavía no existe.
+
+1. **"interesado" deja una tarea para un vendedor.** Aplica tanto si clasifica n8n como si lo hace
+   una persona en la cola. La tarea:
+   - se llama "Contactar prospecto interesado";
+   - queda **sin asignar**, y un supervisor la reparte con `PATCH /tareas/:id/asignar`;
+   - tiene prioridad alta;
+   - vence al **fin del siguiente día hábil en hora de México**. La alerta diaria de SLA avisa si
+     nadie la toma. El cálculo no conoce días festivos.
+
+   La oportunidad **no** se crea en automático: la crea el asesor que toma al interesado
+   (PLAN_CRM_DEFINITIVO.md).
+2. **La IA arranca en modo sugerencia.** El workflow queda así:
+   - PT2 sigue registrando cada respuesta con `crear_tarea_clasificacion: true`, así que cada una
+     sigue cayendo en la cola.
+   - Después, la IA manda `POST /automatizacion/respuestas/sugerencia` con `{ execution_id,
+     respuesta_id, clasificacion, confianza (0-100 entero), motivo? }`.
+   - La API solo guarda la propuesta: no cambia estados, no suprime y no cierra tareas.
+   - La cola la muestra en `respuesta.clasificacion_sugerida`, más `confianza_sugerida` y
+     `motivo_sugerencia`.
+   - Una persona confirma con `POST /cola-clasificacion/:id/clasificar`.
+
+   Registrar la respuesta va aparte a propósito: si Gemini falla, la respuesta ya quedó
+   registrada y los recordatorios ya se detuvieron. Reglas del endpoint:
+   - un reintento con el mismo `execution_id` responde `ya_existia`;
+   - otro `execution_id` sobrescribe la sugerencia;
+   - una respuesta ya decidida responde 409 `RESPUESTA_YA_CLASIFICADA`, y n8n debe ignorarlo
+     ("Never Error" + revisar el status, como PT3);
+   - un `motivo` de más de 500 caracteres se recorta, no se rechaza. Aun así, conviene pedirle a
+     Gemini un motivo corto.
+3. **Pasar a modo directo** es decisión aparte, cuando la IA demuestre que acierta. Bastaría con
+   llamar a `POST /automatizacion/respuestas/clasificacion` en vez de la sugerencia. La API ya
+   quedó lista para eso:
+   - cierra sola la tarea que PT2 dejó en la cola;
+   - "ambigua" reusa esa tarea en vez de crear otra;
+   - si una persona intenta clasificar una respuesta que ya decidió la IA, recibe 409
+     `RESPUESTA_YA_CLASIFICADA` y no la pisa.
+4. **Privacidad: ⚠ PENDIENTE DE APROBAR POR CARLOS.** La regla de "Reintento Gemini" dice "nunca
+   enviar descripción libre a Gemini", y el texto de una respuesta es justo eso.
+   - **Propuesta de Fabián:** permitirlo **solo después de** que n8n quite correos, teléfonos y la
+     firma del texto.
+   - **También hay que confirmar qué plan de Gemini se usa.** En el gratuito, Google puede usar
+     los datos para entrenar.
+
+   Hasta que Carlos lo apruebe, la regla original sigue vigente y el paso de IA de PT2 no se
+   construye. No bloquea nada: mientras tanto, todo se sigue clasificando a mano.
+5. `prospecto_clasificado` solo sale de la clasificación **manual**. Si clasificó n8n, n8n ya lo
+   sabe. Además, sin `N8N_WEBHOOK_URL` cada evento terminaría en `procesos_fallidos`, y eso sería
+   una fila por respuesta.
 
 ## Envío real con SendGrid (en planeación, `/grill-me` 24-sep-2026)
 

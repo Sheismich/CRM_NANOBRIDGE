@@ -156,6 +156,20 @@ gcloud sql instances patch nanobridge-db --clear-authorized-networks --project=c
 **Paso 5 — redesplegar** exactamente como en el punto 5 de arriba
 (`gcloud builds submit` + `gcloud run deploy`).
 
+**Siguiente deploy (pendiente desde el 30-sep-2026): trae la migración
+`023_sugerencia_clasificacion.sql`.** Agrega 5 columnas NULL a `respuestas`
+y un `CHECK` (confianza ≤ 100). Ese CHECK hace que MySQL copie la tabla,
+pero `respuestas` es chica. Hay que migrar **antes** de desplegar el código:
+la API nueva lee esas columnas en la cola de clasificación, y sin ellas
+`GET /cola-clasificacion` truena.
+
+Si `npm run migrate` se queda colgado en Cloud Shell, se aplica a mano:
+1. Conéctate con el cliente de MySQL, usando la IP y el usuario del paso 3:
+   `mysql -h <ip_publica> -u appuser -p nanobridge_crm`
+2. Pega el `ALTER TABLE` del archivo tal cual.
+3. Regístralo como aplicado, igual que lo hace `apply-migrations.ts`:
+   `INSERT INTO schema_migrations (version) VALUES ('023_sugerencia_clasificacion.sql');`
+
 ## 7. Consultar o rotar secretos
 
 Los valores actuales de los secretos no están escritos en ningún documento

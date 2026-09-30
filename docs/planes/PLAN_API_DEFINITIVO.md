@@ -30,7 +30,7 @@
 
 ## Endpoints de automatización n8n
 
-Mantener los 18 endpoints de automatización (todos con auth `X-API-Key` / `CRM_CALLBACK_API_KEY`):
+Mantener los 19 endpoints de automatización (todos con auth `X-API-Key` / `CRM_CALLBACK_API_KEY`):
 
 1. Parámetros.
 2. Catálogos.
@@ -48,10 +48,15 @@ Mantener los 18 endpoints de automatización (todos con auth `X-API-Key` / `CRM_
 14. Consulta de prospecto para scoring.
 15. Ventanas vencidas.
 16. Respuesta recibida.
-17. Respuesta clasificada (también recibe el caso ambiguo y lo inserta en `cola_clasificacion`; la pantalla CRM `/cola-clasificacion` solo lee y resuelve, nunca recibe escritura directa de n8n).
+17. Respuesta clasificada. El caso ambiguo deja una `tarea` con `tipo=clasificacion` ligada a la respuesta (no existe una tabla `cola_clasificacion`), o reusa la que ya tenga abierta. La pantalla CRM `/cola-clasificacion` solo lee y resuelve; nunca recibe escritura directa de n8n. Desde el 30-sep-2026:
+    - comparte con la clasificación manual una sola función (`TareasService.aplicarClasificacionDeRespuesta`);
+    - cierra las tareas de clasificación abiertas de esa respuesta;
+    - "interesado" deja la tarea "Contactar prospecto interesado";
+    - responde 409 `code: RESPUESTA_YA_CLASIFICADA` si la respuesta ya estaba decidida.
+19. Sugerencia de clasificación (30-sep-2026, IA en modo sugerencia): `POST /api/v1/automatizacion/respuestas/sugerencia`. Solo guarda lo que propone la IA (clasificación, confianza 0-100 y motivo) en columnas aparte de `respuestas` (migración 023); la cola lo muestra y una persona confirma. Ver PLAN_N8N_DEFINITIVO.md B2.
 18. Registrar error de workflow (n8n Error Workflow, B4): `POST /api/v1/automatizacion/errores-workflow`. Registra una incidencia y, si el fallo es crítico, también una fila en `procesos_fallidos`, en una sola llamada transaccional.
 
-**✅ Completado (10-sep-2026), extendido con B4 (14-sep-2026).** Los 18 endpoints están construidos, probados contra MySQL real (positivos, negativos, idempotencia) y en `main`. Historial de commits: `babdfab` (módulo base) hasta `a689a40` (Respuesta recibida/clasificada); B4 se agregó después, ver commit de "Registrar error de workflow".
+**✅ Completado (10-sep-2026), extendido con B4 (14-sep-2026).** Los 18 endpoints están construidos, probados contra MySQL real (positivos, negativos, idempotencia) y en `main`. El 19 (Sugerencia de clasificación) se agregó el 30-sep-2026. Historial de commits: `babdfab` (módulo base) hasta `a689a40` (Respuesta recibida/clasificada); B4 se agregó después, ver commit de "Registrar error de workflow".
 
 Todos los endpoints que n8n necesita para continuar el flujo son críticos. "Parámetros" y "Catálogos" están separados porque `PLAN_N8N_DEFINITIVO.md` (B1) los sustituye como dos pasos independientes.
 
