@@ -10,6 +10,7 @@ import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion } from "../shared/supresion.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo } from "../shared/reply-to.js";
+import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
@@ -1016,7 +1017,7 @@ export class AutomatizacionService {
       if (respuesta.executionIdClasificacion === input.execution_id) {
         return { id: respuesta.id, prospecto_id: respuesta.prospectoId, clasificacion: respuesta.clasificacion, tarea_id: null, ya_existia: true as const };
       }
-      throw new HttpError(409, "La respuesta ya fue clasificada");
+      throw new HttpError(409, "La respuesta ya fue clasificada", CODIGO_RESPUESTA_YA_CLASIFICADA);
     }
 
     // Update de respuestas + update de prospectos + creación de la tarea

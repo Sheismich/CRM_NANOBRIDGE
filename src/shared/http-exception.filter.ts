@@ -7,7 +7,8 @@ import { HttpError } from "./http-error.js";
  * Filtro global de excepciones. Reemplaza al errorHandler/notFound de
  * Express y al withErrorHandling/notFoundResponse de la versión en
  * Next.js, con el mismo formato de respuesta en los tres casos:
- * - HttpError propio -> { error: "request_error", message } con su status.
+ * - HttpError propio -> { error: "request_error", message } con su status,
+ *   más `code` cuando el error trae uno (ver http-error.ts).
  * - 404 automático de Nest (ninguna ruta coincide) -> el mismo cuerpo que
  *   ya devolvía el catch-all de Express/Next.
  * - ZodError (body/query inválido) -> 400 con el detalle de campos. Esto
@@ -21,7 +22,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
 
     if (exception instanceof HttpError) {
-      response.status(exception.status).json({ error: "request_error", message: exception.message });
+      response.status(exception.status).json({ error: "request_error", message: exception.message, ...(exception.code ? { code: exception.code } : {}) });
       return;
     }
 

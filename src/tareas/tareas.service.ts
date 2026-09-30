@@ -1,12 +1,13 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import { and, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, contactos, empresas, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { aplicarClasificacionAlProspecto, type ClasificacionRespuesta, type OrigenClasificacion } from "../shared/clasificacion-respuesta.js";
 import { recortarTexto } from "../shared/texto.js";
+import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
@@ -37,9 +38,10 @@ export type ClasificacionDeRespuesta = {
   // Solo con "reagendar": fecha de la tarea de seguimiento.
   fechaSeguimiento: Date | null;
   origen: OrigenClasificacion;
-  // Qué respuestas se pueden clasificar: n8n solo una que siga pendiente;
-  // la clasificación manual no revisa nada (todavía).
-  guarda: "pendiente" | "ninguna";
+  // Qué respuestas se pueden clasificar: n8n, solo una que siga pendiente;
+  // una persona en la cola, también una "ambigua" (resolverla es justo para
+  // lo que existe la cola). Ninguno pisa una decisión ya tomada.
+  guarda: "pendiente" | "pendiente_o_ambigua";
 };
 
 function toRow(row: typeof tareas.$inferSelect) {
@@ -132,13 +134,16 @@ export class TareasService {
     return toRow(row);
   }
 
-  private async findAssignable(user: CurrentUser, id: number) {
+  // codigoSiCerrada: el `code` del 409 cuando la tarea ya está cerrada (la
+  // cola de clasificación lo usa para decir "ya la clasificó otra persona o
+  // la IA").
+  private async findAssignable(user: CurrentUser, id: number, codigoSiCerrada?: string) {
     const [row] = await this.db.select().from(tareas).where(eq(tareas.id, id)).limit(1);
     if (!row || (user.rol === "agente" && row.responsableId !== user.id)) {
       throw new HttpError(404, "Tarea no encontrada");
     }
     if (row.estado === "cerrada" || row.estado === "cancelada") {
-      throw new HttpError(409, "La tarea ya está cerrada");
+      throw new HttpError(409, "La tarea ya está cerrada", codigoSiCerrada);
     }
     return row;
   }
@@ -296,16 +301,31 @@ export class TareasService {
         // 14-sep-2026): dos clasificaciones simultáneas de la misma
         // respuesta pasaban ambas la lectura previa de quien llama, y la
         // segunda pisaba en silencio a la primera.
-        input.guarda === "pendiente" ? ne(respuestas.estado, "clasificada") : undefined
+        // Una persona que llega a una respuesta ya decidida (por la IA o
+        // por otra persona) no la pisa: antes el UPDATE manual no revisaba
+        // nada (hallazgo de /code-review, 30-sep-2026).
+        input.guarda === "pendiente"
+          ? ne(respuestas.estado, "clasificada")
+          : or(ne(respuestas.estado, "clasificada"), eq(respuestas.clasificacion, "ambigua"))
       ])));
-      if (result.affectedRows === 0) throw new HttpError(409, "La respuesta ya fue clasificada por otra solicitud");
+      if (result.affectedRows === 0) {
+        throw new HttpError(409, "La respuesta ya fue clasificada por otra solicitud", CODIGO_RESPUESTA_YA_CLASIFICADA);
+      }
     }
 
     const { estadoProspecto, supresionIds } = await aplicarClasificacionAlProspecto(tx, input.prospectoId, input.clasificacion, input.origen);
 
     let tareaId: number | null = null;
     if (input.clasificacion === "ambigua") {
-      const tarea = await this.createFromAutomation({
+      // Si la respuesta ya tiene su tarea en la cola (PT2 la crea con
+      // crear_tarea_clasificacion), se reusa: antes nacía una segunda.
+      const [abierta] = input.respuestaId === null ? [] : await tx
+        .select({ id: tareas.id })
+        .from(tareas)
+        .where(and(eq(tareas.respuestaId, input.respuestaId), eq(tareas.tipo, "clasificacion"), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`))
+        .orderBy(tareas.id)
+        .limit(1);
+      tareaId = abierta?.id ?? (await this.createFromAutomation({
         execution_id: `resp-clasif-${input.origen.executionId}`,
         prospecto_id: input.prospectoId,
         respuesta_id: input.respuestaId ?? undefined,
@@ -313,9 +333,22 @@ export class TareasService {
         titulo: "Clasificar respuesta ambigua",
         descripcion: input.comentario ?? input.contenido ?? undefined,
         prioridad: "media"
-      }, tx);
-      tareaId = tarea.id;
-    } else if (input.clasificacion === "reagendar") {
+      }, tx)).id;
+    } else if (input.respuestaId !== null) {
+      // Ya hay decisión: las tareas de clasificación de esta respuesta que
+      // sigan abiertas se cierran con ella. Sin esto, si la IA clasificaba
+      // directo, la tarea de PT2 se quedaba en la cola y una persona podía
+      // pisar la decisión. La tarea que resolvió una persona ya viene
+      // cerrada (clasificar la cierra primero), así que no entra aquí.
+      await tx.update(tareas).set({
+        estado: "cerrada",
+        clasificacion: input.clasificacion,
+        resultado: `Clasificada como ${input.clasificacion} (${input.origen.descripcion})`,
+        cerradaEn: sql`CURRENT_TIMESTAMP`
+      }).where(and(eq(tareas.respuestaId, input.respuestaId), eq(tareas.tipo, "clasificacion"), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
+    }
+
+    if (input.clasificacion === "reagendar") {
       const { empresaId, contactoId } = await this.contextoDeProspecto(tx, input.prospectoId);
       const [seguimiento] = await tx.insert(tareas).values({
         tipo: "seguimiento",
@@ -341,7 +374,7 @@ export class TareasService {
   // aplicarClasificacionDeRespuesta. El evento prospecto_clasificado sigue
   // saliendo, solo como aviso.
   async clasificar(user: CurrentUser, id: number, input: ClasificarTareaInput) {
-    const row = await this.findAssignable(user, id);
+    const row = await this.findAssignable(user, id, CODIGO_RESPUESTA_YA_CLASIFICADA);
     if (row.tipo !== "clasificacion") {
       throw new HttpError(409, "Solo las tareas de clasificación se resuelven aquí");
     }
@@ -360,7 +393,7 @@ export class TareasService {
         resultado: input.comentario ?? input.clasificacion,
         cerradaEn: sql`CURRENT_TIMESTAMP`
       }).where(and(eq(tareas.id, id), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
-      if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada");
+      if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada", CODIGO_RESPUESTA_YA_CLASIFICADA);
 
       // Las tareas de clasificación creadas a mano (POST /tareas) no tienen
       // respuesta; las anteriores a 022 la recuperan con su backfill.
@@ -372,7 +405,7 @@ export class TareasService {
         contenido: null,
         fechaSeguimiento: input.fechaSeguimiento ?? null,
         origen: { descripcion: `clasificación manual, tarea ${id}`, executionId: null, usuarioId: user.id },
-        guarda: "ninguna"
+        guarda: "pendiente_o_ambigua"
       });
 
       await this.outboxService.enqueue(tx, {

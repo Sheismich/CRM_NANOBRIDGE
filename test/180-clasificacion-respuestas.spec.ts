@@ -366,6 +366,92 @@ describe("respuestas: clasificación automática y manual", () => {
     });
   });
 
+  // PT2 registra cada respuesta con crear_tarea_clasificacion (una tarea en
+  // la cola por respuesta). Cuando la IA clasifique directo, esa tarea se
+  // quedaba abierta: una persona podía clasificarla después y pisar la
+  // decisión de la IA (ej. la IA dijo "baja" y suprimió el contacto; la
+  // persona pone "interesado"), y "ambigua" creaba una segunda tarea para
+  // la misma respuesta (hallazgo de /code-review, 30-sep-2026).
+  describe("la IA y la cola no se pisan", () => {
+    async function respuestaConTareaEnCola(prospectoId: number, contenido = "¿cuánto cuesta?") {
+      const res = await api()
+        .post("/api/v1/automatizacion/respuestas")
+        .set("X-API-Key", API_KEY)
+        .send({ execution_id: randomUUID(), prospecto_id: prospectoId, canal: "correo", contenido, crear_tarea_clasificacion: true });
+      expect(res.status).toBe(201);
+      return { respuestaId: res.body.id as number, tareaId: res.body.tarea_id as number };
+    }
+
+    async function idsEnCola() {
+      const cola = await api().get("/api/v1/cola-clasificacion").query({ limit: 100 }).set("Cookie", adminCookie);
+      return (cola.body.data as { id: number }[]).map((t) => t.id);
+    }
+
+    it("si n8n clasifica una respuesta que tenía tarea en la cola, la tarea se cierra y sale de la cola", async () => {
+      const prospecto = await registrarProspecto();
+      const { respuestaId, tareaId } = await respuestaConTareaEnCola(prospecto.id);
+      expect(await idsEnCola()).toContain(tareaId);
+
+      expect((await clasificarAutomatica(respuestaId, "interesado")).status).toBe(201);
+
+      const [tarea] = await db.select().from(tareas).where(eq(tareas.id, tareaId));
+      expect(tarea!.estado).toBe("cerrada");
+      expect(tarea!.clasificacion).toBe("interesado");
+      expect(tarea!.resultado).toMatch(/n8n/);
+      expect(await idsEnCola()).not.toContain(tareaId);
+    });
+
+    it("después, una persona ya no puede clasificar esa tarea: 409 con code RESPUESTA_YA_CLASIFICADA", async () => {
+      const prospecto = await registrarProspecto({ conTelefono: true });
+      const { respuestaId, tareaId } = await respuestaConTareaEnCola(prospecto.id, "ya no me escriban");
+      expect((await clasificarAutomatica(respuestaId, "baja")).status).toBe(201);
+
+      const res = await api().post(`/api/v1/cola-clasificacion/${tareaId}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "interesado" });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("RESPUESTA_YA_CLASIFICADA");
+
+      const [fila] = await db.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, prospecto.id));
+      expect(fila!.estado).toBe("baja");
+    });
+
+    // Caso de datos inconsistentes (la tarea sigue abierta pero la respuesta
+    // ya tiene una decisión que no es "ambigua"): la persona no la pisa.
+    it("una persona no pisa una respuesta ya clasificada aunque su tarea siga abierta", async () => {
+      const prospecto = await registrarProspecto();
+      const { respuestaId, tareaId } = await respuestaConTareaEnCola(prospecto.id);
+      await db.update(respuestas).set({ estado: "clasificada", clasificacion: "no_interesado" }).where(eq(respuestas.id, respuestaId));
+
+      const res = await api().post(`/api/v1/cola-clasificacion/${tareaId}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "interesado" });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("RESPUESTA_YA_CLASIFICADA");
+      const [fila] = await db.select({ clasificacion: respuestas.clasificacion }).from(respuestas).where(eq(respuestas.id, respuestaId));
+      expect(fila!.clasificacion).toBe("no_interesado");
+    });
+
+    it("n8n tampoco reclasifica una respuesta ya clasificada: 409 con code RESPUESTA_YA_CLASIFICADA", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id);
+      expect((await clasificarAutomatica(respuestaId, "no_interesado")).status).toBe(201);
+
+      const res = await clasificarAutomatica(respuestaId, "interesado");
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("RESPUESTA_YA_CLASIFICADA");
+    });
+
+    it("'ambigua' de una respuesta que ya tiene tarea en la cola reusa esa tarea en vez de crear otra", async () => {
+      const prospecto = await registrarProspecto();
+      const { respuestaId, tareaId } = await respuestaConTareaEnCola(prospecto.id);
+
+      const res = await clasificarAutomatica(respuestaId, "ambigua");
+      expect(res.status).toBe(201);
+      expect(res.body.tarea_id).toBe(tareaId);
+
+      const deLaRespuesta = await db.select().from(tareas).where(and(eq(tareas.respuestaId, respuestaId), eq(tareas.tipo, "clasificacion")));
+      expect(deLaRespuesta).toHaveLength(1);
+      expect(deLaRespuesta[0]!.estado).toBe("pendiente");
+    });
+  });
+
   // El Historial de la ficha de cliente (GET /actividades) solo mostraba los
   // cambios de estado hechos por POST /automatizacion/prospectos/estado: una
   // clasificación cambiaba el estado del prospecto sin dejar ese rastro

@@ -15,6 +15,11 @@
 export const CLASIFICACIONES_RESPUESTA = ["interesado", "no_interesado", "baja", "automatica", "ambigua", "invalido", "reagendar"] as const;
 export type ClasificacionRespuesta = (typeof CLASIFICACIONES_RESPUESTA)[number];
 
+// `code` del 409 cuando alguien (una persona, n8n o la sugerencia de la IA)
+// llega a una respuesta que otro ya clasificó. La pantalla de la cola
+// compara contra esto, no contra el texto del mensaje.
+export const CODIGO_RESPUESTA_YA_CLASIFICADA = "RESPUESTA_YA_CLASIFICADA";
+
 // Lo que puede decidir n8n (POST /automatizacion/respuestas/clasificacion).
 export const CLASIFICACIONES_N8N = ["interesado", "no_interesado", "baja", "automatica", "ambigua"] as const satisfies readonly ClasificacionRespuesta[];
 
