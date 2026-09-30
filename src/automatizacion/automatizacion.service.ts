@@ -1050,7 +1050,8 @@ export class AutomatizacionService {
           contenido: respuesta.contenido,
           fechaSeguimiento: null,
           origen: { descripcion: `clasificación de n8n, respuesta ${respuesta.id}`, executionId: input.execution_id, usuarioId: null },
-          guarda: "pendiente"
+          guarda: "pendiente",
+          tareaClasificacionId: null
         });
       } catch (error) {
         if (isDuplicateEntry(error)) {

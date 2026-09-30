@@ -452,6 +452,91 @@ describe("respuestas: clasificación automática y manual", () => {
     });
   });
 
+  // Un "interesado" solo cambiaba el estado del prospecto: nadie se
+  // enteraba. PLAN_CRM_DEFINITIVO.md: la oportunidad la crea el asesor que
+  // toma al interesado, así que se deja una tarea sin asignar para que un
+  // supervisor la reparta (decisión del 30-sep-2026).
+  describe("'interesado' deja una tarea para un vendedor", () => {
+    async function tareasDeInteresado(prospectoId: number) {
+      return db.select().from(tareas).where(and(eq(tareas.prospectoId, prospectoId), eq(tareas.titulo, "Contactar prospecto interesado")));
+    }
+
+    function esperarTareaDeInteresado(tarea: typeof tareas.$inferSelect | undefined, respuestaId: number | null, antes: Date) {
+      expect(tarea).toBeDefined();
+      expect(tarea!.tipo).toBe("seguimiento");
+      expect(tarea!.prioridad).toBe("alta");
+      expect(tarea!.estado).toBe("pendiente");
+      expect(tarea!.responsableId).toBeNull();
+      expect(tarea!.respuestaId).toBe(respuestaId);
+      expect(tarea!.empresaId).toEqual(expect.any(Number));
+      // Fin del siguiente día hábil en México (ver 215-dia-habil-mx): el
+      // valor exacto depende de la hora a la que corra la prueba.
+      const limite = tarea!.fechaLimite!.getTime();
+      expect(limite).toBeGreaterThan(antes.getTime());
+      expect(limite).toBeLessThanOrEqual(antes.getTime() + 4 * 86_400_000);
+    }
+
+    it("clasificado por n8n: una tarea 'Contactar prospecto interesado' sin asignar, prioridad alta, con fecha límite", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "sí me interesa, llámenme");
+      const antes = new Date();
+
+      expect((await clasificarAutomatica(respuestaId, "interesado")).status).toBe(201);
+
+      const creadas = await tareasDeInteresado(prospecto.id);
+      expect(creadas).toHaveLength(1);
+      esperarTareaDeInteresado(creadas[0], respuestaId, antes);
+      expect(creadas[0]!.descripcion).toMatch(/sí me interesa, llámenme/);
+    });
+
+    it("clasificado a mano en la cola: la misma tarea, también sin asignar", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "me interesa la propuesta");
+      const tareaId = (await clasificarAutomatica(respuestaId, "ambigua")).body.tarea_id as number;
+      const antes = new Date();
+
+      expect((await api().post(`/api/v1/cola-clasificacion/${tareaId}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "interesado" })).status).toBe(200);
+
+      const creadas = await tareasDeInteresado(prospecto.id);
+      expect(creadas).toHaveLength(1);
+      esperarTareaDeInteresado(creadas[0], respuestaId, antes);
+      expect(creadas[0]!.descripcion).toMatch(/me interesa la propuesta/);
+    });
+
+    it("en una tarea de clasificación creada a mano (sin respuesta) también se crea", async () => {
+      const prospecto = await registrarProspecto();
+      const adminId = (await api().get("/api/v1/auth/me").set("Cookie", adminCookie)).body.id as number;
+      const creada = await api().post("/api/v1/tareas").set("Cookie", adminCookie).send({ tipo: "clasificacion", titulo: "Clasificar a mano", responsableId: adminId, prospectoId: prospecto.id });
+      const antes = new Date();
+
+      expect((await api().post(`/api/v1/cola-clasificacion/${creada.body.id}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "interesado" })).status).toBe(200);
+
+      const creadas = await tareasDeInteresado(prospecto.id);
+      expect(creadas).toHaveLength(1);
+      esperarTareaDeInteresado(creadas[0], null, antes);
+    });
+
+    it("un reintento de n8n con el mismo execution_id no la duplica", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "interesado");
+      const executionId = randomUUID();
+      const enviar = () => api().post("/api/v1/automatizacion/respuestas/clasificacion").set("X-API-Key", API_KEY).send({ execution_id: executionId, respuesta_id: respuestaId, clasificacion: "interesado" });
+
+      expect((await enviar()).status).toBe(201);
+      const segunda = await enviar();
+      expect(segunda.status).toBe(200);
+      expect(segunda.body.ya_existia).toBe(true);
+      expect(await tareasDeInteresado(prospecto.id)).toHaveLength(1);
+    });
+
+    it("las demás clasificaciones no crean esta tarea", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "no gracias");
+      expect((await clasificarAutomatica(respuestaId, "no_interesado")).status).toBe(201);
+      expect(await tareasDeInteresado(prospecto.id)).toHaveLength(0);
+    });
+  });
+
   // El Historial de la ficha de cliente (GET /actividades) solo mostraba los
   // cambios de estado hechos por POST /automatizacion/prospectos/estado: una
   // clasificación cambiaba el estado del prospecto sin dejar ese rastro

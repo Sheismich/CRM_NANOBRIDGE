@@ -7,6 +7,7 @@ import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { aplicarClasificacionAlProspecto, type ClasificacionRespuesta, type OrigenClasificacion } from "../shared/clasificacion-respuesta.js";
 import { recortarTexto } from "../shared/texto.js";
+import { finSiguienteDiaHabilMx } from "../shared/dia-habil.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
@@ -42,6 +43,8 @@ export type ClasificacionDeRespuesta = {
   // una persona en la cola, también una "ambigua" (resolverla es justo para
   // lo que existe la cola). Ninguno pisa una decisión ya tomada.
   guarda: "pendiente" | "pendiente_o_ambigua";
+  // La tarea de la cola que resolvió una persona; NULL si clasificó n8n.
+  tareaClasificacionId: number | null;
 };
 
 function toRow(row: typeof tareas.$inferSelect) {
@@ -348,6 +351,10 @@ export class TareasService {
       }).where(and(eq(tareas.respuestaId, input.respuestaId), eq(tareas.tipo, "clasificacion"), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
     }
 
+    if (input.clasificacion === "interesado") {
+      tareaId = await this.crearTareaDeInteresado(tx, input);
+    }
+
     if (input.clasificacion === "reagendar") {
       const { empresaId, contactoId } = await this.contextoDeProspecto(tx, input.prospectoId);
       const [seguimiento] = await tx.insert(tareas).values({
@@ -366,6 +373,33 @@ export class TareasService {
     }
 
     return { estadoProspecto, supresionIds, tareaId };
+  }
+
+  // Un "interesado" solo cambiaba el estado del prospecto y nadie se
+  // enteraba. PLAN_CRM_DEFINITIVO.md: "Las oportunidades se crean cuando un
+  // prospecto interesado es tomado por un asesor", así que no se crea la
+  // oportunidad: queda una tarea sin asignar, prioridad alta, para que un
+  // supervisor la reparta (PATCH /tareas/:id/asignar). Con fecha límite al
+  // fin del siguiente día hábil, la alerta diaria de SLA avisa si nadie la
+  // tomó (decisión del 30-sep-2026). Idempotente: una por respuesta (o por
+  // tarea de la cola, si la creó una persona sin respuesta).
+  private async crearTareaDeInteresado(tx: DrizzleTx, input: ClasificacionDeRespuesta) {
+    let contenido = input.contenido;
+    if (contenido === null && input.respuestaId !== null) {
+      const [respuesta] = await tx.select({ contenido: respuestas.contenido }).from(respuestas).where(eq(respuestas.id, input.respuestaId)).limit(1);
+      contenido = respuesta?.contenido ?? null;
+    }
+    const tarea = await this.createFromAutomation({
+      execution_id: input.respuestaId !== null ? `interesado-resp-${input.respuestaId}` : `interesado-tarea-${input.tareaClasificacionId}`,
+      prospecto_id: input.prospectoId,
+      respuesta_id: input.respuestaId ?? undefined,
+      tipo: "seguimiento",
+      titulo: "Contactar prospecto interesado",
+      descripcion: [`Clasificada como interesado (${input.origen.descripcion}).`, input.comentario, contenido].filter((linea) => linea).join("\n\n"),
+      prioridad: "alta",
+      fecha_limite: finSiguienteDiaHabilMx(new Date()).toISOString()
+    }, tx);
+    return tarea.id;
   }
 
   // La decisión de la persona se aplica aquí mismo, en una sola transacción
@@ -405,7 +439,8 @@ export class TareasService {
         contenido: null,
         fechaSeguimiento: input.fechaSeguimiento ?? null,
         origen: { descripcion: `clasificación manual, tarea ${id}`, executionId: null, usuarioId: user.id },
-        guarda: "pendiente_o_ambigua"
+        guarda: "pendiente_o_ambigua",
+        tareaClasificacionId: id
       });
 
       await this.outboxService.enqueue(tx, {
