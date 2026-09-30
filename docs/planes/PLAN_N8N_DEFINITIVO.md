@@ -113,6 +113,60 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
   de mandar otro. No hay que construir un job de "recordatorios" aparte de "ventanas vencidas".
 - Procesar respuestas tardías: crear tarea comercial, no reiniciar automáticamente el outbound.
 
+### Flujo de recordatorios (correos 2 y 3): contrato con la API (30-sep-2026)
+
+**`GET /automatizacion/envios/vencidas`.** Cada fila de `data` trae lo necesario para mandar el
+correo:
+- `correo`: uno activo y fuera de `lista_supresion`, el principal primero;
+- `contacto_nombre`, `empresa_nombre` (el nombre comercial o, si no hay, el legal) y `giro`;
+- `campana_id` y `campana_activa`, que vale `null` cuando no hay campaña. Con eso n8n ya no
+  necesita llamar a "Campaña activa".
+
+**Filas que la API no devuelve.** Las deja reclamadas (`vencida`), así que **el recordatorio queda
+cancelado, no en pausa**: si la campaña se reactiva, no se disparan todas juntas. Las lista en
+`omitidas: [{ envio_id, prospecto_id, motivo }]`, con una fila de auditoría
+`recordatorio_omitido` cada una. Los motivos son:
+- `prospecto_cerrado`: el prospecto está en baja, interesado, no_interesado, descartado,
+  excluido o inactivo;
+- `campana_inactiva`: la campaña está pausada, finalizada o ya pasó su fecha de fin;
+- `sin_correo`: la persona no tiene correo utilizable;
+- `suprimido`: sus correos están dados de baja;
+- `canal_desactivado`: el envío era por WhatsApp.
+
+**Excepción:** la fila con `es_ultimo_contacto: true` se devuelve aunque la campaña esté inactiva
+o no haya correo, porque ahí n8n no manda nada: marca al prospecto `inactivo` con
+`POST /prospectos/estado`. Solo se omite si el prospecto ya está cerrado.
+
+**Qué hace n8n con cada fila:**
+1. Si `es_ultimo_contacto` es `true`, marca al prospecto inactivo y no manda nada.
+2. Si no hay campaña (`campana_id` es `null`), solo sigue en modo pruebas, igual que PT1, con la
+   misma lista `PERMITIDOS` y el mismo `SANDBOX`.
+3. Registra el envío con `POST /envios` y `execution_id = "recordatorio-" + envio_id`, con el
+   `envio_id` **de la fila**. Es fijo por recordatorio; no se usa el id de la ejecución.
+4. Si la API responde `ya_existia: true`, **no manda el correo**.
+5. Si no, llama a PT1b con el `reply_to` que devolvió `POST /envios`.
+
+**Sin correos dobles:**
+- Dos corridas del poll nunca reciben la misma ventana, por `FOR UPDATE SKIP LOCKED` más el
+  reclamo en la misma transacción.
+- Dos `POST /envios` para la misma persona se serializan: uno pasa y el otro recibe 409 por la
+  ventana nueva.
+- Un reintento con el mismo `execution_id` responde `ya_existia`.
+
+Hay tests de las tres cosas.
+
+**Riesgo aceptado:** si el registro pasa y PT1b falla, el Error Workflow (B4) deja la incidencia y
+un reintento ya no manda nada, porque recibe `ya_existia`. Se prefiere perder un recordatorio a
+mandar uno doble. Hacerlo perfecto requiere guardar la confirmación de SendGrid en `envios`; queda
+como mejora.
+
+**Gemini:** el flujo de recordatorios **no le pasa correo, nombre, empresa ni giro a Gemini**.
+Personalizar el texto con IA pasaría por la misma aprobación de Carlos que la clasificación de
+respuestas.
+
+**Prueba en vivo:** los envíos de prueba 11 a 13 vencen el 6-oct-2026. No se mueven fechas a mano
+en producción. Mientras tanto, el flujo se construye y se prueba con datos de ejemplo en n8n.
+
 ### Clasificación con IA: modo sugerencia primero (decidido 30-sep-2026)
 
 **Decisiones de Fabián (30-sep-2026).** Construidas del lado API con TDD. El workflow de IA en n8n

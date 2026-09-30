@@ -46,7 +46,7 @@ Mantener los 19 endpoints de automatización (todos con auth `X-API-Key` / `CRM_
 12. Consulta de supresión (verificar antes de enviar).
 13. Registro de supresión (alta de baja / `no_contactar`). Desde el 24-sep-2026, cuando una respuesta se clasifica `baja` (por n8n en "Respuesta clasificada" o a mano en la cola de clasificación), la API la registra en la misma transacción. El endpoint queda para supresiones que no vienen de una respuesta, como el link de baja del proveedor de correo.
 14. Consulta de prospecto para scoring.
-15. Ventanas vencidas.
+15. Ventanas vencidas. Desde el 30-sep-2026 cada fila trae `correo`, `contacto_nombre`, `empresa_nombre`, `giro`, `campana_id` y `campana_activa`; las ventanas a las que no se debe escribir (prospecto cerrado, campaña inactiva, sin correo, suprimido, WhatsApp) no se devuelven, quedan canceladas y salen en `omitidas` con su motivo. Contrato completo en PLAN_N8N_DEFINITIVO.md B2, "Flujo de recordatorios".
 16. Respuesta recibida.
 17. Respuesta clasificada. El caso ambiguo deja una `tarea` con `tipo=clasificacion` ligada a la respuesta (no existe una tabla `cola_clasificacion`), o reusa la que ya tenga abierta. La pantalla CRM `/cola-clasificacion` solo lee y resuelve; nunca recibe escritura directa de n8n. Desde el 30-sep-2026:
     - comparte con la clasificación manual una sola función (`TareasService.aplicarClasificacionDeRespuesta`);
