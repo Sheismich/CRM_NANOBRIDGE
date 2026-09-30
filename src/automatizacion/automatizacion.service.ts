@@ -28,6 +28,26 @@ const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
 const MAX_CONTACTOS_POR_CICLO = 3;
 const MESES_ENFRIAMIENTO = 6;
 
+// Estados en los que un prospecto ya no recibe recordatorios: respondió y
+// se clasificó, pidió la baja, o la automatización lo sacó del flujo.
+const ESTADOS_PROSPECTO_CERRADO: readonly string[] = ["baja", "interesado", "no_interesado", "descartado", "excluido", "inactivo"];
+
+// Por qué /envios/vencidas no devuelve una ventana (ver destinoDeRecordatorio).
+type MotivoRecordatorioOmitido = "prospecto_cerrado" | "campana_inactiva" | "sin_correo" | "suprimido" | "canal_desactivado";
+
+// Lo que n8n necesita para mandar un recordatorio. Nada de esto va a
+// Gemini (PLAN_N8N_DEFINITIVO.md B2, flujo de recordatorios).
+type CorreoDeRecordatorio = { valor: string } | { motivo: "sin_correo" | "suprimido" | "canal_desactivado" };
+
+type DatosRecordatorio = {
+  correo: string | null;
+  contacto_nombre: string;
+  empresa_nombre: string;
+  giro: string | null;
+  campana_id: number | null;
+  campana_activa: boolean | null;
+};
+
 function sumarMeses(fecha: Date, meses: number): Date {
   const result = new Date(fecha);
   result.setMonth(result.getMonth() + meses);
@@ -757,7 +777,7 @@ export class AutomatizacionService {
         // termine su transacción.
         .for("update", { skipLocked: true });
 
-      if (rows.length === 0) return { data: [] };
+      if (rows.length === 0) return { data: [], omitidas: [] };
 
       await tx.update(envios).set({ ventanaEstado: "vencida" }).where(inArray(envios.id, rows.map((row) => row.id)));
 
@@ -772,22 +792,110 @@ export class AutomatizacionService {
       const contactoDe = new Map(duenos.map((d) => [d.id, d.contactoId]));
 
       const data = [];
+      const omitidas: { envio_id: number; prospecto_id: number; motivo: MotivoRecordatorioOmitido }[] = [];
       for (const row of rows) {
-        const ciclo = await this.cicloActualDePersona(tx, contactoDe.get(row.prospectoId)!, row.canal);
+        const contactoId = contactoDe.get(row.prospectoId)!;
+        const ciclo = await this.cicloActualDePersona(tx, contactoId, row.canal);
         if (ciclo[0]?.id !== row.id) continue;
+
+        const esUltimoContacto = ciclo.length >= MAX_CONTACTOS_POR_CICLO;
+        const destino = await this.destinoDeRecordatorio(tx, row.prospectoId, contactoId, row.canal, esUltimoContacto);
+        if ("motivo" in destino) {
+          omitidas.push({ envio_id: row.id, prospecto_id: row.prospectoId, motivo: destino.motivo });
+          await tx.insert(auditoria).values({
+            usuarioId: null,
+            entidad: "envio",
+            entidadId: row.id,
+            accion: "recordatorio_omitido",
+            despues: { motivo: destino.motivo, prospecto_id: row.prospectoId }
+          });
+          continue;
+        }
+
         data.push({
           envio_id: row.id,
           prospecto_id: row.prospectoId,
           canal: row.canal,
           numero_contacto: row.numeroContacto,
           numero_en_ciclo: ciclo.length,
-          es_ultimo_contacto: ciclo.length >= MAX_CONTACTOS_POR_CICLO,
-          enviado_en: row.enviadoEn
+          es_ultimo_contacto: esUltimoContacto,
+          enviado_en: row.enviadoEn,
+          ...destino
         });
       }
 
-      return { data };
+      return { data, omitidas };
     });
+  }
+
+  // A quién va el recordatorio de una ventana vencida, o por qué no se le
+  // escribe (decisión del 30-sep-2026). Antes /vencidas no traía ni el
+  // correo (la consulta de scoring lo excluye a propósito por Gemini) y
+  // n8n tenía que ignorar por su cuenta las ventanas de campañas
+  // inactivas. Las omitidas ya quedaron reclamadas (vencida) por el poll:
+  // no vuelven a salir, así que el recordatorio queda cancelado, no en
+  // pausa -- si la campaña se reactiva no se disparan todas juntas.
+  //
+  // La última ventana de la persona (es_ultimo_contacto) se devuelve
+  // aunque no haya correo o la campaña ya no esté activa: ahí n8n no manda
+  // nada, marca al prospecto inactivo. Solo se omite si el prospecto ya
+  // está cerrado.
+  private async destinoDeRecordatorio(tx: DrizzleTx, prospectoId: number, contactoId: number, canal: "correo" | "whatsapp", esUltimoContacto: boolean): Promise<{ motivo: MotivoRecordatorioOmitido } | DatosRecordatorio> {
+    const [contexto] = await tx
+      .select({
+        estado: prospectos.estado,
+        campanaId: prospectos.campanaId,
+        campanaEstado: campanas.estado,
+        campanaVigente: sql<number | null>`(${campanas.fechaFin} IS NULL OR ${campanas.fechaFin} >= CURDATE())`,
+        contactoNombre: contactos.nombre,
+        empresaNombre: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
+        giro: empresas.giro
+      })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
+      .where(eq(prospectos.id, prospectoId))
+      .limit(1);
+
+    if (!contexto || ESTADOS_PROSPECTO_CERRADO.includes(contexto.estado)) return { motivo: "prospecto_cerrado" as const };
+
+    const campanaActiva = contexto.campanaId === null ? null : contexto.campanaEstado === "activa" && !!Number(contexto.campanaVigente);
+    const correo: CorreoDeRecordatorio = canal === "correo" ? await this.correoParaRecordatorio(tx, contactoId) : { motivo: "canal_desactivado" };
+    const datos = {
+      correo: "valor" in correo ? correo.valor : null,
+      contacto_nombre: contexto.contactoNombre,
+      empresa_nombre: contexto.empresaNombre,
+      giro: contexto.giro,
+      campana_id: contexto.campanaId,
+      campana_activa: campanaActiva
+    };
+    if (esUltimoContacto) return datos;
+
+    if (campanaActiva === false) return { motivo: "campana_inactiva" as const };
+    if ("motivo" in correo) return { motivo: correo.motivo };
+    return datos;
+  }
+
+  // El correo al que se manda: uno activo y fuera de lista_supresion (el
+  // principal primero). "sin_correo" si la persona no tiene ninguno
+  // utilizable; "suprimido" si los que tiene están dados de baja.
+  private async correoParaRecordatorio(tx: DrizzleTx, contactoId: number): Promise<CorreoDeRecordatorio> {
+    const medios = await tx
+      .select({ valor: mediosContacto.valor, valorNormalizado: mediosContacto.valorNormalizado, estado: mediosContacto.estadoContacto })
+      .from(mediosContacto)
+      .where(and(eq(mediosContacto.contactoId, contactoId), eq(mediosContacto.tipo, "correo"), inArray(mediosContacto.estadoContacto, ["activo", "no_contactar"])))
+      .orderBy(desc(mediosContacto.esPrincipal), mediosContacto.id);
+    if (medios.length === 0) return { motivo: "sin_correo" as const };
+
+    const suprimidos = await tx
+      .select({ valorNormalizado: listaSupresion.valorNormalizado })
+      .from(listaSupresion)
+      .where(and(eq(listaSupresion.tipo, "correo"), inArray(listaSupresion.valorNormalizado, medios.map((m) => m.valorNormalizado))));
+    const enSupresion = new Set(suprimidos.map((s) => s.valorNormalizado));
+
+    const utilizable = medios.find((m) => m.estado === "activo" && !enSupresion.has(m.valorNormalizado));
+    return utilizable ? { valor: utilizable.valor } : { motivo: "suprimido" as const };
   }
 
   // --- Campaña activa ----------------------------------------------------------------
