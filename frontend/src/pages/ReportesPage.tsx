@@ -250,7 +250,7 @@ function DesempenoPorAgente({ filtros }: { filtros: Filtros }) {
       {data && data.length === 0 && <div className="px-5 pb-5 text-sm text-ink-3">No hay agentes activos{filtros.responsableId ? " con ese filtro" : ""}.</div>}
       {data && data.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <div className="tabla-scroll"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {encabezados.map((h, i) => (
@@ -290,7 +290,7 @@ function DesempenoPorAgente({ filtros }: { filtros: Filtros }) {
                 </tr>
               </tfoot>
             )}
-          </table>
+          </table></div>
         </div>
       )}
     </Card>
@@ -348,7 +348,7 @@ function Forecast({ responsableId }: { responsableId?: number }) {
       {data && data.length > 0 && (
         <>
           <GraficaForecast meses={data} />
-          <table className="mt-4 w-full border-collapse text-xs tabular-nums">
+          <div className="tabla-scroll"><table className="mt-4 w-full border-collapse text-xs tabular-nums">
             <thead>
               <tr className="text-ink-2">
                 <th className="py-1.5 text-left font-bold">Mes</th>
@@ -370,7 +370,7 @@ function Forecast({ responsableId }: { responsableId?: number }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </>
       )}
     </Card>
@@ -458,7 +458,7 @@ function MetricasDiarias({ fechaInicio, fechaFin, filtradoPorAgente }: { fechaIn
       {data && data.length === 0 && <div className="px-5 pb-5 text-sm text-ink-3">No hay fotos diarias en el periodo.</div>}
       {data && data.length > 0 && (
         <div className="max-h-96 overflow-auto">
-          <table className="w-full border-collapse text-[13px] tabular-nums">
+          <div className="tabla-scroll"><table className="w-full border-collapse text-[13px] tabular-nums">
             <thead className="sticky top-0">
               <tr className="bg-bg">
                 {["Fecha", "Abiertas", "Valor pipeline", "Ganadas", "Ingresos", "Perdidas", "Valor perdido"].map((h, i) => (
@@ -481,7 +481,7 @@ function MetricasDiarias({ fechaInicio, fechaFin, filtradoPorAgente }: { fechaIn
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
     </Card>

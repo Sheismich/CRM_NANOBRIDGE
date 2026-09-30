@@ -32,13 +32,13 @@ export function TareasPage() {
 
   return (
     <AppShell titulo="Tareas">
-      <div className="mb-5 flex gap-1 border-b border-border">
+      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-border">
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setParams(t.id === "cola" ? { tab: "cola" } : {}, { replace: true })}
-            className={`px-4 py-2.5 text-[13px] font-semibold ${tab === t.id ? "border-b-2 border-navy text-navy" : "text-ink-3"}`}
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-[13px] font-semibold ${tab === t.id ? "border-b-2 border-navy text-navy" : "text-ink-3"}`}
           >
             {t.label}
           </button>
@@ -137,7 +137,7 @@ function Bandeja({ esAdminOSupervisor, usuarioId, onIrACola }: { esAdminOSupervi
 
       {data && data.data.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <div className="tabla-scroll"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {COLUMNAS.filter((c) => esAdminOSupervisor || c !== "Responsable").map((h) => (
@@ -185,7 +185,7 @@ function Bandeja({ esAdminOSupervisor, usuarioId, onIrACola }: { esAdminOSupervi
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 

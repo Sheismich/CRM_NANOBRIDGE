@@ -82,7 +82,7 @@ export function UsuariosAdmin({ esAdmin, usuarioActualId }: { esAdmin: boolean; 
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los usuarios.</div>}
       {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">No hay usuarios con ese filtro.</div>}
       {data && data.data.length > 0 && (
-        <table className="w-full border-collapse">
+        <div className="tabla-scroll"><table className="w-full border-collapse">
           <thead>
             <tr className="bg-bg">
               {["Nombre", "Correo", "Rol", "Estado", "Alta", ""].map((h) => (
@@ -128,7 +128,7 @@ export function UsuariosAdmin({ esAdmin, usuarioActualId }: { esAdmin: boolean; 
               </Fragment>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
     </Card>

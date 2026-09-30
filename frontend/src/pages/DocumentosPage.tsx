@@ -91,7 +91,7 @@ export function DocumentosPage() {
           <div className="p-5 text-sm text-ink-3">{revisado === "false" ? "No hay documentos pendientes de revisión." : "No hay documentos con ese filtro."}</div>
         )}
         {data && data.data.length > 0 && (
-          <table className="mt-1 w-full border-collapse">
+          <div className="tabla-scroll"><table className="mt-1 w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {["Documento", "Empresa", "Tipo", "Tamaño", "Subido", "Revisión", ""].map((h) => (
@@ -158,7 +158,7 @@ export function DocumentosPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
       </Card>

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { AppShell } from "../components/layout/AppShell";
+import { EmpresaForm } from "../components/empresas/EmpresaForm";
+import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { api } from "../lib/api";
 import type { Empresa, Paginated } from "../types";
@@ -10,6 +12,7 @@ const LIMIT = 25;
 
 export function EmpresasListPage() {
   const [page, setPage] = useState(1);
+  const [creando, setCreando] = useState(false);
 
   // GET /api/v1/empresas (src/crm/empresas.controller.ts): un agente ve
   // solo las suyas, el backend decide eso solo -- este componente no
@@ -25,8 +28,13 @@ export function EmpresasListPage() {
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="text-sm font-bold">Empresas</div>
-          <span className="text-xs text-ink-3">{data ? `${data.data.length} de esta página` : ""}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-ink-3">{data ? `${data.data.length} de esta página` : ""}</span>
+            {!creando && <Button onClick={() => setCreando(true)}>+ Nueva empresa</Button>}
+          </div>
         </div>
+
+        {creando && <EmpresaForm onDone={() => setCreando(false)} />}
 
         {isPending && <div className="p-6 text-sm text-ink-2">Cargando…</div>}
         {isError && <div className="p-6 text-sm text-danger">No se pudo cargar el listado de empresas.</div>}
@@ -34,7 +42,7 @@ export function EmpresasListPage() {
         {data && data.data.length === 0 && <div className="p-6 text-sm text-ink-2">No hay empresas todavía.</div>}
 
         {data && data.data.length > 0 && (
-          <table className="w-full border-collapse">
+          <div className="tabla-scroll"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {["Nombre legal", "Giro", "Región / ciudad", "Estado"].map((h) => (
@@ -63,7 +71,7 @@ export function EmpresasListPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
 

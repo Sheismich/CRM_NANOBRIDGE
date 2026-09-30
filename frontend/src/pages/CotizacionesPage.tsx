@@ -70,7 +70,7 @@ export function CotizacionesPage() {
           <div className="p-5 text-sm text-ink-3">No hay cotizaciones{estado ? ` en estado "${ETIQUETA_ESTADO_COTIZACION[estado as EstadoCotizacion].toLowerCase()}"` : ""}.</div>
         )}
         {data && data.data.length > 0 && (
-          <table className="w-full border-collapse">
+          <div className="tabla-scroll"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {["Empresa", "Oportunidad", "Versión", "Total", "Estado", "Emitida", "Enviada", "Cierre esperado"].map((h) => (
@@ -101,7 +101,7 @@ export function CotizacionesPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
       </Card>

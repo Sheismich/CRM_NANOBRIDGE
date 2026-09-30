@@ -2,6 +2,7 @@ import { Fragment, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
+import { NuevoProspectoForm } from "../components/prospectos/NuevoProspectoForm";
 import { Button } from "../components/ui/Button";
 import { Card, SectionTitle } from "../components/ui/Card";
 import { ServerError, inputBaseClass, inputClass } from "../components/ui/Field";
@@ -18,21 +19,33 @@ type TabId = (typeof TABS)[number]["id"];
 
 export function ProspectosPage() {
   const [tab, setTab] = useState<TabId>("importaciones");
+  // El alta manual vive en la pestaña Prospectos, pero también se lanza
+  // desde Importaciones (ahí es donde se llega a capturar).
+  const [creando, setCreando] = useState(false);
   return (
     <AppShell titulo="Prospectos">
-      <div className="mb-5 flex gap-1 border-b border-border">
+      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-[13px] font-semibold ${tab === t.id ? "border-b-2 border-navy text-navy" : "text-ink-3"}`}
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-[13px] font-semibold ${tab === t.id ? "border-b-2 border-navy text-navy" : "text-ink-3"}`}
           >
             {t.label}
           </button>
         ))}
       </div>
-      {tab === "importaciones" ? <Importaciones /> : <ListaProspectos />}
+      {tab === "importaciones" ? (
+        <Importaciones
+          onNuevo={() => {
+            setTab("prospectos");
+            setCreando(true);
+          }}
+        />
+      ) : (
+        <ListaProspectos creando={creando} setCreando={setCreando} />
+      )}
     </AppShell>
   );
 }
@@ -90,7 +103,7 @@ const CLASE_ESTADO: Record<EstadoBorrador, string> = {
 };
 const ETIQUETA_CANAL = { correo: "Correo", telefono: "Teléfono", whatsapp: "WhatsApp" } as const;
 
-function Importaciones() {
+function Importaciones({ onNuevo }: { onNuevo: () => void }) {
   const queryClient = useQueryClient();
   const archivoInput = useRef<HTMLInputElement>(null);
   const [loteElegido, setLoteElegido] = useState<string | null>(null);
@@ -195,9 +208,12 @@ function Importaciones() {
             </select>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="ghost" onClick={descargarPlantilla}>
             Descargar plantilla
+          </Button>
+          <Button variant="outline" onClick={onNuevo}>
+            + Nuevo prospecto
           </Button>
           <Button disabled={ocupado} onClick={() => archivoInput.current?.click()}>
             + Importar CSV
@@ -256,7 +272,7 @@ function Importaciones() {
 
             {cargandoFilas && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
             {filas && (
-              <table className="w-full border-collapse">
+              <div className="tabla-scroll"><table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-bg">
                     {["Fila", "Empresa", "Contacto", "Canal", "Prioridad", "Estado", "Acciones"].map((h) => (
@@ -286,7 +302,7 @@ function Importaciones() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             )}
             {filas && <div className="border-t border-border px-5 py-3 text-xs text-ink-3">Mostrando {filasVisibles.length} de {filas.filas.length} filas</div>}
           </Card>
@@ -356,7 +372,10 @@ function AccionesFila({ fila, ocupado, onConfirmar, onRechazar }: { fila: Borrad
 const LIMIT = 25;
 const COLUMNAS_PROSPECTOS = ["Empresa", "Contacto", "Estado", "Prioridad", "Score", "Alta"];
 
-function ListaProspectos() {
+function ListaProspectos({ creando, setCreando }: { creando: boolean; setCreando: (v: boolean) => void }) {
+  // Recién creado a mano: su detalle se muestra arriba de la lista, porque
+  // puede no caer en la página que se está viendo.
+  const [nuevoId, setNuevoId] = useState<number | null>(null);
   const [q, setQ] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [prioridad, setPrioridad] = useState("");
@@ -397,14 +416,41 @@ function ListaProspectos() {
         <Button type="submit" variant="outline">
           Buscar
         </Button>
+        {!creando && (
+          <Button
+            type="button"
+            className="ml-auto"
+            onClick={() => {
+              setNuevoId(null);
+              setCreando(true);
+            }}
+          >
+            + Nuevo prospecto
+          </Button>
+        )}
       </form>
+
+      {creando && (
+        <NuevoProspectoForm
+          onDone={(id) => {
+            setCreando(false);
+            setNuevoId(id);
+          }}
+        />
+      )}
+      {nuevoId && (
+        <div className="border-b border-border">
+          <div className="bg-ok-bg px-5 py-2.5 text-[13px] text-ok">Prospecto creado.</div>
+          <ProspectoDetallePanel id={nuevoId} onClose={() => setNuevoId(null)} />
+        </div>
+      )}
 
       {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los prospectos.</div>}
       {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">No hay prospectos{busqueda || prioridad ? " con ese filtro" : " confirmados todavía"}.</div>}
 
       {data && data.data.length > 0 && (
-        <table className="w-full border-collapse">
+        <div className="tabla-scroll"><table className="w-full border-collapse">
           <thead>
             <tr className="bg-bg">
               {COLUMNAS_PROSPECTOS.map((h) => (
@@ -438,7 +484,7 @@ function ListaProspectos() {
               </Fragment>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
 
       {data && (page > 1 || data.data.length === LIMIT) && (

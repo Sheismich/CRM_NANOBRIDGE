@@ -38,7 +38,7 @@ export function OportunidadesTab({ empresaId, contactos }: { empresaId: number; 
       {data && data.data.length === 0 && <div className="p-6 text-sm text-ink-3">Esta empresa no tiene oportunidades todavía.</div>}
 
       {data && data.data.length > 0 && (
-        <table className="w-full border-collapse">
+        <div className="tabla-scroll"><table className="w-full border-collapse">
           <thead>
             <tr className="bg-bg">
               {COLUMNAS.map((h) => (
@@ -73,7 +73,7 @@ export function OportunidadesTab({ empresaId, contactos }: { empresaId: number; 
               </Fragment>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </Card>
   );

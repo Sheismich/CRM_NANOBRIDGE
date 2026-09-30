@@ -46,7 +46,7 @@ function ResumenPipeline() {
   if (isError || !data) return <div className="text-sm text-danger">No se pudo cargar el resumen del pipeline.</div>;
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <Metrica etiqueta="Oportunidades abiertas" valor={String(data.abiertas.cantidad)} sub={formatoMoneda.format(Number(data.abiertas.valor_pipeline))} />
       <Metrica etiqueta="Ganadas" valor={String(data.ganadas.cantidad)} sub={formatoMoneda.format(Number(data.ganadas.ingresos_cerrados))} tono="ok" />
       <Metrica etiqueta="Perdidas" valor={String(data.perdidas.cantidad)} sub={formatoMoneda.format(Number(data.perdidas.valor_perdido))} tono="danger" />

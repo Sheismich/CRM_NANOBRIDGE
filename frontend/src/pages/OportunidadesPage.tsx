@@ -55,7 +55,7 @@ export function OportunidadesPage() {
   return (
     <AppShell titulo="Oportunidades">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1 border-b border-border">
+        <div className="flex gap-1 overflow-x-auto border-b border-border">
           {(["abiertas", "cerradas"] as const).map((v) => (
             <button
               key={v}
@@ -64,7 +64,7 @@ export function OportunidadesPage() {
                 setVista(v);
                 setAbiertaId(null);
               }}
-              className={`px-4 py-2.5 text-[13px] font-semibold ${vista === v ? "border-b-2 border-navy text-navy" : "text-ink-3"}`}
+              className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-[13px] font-semibold ${vista === v ? "border-b-2 border-navy text-navy" : "text-ink-3"}`}
             >
               {v === "abiertas" ? "Embudo" : "Ganadas y perdidas"}
             </button>
@@ -217,7 +217,7 @@ function Cerradas({ responsableId, coincide, abiertaId, onAbrir, nombreDe }: Pro
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar las oportunidades.</div>}
       {data && filas.length === 0 && <div className="p-5 text-sm text-ink-3">No hay oportunidades cerradas{responsableId ? " con ese filtro" : ""}.</div>}
       {filas.length > 0 && (
-        <table className="w-full border-collapse">
+        <div className="tabla-scroll"><table className="w-full border-collapse">
           <thead>
             <tr className="bg-bg">
               {columnas.map((h) => (
@@ -254,7 +254,7 @@ function Cerradas({ responsableId, coincide, abiertaId, onAbrir, nombreDe }: Pro
               </Fragment>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       {data && <Paginacion page={page} limit={LIMITE_CERRADAS} cantidad={data.data.length} onPage={setPage} />}
     </Card>

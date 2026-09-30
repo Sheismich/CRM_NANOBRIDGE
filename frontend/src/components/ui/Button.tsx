@@ -1,14 +1,16 @@
 import type { ButtonHTMLAttributes } from "react";
 import { clsx } from "clsx";
 
-type Variant = "primary" | "outline" | "ghost" | "exito";
+type Variant = "primary" | "outline" | "ghost" | "exito" | "peligro";
 
 const VARIANTS: Record<Variant, string> = {
   primary: "bg-[linear-gradient(135deg,var(--navy),var(--violet))] text-white shadow-[0_10px_24px_rgba(42,68,155,0.28)]",
   outline: "border-[1.5px] border-navy bg-white text-navy",
   ghost: "text-ink-2 hover:bg-bg",
   // Verde menta de los mockups para confirmar (ej. filas de importación).
-  exito: "bg-mint text-navy-ink"
+  exito: "bg-mint text-navy-ink",
+  // Acciones que desactivan algo (empresa, contacto).
+  peligro: "text-danger hover:bg-danger-bg"
 };
 
 export function Button({ variant = "primary", className, disabled, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {

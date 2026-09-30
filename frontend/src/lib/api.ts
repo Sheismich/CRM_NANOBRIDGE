@@ -8,11 +8,15 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 export class ApiError extends Error {
   readonly status: number;
   readonly details: unknown;
+  // Código estable para distinguir un error en el cliente sin comparar el
+  // texto del mensaje (ej. "RESPUESTA_YA_CLASIFICADA"); no todos lo traen.
+  readonly code: string | undefined;
 
-  constructor(status: number, message: string, details?: unknown) {
+  constructor(status: number, message: string, details?: unknown, code?: string) {
     super(message);
     this.status = status;
     this.details = details;
+    this.code = code;
   }
 }
 
@@ -56,7 +60,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!response.ok) {
     const message = typeof payload === "object" && payload !== null && "message" in payload ? String((payload as { message: unknown }).message) : "Error inesperado";
     const details = typeof payload === "object" && payload !== null ? (payload as { details?: unknown }).details : undefined;
-    throw new ApiError(response.status, message, details);
+    const code = typeof payload === "object" && payload !== null && typeof (payload as { code?: unknown }).code === "string" ? (payload as { code: string }).code : undefined;
+    throw new ApiError(response.status, message, details, code);
   }
 
   return payload as T;

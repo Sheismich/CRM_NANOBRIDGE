@@ -66,3 +66,12 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
 }
+
+/* Tablas en pantallas angostas: en vez de aplastar las columnas, la tabla
+   conserva un ancho mínimo y su contenedor se desplaza a lo ancho. */
+.tabla-scroll {
+  overflow-x: auto;
+}
+.tabla-scroll > table {
+  min-width: 44rem;
+}

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { RedesContacto } from "../components/ui/Enlaces";
 import { inputBaseClass } from "../components/ui/Field";
 import { Paginacion } from "../components/ui/Paginacion";
 import { api } from "../lib/api";
@@ -49,7 +50,7 @@ export function ContactosPage() {
         {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los contactos.</div>}
         {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">No hay contactos{busqueda ? " con ese nombre" : ""}.</div>}
         {data && data.data.length > 0 && (
-          <table className="w-full border-collapse">
+          <div className="tabla-scroll"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {["Contacto", "Empresa", "Medios de contacto", "Redes"].map((h) => (
@@ -82,25 +83,13 @@ export function ContactosPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-xs">
-                    <div className="flex flex-wrap gap-2">
-                      {([
-                        ["LinkedIn", c.linkedin_url],
-                        ["Facebook", c.facebook_url],
-                        ["Instagram", c.instagram_url]
-                      ] as const)
-                        .filter(([, url]) => url)
-                        .map(([red, url]) => (
-                          <a key={red} href={url!} target="_blank" rel="noopener noreferrer" className="font-semibold text-navy hover:underline">
-                            {red}
-                          </a>
-                        ))}
-                      {!c.linkedin_url && !c.facebook_url && !c.instagram_url && <span className="text-ink-3">—</span>}
-                    </div>
+                    <RedesContacto linkedin={c.linkedin_url} facebook={c.facebook_url} instagram={c.instagram_url} />
+                    {!c.linkedin_url && !c.facebook_url && !c.instagram_url && <span className="text-ink-3">—</span>}
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
       </Card>

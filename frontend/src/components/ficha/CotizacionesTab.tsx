@@ -58,7 +58,7 @@ export function CotizacionesTab({ empresaId, contactos }: { empresaId: number; c
       {data && data.data.length === 0 && <div className="p-6 text-sm text-ink-3">Esta empresa no tiene cotizaciones todavía.</div>}
 
       {data && data.data.length > 0 && (
-        <table className="w-full border-collapse">
+        <div className="tabla-scroll"><table className="w-full border-collapse">
           <thead>
             <tr className="bg-bg">
               {COLUMNAS.map((h) => (
@@ -98,7 +98,7 @@ export function CotizacionesTab({ empresaId, contactos }: { empresaId: number; c
               </Fragment>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </Card>
   );
@@ -172,7 +172,7 @@ function CotizacionDetallePanel({
             </Button>
           </div>
 
-          <table className="w-full border-collapse rounded-[9px] bg-white text-[13px]">
+          <div className="tabla-scroll"><table className="w-full border-collapse rounded-[9px] bg-white text-[13px]">
             <thead>
               <tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wide text-ink-2">
                 <th className="px-3 py-2">Descripción</th>
@@ -191,7 +191,7 @@ function CotizacionDetallePanel({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
 
           <div className="flex flex-col items-end gap-0.5 text-[13px]">
             <span className="text-ink-2">Subtotal: {formatoMoneda.format(Number(cotizacion.subtotal))}</span>

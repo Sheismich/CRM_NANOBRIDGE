@@ -168,8 +168,8 @@ export function CotizacionForm(props: Props) {
           {fields.map((field, index) => {
             const e = errors.partidas?.[index];
             return (
-              <div key={field.id} className="grid grid-cols-[1fr_90px_130px_auto] items-start gap-2">
-                <div>
+              <div key={field.id} className="grid grid-cols-2 items-start gap-2 sm:grid-cols-[1fr_90px_130px_auto]">
+                <div className="col-span-2 sm:col-span-1">
                   <input aria-label="Descripción" placeholder="Descripción" className={inputClass} {...register(`partidas.${index}.descripcion`)} />
                   {e?.descripcion && <span className="text-xs text-danger">{e.descripcion.message}</span>}
                 </div>

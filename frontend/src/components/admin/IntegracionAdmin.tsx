@@ -108,7 +108,7 @@ function EventosPendientes() {
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los eventos.</div>}
       {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">{estado === "fallido" ? "No hay eventos fallidos: n8n está recibiendo todo." : "No hay eventos con ese estado."}</div>}
       {data && data.data.length > 0 && (
-        <table className="mt-3 w-full border-collapse">
+        <div className="tabla-scroll"><table className="mt-3 w-full border-collapse">
           <thead>
             <tr className="bg-bg">
               {["Creado", "Tipo", "Entidad", "Estado", "Intentos", "Último error", ""].map((h) => (
@@ -164,7 +164,7 @@ function EventosPendientes() {
               </Fragment>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
     </Card>
@@ -230,7 +230,7 @@ function ProcesosFallidos() {
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los procesos fallidos.</div>}
       {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">{estado === "abierto" ? "No hay procesos fallidos abiertos." : "No hay procesos con ese estado."}</div>}
       {data && data.data.length > 0 && (
-        <table className="mt-3 w-full border-collapse">
+        <div className="tabla-scroll"><table className="mt-3 w-full border-collapse">
           <thead>
             <tr className="bg-bg">
               {["Fecha", "Workflow / nodo", "Tipo", "HTTP", "Mensaje", "Estado"].map((h) => (
@@ -282,7 +282,7 @@ function ProcesosFallidos() {
               </Fragment>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
     </Card>

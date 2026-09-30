@@ -145,7 +145,7 @@ export function AuditoriaAdmin() {
       {isError && <div className="p-5 text-sm text-danger">No se pudo cargar la auditoría.</div>}
       {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">No hay registros con ese filtro.</div>}
       {data && data.data.length > 0 && (
-        <table className="w-full border-collapse">
+        <div className="tabla-scroll"><table className="w-full border-collapse">
           <thead>
             <tr className="bg-bg">
               {["Fecha", "Usuario", "Entidad", "Acción", "Cambio"].map((h) => (
@@ -186,7 +186,7 @@ export function AuditoriaAdmin() {
               </Fragment>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
     </Card>

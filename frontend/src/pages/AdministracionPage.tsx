@@ -25,13 +25,13 @@ export function AdministracionPage() {
 
   return (
     <AppShell titulo="Administración">
-      <div className="mb-5 flex gap-1 border-b border-border">
+      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-border">
         {visibles.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setParams(t.id === "usuarios" ? {} : { tab: t.id }, { replace: true })}
-            className={`px-4 py-2.5 text-[13px] font-semibold ${tab === t.id ? "border-b-2 border-navy text-navy" : "text-ink-3"}`}
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-[13px] font-semibold ${tab === t.id ? "border-b-2 border-navy text-navy" : "text-ink-3"}`}
           >
             {t.label}
           </button>

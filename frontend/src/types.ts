@@ -60,6 +60,9 @@ export type ContactoConMedio = {
   nombre: string;
   puesto: string | null;
   area: string | null;
+  linkedin_url: string | null;
+  facebook_url: string | null;
+  instagram_url: string | null;
   activo: boolean;
   medio_id: number | null;
   medio_tipo: MedioContacto["tipo"] | null;
@@ -178,6 +181,7 @@ export type LoteImportacion = {
 // Una fila de GET /prospectos/importaciones/:loteId
 export type Borrador = {
   id: number;
+  lote_id: string;
   fila_numero: number;
   empresa_nombre_legal: string | null;
   contacto_nombre: string | null;
@@ -254,8 +258,11 @@ export type TareaClasificacion = Tarea & {
     canal: "correo" | "whatsapp" | null;
     contenido: string | null;
     recibido_en: string | null;
-    // Lo que dijo n8n antes de mandarla a revisión (normalmente "ambigua").
+    // Lo que propone la IA (migración 023; si no hay sugerencia, lo que
+    // decidió n8n, normalmente "ambigua"), qué tan segura está (0-100) y por qué.
     clasificacion_sugerida: string | null;
+    confianza_sugerida: number | null;
+    motivo_sugerencia: string | null;
   } | null;
 };
 
