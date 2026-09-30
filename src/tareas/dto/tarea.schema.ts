@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CLASIFICACIONES_MANUALES } from "../../shared/clasificaciones.js";
 
 export const crearTareaSchema = z.object({
   tipo: z.enum(["seguimiento", "clasificacion", "revision_documento", "otro"]).default("seguimiento"),
@@ -24,7 +25,7 @@ export const cerrarTareaSchema = z.object({
 // una tarea de seguimiento para esa fecha; con cualquier otra clasificación
 // se rechaza en vez de ignorarse en silencio.
 export const clasificarTareaSchema = z.object({
-  clasificacion: z.enum(["interesado", "no_interesado", "baja", "invalido", "reagendar"]),
+  clasificacion: z.enum(CLASIFICACIONES_MANUALES),
   comentario: z.string().trim().max(4000).optional(),
   fechaSeguimiento: z.coerce.date().optional()
 }).superRefine((input, ctx) => {

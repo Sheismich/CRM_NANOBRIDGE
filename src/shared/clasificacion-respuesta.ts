@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
 import type { DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, prospectos, type respuestas } from "../database/schema.js";
+import { auditoria, prospectos } from "../database/schema.js";
+import type { ClasificacionRespuesta } from "./clasificaciones.js";
 import { suprimirContactoPorBaja } from "./supresion.js";
 
-export type ClasificacionRespuesta = NonNullable<typeof respuestas.$inferSelect["clasificacion"]>;
+export type { ClasificacionRespuesta };
 
 // Acción de auditoría que deja un cambio de estado hecho por una
 // clasificación; ActividadesService la lee para el Historial de la ficha

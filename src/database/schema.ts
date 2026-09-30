@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { bigint, boolean, char, date, datetime, int, json, mysqlEnum, mysqlTable, smallint, uniqueIndex, varchar, decimal, index, text } from "drizzle-orm/mysql-core";
+import { CLASIFICACIONES_RESPUESTA } from "../shared/clasificaciones.js";
 
 /**
  * Espejo tipado de src/database/migrations/001_initial_schema.sql.
@@ -364,8 +365,9 @@ export const respuestas = mysqlTable("respuestas", {
   tardia: boolean("tardia").notNull().default(false),
   estado: mysqlEnum("estado", ["pendiente_clasificacion", "clasificada"]).notNull().default("pendiente_clasificacion"),
   // invalido/reagendar (022_clasificacion_manual.sql) solo los pone la
-  // clasificación manual; n8n sigue limitado a los 5 primeros.
-  clasificacion: mysqlEnum("clasificacion", ["interesado", "no_interesado", "baja", "automatica", "ambigua", "invalido", "reagendar"]),
+  // clasificación manual; n8n sigue limitado a los 5 primeros. La lista
+  // vive en shared/clasificaciones.ts.
+  clasificacion: mysqlEnum("clasificacion", CLASIFICACIONES_RESPUESTA),
   comentario: varchar("comentario", { length: 500 }),
   executionId: varchar("execution_id", { length: 100 }),
   executionIdClasificacion: varchar("execution_id_clasificacion", { length: 100 }),

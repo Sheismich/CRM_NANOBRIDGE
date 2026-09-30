@@ -8,6 +8,8 @@ import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
 import { auditoria, contactos, eventosPendientes, incidencias, mediosContacto, prospectos, respuestas, tareas } from "../src/database/schema.js";
+import { CLASIFICACIONES_RESPUESTA } from "../src/shared/clasificaciones.js";
+import { recortarTexto } from "../src/shared/texto.js";
 
 // Mismo valor fijado en test/setup/setup-env.ts.
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -58,12 +60,28 @@ describe("respuestas: clasificación automática y manual", () => {
     return res.body.id as number;
   }
 
+  async function valoresEnum(tabla: string, columna: string) {
+    const [filas] = await db.execute(sql`SELECT COLUMN_TYPE AS tipo FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${tabla} AND COLUMN_NAME = ${columna}`);
+    const tipo = (filas as unknown as { tipo: string }[])[0]!.tipo;
+    return [...tipo.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+  }
+
   function clasificarAutomatica(respuestaId: number, clasificacion: string) {
     return api()
       .post("/api/v1/automatizacion/respuestas/clasificacion")
       .set("X-API-Key", API_KEY)
       .send({ execution_id: randomUUID(), respuesta_id: respuestaId, clasificacion });
   }
+
+  // String.slice corta por unidades UTF-16: un emoji (2 unidades) justo en
+  // el límite quedaba partido y la base guardaba un carácter roto.
+  describe("recortarTexto", () => {
+    it("recorta por caracteres completos, sin partir un emoji en el límite", () => {
+      expect(recortarTexto(`${"a".repeat(4)}😀zz`, 5)).toBe("aaaa😀");
+      expect(recortarTexto(`${"a".repeat(5)}😀`, 5)).toBe("aaaaa");
+      expect(recortarTexto("corto", 500)).toBe("corto");
+    });
+  });
 
   describe("tarea de clasificación ligada a su respuesta", () => {
     it("una respuesta 'ambigua' crea una tarea de clasificación que apunta a esa respuesta (respuesta_id)", async () => {
@@ -121,6 +139,13 @@ describe("respuestas: clasificación automática y manual", () => {
 
       const [tarea] = await db.select({ respuestaId: tareas.respuestaId }).from(tareas).where(eq(tareas.id, tareaId));
       expect(tarea!.respuestaId).toBe(respuestaId);
+    });
+
+    // Las clasificaciones viven en una sola constante (de ella salen los
+    // schemas de Zod y el de Drizzle), pero el SQL de las migraciones se
+    // escribe a mano: si alguien cambia una lista y no la otra, esto truena.
+    it("el ENUM real de respuestas.clasificacion coincide con CLASIFICACIONES_RESPUESTA", async () => {
+      expect(await valoresEnum("respuestas", "clasificacion")).toEqual([...CLASIFICACIONES_RESPUESTA]);
     });
 
     it("respuestas.clasificacion admite los valores que solo usa la clasificación manual (invalido, reagendar)", async () => {
@@ -304,6 +329,18 @@ describe("respuestas: clasificación automática y manual", () => {
       expect(seguimientos[0]!.estado).toBe("pendiente");
       expect(seguimientos[0]!.fechaLimite!.getTime()).toBe(fecha.getTime());
       expect(seguimientos[0]!.descripcion).toBe("llamar después del cierre de mes");
+    });
+
+    // Antes solo la clasificación de n8n guardaba su comentario en la
+    // respuesta; la manual lo dejaba nada más en la tarea.
+    it("el comentario de la clasificación manual queda también en la respuesta, recortado a 500 caracteres", async () => {
+      const { respuestaId, tareaId } = await tareaDeRespuestaAmbigua();
+      const comentario = `${"a".repeat(499)}😀${"b".repeat(100)}`;
+
+      expect((await clasificarManual(tareaId, { clasificacion: "no_interesado", comentario })).status).toBe(200);
+
+      const [fila] = await db.select({ comentario: respuestas.comentario }).from(respuestas).where(eq(respuestas.id, respuestaId));
+      expect(fila!.comentario).toBe(`${"a".repeat(499)}😀`);
     });
 
     it("el evento a n8n sigue saliendo como aviso, ahora con la respuesta", async () => {

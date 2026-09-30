@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { httpUrlSchema } from "../../shared/http-url.js";
 import { tieneDigitosSuficientes } from "../../shared/normalize.js";
+import { CLASIFICACIONES_N8N } from "../../shared/clasificaciones.js";
 
 // --- Scoring -----------------------------------------------------------------
 export const scoringInputSchema = z.object({
@@ -150,7 +151,7 @@ export type RespuestaRecibidaInput = z.infer<typeof respuestaRecibidaInputSchema
 export const respuestaClasificadaInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),
   respuesta_id: z.coerce.number().int().positive(),
-  clasificacion: z.enum(["interesado", "no_interesado", "baja", "automatica", "ambigua"]),
+  clasificacion: z.enum(CLASIFICACIONES_N8N),
   comentario: z.string().trim().max(500).optional()
 });
 export type RespuestaClasificadaInput = z.infer<typeof respuestaClasificadaInputSchema>;

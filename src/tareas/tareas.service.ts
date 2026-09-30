@@ -1,11 +1,12 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
-import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, contactos, empresas, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
-import { aplicarClasificacionAlProspecto } from "../shared/clasificacion-respuesta.js";
+import { aplicarClasificacionAlProspecto, type ClasificacionRespuesta, type OrigenClasificacion } from "../shared/clasificacion-respuesta.js";
+import { recortarTexto } from "../shared/texto.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
@@ -18,6 +19,27 @@ export type ListTareasFilters = {
   prioridad?: "baja" | "media" | "alta" | "urgente";
   tipo?: "seguimiento" | "clasificacion" | "revision_documento" | "otro";
   responsableId?: number;
+};
+
+// Largo de respuestas.comentario (VARCHAR(500)).
+const MAX_COMENTARIO_RESPUESTA = 500;
+
+// Una clasificación ya decidida (por una persona o por n8n), lista para
+// aplicarse con aplicarClasificacionDeRespuesta.
+export type ClasificacionDeRespuesta = {
+  prospectoId: number;
+  // NULL: tarea de clasificación creada a mano (POST /tareas), sin respuesta.
+  respuestaId: number | null;
+  clasificacion: ClasificacionRespuesta;
+  comentario: string | null;
+  // Texto de la respuesta, para la descripción de la tarea que se cree.
+  contenido: string | null;
+  // Solo con "reagendar": fecha de la tarea de seguimiento.
+  fechaSeguimiento: Date | null;
+  origen: OrigenClasificacion;
+  // Qué respuestas se pueden clasificar: n8n solo una que siga pendiente;
+  // la clasificación manual no revisa nada (todavía).
+  guarda: "pendiente" | "ninguna";
 };
 
 function toRow(row: typeof tareas.$inferSelect) {
@@ -243,17 +265,81 @@ export class TareasService {
     };
   }
 
+  // Lo que pasa cuando se decide la clasificación de una respuesta, igual la
+  // decida una persona en la cola (clasificar, abajo) o n8n
+  // (AutomatizacionService.clasificarRespuesta). Antes cada camino tenía su
+  // copia y ya no coincidían: la manual no guardaba el comentario en la
+  // respuesta, por ejemplo (hallazgo de /code-review, 30-sep-2026). Corre
+  // en la transacción de quien llama:
+  // - la respuesta queda con esta clasificación;
+  // - el prospecto cambia de estado y, con "baja", se suprimen todos los
+  //   medios de su contacto (aplicarClasificacionAlProspecto; obligación
+  //   legal: no puede depender de que n8n reciba un evento);
+  // - la tarea que sigue: "ambigua" va a la cola de clasificación y
+  //   "reagendar" deja un seguimiento para quien clasificó.
+  // El evento para n8n y la auditoría de la tarea o de la respuesta los
+  // escribe cada camino.
+  async aplicarClasificacionDeRespuesta(tx: DrizzleTx, input: ClasificacionDeRespuesta) {
+    if (input.respuestaId !== null) {
+      // Solo se pisa el comentario y el execution_id si esta clasificación
+      // los trae: una persona que resuelve una "ambigua" sin comentar no
+      // debe borrar lo que dejó n8n.
+      const [result] = await tx.update(respuestas).set({
+        estado: "clasificada",
+        clasificacion: input.clasificacion,
+        ...(input.comentario !== null ? { comentario: recortarTexto(input.comentario, MAX_COMENTARIO_RESPUESTA) } : {}),
+        ...(input.origen.executionId !== null ? { executionIdClasificacion: input.origen.executionId } : {}),
+        clasificadoEn: sql`CURRENT_TIMESTAMP`
+      }).where(and(...compactConditions([
+        eq(respuestas.id, input.respuestaId),
+        // Revalidación dentro del UPDATE (hallazgo de code review,
+        // 14-sep-2026): dos clasificaciones simultáneas de la misma
+        // respuesta pasaban ambas la lectura previa de quien llama, y la
+        // segunda pisaba en silencio a la primera.
+        input.guarda === "pendiente" ? ne(respuestas.estado, "clasificada") : undefined
+      ])));
+      if (result.affectedRows === 0) throw new HttpError(409, "La respuesta ya fue clasificada por otra solicitud");
+    }
+
+    const { estadoProspecto, supresionIds } = await aplicarClasificacionAlProspecto(tx, input.prospectoId, input.clasificacion, input.origen);
+
+    let tareaId: number | null = null;
+    if (input.clasificacion === "ambigua") {
+      const tarea = await this.createFromAutomation({
+        execution_id: `resp-clasif-${input.origen.executionId}`,
+        prospecto_id: input.prospectoId,
+        respuesta_id: input.respuestaId ?? undefined,
+        tipo: "clasificacion",
+        titulo: "Clasificar respuesta ambigua",
+        descripcion: input.comentario ?? input.contenido ?? undefined,
+        prioridad: "media"
+      }, tx);
+      tareaId = tarea.id;
+    } else if (input.clasificacion === "reagendar") {
+      const { empresaId, contactoId } = await this.contextoDeProspecto(tx, input.prospectoId);
+      const [seguimiento] = await tx.insert(tareas).values({
+        tipo: "seguimiento",
+        titulo: "Seguimiento reagendado",
+        descripcion: input.comentario,
+        prioridad: "media",
+        responsableId: input.origen.usuarioId,
+        empresaId,
+        contactoId,
+        prospectoId: input.prospectoId,
+        fechaLimite: input.fechaSeguimiento,
+        creadaPor: input.origen.usuarioId
+      });
+      tareaId = seguimiento.insertId;
+    }
+
+    return { estadoProspecto, supresionIds, tareaId };
+  }
+
   // La decisión de la persona se aplica aquí mismo, en una sola transacción
   // (antes solo se cerraba la tarea y se encolaba el evento, y nada la
-  // aplicaba: n8n no tenía cómo -- hallazgo de revisión, 24-sep-2026):
-  // - la respuesta que originó la tarea (respuesta_id) queda con esta
-  //   clasificación;
-  // - el prospecto cambia de estado y, con "baja", se suprimen todos los
-  //   medios de su contacto (aplicarClasificacionAlProspecto, compartida con
-  //   la clasificación de n8n; obligación legal: no puede depender de que
-  //   n8n reciba el evento);
-  // - "reagendar" crea una tarea de seguimiento para quien clasificó.
-  // El evento prospecto_clasificado sigue saliendo, solo como aviso.
+  // aplicaba: n8n no tenía cómo -- hallazgo de revisión, 24-sep-2026); ver
+  // aplicarClasificacionDeRespuesta. El evento prospecto_clasificado sigue
+  // saliendo, solo como aviso.
   async clasificar(user: CurrentUser, id: number, input: ClasificarTareaInput) {
     const row = await this.findAssignable(user, id);
     if (row.tipo !== "clasificacion") {
@@ -278,36 +364,16 @@ export class TareasService {
 
       // Las tareas de clasificación creadas a mano (POST /tareas) no tienen
       // respuesta; las anteriores a 022 la recuperan con su backfill.
-      if (row.respuestaId) {
-        await tx.update(respuestas).set({
-          estado: "clasificada",
-          clasificacion: input.clasificacion,
-          clasificadoEn: sql`CURRENT_TIMESTAMP`
-        }).where(eq(respuestas.id, row.respuestaId));
-      }
-
-      const { estadoProspecto, supresionIds } = await aplicarClasificacionAlProspecto(tx, prospectoId, input.clasificacion, {
-        descripcion: `clasificación manual, tarea ${id}`,
-        executionId: null,
-        usuarioId: user.id
+      const { estadoProspecto, supresionIds, tareaId: tareaSeguimientoId } = await this.aplicarClasificacionDeRespuesta(tx, {
+        prospectoId,
+        respuestaId: row.respuestaId,
+        clasificacion: input.clasificacion,
+        comentario: input.comentario ?? null,
+        contenido: null,
+        fechaSeguimiento: input.fechaSeguimiento ?? null,
+        origen: { descripcion: `clasificación manual, tarea ${id}`, executionId: null, usuarioId: user.id },
+        guarda: "ninguna"
       });
-
-      let tareaSeguimientoId: number | null = null;
-      if (input.clasificacion === "reagendar") {
-        const [seguimiento] = await tx.insert(tareas).values({
-          tipo: "seguimiento",
-          titulo: "Seguimiento reagendado",
-          descripcion: input.comentario ?? null,
-          prioridad: "media",
-          responsableId: user.id,
-          empresaId: row.empresaId,
-          contactoId: row.contactoId,
-          prospectoId,
-          fechaLimite: input.fechaSeguimiento!,
-          creadaPor: user.id
-        });
-        tareaSeguimientoId = seguimiento.insertId;
-      }
 
       await this.outboxService.enqueue(tx, {
         tipo: "prospecto_clasificado",
@@ -347,19 +413,9 @@ export class TareasService {
     const [existing] = await db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
     if (existing) return { id: existing.id, ya_existia: true as const };
 
-    let contactoId: number | null = null;
-    let empresaId: number | null = null;
-    if (input.prospecto_id) {
-      const [prospecto] = await db
-        .select({ id: prospectos.id, contactoId: contactos.id, empresaId: contactos.empresaId })
-        .from(prospectos)
-        .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
-        .where(eq(prospectos.id, input.prospecto_id))
-        .limit(1);
-      if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
-      contactoId = prospecto.contactoId;
-      empresaId = prospecto.empresaId;
-    }
+    const { contactoId, empresaId } = input.prospecto_id
+      ? await this.contextoDeProspecto(db, input.prospecto_id)
+      : { contactoId: null, empresaId: null };
 
     try {
       const [result] = await db.insert(tareas).values({
@@ -384,6 +440,18 @@ export class TareasService {
       }
       throw error;
     }
+  }
+
+  // La empresa y el contacto de un prospecto, para ligar una tarea suya.
+  private async contextoDeProspecto(db: DrizzleDb | DrizzleTx, prospectoId: number) {
+    const [prospecto] = await db
+      .select({ contactoId: contactos.id, empresaId: contactos.empresaId })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .where(eq(prospectos.id, prospectoId))
+      .limit(1);
+    if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
+    return prospecto;
   }
 
   // "Alertas de tareas SLA vencidas" (PLAN_API_DEFINITIVO.md, "Jobs

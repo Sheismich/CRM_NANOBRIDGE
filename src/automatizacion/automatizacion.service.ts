@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, procesosFallidos, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
@@ -8,7 +8,6 @@ import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion } from "../shared/supresion.js";
-import { aplicarClasificacionAlProspecto } from "../shared/clasificacion-respuesta.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo } from "../shared/reply-to.js";
 import { TareasService } from "../tareas/tareas.service.js";
@@ -1027,53 +1026,38 @@ export class AutomatizacionService {
     // entraba por el early-return de arriba (estado ya es 'clasificada') y
     // nunca reintentaba crear la tarea perdida (hallazgo de code review,
     // 10-sep-2026).
+    // La decisión se aplica con TareasService.aplicarClasificacionDeRespuesta,
+    // la misma función que usa la clasificación manual. Su guarda
+    // "pendiente" revalida el estado dentro del UPDATE: el guard de arriba
+    // se lee ANTES de esta transacción, y sin revalidarlo dos POST
+    // concurrentes para la misma respuesta (distinto execution_id) pasaban
+    // ambos, y el segundo pisaba en silencio al primero (hallazgo de code
+    // review, 14-sep-2026).
+    //
+    // A diferencia de la manual, no encola prospecto_clasificado: ese
+    // evento es un aviso PARA n8n, y aquí quien clasificó es n8n. Además,
+    // mientras N8N_WEBHOOK_URL no exista, cada evento termina en
+    // procesos_fallidos: uno por respuesta llenaría esa bandeja de ruido.
     return this.db.transaction(async (tx) => {
+      let aplicada: Awaited<ReturnType<TareasService["aplicarClasificacionDeRespuesta"]>>;
       try {
-        // ne(estado, "clasificada") + affectedRows (hallazgo de code
-        // review, 14-sep-2026): el guard de arriba (estado==='clasificada')
-        // se lee ANTES de esta transacción -- sin revalidarlo aquí dentro,
-        // dos POST /respuestas/clasificacion concurrentes para la misma
-        // respuesta (distinto execution_id cada uno) pasaban ambos ese
-        // guard, y el segundo en confirmar pisaba en silencio la
-        // clasificación del primero (y el estado del prospecto), con dos
-        // filas de auditoría contradictorias. Mismo patrón CAS que ya usa
-        // TareasService.cerrar()/clasificar().
-        const [result] = await tx.update(respuestas).set({
-          estado: "clasificada",
+        aplicada = await this.tareasService.aplicarClasificacionDeRespuesta(tx, {
+          prospectoId: respuesta.prospectoId,
+          respuestaId: respuesta.id,
           clasificacion: input.clasificacion,
           comentario: input.comentario ?? null,
-          executionIdClasificacion: input.execution_id,
-          clasificadoEn: sql`CURRENT_TIMESTAMP`
-        }).where(and(eq(respuestas.id, input.respuesta_id), ne(respuestas.estado, "clasificada")));
-        if (result.affectedRows === 0) {
-          throw new HttpError(409, "La respuesta ya fue clasificada por otra solicitud");
-        }
+          contenido: respuesta.contenido,
+          fechaSeguimiento: null,
+          origen: { descripcion: `clasificación de n8n, respuesta ${respuesta.id}`, executionId: input.execution_id, usuarioId: null },
+          guarda: "pendiente"
+        });
       } catch (error) {
         if (isDuplicateEntry(error)) {
           throw new HttpError(409, "execution_id de clasificación ya usado en otra respuesta");
         }
         throw error;
       }
-
-      const { supresionIds } = await aplicarClasificacionAlProspecto(tx, respuesta.prospectoId, input.clasificacion, {
-        descripcion: `clasificación de n8n, respuesta ${respuesta.id}`,
-        executionId: input.execution_id,
-        usuarioId: null
-      });
-
-      let tareaId: number | null = null;
-      if (input.clasificacion === "ambigua") {
-        const tarea = await this.tareasService.createFromAutomation({
-          execution_id: `resp-clasif-${input.execution_id}`,
-          prospecto_id: respuesta.prospectoId,
-          respuesta_id: respuesta.id,
-          tipo: "clasificacion",
-          titulo: "Clasificar respuesta ambigua",
-          descripcion: input.comentario ?? respuesta.contenido ?? undefined,
-          prioridad: "media"
-        }, tx);
-        tareaId = tarea.id;
-      }
+      const { supresionIds, tareaId } = aplicada;
 
       await tx.insert(auditoria).values({
         usuarioId: null,
