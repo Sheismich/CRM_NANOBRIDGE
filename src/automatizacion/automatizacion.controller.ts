@@ -14,6 +14,7 @@ import {
   registroProspectoInputSchema,
   registroSupresionInputSchema,
   respuestaClasificadaInputSchema,
+  respuestaSugeridaInputSchema,
   respuestaRecibidaInputSchema,
   scoringInputSchema,
   tareaAutomatizacionInputSchema,
@@ -155,6 +156,14 @@ export class AutomatizacionController {
   async respuestaClasificada(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
     const input = respuestaClasificadaInputSchema.parse(body);
     const result = await this.automatizacionService.clasificarRespuesta(input);
+    response.status(result.ya_existia ? 200 : 201);
+    return result;
+  }
+
+  @Post("respuestas/sugerencia")
+  async respuestaSugerida(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
+    const input = respuestaSugeridaInputSchema.parse(body);
+    const result = await this.automatizacionService.registrarSugerencia(input);
     response.status(result.ya_existia ? 200 : 201);
     return result;
   }

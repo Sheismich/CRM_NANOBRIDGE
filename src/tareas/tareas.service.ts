@@ -243,7 +243,10 @@ export class TareasService {
         respuestaCanal: respuestas.canal,
         respuestaContenido: respuestas.contenido,
         respuestaRecibidoEn: respuestas.recibidoEn,
-        respuestaClasificacion: respuestas.clasificacion
+        respuestaClasificacion: respuestas.clasificacion,
+        respuestaClasificacionSugerida: respuestas.clasificacionSugerida,
+        respuestaConfianzaSugerida: respuestas.confianzaSugerida,
+        respuestaMotivoSugerencia: respuestas.motivoSugerencia
       })
       .from(tareas)
       .leftJoin(empresas, eq(empresas.id, tareas.empresaId))
@@ -267,7 +270,18 @@ export class TareasService {
         contacto_nombre: r.contactoNombre,
         contacto_puesto: r.contactoPuesto,
         respuesta: r.tarea.respuestaId
-          ? { id: r.tarea.respuestaId, canal: r.respuestaCanal, contenido: r.respuestaContenido, recibido_en: r.respuestaRecibidoEn, clasificacion_sugerida: r.respuestaClasificacion }
+          ? {
+              id: r.tarea.respuestaId,
+              canal: r.respuestaCanal,
+              contenido: r.respuestaContenido,
+              recibido_en: r.respuestaRecibidoEn,
+              // Lo que propuso la IA (modo sugerencia) o, si no hay, lo que
+              // decidió n8n (normalmente "ambigua"): la pantalla ya pinta
+              // este campo como "n8n: …".
+              clasificacion_sugerida: r.respuestaClasificacionSugerida ?? r.respuestaClasificacion,
+              confianza_sugerida: r.respuestaConfianzaSugerida,
+              motivo_sugerencia: r.respuestaMotivoSugerencia
+            }
           : null
       }))
     };

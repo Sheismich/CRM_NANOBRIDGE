@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, char, date, datetime, int, json, mysqlEnum, mysqlTable, smallint, uniqueIndex, varchar, decimal, index, text } from "drizzle-orm/mysql-core";
-import { CLASIFICACIONES_RESPUESTA } from "../shared/clasificaciones.js";
+import { bigint, boolean, char, date, datetime, int, json, mysqlEnum, mysqlTable, smallint, tinyint, uniqueIndex, varchar, decimal, index, text } from "drizzle-orm/mysql-core";
+import { CLASIFICACIONES_N8N, CLASIFICACIONES_RESPUESTA } from "../shared/clasificaciones.js";
 
 /**
  * Espejo tipado de src/database/migrations/001_initial_schema.sql.
@@ -372,7 +372,14 @@ export const respuestas = mysqlTable("respuestas", {
   executionId: varchar("execution_id", { length: 100 }),
   executionIdClasificacion: varchar("execution_id_clasificacion", { length: 100 }),
   recibidoEn: datetime("recibido_en").notNull().default(sql`CURRENT_TIMESTAMP`),
-  clasificadoEn: datetime("clasificado_en")
+  clasificadoEn: datetime("clasificado_en"),
+  // 023_sugerencia_clasificacion.sql: lo que PROPONE la IA de n8n (modo
+  // sugerencia). No es la decisión: esa sigue en estado/clasificacion.
+  clasificacionSugerida: mysqlEnum("clasificacion_sugerida", CLASIFICACIONES_N8N),
+  confianzaSugerida: tinyint("confianza_sugerida", { unsigned: true }),
+  motivoSugerencia: varchar("motivo_sugerencia", { length: 500 }),
+  executionIdSugerencia: varchar("execution_id_sugerencia", { length: 100 }),
+  sugeridoEn: datetime("sugerido_en")
 }, (table) => [
   uniqueIndex("uq_respuestas_execution_id").on(table.executionId),
   uniqueIndex("uq_respuestas_execution_id_clasificacion").on(table.executionIdClasificacion),

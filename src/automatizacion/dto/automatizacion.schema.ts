@@ -2,6 +2,7 @@ import { z } from "zod";
 import { httpUrlSchema } from "../../shared/http-url.js";
 import { tieneDigitosSuficientes } from "../../shared/normalize.js";
 import { CLASIFICACIONES_N8N } from "../../shared/clasificaciones.js";
+import { recortarTexto } from "../../shared/texto.js";
 
 // --- Scoring -----------------------------------------------------------------
 export const scoringInputSchema = z.object({
@@ -155,6 +156,19 @@ export const respuestaClasificadaInputSchema = z.object({
   comentario: z.string().trim().max(500).optional()
 });
 export type RespuestaClasificadaInput = z.infer<typeof respuestaClasificadaInputSchema>;
+
+// --- Sugerencia de clasificación (IA en modo sugerencia) ---------------------------
+// motivo: Gemini puede soltar más texto del que cabe (VARCHAR(500)); se
+// recorta en vez de rechazar, para no perder la sugerencia entera por un
+// texto largo. El tope de 10 000 solo frena cuerpos absurdos.
+export const respuestaSugeridaInputSchema = z.object({
+  execution_id: z.string().trim().min(1).max(100),
+  respuesta_id: z.coerce.number().int().positive(),
+  clasificacion: z.enum(CLASIFICACIONES_N8N),
+  confianza: z.number().int().min(0).max(100),
+  motivo: z.string().trim().max(10_000).transform((motivo) => recortarTexto(motivo, 500)).optional()
+});
+export type RespuestaSugeridaInput = z.infer<typeof respuestaSugeridaInputSchema>;
 
 // --- Ventanas vencidas -------------------------------------------------------------
 export const ventanasVencidasQuerySchema = z.object({

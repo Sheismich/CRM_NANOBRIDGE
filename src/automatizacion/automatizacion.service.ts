@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, procesosFallidos, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
@@ -12,7 +12,7 @@ import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo } from "../shared/reply-to.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { TareasService } from "../tareas/tareas.service.js";
-import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
+import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, RespuestaSugeridaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
 // tipo fijo de incidencias.tipo para todo lo que reporta el Error Workflow
 // global de n8n (B4) — junto con execution_id es la pareja que usa el
@@ -1071,5 +1071,57 @@ export class AutomatizacionService {
 
       return { id: respuesta.id, prospecto_id: respuesta.prospectoId, clasificacion: input.clasificacion, tarea_id: tareaId, ya_existia: false as const };
     });
+  }
+
+  // --- Sugerencia de clasificación ------------------------------------------------------
+  // Modo sugerencia (decisión del 30-sep-2026): la IA de n8n solo PROPONE.
+  // Se guarda junto a la respuesta y la cola la muestra; una persona
+  // confirma con POST /cola-clasificacion/:id/clasificar. No cambia el
+  // estado del prospecto, no suprime ni cierra tareas: nada depende de la
+  // IA mientras no se pase a modo directo (POST /respuestas/clasificacion).
+  //
+  // Va aparte de POST /respuestas a propósito: registrar la respuesta (lo
+  // que detiene los recordatorios) no debe depender de que Gemini funcione.
+  //
+  // - Mismo execution_id que la sugerencia guardada: reintento, ya_existia
+  //   (incluso si entretanto alguien ya clasificó la respuesta).
+  // - Otro execution_id (se volvió a correr el workflow): sobrescribe; gana
+  //   la última.
+  // - Respuesta ya decidida: 409 RESPUESTA_YA_CLASIFICADA. Una "ambigua"
+  //   sigue sin decidir (la resuelve la cola), así que sí acepta sugerencia.
+  async registrarSugerencia(input: RespuestaSugeridaInput) {
+    const [respuesta] = await this.db
+      .select({
+        id: respuestas.id,
+        clasificacionSugerida: respuestas.clasificacionSugerida,
+        confianzaSugerida: respuestas.confianzaSugerida,
+        executionIdSugerencia: respuestas.executionIdSugerencia
+      })
+      .from(respuestas)
+      .where(eq(respuestas.id, input.respuesta_id))
+      .limit(1);
+    if (!respuesta) throw new HttpError(404, "Respuesta no encontrada");
+
+    if (respuesta.executionIdSugerencia === input.execution_id) {
+      return { respuesta_id: respuesta.id, clasificacion_sugerida: respuesta.clasificacionSugerida, confianza_sugerida: respuesta.confianzaSugerida, sobrescrita: false, ya_existia: true as const };
+    }
+
+    // La revalidación va dentro del UPDATE: si una persona clasifica entre
+    // la lectura de arriba y esta escritura, la sugerencia no se guarda.
+    const [result] = await this.db.update(respuestas).set({
+      clasificacionSugerida: input.clasificacion,
+      confianzaSugerida: input.confianza,
+      motivoSugerencia: input.motivo ?? null,
+      executionIdSugerencia: input.execution_id,
+      sugeridoEn: sql`CURRENT_TIMESTAMP`
+    }).where(and(
+      eq(respuestas.id, input.respuesta_id),
+      or(ne(respuestas.estado, "clasificada"), eq(respuestas.clasificacion, "ambigua"))
+    ));
+    if (result.affectedRows === 0) {
+      throw new HttpError(409, "La respuesta ya fue clasificada", CODIGO_RESPUESTA_YA_CLASIFICADA);
+    }
+
+    return { respuesta_id: respuesta.id, clasificacion_sugerida: input.clasificacion, confianza_sugerida: input.confianza, sobrescrita: respuesta.executionIdSugerencia !== null, ya_existia: false as const };
   }
 }
