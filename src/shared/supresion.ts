@@ -94,24 +94,13 @@ const TIPOS_SUPRIMIBLES: TipoMedioSupresion[] = ["correo", "telefono", "whatsapp
 
 /**
  * Suprime TODOS los medios contactables (correo, teléfono, WhatsApp) de un
- * contacto. Lo usa la baja por evento de SendGrid (link de baja o queja de
- * spam), que llega por correo y no por prospecto. ORDER BY id por la misma
- * razón que suprimirContactoPorBaja: dos bajas simultáneas bloquean en el
- * mismo orden.
- */
-
-/**
- * Una respuesta clasificada "baja" (por n8n o a mano): suprime TODOS los
- * medios contactables (correo, teléfono, WhatsApp) del contacto del
- * prospecto, no solo los del canal por el que respondió -- la persona pidió
- * no ser contactada, no dejar un canal (regla del 24-sep-2026). Sigue
- * siendo por contacto y por medio: no toca a otros contactos de la misma
- * empresa ni los medios de la empresa.
+ * contacto: la persona pidió no ser contactada, no dejar un canal (regla
+ * del 24-sep-2026). Sigue siendo por contacto y por medio: no toca a otros
+ * contactos de la misma empresa ni los medios de la empresa. Devuelve los
+ * ids de lista_supresion; vacío si el contacto no tiene medios.
  *
- * Si el contacto no tiene ningún medio que suprimir, la clasificación NO se
- * rechaza (la persona ya pidió la baja), pero queda una incidencia 'alta':
- * si después se da de alta un correo o teléfono suyo, nada lo bloquearía, así
- * que alguien tiene que registrarlo a mano.
+ * La usan la baja por evento de SendGrid (link de baja o queja de spam, que
+ * llega por correo y no por prospecto) y suprimirContactoPorBaja.
  *
  * ORDER BY id: dos bajas simultáneas del mismo contacto bloquean las filas
  * en el mismo orden y no pueden cruzarse en un deadlock.
@@ -131,15 +120,21 @@ export async function suprimirMediosDeContacto(tx: DrizzleTx, contactoId: number
   return ids;
 }
 
+/**
+ * Una respuesta clasificada "baja" (por n8n o a mano): suprime todos los
+ * medios del contacto del prospecto (suprimirMediosDeContacto), no solo los
+ * del canal por el que respondió.
+ *
+ * Si el contacto no tiene ningún medio que suprimir, la clasificación NO se
+ * rechaza (la persona ya pidió la baja), pero queda una incidencia 'alta':
+ * si después se da de alta un correo o teléfono suyo, nada lo bloquearía, así
+ * que alguien tiene que registrarlo a mano.
+ */
 export async function suprimirContactoPorBaja(tx: DrizzleTx, prospectoId: number, origen: OrigenSupresion) {
-  const medios = await tx
-    .select({ tipo: mediosContacto.tipo, valorNormalizado: mediosContacto.valorNormalizado })
-    .from(mediosContacto)
-    .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
-    .where(and(eq(prospectos.id, prospectoId), inArray(mediosContacto.tipo, TIPOS_SUPRIMIBLES)))
-    .orderBy(mediosContacto.id);
+  const [prospecto] = await tx.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
+  const ids = prospecto ? await suprimirMediosDeContacto(tx, prospecto.contactoId, origen) : [];
 
-  if (medios.length === 0) {
+  if (ids.length === 0) {
     await tx.insert(incidencias).values({
       executionId: origen.executionId,
       prospectoId,
@@ -148,13 +143,6 @@ export async function suprimirContactoPorBaja(tx: DrizzleTx, prospectoId: number
       mensaje: "El prospecto pidió la baja pero su contacto no tiene correo, teléfono ni WhatsApp que suprimir: registrarlos a mano en lista_supresion si aparecen.",
       detalle: { motivo: origen.motivo, usuario_id: origen.usuarioId }
     });
-    return [];
-  }
-
-  const ids: number[] = [];
-  for (const medio of medios) {
-    const supresion = await registrarSupresion(tx, { tipo: medio.tipo as TipoMedioSupresion, valorNormalizado: medio.valorNormalizado, ...origen });
-    ids.push(supresion.id);
   }
   return ids;
 }
