@@ -2,11 +2,11 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { actividades, catalogoEtapaEmbudo, historialEtapaOportunidad, metricasComercialesDiarias, oportunidades, roles, tareas, usuarios } from "../database/schema.js";
+import { actividades, campanas, catalogoEtapaEmbudo, envios, historialEtapaOportunidad, metricasComercialesDiarias, oportunidades, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { toCsv } from "../shared/csv.js";
-import type { MetricasDiariasQuery, ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
+import type { MetricasDiariasQuery, ProspeccionQuery, ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). A diferencia de los
 // demás módulos comerciales, aquí no hay "scoping por responsable" en el
@@ -20,6 +20,12 @@ function condicionRangoFecha(columna: unknown, fechaInicio?: string, fechaFin?: 
   if (fechaInicio) condiciones.push(sql`DATE(${columna}) >= ${fechaInicio}`);
   if (fechaFin) condiciones.push(sql`DATE(${columna}) <= ${fechaFin}`);
   return condiciones;
+}
+
+// Porcentaje con dos decimales; null cuando no hay base (nadie contactado),
+// para no confundir "sin datos" con "0% de respuesta".
+function porcentaje(parte: number, total: number) {
+  return total === 0 ? null : Math.round((parte / total) * 10_000) / 100;
 }
 
 // Igual criterio que toRow() en oportunidades.service.ts/cotizaciones.service.ts:
@@ -488,7 +494,7 @@ export class ReportesService {
   // métodos de arriba y aplana su resultado a filas para toCsv(). Cada
   // reporte tiene su propia forma (uno es lista plana, otros son objetos
   // con sub-secciones), así que el aplanado es específico por reporte.
-  async exportarCsv(reporte: ReporteExportable, query: ReporteQuery): Promise<{ nombreArchivo: string; contenido: string }> {
+  async exportarCsv(reporte: Exclude<ReporteExportable, "prospeccion">, query: ReporteQuery): Promise<{ nombreArchivo: string; contenido: string }> {
     switch (reporte) {
       case "actividades": {
         const datos = await this.actividadesPorAgente(query);
@@ -563,5 +569,138 @@ export class ReportesService {
         throw new HttpError(400, `Reporte desconocido: ${String(exhaustivo)}`);
       }
     }
+  }
+
+  // Prospección automática (n8n): cuántos correos salieron, a cuántas
+  // personas y cuánto se respondió, por campaña. Hasta ahora los reportes
+  // solo cubrían el pipeline comercial.
+  // - envios y la tasa se calculan sobre los envíos del rango (enviado_en):
+  //   de las personas contactadas en el periodo, cuántas respondieron
+  //   (respuesta ligada a uno de esos envíos, sin importar cuándo llegó).
+  // - respuestas cuenta lo que llegó en el rango (recibido_en).
+  // - Las automáticas (fuera de oficina) no son de la persona: se reportan
+  //   aparte y no cuentan para la tasa (PLAN_N8N_DEFINITIVO.md, ronda 3).
+  // - Personas = contactos distintos, no prospectos: la política de
+  //   contactos también cuenta por persona. El total no es la suma de las
+  //   campañas, porque una persona puede estar en dos.
+  // - inicial / recordatorio_1 / recordatorio_2 salen de numero_contacto,
+  //   que es el consecutivo dentro del prospecto.
+  async prospeccion(query: ProspeccionQuery) {
+    const condicionesEnvio = compactConditions([
+      query.campanaId ? eq(prospectos.campanaId, query.campanaId) : undefined,
+      ...condicionRangoFecha(envios.enviadoEn, query.fechaInicio, query.fechaFin)
+    ]);
+    const whereEnvio = condicionesEnvio.length > 0 ? and(...condicionesEnvio) : undefined;
+    const noAutomatica = sql`(${respuestas.clasificacion} IS NULL OR ${respuestas.clasificacion} <> 'automatica')`;
+
+    const condicionesRespuesta = compactConditions([
+      query.campanaId ? eq(prospectos.campanaId, query.campanaId) : undefined,
+      ...condicionRangoFecha(respuestas.recibidoEn, query.fechaInicio, query.fechaFin)
+    ]);
+
+    const [enviosPorCampana, personasTotal, respondieronPorCampana, respondieronTotal, respuestasRecibidas] = await Promise.all([
+      this.db
+        .select({
+          campanaId: prospectos.campanaId,
+          campanaNombre: campanas.nombre,
+          envios: sql<number>`COUNT(*)`,
+          inicial: sql<number>`SUM(${envios.numeroContacto} = 1)`,
+          recordatorio1: sql<number>`SUM(${envios.numeroContacto} = 2)`,
+          recordatorio2: sql<number>`SUM(${envios.numeroContacto} = 3)`,
+          personas: sql<number>`COUNT(DISTINCT ${prospectos.contactoId})`
+        })
+        .from(envios)
+        .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+        .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
+        .where(whereEnvio)
+        .groupBy(prospectos.campanaId, campanas.nombre)
+        .orderBy(prospectos.campanaId),
+      this.db
+        .select({ personas: sql<number>`COUNT(DISTINCT ${prospectos.contactoId})` })
+        .from(envios)
+        .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+        .where(whereEnvio),
+      this.db
+        .select({ campanaId: prospectos.campanaId, personas: sql<number>`COUNT(DISTINCT ${prospectos.contactoId})` })
+        .from(respuestas)
+        .innerJoin(envios, eq(envios.id, respuestas.envioId))
+        .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+        .where(and(noAutomatica, whereEnvio))
+        .groupBy(prospectos.campanaId),
+      this.db
+        .select({ personas: sql<number>`COUNT(DISTINCT ${prospectos.contactoId})` })
+        .from(respuestas)
+        .innerJoin(envios, eq(envios.id, respuestas.envioId))
+        .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+        .where(and(noAutomatica, whereEnvio)),
+      this.db
+        .select({ estado: respuestas.estado, clasificacion: respuestas.clasificacion, tardia: respuestas.tardia, cantidad: sql<number>`COUNT(*)` })
+        .from(respuestas)
+        .innerJoin(prospectos, eq(prospectos.id, respuestas.prospectoId))
+        .where(condicionesRespuesta.length > 0 ? and(...condicionesRespuesta) : undefined)
+        .groupBy(respuestas.estado, respuestas.clasificacion, respuestas.tardia)
+    ]);
+
+    const totalEnvios = { total: 0, inicial: 0, recordatorio_1: 0, recordatorio_2: 0, personas_contactadas: Number(personasTotal[0]?.personas ?? 0) };
+    for (const fila of enviosPorCampana) {
+      totalEnvios.total += Number(fila.envios);
+      totalEnvios.inicial += Number(fila.inicial);
+      totalEnvios.recordatorio_1 += Number(fila.recordatorio1);
+      totalEnvios.recordatorio_2 += Number(fila.recordatorio2);
+    }
+
+    let total = 0;
+    let automaticas = 0;
+    let tardias = 0;
+    let pendientes = 0;
+    const porClasificacion = new Map<string, number>();
+    for (const fila of respuestasRecibidas) {
+      const cantidad = Number(fila.cantidad);
+      if (fila.clasificacion === "automatica") {
+        automaticas += cantidad;
+        continue;
+      }
+      total += cantidad;
+      if (fila.tardia) tardias += cantidad;
+      if (fila.estado === "pendiente_clasificacion") pendientes += cantidad;
+      else if (fila.clasificacion) porClasificacion.set(fila.clasificacion, (porClasificacion.get(fila.clasificacion) ?? 0) + cantidad);
+    }
+    const personasQueRespondieron = Number(respondieronTotal[0]?.personas ?? 0);
+
+    const respondieron = new Map(respondieronPorCampana.map((fila) => [fila.campanaId, Number(fila.personas)]));
+    const porCampana = enviosPorCampana.map((fila) => {
+      const personas = Number(fila.personas);
+      const respondieronCampana = respondieron.get(fila.campanaId) ?? 0;
+      return {
+        campana_id: fila.campanaId,
+        campana_nombre: fila.campanaNombre ?? "Sin campaña",
+        envios: Number(fila.envios),
+        personas_contactadas: personas,
+        personas_que_respondieron: respondieronCampana,
+        tasa_respuesta_pct: porcentaje(respondieronCampana, personas)
+      };
+    });
+
+    return {
+      envios: totalEnvios,
+      respuestas: {
+        total,
+        automaticas,
+        tardias,
+        pendientes_clasificar: pendientes,
+        por_clasificacion: [...porClasificacion.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([clasificacion, cantidad]) => ({ clasificacion, cantidad })),
+        personas_que_respondieron: personasQueRespondieron
+      },
+      tasa_respuesta_pct: porcentaje(personasQueRespondieron, totalEnvios.personas_contactadas),
+      por_campana: porCampana
+    };
+  }
+
+  async exportarProspeccionCsv(query: ProspeccionQuery) {
+    const datos = await this.prospeccion(query);
+    return {
+      nombreArchivo: "prospeccion_por_campana.csv",
+      contenido: toCsv(datos.por_campana, ["campana_id", "campana_nombre", "envios", "personas_contactadas", "personas_que_respondieron", "tasa_respuesta_pct"])
+    };
   }
 }

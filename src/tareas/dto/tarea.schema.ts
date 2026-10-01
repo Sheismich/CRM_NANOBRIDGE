@@ -46,8 +46,12 @@ export const listTareasQuerySchema = z.object({
   estado: z.enum(["pendiente", "en_progreso", "cerrada", "cancelada"]).optional(),
   prioridad: z.enum(["baja", "media", "alta", "urgente"]).optional(),
   tipo: z.enum(["seguimiento", "clasificacion", "revision_documento", "otro"]).optional(),
-  responsableId: z.coerce.number().int().positive().optional()
-});
+  responsableId: z.coerce.number().int().positive().optional(),
+  // Las tareas que crea n8n llegan sin responsable: un supervisor las
+  // filtra así para repartirlas. Mismo mapeo explícito que `cerrada` en
+  // oportunidades (z.coerce.boolean() tomaría "false" como true).
+  sinAsignar: z.enum(["true", "false"]).optional().transform((v) => (v === undefined ? undefined : v === "true"))
+}).refine((q) => !(q.sinAsignar && q.responsableId), { path: ["sinAsignar"], message: "No se combina con responsableId" });
 
 export type CrearTareaInput = z.infer<typeof crearTareaSchema>;
 export type ClasificarTareaInput = z.infer<typeof clasificarTareaSchema>;

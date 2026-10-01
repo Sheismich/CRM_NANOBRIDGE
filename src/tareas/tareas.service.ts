@@ -21,6 +21,7 @@ export type ListTareasFilters = {
   prioridad?: "baja" | "media" | "alta" | "urgente";
   tipo?: "seguimiento" | "clasificacion" | "revision_documento" | "otro";
   responsableId?: number;
+  sinAsignar?: boolean;
 };
 
 // Largo de respuestas.comentario (VARCHAR(500)).
@@ -84,7 +85,7 @@ export class TareasService {
   // asignadas"); administrador y supervisor pueden ver o filtrar por
   // cualquier responsable.
   private scopedFilters(user: CurrentUser, filters: ListTareasFilters): ListTareasFilters {
-    if (user.rol === "agente") return { ...filters, responsableId: user.id };
+    if (user.rol === "agente") return { ...filters, responsableId: user.id, sinAsignar: undefined };
     return filters;
   }
 
@@ -96,7 +97,8 @@ export class TareasService {
       scoped.estado ? eq(tareas.estado, scoped.estado) : undefined,
       scoped.prioridad ? eq(tareas.prioridad, scoped.prioridad) : undefined,
       scoped.tipo ? eq(tareas.tipo, scoped.tipo) : undefined,
-      scoped.responsableId ? eq(tareas.responsableId, scoped.responsableId) : undefined
+      scoped.responsableId ? eq(tareas.responsableId, scoped.responsableId) : undefined,
+      scoped.sinAsignar ? isNull(tareas.responsableId) : undefined
     ]);
 
     // empresa_nombre: la bandeja lo necesita para decir de quién es cada

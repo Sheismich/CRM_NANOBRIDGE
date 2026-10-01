@@ -50,6 +50,7 @@ export function TareasPage() {
 }
 
 const LIMIT = 25;
+const SIN_ASIGNAR = "sin_asignar";
 const COLUMNAS = ["Tarea", "Empresa", "Tipo", "Prioridad", "Fecha límite", "Responsable", "Estado"];
 
 function Bandeja({ esAdminOSupervisor, usuarioId, onIrACola }: { esAdminOSupervisor: boolean; usuarioId: number; onIrACola: () => void }) {
@@ -61,7 +62,10 @@ function Bandeja({ esAdminOSupervisor, usuarioId, onIrACola }: { esAdminOSupervi
   const [abiertaId, setAbiertaId] = useState<number | null>(null);
   const [creando, setCreando] = useState(false);
 
-  const filtros = { estado: estado || undefined, prioridad: prioridad || undefined, tipo: tipo || undefined, responsableId: responsableId || undefined, page, limit: LIMIT };
+  // "sin_asignar" no es un id: se manda como sinAsignar=true (las tareas que
+  // crea n8n, como "Contactar prospecto interesado", llegan sin responsable).
+  const sinAsignar = responsableId === SIN_ASIGNAR;
+  const filtros = { estado: estado || undefined, prioridad: prioridad || undefined, tipo: tipo || undefined, responsableId: (!sinAsignar && responsableId) || undefined, sinAsignar: sinAsignar ? "true" : undefined, page, limit: LIMIT };
   const { data, isPending, isError } = useQuery({
     queryKey: ["tareas", "bandeja", filtros],
     queryFn: () => api.get<Paginated<Tarea>>("/api/v1/tareas", filtros)
@@ -118,6 +122,7 @@ function Bandeja({ esAdminOSupervisor, usuarioId, onIrACola }: { esAdminOSupervi
           {esAdminOSupervisor && (
             <select aria-label="Responsable" className={`${inputBaseClass} w-auto`} value={responsableId} onChange={cambiar(setResponsableId)}>
               <option value="">Responsable: Todos</option>
+              <option value={SIN_ASIGNAR}>Sin asignar</option>
               {personas?.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.nombre}

@@ -29,8 +29,17 @@ export const metricasDiariasQuerySchema = z.object({
 }).refine(fechaInicioAntesDeFechaFin, ERROR_RANGO_FECHA);
 export type MetricasDiariasQuery = z.infer<typeof metricasDiariasQuerySchema>;
 
+// Prospección (envíos y respuestas de n8n): no hay agente que filtrar --
+// los correos los manda la automatización --, pero sí campaña.
+export const prospeccionQuerySchema = z.object({
+  fechaInicio: z.string().date().optional(),
+  fechaFin: z.string().date().optional(),
+  campanaId: z.coerce.number().int().positive().optional()
+}).refine(fechaInicioAntesDeFechaFin, ERROR_RANGO_FECHA);
+export type ProspeccionQuery = z.infer<typeof prospeccionQuerySchema>;
+
 // Reportes disponibles para exportación CSV (GET /reportes/export/:reporte).
-// Mismo set que los 6 endpoints de lectura -- ver ReportesController.
-export const REPORTES_EXPORTABLES = ["actividades", "tareas", "conversion-etapas", "pipeline", "forecast", "desempeno-por-agente"] as const;
+// Mismo set que los 7 endpoints de lectura -- ver ReportesController.
+export const REPORTES_EXPORTABLES = ["actividades", "tareas", "conversion-etapas", "pipeline", "forecast", "desempeno-por-agente", "prospeccion"] as const;
 export const reporteExportableSchema = z.enum(REPORTES_EXPORTABLES);
 export type ReporteExportable = z.infer<typeof reporteExportableSchema>;

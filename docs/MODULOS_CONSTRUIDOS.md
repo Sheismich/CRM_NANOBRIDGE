@@ -36,7 +36,7 @@ Alta manual e importación CSV vía `borradores_captura` — ver `docs/planes/S3
 
 ## Tareas y cola de clasificación (`src/tareas/`)
 
-- `GET/POST /tareas`, `GET /tareas/:id`, `PATCH /tareas/:id/cerrar`.
+- `GET/POST /tareas`, `GET /tareas/:id`, `PATCH /tareas/:id/cerrar`, `PATCH /tareas/:id/asignar`. `GET /tareas?sinAsignar=true` lista las que no tienen responsable (las que crea n8n) para repartirlas.
 - Tipos: `seguimiento`, `clasificacion`, `revision_documento`, `otro`. Prioridades: `baja`, `media`, `alta`, `urgente`.
 - `GET /cola-clasificacion` — atajo que filtra `tareas` a `tipo=clasificacion, estado=pendiente` (no es una tabla aparte).
 - `POST /cola-clasificacion/:id/clasificar` — solo `administrador`/`supervisor`. Aplica la decisión (`interesado`, `no_interesado`, `baja`, `invalido`, `reagendar`) en la misma transacción y genera un evento en `eventos_pendientes` (outbox) como aviso, nunca llama a n8n directo. Detalle de cada clasificación en el README ("Cola de clasificación").
@@ -95,7 +95,8 @@ Reglas clave:
 ## Reportes (`src/reportes/`)
 
 - Solo `administrador`/`supervisor` (un `agente` ya ve lo suyo filtrado en `/oportunidades`, `/tareas`, `/cotizaciones` — estos reportes cruzan datos de *todos* los agentes).
-- `GET /actividades`, `/tareas`, `/pipeline/conversion-etapas`, `/pipeline/resumen`, `/forecast`, `/desempeno-por-agente`, `/export/:reporte` (CSV).
+- `GET /actividades`, `/tareas`, `/pipeline/conversion-etapas`, `/pipeline/resumen`, `/forecast`, `/desempeno-por-agente`, `/prospeccion`, `/export/:reporte` (CSV).
+- `GET /prospeccion` (1-oct-2026): envíos y respuestas de la automatización, en total y por campaña (filtros: periodo y `campanaId`, sin agente). La tasa de respuesta es la proporción de personas contactadas en el periodo que respondieron a alguno de esos correos; las respuestas automáticas van aparte y no cuentan.
 - `GET /desempeno-por-agente` (22-sep-2026): junta actividades + tareas cerradas/vencidas + oportunidades ganadas/ingresos, ya agrupadas por agente, en una sola llamada — antes armar esa tabla exigía llamar `/tareas` y `/pipeline/resumen` una vez por agente (ninguno de los dos acepta una lista de `responsableId`) y unir todo a mano en el frontend. Incluye a todos los agentes activos aunque no tengan ninguna fila en el rango (aparecen en ceros, no desaparecen de la tabla). `metricas_comerciales_diarias` queda fuera: es un agregado global del día, sin desglose por agente.
 - Los reportes se calculan **en vivo** en cada consulta. Aparte, la tabla `metricas_comerciales_diarias` ya existe y se llena con un job diario (ver README).
 - La conversión por etapa identifica la etapa de entrada por su clave (`"calificada"`), no por un número de orden que podría cambiar si se reordena el catálogo.

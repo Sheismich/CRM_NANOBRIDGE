@@ -304,6 +304,30 @@ export type DesempenoAgente = {
   oportunidades: { ganadas: number; ingresos_cerrados: string };
 };
 
+// GET /reportes/prospeccion: envíos y respuestas de la automatización. Las
+// respuestas automáticas (fuera de oficina) van aparte y no cuentan para la
+// tasa; tasa_respuesta_pct es null sin personas contactadas.
+export type ReporteProspeccion = {
+  envios: { total: number; inicial: number; recordatorio_1: number; recordatorio_2: number; personas_contactadas: number };
+  respuestas: {
+    total: number;
+    automaticas: number;
+    tardias: number;
+    pendientes_clasificar: number;
+    por_clasificacion: { clasificacion: string; cantidad: number }[];
+    personas_que_respondieron: number;
+  };
+  tasa_respuesta_pct: number | null;
+  por_campana: {
+    campana_id: number | null;
+    campana_nombre: string;
+    envios: number;
+    personas_contactadas: number;
+    personas_que_respondieron: number;
+    tasa_respuesta_pct: number | null;
+  }[];
+};
+
 export type MetricaDiaria = {
   fecha: string;
   oportunidades_abiertas: number;

@@ -4,7 +4,7 @@ import { ReportesService } from "./reportes.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
-import { metricasDiariasQuerySchema, reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
+import { metricasDiariasQuerySchema, prospeccionQuerySchema, reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). Criterio de acceso
 // (el plan no lo especifica para este módulo, así que se define aquí):
@@ -62,6 +62,14 @@ export class ReportesController {
     return this.reportesService.desempenoPorAgente(input);
   }
 
+  // Envíos y respuestas de la prospección automática (n8n), con la tasa de
+  // respuesta por campaña. Schema propio: filtra por campaña, no por agente.
+  @Get("prospeccion")
+  prospeccion(@Query() query: Record<string, unknown>) {
+    const input = prospeccionQuerySchema.parse(query);
+    return this.reportesService.prospeccion(input);
+  }
+
   // Histórico del job diario de métricas comerciales -- a diferencia de los
   // reportes de arriba (siempre calculados en vivo), esto lee la foto que
   // ya dejó calcularMetricasDelDia(), así que responde igual de rápido sin
@@ -92,8 +100,9 @@ export class ReportesController {
   @Get("export/:reporte")
   async exportar(@Param("reporte") reporteParam: string, @Query() query: Record<string, unknown>, @Res() response: Response) {
     const reporte = reporteExportableSchema.parse(reporteParam);
-    const input = reporteQuerySchema.parse(query);
-    const { nombreArchivo, contenido } = await this.reportesService.exportarCsv(reporte, input);
+    const { nombreArchivo, contenido } = reporte === "prospeccion"
+      ? await this.reportesService.exportarProspeccionCsv(prospeccionQuerySchema.parse(query))
+      : await this.reportesService.exportarCsv(reporte, reporteQuerySchema.parse(query));
     response.status(200).set({
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${nombreArchivo}"`

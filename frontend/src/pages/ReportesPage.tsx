@@ -6,9 +6,9 @@ import { Card, SectionTitle } from "../components/ui/Card";
 import { ServerError, inputBaseClass } from "../components/ui/Field";
 import { GraficaConversion, GraficaForecast } from "../components/reportes/Graficas";
 import { ApiError, api } from "../lib/api";
-import { ETIQUETA_TIPO_TAREA } from "../lib/tareas";
+import { ETIQUETA_CLASIFICACION, ETIQUETA_TIPO_TAREA } from "../lib/tareas";
 import { etiquetaMes, fechaLocal, formatoFecha, formatoFechaHora, formatoMonedaEntera, plural } from "../lib/formato";
-import type { ConversionEtapas, DesempenoAgente, ForecastMes, MetricaDiaria, Paginated, PipelineResumen, ReporteTareas, Usuario } from "../types";
+import type { Clasificacion, ConversionEtapas, DesempenoAgente, ForecastMes, MetricaDiaria, Paginated, PipelineResumen, ReporteProspeccion, ReporteTareas, Usuario } from "../types";
 
 // Reportes (PLAN_FRONTEND.md §5, punto #5 del jefe). Solo administrador y
 // supervisor: ReportesController lo exige y App.tsx protege la ruta.
@@ -58,7 +58,8 @@ const ARCHIVO_EXPORTACION = {
   "conversion-etapas": "conversion_por_etapa.csv",
   pipeline: "pipeline_resumen.csv",
   forecast: "forecast_mensual.csv",
-  "desempeno-por-agente": "desempeno_por_agente.csv"
+  "desempeno-por-agente": "desempeno_por_agente.csv",
+  prospeccion: "prospeccion_por_campana.csv"
 } as const;
 type ReporteExportable = keyof typeof ARCHIVO_EXPORTACION;
 
@@ -130,6 +131,7 @@ export function ReportesPage() {
               <Forecast responsableId={responsableId} />
             </div>
             <TareasPorTipo filtros={filtros} />
+            <Prospeccion rango={rango} filtradoPorAgente={responsableId !== undefined} />
             <MetricasDiarias fechaInicio={rango.fechaInicio} fechaFin={rango.fechaFin} filtradoPorAgente={responsableId !== undefined} />
           </>
         )}
@@ -413,6 +415,92 @@ function TareasPorTipo({ filtros }: { filtros: Filtros }) {
         </table>
       )}
     </Card>
+  );
+}
+
+// --- Prospección ----------------------------------------------------------------------
+
+// Envíos y respuestas de la automatización (n8n). Los correos no tienen
+// agente: el filtro de agente no aplica, solo el periodo. No hay selector
+// de campaña porque la tabla ya desglosa por campaña.
+function Prospeccion({ rango, filtradoPorAgente }: { rango: Pick<Filtros, "fechaInicio" | "fechaFin">; filtradoPorAgente: boolean }) {
+  const { data, isPending, isError } = useReporte<ReporteProspeccion>("prospeccion", rango);
+  const pct = (v: number | null) => (v == null ? "—" : `${v}%`);
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="px-5 pt-5">
+        <Encabezado
+          titulo="Prospección"
+          nota={`Correos de la automatización. La tasa es de las personas contactadas en el periodo que respondieron; las respuestas automáticas no cuentan${filtradoPorAgente ? " (no se filtra por agente)" : ""}.`}
+        >
+          <BotonExportar reporte="prospeccion" filtros={rango} />
+        </Encabezado>
+      </div>
+      <div className="px-5">
+        <Estado isPending={isPending} isError={isError} />
+      </div>
+      {data && data.envios.total === 0 && data.respuestas.total === 0 && data.respuestas.automaticas === 0 && <div className="px-5 pb-5 text-sm text-ink-3">Sin correos ni respuestas en el periodo.</div>}
+      {data && (data.envios.total > 0 || data.respuestas.total > 0 || data.respuestas.automaticas > 0) && (
+        <>
+          <div className="grid grid-cols-2 gap-4 px-5 pb-5 xl:grid-cols-4">
+            <Dato etiqueta="Correos enviados" valor={data.envios.total} sub={`${data.envios.inicial} iniciales · ${data.envios.recordatorio_1 + data.envios.recordatorio_2} recordatorios`} />
+            <Dato etiqueta="Personas contactadas" valor={data.envios.personas_contactadas} sub={plural(data.respuestas.personas_que_respondieron, "respondió", "respondieron")} />
+            <Dato etiqueta="Tasa de respuesta" valor={pct(data.tasa_respuesta_pct)} />
+            <Dato
+              etiqueta="Respuestas recibidas"
+              valor={data.respuestas.total}
+              sub={[data.respuestas.pendientes_clasificar > 0 && `${data.respuestas.pendientes_clasificar} sin clasificar`, data.respuestas.tardias > 0 && plural(data.respuestas.tardias, "tardía", "tardías"), data.respuestas.automaticas > 0 && plural(data.respuestas.automaticas, "automática aparte", "automáticas aparte")].filter(Boolean).join(" · ")}
+            />
+          </div>
+          {data.respuestas.por_clasificacion.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-5 pb-5 text-xs">
+              {data.respuestas.por_clasificacion.map((c) => (
+                <span key={c.clasificacion} className="rounded-full border border-border px-2.5 py-1">
+                  {ETIQUETA_CLASIFICACION[c.clasificacion as Clasificacion] ?? c.clasificacion}: <span className="font-bold">{c.cantidad}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          {data.por_campana.length > 0 && (
+            <div className="overflow-x-auto">
+              <div className="tabla-scroll"><table className="w-full border-collapse text-[13px] tabular-nums">
+                <thead>
+                  <tr className="bg-bg">
+                    {["Campaña", "Correos", "Personas", "Respondieron", "Tasa"].map((h, i) => (
+                      <th key={h} className={`px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-2 ${i === 0 ? "text-left" : "text-right"}`}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.por_campana.map((c) => (
+                    <tr key={c.campana_id ?? "sin"} className="border-t border-border">
+                      <td className="px-4 py-3 font-semibold">{c.campana_nombre}</td>
+                      <Num>{c.envios}</Num>
+                      <Num>{c.personas_contactadas}</Num>
+                      <Num>{c.personas_que_respondieron}</Num>
+                      <Num fuerte>{pct(c.tasa_respuesta_pct)}</Num>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+function Dato({ etiqueta, valor, sub }: { etiqueta: string; valor: number | string; sub?: string }) {
+  return (
+    <div className="rounded-[10px] border border-border px-4 py-3">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-2">{etiqueta}</div>
+      <div className="mt-1 font-heading text-[22px] font-extrabold tabular-nums">{valor}</div>
+      {sub && <div className="mt-0.5 text-xs text-ink-3">{sub}</div>}
+    </div>
   );
 }
 

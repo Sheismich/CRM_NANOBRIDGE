@@ -93,6 +93,30 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       expect(listaAdminFiltrada.body.data.map((t: { id: number }) => t.id)).not.toContain(idAgente2);
     });
 
+    it("sinAsignar=true lista solo las tareas sin responsable; un agente sigue viendo solo las suyas", async () => {
+      const creada = await request(app.getHttpServer())
+        .post("/api/v1/automatizacion/tareas")
+        .set("X-API-Key", API_KEY)
+        .send({ execution_id: `sin-asignar-${randomUUID()}`, tipo: "seguimiento", titulo: "Tarea sin responsable" });
+      expect(creada.status).toBe(201);
+      const idSinAsignar = creada.body.id as number;
+      const idAsignada = await crearTarea(adminCookie, { titulo: "Tarea asignada", responsableId: agente1.id });
+
+      const lista = await request(app.getHttpServer()).get("/api/v1/tareas?sinAsignar=true&limit=100").set("Cookie", adminCookie);
+      expect(lista.status).toBe(200);
+      const ids = lista.body.data.map((t: { id: number }) => t.id);
+      expect(ids).toContain(idSinAsignar);
+      expect(ids).not.toContain(idAsignada);
+      expect(lista.body.data.every((t: { responsable_id: number | null }) => t.responsable_id === null)).toBe(true);
+
+      const listaAgente = await request(app.getHttpServer()).get("/api/v1/tareas?sinAsignar=true&limit=100").set("Cookie", agente1.cookie);
+      expect(listaAgente.status).toBe(200);
+      expect(listaAgente.body.data.map((t: { id: number }) => t.id)).not.toContain(idSinAsignar);
+      expect(listaAgente.body.data.map((t: { id: number }) => t.id)).toContain(idAsignada);
+
+      expect((await request(app.getHttpServer()).get(`/api/v1/tareas?sinAsignar=true&responsableId=${agente1.id}`).set("Cookie", adminCookie)).status).toBe(400);
+    });
+
     it("sin sesión responde 401", async () => {
       expect((await request(app.getHttpServer()).get("/api/v1/tareas")).status).toBe(401);
       expect((await request(app.getHttpServer()).post("/api/v1/tareas").send({})).status).toBe(401);
