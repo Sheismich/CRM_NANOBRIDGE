@@ -61,7 +61,7 @@ function tareaToEvento(row: typeof tareas.$inferSelect): TimelineEvento {
     canal: null,
     resultado: row.resultado,
     proxima_accion: null,
-    detalle: { tarea_id: row.id, titulo: row.titulo, tipo_tarea: row.tipo, clasificacion: row.clasificacion }
+    detalle: { tarea_id: row.id, titulo: row.titulo, tipo_tarea: row.tipo, clasificacion: row.clasificacion, estado: row.estado }
   };
 }
 

@@ -8,6 +8,7 @@ import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
+import { darDeBajaProspecto } from "../shared/baja-prospecto.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo } from "../shared/reply-to.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
@@ -943,25 +944,26 @@ export class AutomatizacionService {
   }
 
   // --- Registro de supresión ---------------------------------------------------------
-  // Endpoint para cuando n8n necesite suprimir un medio por su cuenta (p.
-  // ej. el link de baja de SendGrid, PLAN_N8N_DEFINITIVO.md B2). La lógica
-  // vive en shared/supresion.ts para que las clasificaciones "baja" (la de
-  // n8n y la manual del CRM) la usen dentro de su propia transacción.
+  // Supresiones que no vienen de una respuesta clasificada: sobre todo los
+  // eventos de SendGrid que manda PT3 (PLAN_N8N_DEFINITIVO.md B2). La
+  // lógica vive en shared/supresion.ts para que las clasificaciones "baja"
+  // (la de n8n y la manual del CRM) la usen dentro de su propia transacción.
   //
-  // Las 3 escrituras (lista_supresion, medios_contacto, auditoría) corren en
-  // una sola transacción (hallazgo de code review, 14-sep-2026): si el
-  // UPDATE de medios_contacto tronaba después de confirmar el insert, un
-  // retry de n8n devolvía ya_existia sin volver a intentar ese UPDATE.
+  // Alcance según `evento` (decisión del 1-oct-2026):
+  // - unsubscribe / group_unsubscribe / spamreport: la persona pidió no ser
+  //   contactada, igual que una respuesta clasificada "baja". Se suprimen
+  //   TODOS los medios de quien tenga ese valor y sus prospectos pasan a
+  //   baja con darDeBajaProspecto (que además cancela sus seguimientos).
+  //   Antes solo se suprimía ese correo: el teléfono seguía contactable y
+  //   el prospecto seguía como si nada.
+  // - bounce, o sin evento: solo ese medio. Un rebote no es una petición de
+  //   la persona.
+  //
+  // Todo corre en una sola transacción (hallazgo de code review,
+  // 14-sep-2026): si el UPDATE de medios_contacto tronaba después de
+  // confirmar el insert, un retry de n8n devolvía ya_existia sin volver a
+  // intentar ese UPDATE.
   async registrarSupresion(input: RegistroSupresionInput) {
-    //
-    // Con `evento` de baja de persona (link de baja o queja de spam de
-    // SendGrid, PT3) la persona pidió no ser contactada, igual que una
-    // respuesta clasificada "baja": se suprimen TODOS los medios de quien
-    // tenga ese valor y sus prospectos pasan a baja, en esta misma
-    // transacción. Antes solo se suprimía ese correo: el teléfono seguía
-    // contactable y el prospecto seguía como si nada (decisión del
-    // 1-oct-2026). Un rebote (bounce) o sin evento: solo ese medio -- un
-    // rebote no es una petición de la persona.
     return this.db.transaction(async (tx) => {
       const valorNormalizado = normalizarValorSupresion(input.tipo, input.valor);
       const origen = { motivo: input.motivo, executionId: input.execution_id, usuarioId: null };
@@ -983,24 +985,12 @@ export class AutomatizacionService {
       for (const { contactoId } of duenos) {
         for (const id of await suprimirMediosDeContacto(tx, contactoId!, origen)) supresionIds.add(id);
 
-        const suyos = await tx
-          .select({ id: prospectos.id, estado: prospectos.estado })
-          .from(prospectos)
-          .where(and(eq(prospectos.contactoId, contactoId!), ne(prospectos.estado, "baja")))
-          .orderBy(prospectos.id);
+        const suyos = await tx.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.contactoId, contactoId!)).orderBy(prospectos.id);
         for (const prospecto of suyos) {
-          await tx.update(prospectos).set({ estado: "baja" }).where(eq(prospectos.id, prospecto.id));
           // Misma acción que POST /prospectos/estado: el Historial de la
           // ficha de cliente la muestra como cambio de estado.
-          await tx.insert(auditoria).values({
-            usuarioId: null,
-            entidad: "prospecto",
-            entidadId: prospecto.id,
-            accion: "cambiar_estado_automatizacion",
-            antes: { estado: prospecto.estado },
-            despues: { execution_id: input.execution_id, estado: "baja", motivo: input.motivo }
-          });
-          prospectosEnBaja.push(prospecto.id);
+          const { cambio } = await darDeBajaProspecto(tx, prospecto.id, { accion: "cambiar_estado_automatizacion", motivo: input.motivo, executionId: input.execution_id, usuarioId: null });
+          if (cambio) prospectosEnBaja.push(prospecto.id);
         }
       }
 

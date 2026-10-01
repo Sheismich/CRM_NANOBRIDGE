@@ -6,7 +6,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, contactos, prospectos } from "../src/database/schema.js";
+import { auditoria, contactos, prospectos, tareas } from "../src/database/schema.js";
 
 // Mismo valor fijado en test/setup/setup-env.ts.
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -153,6 +153,72 @@ describe("baja por evento de SendGrid (link de baja, spam, rebote)", () => {
     expect(res.body.prospectos_en_baja).toEqual([persona.id]);
     expect(await enSupresion("telefono", persona.telefono)).toBe(true);
     expect(await estado(persona.id)).toBe("baja");
+  });
+
+  // Hallazgo del /code-review del 1-oct-2026: una baja dejaba abiertas las
+  // tareas de seguimiento ("Contactar prospecto interesado", "Respuesta
+  // tardía"...) y un vendedor podía contactar a quien pidió la baja. Se
+  // cancelan solas; las de la cola de clasificación no, para que alguien
+  // pueda leer lo que contestó (decisión de Fabián, 1-oct-2026).
+  describe("la baja cancela los seguimientos", () => {
+    async function crearTarea(prospectoId: number, tipo: "seguimiento" | "clasificacion") {
+      const res = await api()
+        .post("/api/v1/automatizacion/tareas")
+        .set("X-API-Key", API_KEY)
+        .send({ execution_id: randomUUID(), prospecto_id: prospectoId, tipo, titulo: `Tarea ${tipo} de prueba` });
+      expect(res.status).toBe(201);
+      return res.body.id as number;
+    }
+
+    async function tarea(id: number) {
+      const [fila] = await db.select().from(tareas).where(eq(tareas.id, id));
+      return fila!;
+    }
+
+    it("las tareas de seguimiento abiertas quedan canceladas y las de clasificación siguen abiertas", async () => {
+      const persona = await registrarProspecto();
+      const seguimiento = await crearTarea(persona.id, "seguimiento");
+      const clasificacion = await crearTarea(persona.id, "clasificacion");
+
+      expect((await evento(persona.correo, "unsubscribe")).status).toBe(201);
+
+      const cancelada = await tarea(seguimiento);
+      expect(cancelada.estado).toBe("cancelada");
+      expect(cancelada.resultado).toBe("Cancelada: el prospecto pidió la baja");
+      expect(cancelada.cerradaEn).toBeInstanceOf(Date);
+      expect((await tarea(clasificacion)).estado).toBe("pendiente");
+    });
+
+    it("un rebote no cancela nada", async () => {
+      const persona = await registrarProspecto();
+      const seguimiento = await crearTarea(persona.id, "seguimiento");
+      expect((await evento(persona.correo, "bounce")).status).toBe(201);
+      expect((await tarea(seguimiento)).estado).toBe("pendiente");
+    });
+
+    it("el Historial muestra la tarea cancelada con su estado", async () => {
+      const persona = await registrarProspecto();
+      const seguimiento = await crearTarea(persona.id, "seguimiento");
+      expect((await evento(persona.correo, "spamreport")).status).toBe(201);
+
+      const [contacto] = await db.select({ empresaId: contactos.empresaId }).from(contactos).where(eq(contactos.id, persona.contactoId));
+      const historial = await api().get("/api/v1/actividades").set("Cookie", adminCookie).query({ empresaId: contacto!.empresaId, limit: 100 });
+      const evento_ = (historial.body.data as { tipo: string; detalle: { tarea_id?: number; estado?: string } }[]).find((e) => e.tipo === "tarea" && e.detalle.tarea_id === seguimiento);
+      expect(evento_?.detalle.estado).toBe("cancelada");
+    });
+  });
+
+  // Antes la baja de persona leía y escribía el estado sin revalidarlo:
+  // dos eventos al mismo tiempo dejaban dos filas de auditoría.
+  it("unsubscribe y spamreport al mismo tiempo: un solo cambio de estado en la auditoría", async () => {
+    const persona = await registrarProspecto();
+    const [a, b] = await Promise.all([evento(persona.correo, "unsubscribe"), evento(persona.correo, "spamreport")]);
+    expect([200, 201]).toContain(a.status);
+    expect([200, 201]).toContain(b.status);
+
+    expect(await estado(persona.id)).toBe("baja");
+    const cambios = await db.select().from(auditoria).where(and(eq(auditoria.entidad, "prospecto"), eq(auditoria.entidadId, persona.id), eq(auditoria.accion, "cambiar_estado_automatizacion")));
+    expect(cambios).toHaveLength(1);
   });
 
   it("un evento desconocido: 400", async () => {

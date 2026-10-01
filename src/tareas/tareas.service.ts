@@ -332,7 +332,10 @@ export class TareasService {
       }
     }
 
-    const { estadoProspecto, supresionIds } = await aplicarClasificacionAlProspecto(tx, input.prospectoId, input.clasificacion, input.origen);
+    // enBaja: "la baja manda" (ver aplicarClasificacionAlProspecto). La
+    // respuesta queda clasificada, pero a quien pidió la baja no se le crean
+    // tareas de seguimiento ni de cola.
+    const { estadoProspecto, supresionIds, enBaja } = await aplicarClasificacionAlProspecto(tx, input.prospectoId, input.clasificacion, input.origen);
 
     let tareaId: number | null = null;
     if (input.clasificacion === "ambigua") {
@@ -344,7 +347,7 @@ export class TareasService {
         .where(and(eq(tareas.respuestaId, input.respuestaId), eq(tareas.tipo, "clasificacion"), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`))
         .orderBy(tareas.id)
         .limit(1);
-      tareaId = abierta?.id ?? (await this.createFromAutomation({
+      tareaId = abierta?.id ?? (enBaja ? null : (await this.createFromAutomation({
         execution_id: `resp-clasif-${input.origen.executionId}`,
         prospecto_id: input.prospectoId,
         respuesta_id: input.respuestaId ?? undefined,
@@ -352,7 +355,7 @@ export class TareasService {
         titulo: "Clasificar respuesta ambigua",
         descripcion: input.comentario ?? input.contenido ?? undefined,
         prioridad: "media"
-      }, tx)).id;
+      }, tx)).id);
     } else if (input.respuestaId !== null) {
       // Ya hay decisión: las tareas de clasificación de esta respuesta que
       // sigan abiertas se cierran con ella. Sin esto, si la IA clasificaba
@@ -367,11 +370,11 @@ export class TareasService {
       }).where(and(eq(tareas.respuestaId, input.respuestaId), eq(tareas.tipo, "clasificacion"), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
     }
 
-    if (input.clasificacion === "interesado") {
+    if (input.clasificacion === "interesado" && !enBaja) {
       tareaId = await this.crearTareaDeInteresado(tx, input);
     }
 
-    if (input.clasificacion === "reagendar") {
+    if (input.clasificacion === "reagendar" && !enBaja) {
       const { empresaId, contactoId } = await this.contextoDeProspecto(tx, input.prospectoId);
       const [seguimiento] = await tx.insert(tareas).values({
         tipo: "seguimiento",

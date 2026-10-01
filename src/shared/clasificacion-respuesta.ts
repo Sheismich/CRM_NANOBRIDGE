@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, prospectos } from "../database/schema.js";
 import type { ClasificacionRespuesta } from "./clasificaciones.js";
+import { darDeBajaProspecto } from "./baja-prospecto.js";
 import { suprimirContactoPorBaja } from "./supresion.js";
 
 export type { ClasificacionRespuesta };
@@ -43,13 +44,29 @@ export type OrigenClasificacion = {
  * (AutomatizacionService.clasificarRespuesta) o de la cola manual
  * (TareasService.clasificar): fija su estado, deja el cambio en auditoría
  * (para que aparezca en el Historial de la ficha de cliente) y, si es
- * "baja", suprime a su contacto. Corre dentro de la transacción de quien
- * llama.
+ * "baja", lo da de baja (darDeBajaProspecto: también cancela sus
+ * seguimientos) y suprime a su contacto. Corre dentro de la transacción de
+ * quien llama.
+ *
+ * "La baja manda" (decisión de Fabián, 1-oct-2026): si el prospecto ya
+ * está en baja -- p. ej. usó el link de SendGrid mientras su respuesta
+ * esperaba en la cola --, ninguna otra clasificación lo saca de ahí. Antes
+ * un "interesado" posterior lo regresaba a interesado. `enBaja` le dice a
+ * quien llama que no cree tareas de seguimiento.
  */
 export async function aplicarClasificacionAlProspecto(tx: DrizzleTx, prospectoId: number, clasificacion: ClasificacionRespuesta, origen: OrigenClasificacion) {
+  const motivo = `Clasificada como ${clasificacion} (${origen.descripcion})`;
+  if (clasificacion === "baja") {
+    await darDeBajaProspecto(tx, prospectoId, { accion: ACCION_CAMBIO_ESTADO_POR_CLASIFICACION, motivo, executionId: origen.executionId, usuarioId: origen.usuarioId });
+    const supresionIds = await suprimirContactoPorBaja(tx, prospectoId, { motivo: `Baja pedida en respuesta (${origen.descripcion})`, executionId: origen.executionId, usuarioId: origen.usuarioId });
+    return { estadoProspecto: "baja", supresionIds, enBaja: true };
+  }
+
+  const [antes] = await tx.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
+  if (antes?.estado === "baja") return { estadoProspecto: null, supresionIds: [] as number[], enBaja: true };
+
   const estadoProspecto = ESTADO_PROSPECTO_POR_CLASIFICACION[clasificacion];
   if (estadoProspecto) {
-    const [antes] = await tx.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
     await tx.update(prospectos).set({ estado: estadoProspecto }).where(eq(prospectos.id, prospectoId));
     await tx.insert(auditoria).values({
       usuarioId: origen.usuarioId,
@@ -57,12 +74,8 @@ export async function aplicarClasificacionAlProspecto(tx: DrizzleTx, prospectoId
       entidadId: prospectoId,
       accion: ACCION_CAMBIO_ESTADO_POR_CLASIFICACION,
       antes: { estado: antes?.estado ?? null },
-      despues: { execution_id: origen.executionId, estado: estadoProspecto, motivo: `Clasificada como ${clasificacion} (${origen.descripcion})` }
+      despues: { execution_id: origen.executionId, estado: estadoProspecto, motivo }
     });
   }
-
-  const supresionIds = clasificacion === "baja"
-    ? await suprimirContactoPorBaja(tx, prospectoId, { motivo: `Baja pedida en respuesta (${origen.descripcion})`, executionId: origen.executionId, usuarioId: origen.usuarioId })
-    : [];
-  return { estadoProspecto, supresionIds };
+  return { estadoProspecto, supresionIds: [] as number[], enBaja: false };
 }

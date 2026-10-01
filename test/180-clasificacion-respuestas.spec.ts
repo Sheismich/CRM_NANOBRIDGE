@@ -537,6 +537,92 @@ describe("respuestas: clasificación automática y manual", () => {
     });
   });
 
+  // Hallazgos del /code-review del 1-oct-2026 (decisiones de Fabián):
+  // - una baja cancela las tareas de seguimiento abiertas del prospecto;
+  // - "la baja manda": si la persona ya está en baja (p. ej. usó el link de
+  //   SendGrid) y tenía una respuesta esperando en la cola, clasificarla
+  //   la registra, pero el prospecto sigue en baja y no se crea ninguna
+  //   tarea. Antes un "interesado" lo regresaba a interesado y le
+  //   asignaba un vendedor.
+  describe("la baja manda", () => {
+    async function darDeBajaPorLink(correo: string) {
+      const res = await api().post("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), tipo: "correo", valor: correo, motivo: "Baja por link de SendGrid", evento: "unsubscribe" });
+      expect(res.status).toBe(201);
+    }
+
+    async function estadoProspecto(prospectoId: number) {
+      const [fila] = await db.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, prospectoId));
+      return fila!.estado;
+    }
+
+    async function tareasDe(prospectoId: number, titulo: string) {
+      return db.select().from(tareas).where(and(eq(tareas.prospectoId, prospectoId), eq(tareas.titulo, titulo)));
+    }
+
+    it("una 'baja' de n8n cancela la tarea 'Contactar prospecto interesado' que ya existía", async () => {
+      const prospecto = await registrarProspecto();
+      expect((await clasificarAutomatica(await registrarRespuesta(prospecto.id, "me interesa"), "interesado")).status).toBe(201);
+      expect((await clasificarAutomatica(await registrarRespuesta(prospecto.id, "mejor ya no"), "baja")).status).toBe(201);
+
+      const [contactar] = await tareasDe(prospecto.id, "Contactar prospecto interesado");
+      expect(contactar!.estado).toBe("cancelada");
+      expect(contactar!.resultado).toBe("Cancelada: el prospecto pidió la baja");
+    });
+
+    it("una 'baja' manual en la cola también la cancela", async () => {
+      const prospecto = await registrarProspecto();
+      expect((await clasificarAutomatica(await registrarRespuesta(prospecto.id, "me interesa"), "interesado")).status).toBe(201);
+      const tareaId = (await clasificarAutomatica(await registrarRespuesta(prospecto.id, "mmm"), "ambigua")).body.tarea_id as number;
+
+      expect((await api().post(`/api/v1/cola-clasificacion/${tareaId}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "baja" })).status).toBe(200);
+
+      const [contactar] = await tareasDe(prospecto.id, "Contactar prospecto interesado");
+      expect(contactar!.estado).toBe("cancelada");
+    });
+
+    it("persona en baja con una respuesta en la cola: clasificarla 'interesado' la registra, pero el prospecto sigue en baja y no hay tarea de vendedor", async () => {
+      const prospecto = await registrarProspecto();
+      const tareaId = (await clasificarAutomatica(await registrarRespuesta(prospecto.id, "sí me interesa"), "ambigua")).body.tarea_id as number;
+      await darDeBajaPorLink(prospecto.correo);
+
+      // La tarea de la cola sigue ahí para que alguien lea lo que contestó.
+      const [enCola] = await db.select({ estado: tareas.estado }).from(tareas).where(eq(tareas.id, tareaId));
+      expect(enCola!.estado).toBe("pendiente");
+
+      const res = await api().post(`/api/v1/cola-clasificacion/${tareaId}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "interesado" });
+      expect(res.status).toBe(200);
+
+      const deLaTarea = await db.select({ respuestaId: tareas.respuestaId }).from(tareas).where(eq(tareas.id, tareaId));
+      const [clasificada] = await db.select({ clasificacion: respuestas.clasificacion }).from(respuestas).where(eq(respuestas.id, deLaTarea[0]!.respuestaId!));
+      expect(clasificada!.clasificacion).toBe("interesado");
+      expect(await estadoProspecto(prospecto.id)).toBe("baja");
+      expect(await tareasDe(prospecto.id, "Contactar prospecto interesado")).toHaveLength(0);
+    });
+
+    it("persona en baja: 'reagendar' tampoco crea el seguimiento", async () => {
+      const prospecto = await registrarProspecto();
+      const tareaId = (await clasificarAutomatica(await registrarRespuesta(prospecto.id, "luego"), "ambigua")).body.tarea_id as number;
+      await darDeBajaPorLink(prospecto.correo);
+
+      const fecha = new Date(Date.now() + 7 * 86_400_000).toISOString();
+      expect((await api().post(`/api/v1/cola-clasificacion/${tareaId}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "reagendar", fechaSeguimiento: fecha })).status).toBe(200);
+      expect(await tareasDe(prospecto.id, "Seguimiento reagendado")).toHaveLength(0);
+      expect(await estadoProspecto(prospecto.id)).toBe("baja");
+    });
+
+    it("persona en baja: un 'ambigua' de n8n no la manda a la cola ni la pasa a en_revision", async () => {
+      const prospecto = await registrarProspecto();
+      const respuestaId = await registrarRespuesta(prospecto.id, "¿?");
+      await darDeBajaPorLink(prospecto.correo);
+
+      const res = await clasificarAutomatica(respuestaId, "ambigua");
+      expect(res.status).toBe(201);
+      expect(res.body.tarea_id).toBeNull();
+      expect(await estadoProspecto(prospecto.id)).toBe("baja");
+      expect(await db.select().from(tareas).where(and(eq(tareas.respuestaId, respuestaId), eq(tareas.tipo, "clasificacion")))).toHaveLength(0);
+    });
+  });
+
   // El Historial de la ficha de cliente (GET /actividades) solo mostraba los
   // cambios de estado hechos por POST /automatizacion/prospectos/estado: una
   // clasificación cambiaba el estado del prospecto sin dejar ese rastro
