@@ -60,7 +60,7 @@ Alta manual e importación CSV vía `borradores_captura` — ver `docs/planes/S3
 
 ## Automatización — n8n (`src/automatizacion/`)
 
-Los 18 endpoints de `PLAN_API_DEFINITIVO.md` (17 originales + `POST /errores-workflow` de B4 Error Workflow), todos protegidos con `X-API-Key` (nunca sesión de usuario): parámetros, catálogos, scoring, incidencias, errores de workflow, registro y estado de prospecto, validaciones, tareas, verificación/registro de envío, ventanas vencidas, campaña activa, supresión (consulta y registro), respuesta recibida y clasificada.
+Los 19 endpoints de `PLAN_API_DEFINITIVO.md` (17 originales + `POST /errores-workflow` de B4 Error Workflow + `POST /respuestas/sugerencia` del 30-sep-2026), todos protegidos con `X-API-Key` (nunca sesión de usuario): parámetros, catálogos, scoring, incidencias, errores de workflow, registro y estado de prospecto, validaciones, tareas, verificación/registro de envío, ventanas vencidas, campaña activa, supresión (consulta y registro), respuesta recibida, clasificada y sugerencia de clasificación.
 
 Reglas clave:
 - Idempotencia por `execution_id` — un reintento del mismo evento de n8n devuelve `200` con `ya_existia: true` en vez de duplicar.

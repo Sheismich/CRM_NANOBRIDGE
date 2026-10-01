@@ -44,7 +44,9 @@ Mantener los 19 endpoints de automatización (todos con auth `X-API-Key` / `CRM_
 10. Campaña activa.
 11. Registro de envío.
 12. Consulta de supresión (verificar antes de enviar).
-13. Registro de supresión (alta de baja / `no_contactar`). Desde el 24-sep-2026, cuando una respuesta se clasifica `baja` (por n8n en "Respuesta clasificada" o a mano en la cola de clasificación), la API la registra en la misma transacción. El endpoint queda para supresiones que no vienen de una respuesta, como el link de baja del proveedor de correo.
+13. Registro de supresión (alta de baja / `no_contactar`). Desde el 24-sep-2026, cuando una respuesta se clasifica `baja` (por n8n en "Respuesta clasificada" o a mano en la cola de clasificación), la API la registra en la misma transacción. El endpoint queda para supresiones que no vienen de una respuesta, como los eventos de SendGrid (PT3). Desde el 1-oct-2026 acepta `evento`:
+    - `unsubscribe`, `group_unsubscribe` o `spamreport` = baja de la persona: todos sus medios suprimidos, sus prospectos en `baja` y sus tareas de seguimiento canceladas;
+    - `bounce` o sin evento = solo ese medio.
 14. Consulta de prospecto para scoring.
 15. Ventanas vencidas. Desde el 30-sep-2026 cada fila trae `correo`, `contacto_nombre`, `empresa_nombre`, `giro`, `campana_id` y `campana_activa`; las ventanas a las que no se debe escribir (prospecto cerrado, campaña inactiva, sin correo, suprimido, WhatsApp) no se devuelven, quedan canceladas y salen en `omitidas` con su motivo. Contrato completo en PLAN_N8N_DEFINITIVO.md B2, "Flujo de recordatorios".
 16. Respuesta recibida.
@@ -53,10 +55,12 @@ Mantener los 19 endpoints de automatización (todos con auth `X-API-Key` / `CRM_
     - cierra las tareas de clasificación abiertas de esa respuesta;
     - "interesado" deja la tarea "Contactar prospecto interesado";
     - responde 409 `code: RESPUESTA_YA_CLASIFICADA` si la respuesta ya estaba decidida.
-19. Sugerencia de clasificación (30-sep-2026, IA en modo sugerencia): `POST /api/v1/automatizacion/respuestas/sugerencia`. Solo guarda lo que propone la IA (clasificación, confianza 0-100 y motivo) en columnas aparte de `respuestas` (migración 023); la cola lo muestra y una persona confirma. Ver PLAN_N8N_DEFINITIVO.md B2.
 18. Registrar error de workflow (n8n Error Workflow, B4): `POST /api/v1/automatizacion/errores-workflow`. Registra una incidencia y, si el fallo es crítico, también una fila en `procesos_fallidos`, en una sola llamada transaccional.
+19. Sugerencia de clasificación (30-sep-2026, IA en modo sugerencia): `POST /api/v1/automatizacion/respuestas/sugerencia`. Solo guarda lo que propone la IA (clasificación, confianza 0-100 y motivo) en columnas aparte de `respuestas` (migración 023); la cola lo muestra y una persona confirma. Ver PLAN_N8N_DEFINITIVO.md B2.
 
-**✅ Completado (10-sep-2026), extendido con B4 (14-sep-2026).** Los 18 endpoints están construidos, probados contra MySQL real (positivos, negativos, idempotencia) y en `main`. El 19 (Sugerencia de clasificación) se agregó el 30-sep-2026. Historial de commits: `babdfab` (módulo base) hasta `a689a40` (Respuesta recibida/clasificada); B4 se agregó después, ver commit de "Registrar error de workflow".
+**"La baja manda" (1-oct-2026).** Toda baja (respuesta clasificada `baja` o evento de SendGrid) pasa por `darDeBajaProspecto` (`src/shared/baja-prospecto.ts`), que pone el prospecto en `baja` y cancela sus tareas de seguimiento. Una clasificación posterior queda registrada en la respuesta, pero no saca al prospecto de baja ni crea tareas.
+
+**✅ Completado (10-sep-2026), extendido con B4 (14-sep-2026).** Los 18 endpoints están construidos, probados contra MySQL real (positivos, negativos, idempotencia) y en `main`. El 19 (Sugerencia de clasificación) se agregó el 30-sep-2026: hoy son 19. Historial de commits: `babdfab` (módulo base) hasta `a689a40` (Respuesta recibida/clasificada); B4 se agregó después, ver commit de "Registrar error de workflow".
 
 Todos los endpoints que n8n necesita para continuar el flujo son críticos. "Parámetros" y "Catálogos" están separados porque `PLAN_N8N_DEFINITIVO.md` (B1) los sustituye como dos pasos independientes.
 

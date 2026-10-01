@@ -88,7 +88,9 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
 
 - Recibir respuestas desde webhook del proveedor de correo. **Proveedor: SendGrid (decidido 22-sep-2026, `/grill-me`)** — Inbound Parse para entrada (webhook nativo, cumple "no usar polling"), API transaccional para salida, nodo nativo en n8n. Reemplaza al nodo "MOCK · envio de campana (7)" del workflow "PT1" (que trae `proveedor: "pendiente_de_elegir"`) cuando se construya el envío real.
 - Registrar respuesta mediante API.
-- Clasificar con IA o enviar a cola manual: el nodo llama siempre al endpoint "Respuesta clasificada"; si la clasificación es ambigua, ese mismo endpoint crea una `tarea` con `tipo=clasificacion` (no hay tabla `cola_clasificacion` aparte), que aparece en la bandeja `GET /api/v1/cola-clasificacion` para que el Equipo CRM la resuelva.
+- Clasificar con IA o enviar a cola manual (actualizado 30-sep-2026):
+  - **Hoy (modo sugerencia):** cada respuesta entra a la cola (`crear_tarea_clasificacion: true`). La IA, cuando exista, solo propone con `POST /respuestas/sugerencia` y una persona confirma. Ver "Clasificación con IA: modo sugerencia primero".
+  - **Modo directo, más adelante:** n8n llama al endpoint "Respuesta clasificada". Si es ambigua, ese endpoint deja o reusa una `tarea` con `tipo=clasificacion` (no hay tabla `cola_clasificacion` aparte), que aparece en `GET /api/v1/cola-clasificacion` para que el Equipo CRM la resuelva.
 - Procesar no interesado, baja, respuesta automática, ambigua e interesado.
 - **La supresión por "baja" ya no es un paso de n8n (cambiado 24-sep-2026).** El endpoint
   "Respuesta clasificada" registra en `lista_supresion` **todos** los medios del contacto
@@ -114,12 +116,17 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
   - **Sin `evento`** se comporta igual que `bounce`, por compatibilidad.
 
   La respuesta agrega `alcance` (`persona` o `medio`), `supresion_ids` y `prospectos_en_baja`.
+- **"La baja manda" (1-oct-2026, decisiones de Fabián tras el /code-review).**
+  - Toda baja, por respuesta clasificada `baja` o por evento de SendGrid, **cancela las tareas de seguimiento abiertas** del prospecto ("Contactar prospecto interesado", "Seguimiento reagendado", "Respuesta tardía"...) con el resultado "Cancelada: el prospecto pidió la baja".
+  - Las tareas de la cola de clasificación se quedan, para que alguien lea lo que contestó.
+  - Si el prospecto ya está en baja, clasificar una respuesta suya la registra, pero **no lo saca de baja ni crea tareas** (ni de vendedor, ni de seguimiento, ni de cola).
+  - Antes, un "interesado" posterior regresaba al prospecto a interesado y le asignaba un vendedor.
 - La clasificación manual (cola de clasificación) aplica su decisión en la API y el evento
   `prospecto_clasificado` llega a n8n **solo como aviso**: la rama del Switch de B3 no tiene que
   cambiar estados ni registrar supresiones.
 - Recordatorios e inactividad son **una sola consulta con una rama, no dos mecanismos separados**
   (corregido 22-sep-2026, hallazgo de `/grill-me`): n8n hace polling de
-  `GET /automatizacion/envios/vencidas` (ver `automatizacion.service.ts:670-679`); cada fila
+  `GET /automatizacion/envios/vencidas` (ver `listarVentanasVencidas` en `automatizacion.service.ts`); cada fila
   trae `es_ultimo_contacto`. Si es `false`, n8n manda el siguiente recordatorio (`POST /envios`);
   si es `true` (ya llegó a 3 contactos), n8n marca inactividad (`POST /prospectos/estado`) en vez
   de mandar otro. No hay que construir un job de "recordatorios" aparte de "ventanas vencidas".
@@ -301,7 +308,9 @@ Decisiones de la ronda 2 (25-sep-2026):
    Workflow.
 3. **Event Webhook de SendGrid en este bloque:** bajas por link, quejas de spam y rebotes
    definitivos llegan a n8n y se registran con `POST /automatizacion/supresion`, para que el
-   CRM y SendGrid digan lo mismo.
+   CRM y SendGrid digan lo mismo. Desde el 1-oct-2026, PT3 manda también `evento`, y la API
+   decide el alcance: persona completa o solo el correo (ver B2, "Bajas por evento de
+   SendGrid").
 4. **Modo pruebas:** la lista de correos permitidos vive fija en un nodo de n8n (es temporal),
    con un interruptor `modo_pruebas` visible al inicio del flujo.
 5. **Calentamiento del dominio:** arranque con 20 correos nuevos al día. Se duplica cada

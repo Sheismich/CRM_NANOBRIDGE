@@ -70,8 +70,9 @@ Se corre desde **Cloud Shell** (la terminal de Google en el navegador) — no
 desde tu compu, ahí no tienes `gcloud` instalado.
 
 ```bash
-cd tu-repo-clonado
-git pull
+cd ~/CRM_NANOBRIDGE
+git checkout main && git pull && git checkout <commit-a-desplegar>
+git checkout -- package-lock.json   # ver nota abajo
 
 gcloud builds submit --tag us-central1-docker.pkg.dev/crm-prospeccion-outbound/nanobridge-repo/nanobridge-api:v1
 
@@ -80,7 +81,15 @@ gcloud run deploy nanobridge-api \
   --region=us-central1
 ```
 
-- `git pull` trae tu código más reciente a la copia clonada en Cloud Shell.
+- `git pull` trae tu código más reciente a la copia clonada en Cloud Shell, y
+  `git checkout <commit>` fija exactamente la versión que se va a desplegar:
+  así un commit que alguien suba mientras tanto no se cuela.
+- `git checkout -- package-lock.json`: el npm de Cloud Shell es más nuevo y
+  reescribe ese archivo cada vez que corres `npm install` (por ejemplo para
+  migrar). `gcloud builds submit` sube la carpeta tal cual, así que sin esto
+  el build usaría ese archivo modificado y no el del repo (visto el
+  1-oct-2026).
+- Al terminar, `git checkout main` para no dejar la copia en un commit fijo.
 - `gcloud builds submit` empaqueta el código con el `Dockerfile` y sube la
   imagen a Artifact Registry (siempre con la misma etiqueta `v1`, se
   sobreescribe, no se van acumulando `v2`, `v3`...).
@@ -156,19 +165,26 @@ gcloud sql instances patch nanobridge-db --clear-authorized-networks --project=c
 **Paso 5 — redesplegar** exactamente como en el punto 5 de arriba
 (`gcloud builds submit` + `gcloud run deploy`).
 
-**Siguiente deploy (pendiente desde el 30-sep-2026): trae la migración
-`023_sugerencia_clasificacion.sql`.** Agrega 5 columnas NULL a `respuestas`
-y un `CHECK` (confianza ≤ 100). Ese CHECK hace que MySQL copie la tabla,
-pero `respuestas` es chica. Hay que migrar **antes** de desplegar el código:
-la API nueva lee esas columnas en la cola de clasificación, y sin ellas
-`GET /cola-clasificacion` truena.
+**Orden:** la migración va **antes** del código. El código nuevo suele leer
+las columnas nuevas (con la 023, `GET /cola-clasificacion` tronaba sin
+ellas); el código viejo con columnas de más no se rompe.
 
-Si `npm run migrate` se queda colgado en Cloud Shell, se aplica a mano:
+**Si `npm run migrate` se queda colgado en Cloud Shell**, la migración se
+aplica a mano:
 1. Conéctate con el cliente de MySQL, usando la IP y el usuario del paso 3:
    `mysql -h <ip_publica> -u appuser -p nanobridge_crm`
-2. Pega el `ALTER TABLE` del archivo tal cual.
-3. Regístralo como aplicado, igual que lo hace `apply-migrations.ts`:
-   `INSERT INTO schema_migrations (version) VALUES ('023_sugerencia_clasificacion.sql');`
+2. Pega las sentencias del archivo tal cual.
+3. Regístrala como aplicada, igual que lo hace `apply-migrations.ts`:
+   `INSERT INTO schema_migrations (version) VALUES ('<archivo>.sql');`
+
+### Qué está en producción
+
+Actualiza esta tabla en cada deploy.
+
+| Fecha | Revisión | Commit | Migraciones hasta | Qué trajo |
+|---|---|---|---|---|
+| 1-oct-2026 | `nanobridge-api-00008-6wj` | `91b88d5` | `023_sugerencia_clasificacion.sql` | Sugerencia de la IA, interesado → tarea, `/vencidas` con datos del recordatorio, "Sin asignar" y reporte de prospección |
+| 1-oct-2026 | `nanobridge-api-00009-jfk` | `ff9f3d3` | (sin migración) | Baja por link o spam de SendGrid = persona completa |
 
 ## 7. Consultar o rotar secretos
 
