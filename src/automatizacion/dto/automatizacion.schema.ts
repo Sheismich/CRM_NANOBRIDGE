@@ -97,11 +97,17 @@ export const consultaSupresionQuerySchema = z.object({
 });
 export type ConsultaSupresionQuery = z.infer<typeof consultaSupresionQuerySchema>;
 
+// evento: el del Event Webhook de SendGrid que originó la supresión (PT3).
+// unsubscribe / group_unsubscribe / spamreport = la persona pidió no ser
+// contactada: se dan de baja todos sus medios y sus prospectos. bounce, o
+// sin evento = solo ese medio (ver AutomatizacionService.registrarSupresion).
+export const EVENTOS_BAJA_DE_PERSONA = ["unsubscribe", "group_unsubscribe", "spamreport"] as const;
 export const registroSupresionInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),
   tipo: z.enum(["correo", "telefono", "whatsapp"]),
   valor: z.string().trim().min(1).max(512),
-  motivo: z.string().trim().min(2).max(255)
+  motivo: z.string().trim().min(2).max(255),
+  evento: z.enum([...EVENTOS_BAJA_DE_PERSONA, "bounce"]).optional()
 });
 export type RegistroSupresionInput = z.infer<typeof registroSupresionInputSchema>;
 

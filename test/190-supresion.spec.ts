@@ -98,7 +98,8 @@ describe("supresión", () => {
       const primera = await registrarPorEndpoint(prospecto.correo);
       const segunda = await registrarPorEndpoint(prospecto.correo);
       expect(segunda.status).toBe(200);
-      expect(segunda.body).toEqual({ id: primera.body.id, ya_existia: true });
+      // Sin `evento` el alcance es solo ese medio (ver 245-baja-por-evento).
+      expect(segunda.body).toEqual({ id: primera.body.id, ya_existia: true, alcance: "medio", supresion_ids: [primera.body.id], prospectos_en_baja: [] });
     });
   });
 

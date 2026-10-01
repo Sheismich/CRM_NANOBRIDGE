@@ -93,6 +93,14 @@ export type OrigenSupresion = Pick<SupresionNueva, "motivo" | "executionId" | "u
 const TIPOS_SUPRIMIBLES: TipoMedioSupresion[] = ["correo", "telefono", "whatsapp"];
 
 /**
+ * Suprime TODOS los medios contactables (correo, teléfono, WhatsApp) de un
+ * contacto. Lo usa la baja por evento de SendGrid (link de baja o queja de
+ * spam), que llega por correo y no por prospecto. ORDER BY id por la misma
+ * razón que suprimirContactoPorBaja: dos bajas simultáneas bloquean en el
+ * mismo orden.
+ */
+
+/**
  * Una respuesta clasificada "baja" (por n8n o a mano): suprime TODOS los
  * medios contactables (correo, teléfono, WhatsApp) del contacto del
  * prospecto, no solo los del canal por el que respondió -- la persona pidió
@@ -108,6 +116,21 @@ const TIPOS_SUPRIMIBLES: TipoMedioSupresion[] = ["correo", "telefono", "whatsapp
  * ORDER BY id: dos bajas simultáneas del mismo contacto bloquean las filas
  * en el mismo orden y no pueden cruzarse en un deadlock.
  */
+export async function suprimirMediosDeContacto(tx: DrizzleTx, contactoId: number, origen: OrigenSupresion) {
+  const medios = await tx
+    .select({ tipo: mediosContacto.tipo, valorNormalizado: mediosContacto.valorNormalizado })
+    .from(mediosContacto)
+    .where(and(eq(mediosContacto.contactoId, contactoId), inArray(mediosContacto.tipo, TIPOS_SUPRIMIBLES)))
+    .orderBy(mediosContacto.id);
+
+  const ids: number[] = [];
+  for (const medio of medios) {
+    const supresion = await registrarSupresion(tx, { tipo: medio.tipo as TipoMedioSupresion, valorNormalizado: medio.valorNormalizado, ...origen });
+    ids.push(supresion.id);
+  }
+  return ids;
+}
+
 export async function suprimirContactoPorBaja(tx: DrizzleTx, prospectoId: number, origen: OrigenSupresion) {
   const medios = await tx
     .select({ tipo: mediosContacto.tipo, valorNormalizado: mediosContacto.valorNormalizado })

@@ -1,17 +1,18 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, inArray, lte, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, procesosFallidos, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
-import { normalizarValorSupresion, registrarSupresion } from "../shared/supresion.js";
+import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo } from "../shared/reply-to.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { TareasService } from "../tareas/tareas.service.js";
+import { EVENTOS_BAJA_DE_PERSONA } from "./dto/automatizacion.schema.js";
 import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, RespuestaSugeridaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
 // tipo fijo de incidencias.tipo para todo lo que reporta el Error Workflow
@@ -952,13 +953,59 @@ export class AutomatizacionService {
   // UPDATE de medios_contacto tronaba después de confirmar el insert, un
   // retry de n8n devolvía ya_existia sin volver a intentar ese UPDATE.
   async registrarSupresion(input: RegistroSupresionInput) {
-    return this.db.transaction((tx) => registrarSupresion(tx, {
-      tipo: input.tipo,
-      valorNormalizado: normalizarValorSupresion(input.tipo, input.valor),
-      motivo: input.motivo,
-      executionId: input.execution_id,
-      usuarioId: null
-    }));
+    //
+    // Con `evento` de baja de persona (link de baja o queja de spam de
+    // SendGrid, PT3) la persona pidió no ser contactada, igual que una
+    // respuesta clasificada "baja": se suprimen TODOS los medios de quien
+    // tenga ese valor y sus prospectos pasan a baja, en esta misma
+    // transacción. Antes solo se suprimía ese correo: el teléfono seguía
+    // contactable y el prospecto seguía como si nada (decisión del
+    // 1-oct-2026). Un rebote (bounce) o sin evento: solo ese medio -- un
+    // rebote no es una petición de la persona.
+    return this.db.transaction(async (tx) => {
+      const valorNormalizado = normalizarValorSupresion(input.tipo, input.valor);
+      const origen = { motivo: input.motivo, executionId: input.execution_id, usuarioId: null };
+      const supresion = await registrarSupresion(tx, { tipo: input.tipo, valorNormalizado, ...origen });
+
+      const esBajaDePersona = input.evento !== undefined && (EVENTOS_BAJA_DE_PERSONA as readonly string[]).includes(input.evento);
+      if (!esBajaDePersona) {
+        return { ...supresion, alcance: "medio" as const, supresion_ids: [supresion.id], prospectos_en_baja: [] as number[] };
+      }
+
+      const duenos = await tx
+        .selectDistinct({ contactoId: mediosContacto.contactoId })
+        .from(mediosContacto)
+        .where(and(eq(mediosContacto.tipo, input.tipo), eq(mediosContacto.valorNormalizado, valorNormalizado), isNotNull(mediosContacto.contactoId)))
+        .orderBy(mediosContacto.contactoId);
+
+      const supresionIds = new Set([supresion.id]);
+      const prospectosEnBaja: number[] = [];
+      for (const { contactoId } of duenos) {
+        for (const id of await suprimirMediosDeContacto(tx, contactoId!, origen)) supresionIds.add(id);
+
+        const suyos = await tx
+          .select({ id: prospectos.id, estado: prospectos.estado })
+          .from(prospectos)
+          .where(and(eq(prospectos.contactoId, contactoId!), ne(prospectos.estado, "baja")))
+          .orderBy(prospectos.id);
+        for (const prospecto of suyos) {
+          await tx.update(prospectos).set({ estado: "baja" }).where(eq(prospectos.id, prospecto.id));
+          // Misma acción que POST /prospectos/estado: el Historial de la
+          // ficha de cliente la muestra como cambio de estado.
+          await tx.insert(auditoria).values({
+            usuarioId: null,
+            entidad: "prospecto",
+            entidadId: prospecto.id,
+            accion: "cambiar_estado_automatizacion",
+            antes: { estado: prospecto.estado },
+            despues: { execution_id: input.execution_id, estado: "baja", motivo: input.motivo }
+          });
+          prospectosEnBaja.push(prospecto.id);
+        }
+      }
+
+      return { ...supresion, alcance: "persona" as const, supresion_ids: [...supresionIds], prospectos_en_baja: prospectosEnBaja };
+    });
   }
 
   // --- Respuesta recibida ---------------------------------------------------------------
