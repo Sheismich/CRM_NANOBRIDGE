@@ -152,4 +152,6 @@ la base de datos**: al final se limpian cerrando sus ventanas.
 | fabiandelirardz+prueba2@gmail.com | 29-sep-2026 | prospecto 27 |
 | fabiandelirardz+prueba3@gmail.com | 29-sep-2026 | prospecto 28; se gastó en sandbox (200) |
 | fabiandelirardz+prueba4@gmail.com | 29-sep-2026 | prospecto 29, envío 14; contestado y dado de baja (suprimido) |
+| (demo "Prospecto Nawal") | 30-sep-2026 | envío 15; contestado ("Me interesa") |
+| fabiandelirardz+prueba6@gmail.com | 1-oct-2026 | "Empresa Prueba Seis"; contestado, clasificado interesado → tarea "Contactar prospecto interesado" |
 | | | |
