@@ -5,6 +5,14 @@ const ZONA_MX = "America/Mexico_City";
 const formatoFecha = new Intl.DateTimeFormat("en-CA", { timeZone: ZONA_MX, year: "numeric", month: "2-digit", day: "2-digit" });
 const formatoDesfase = new Intl.DateTimeFormat("en-US", { timeZone: ZONA_MX, timeZoneName: "longOffset" });
 
+// La fecha (AAAA-MM-DD) que marca el calendario en México en ese instante.
+// La conexión a MySQL corre en UTC (pool.ts: time_zone '+00:00'), así que
+// CURDATE() cambia de día a las 6 pm de México; para comparar contra
+// columnas DATE de negocio (fechas de campaña) se usa esta.
+export function fechaMx(instante: Date): string {
+  return formatoFecha.format(instante);
+}
+
 // "GMT-06:00" -> "-06:00" (desfase de México en ese instante).
 function desfaseMx(instante: Date): string {
   const nombre = formatoDesfase.formatToParts(instante).find((p) => p.type === "timeZoneName")!.value;

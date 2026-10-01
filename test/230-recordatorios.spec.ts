@@ -6,6 +6,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
 import { auditoria, campanas, envios, mediosContacto, prospectos } from "../src/database/schema.js";
+import { fechaMx } from "../src/shared/dia-habil.js";
 
 // Mismo valor fijado en test/setup/setup-env.ts.
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -46,8 +47,8 @@ describe("recordatorios: ventanas vencidas con los datos para el correo", () => 
 
   const api = () => request(app.getHttpServer());
 
-  async function crearCampana(estado: "activa" | "pausada" | "finalizada", fechaFin: string | null = null) {
-    const [result] = await db.insert(campanas).values({ nombre: `Campaña ${randomUUID()}`, estado, fechaFin });
+  async function crearCampana(estado: "borrador" | "activa" | "pausada" | "finalizada", fechaFin: string | null = null, fechaInicio: string | null = null) {
+    const [result] = await db.insert(campanas).values({ nombre: `Campaña ${randomUUID()}`, estado, fechaFin, fechaInicio });
     return result.insertId;
   }
 
@@ -81,8 +82,8 @@ describe("recordatorios: ventanas vencidas con los datos para el correo", () => 
     return result.insertId;
   }
 
-  async function poll() {
-    const res = await api().get("/api/v1/automatizacion/envios/vencidas").set("X-API-Key", API_KEY).query({ limit: 200 });
+  async function poll(limit = 200) {
+    const res = await api().get("/api/v1/automatizacion/envios/vencidas").set("X-API-Key", API_KEY).query({ limit });
     expect(res.status).toBe(200);
     return { data: res.body.data as Fila[], omitidas: res.body.omitidas as Omitida[] };
   }
@@ -119,9 +120,10 @@ describe("recordatorios: ventanas vencidas con los datos para el correo", () => 
   });
 
   it.each([
-    ["pausada", null],
     ["finalizada", null],
-    ["activa", "2020-01-01"]
+    ["borrador", null],
+    ["activa", "2020-01-01"],
+    ["pausada", "2020-01-01"]
   ] as const)("campaña %s (fecha_fin %s): no se devuelve, queda cancelada y sale en omitidas", async (estado, fechaFin) => {
     const campanaId = await crearCampana(estado, fechaFin);
     const prospecto = await registrarProspecto({ campanaId });
@@ -138,6 +140,89 @@ describe("recordatorios: ventanas vencidas con los datos para el correo", () => 
 
     const [audit] = await db.select().from(auditoria).where(and(eq(auditoria.entidad, "envio"), eq(auditoria.entidadId, envioId), eq(auditoria.accion, "recordatorio_omitido")));
     expect((audit!.despues as { motivo: string }).motivo).toBe("campana_inactiva");
+  });
+
+  // Pausa = espera (decisión de Fabián, 1-oct-2026): antes una campaña
+  // pausada cancelaba los recordatorios que se vencían mientras tanto, y al
+  // reactivarla esa gente ya no recibía nada. Lo mismo para una campaña
+  // activa cuya fecha_inicio todavía no llega.
+  describe("campaña en espera (pausada o sin empezar)", () => {
+    it.each([
+      ["pausada", null],
+      ["activa", "2099-01-01"]
+    ] as const)("campaña %s (fecha_inicio %s): la ventana no se toca y sale cuando la campaña se activa", async (estado, fechaInicio) => {
+      const campanaId = await crearCampana(estado, null, fechaInicio);
+      const prospecto = await registrarProspecto({ campanaId });
+      const envioId = await sembrarVencido(prospecto.id);
+
+      const enEspera = await poll();
+      expect(enEspera.data.some((f) => f.envio_id === envioId)).toBe(false);
+      expect(enEspera.omitidas.some((o) => o.envio_id === envioId)).toBe(false);
+      expect(await estadoVentana(envioId)).toBe("abierta");
+
+      await db.update(campanas).set({ estado: "activa", fechaInicio: null }).where(eq(campanas.id, campanaId));
+      const fila = (await poll()).data.find((f) => f.envio_id === envioId);
+      expect(fila).toMatchObject({ campana_id: campanaId, campana_activa: true });
+    });
+
+    it("la última ventana de la persona también espera mientras la campaña está pausada", async () => {
+      const campanaId = await crearCampana("pausada");
+      const prospecto = await registrarProspecto({ campanaId });
+      for (const n of [1, 2]) {
+        const id = await sembrarVencido(prospecto.id, n);
+        await db.update(envios).set({ ventanaEstado: "vencida" }).where(eq(envios.id, id));
+      }
+      const ultimo = await sembrarVencido(prospecto.id, 3);
+
+      const enEspera = await poll();
+      expect(enEspera.data.some((f) => f.envio_id === ultimo)).toBe(false);
+      expect(await estadoVentana(ultimo)).toBe("abierta");
+
+      await db.update(campanas).set({ estado: "activa" }).where(eq(campanas.id, campanaId));
+      expect((await poll()).data.find((f) => f.envio_id === ultimo)).toMatchObject({ es_ultimo_contacto: true, campana_activa: true });
+    });
+
+    // "Hoy" es la fecha de México, no la de la conexión (UTC): después de
+    // las 6 pm de México, CURDATE() ya es mañana y una campaña que termina
+    // hoy dejaba de mandar.
+    it("una campaña que termina hoy (fecha de México) sigue activa todo el día", async () => {
+      const id = await crearCampana("activa", fechaMx(new Date()));
+      const res = await api().get("/api/v1/automatizacion/campanas/activa").set("X-API-Key", API_KEY).query({ campana_id: id });
+      expect(res.body).toMatchObject({ activa: true, motivo: null });
+    });
+
+    it("muchas ventanas en espera no le quitan el turno a las demás", async () => {
+      await poll();
+      const pausada = await crearCampana("pausada");
+      for (let i = 0; i < 3; i++) {
+        const p = await registrarProspecto({ campanaId: pausada });
+        // Más viejas que la activa: sin el filtro en el SELECT ocuparían
+        // primero los lugares del limit.
+        await db.insert(envios).values({ prospectoId: p.id, canal: "correo", numeroContacto: 1, ventanaVenceEn: new Date(Date.now() - 60 * 86_400_000), ventanaEstado: "abierta", executionId: randomUUID(), enviadoEn: new Date(Date.now() - 67 * 86_400_000) });
+      }
+      const activa = await crearCampana("activa");
+      const prospecto = await registrarProspecto({ campanaId: activa });
+      const envioId = await sembrarVencido(prospecto.id);
+
+      expect((await poll(2)).data.some((f) => f.envio_id === envioId)).toBe(true);
+    });
+
+    it("'Campaña activa' (PT1) dice por qué una campaña no manda", async () => {
+      const consultar = (id: number) => api().get("/api/v1/automatizacion/campanas/activa").set("X-API-Key", API_KEY).query({ campana_id: id });
+      const casos: [Parameters<typeof crearCampana>, boolean, string | null][] = [
+        [["activa"], true, null],
+        [["activa", null, "2099-01-01"], false, "aun_no_empieza"],
+        [["pausada"], false, "pausada"],
+        [["finalizada"], false, "finalizada"],
+        [["borrador"], false, "borrador"],
+        [["activa", "2020-01-01"], false, "vencida"]
+      ];
+      for (const [args, activaEsperada, motivo] of casos) {
+        const res = await consultar(await crearCampana(...args));
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ activa: activaEsperada, motivo });
+      }
+    });
   });
 
   it("sin correo activo: se omite con motivo sin_correo", async () => {

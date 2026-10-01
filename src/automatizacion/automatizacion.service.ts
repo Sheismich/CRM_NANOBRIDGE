@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, procesosFallidos, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
@@ -9,6 +9,8 @@ import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
 import { darDeBajaProspecto } from "../shared/baja-prospecto.js";
+import { campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
+import { fechaMx } from "../shared/dia-habil.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo } from "../shared/reply-to.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
@@ -757,6 +759,8 @@ export class AutomatizacionService {
   // reclama igual pero no se devuelve: el seguimiento continúa desde la
   // ventana del envío más reciente, no desde esta.
   async listarVentanasVencidas(query: VentanasVencidasQuery) {
+    // Fecha de México para las reglas de campaña (ver shared/campana-vigente.ts).
+    const hoy = fechaMx(new Date());
     return this.db.transaction(async (tx) => {
       const rows = await tx
         .select({
@@ -767,7 +771,19 @@ export class AutomatizacionService {
           enviadoEn: envios.enviadoEn
         })
         .from(envios)
-        .where(and(eq(envios.ventanaEstado, "abierta"), lte(envios.ventanaVenceEn, sql`CURRENT_TIMESTAMP`)))
+        .where(and(
+          eq(envios.ventanaEstado, "abierta"),
+          lte(envios.ventanaVenceEn, sql`CURRENT_TIMESTAMP`),
+          // Campañas en espera (pausada o sin empezar): sus ventanas no se
+          // reclaman, esperan a que la campaña mande (pausa = espera,
+          // decisión del 1-oct-2026). Van fuera aquí, en el SELECT, y no
+          // después: si no, ocuparían los lugares del LIMIT en cada corrida
+          // y les quitarían el turno a las demás. Es subconsulta, no JOIN:
+          // en MySQL el FOR UPDATE de afuera no bloquea las filas de una
+          // subconsulta, así que no toca prospectos ni campanas (ver el
+          // comentario de contacto_id más abajo).
+          notInArray(envios.prospectoId, tx.select({ id: prospectos.id }).from(prospectos).innerJoin(campanas, eq(campanas.id, prospectos.campanaId)).where(campanaEnEsperaSql(hoy)))
+        ))
         .orderBy(envios.ventanaVenceEn)
         .limit(query.limit)
         // SELECT ... FOR UPDATE SKIP LOCKED: sin esto, dos polls
@@ -801,7 +817,7 @@ export class AutomatizacionService {
         if (ciclo[0]?.id !== row.id) continue;
 
         const esUltimoContacto = ciclo.length >= MAX_CONTACTOS_POR_CICLO;
-        const destino = await this.destinoDeRecordatorio(tx, row.prospectoId, contactoId, row.canal, esUltimoContacto);
+        const destino = await this.destinoDeRecordatorio(tx, row.prospectoId, contactoId, row.canal, esUltimoContacto, hoy);
         if ("motivo" in destino) {
           omitidas.push({ envio_id: row.id, prospecto_id: row.prospectoId, motivo: destino.motivo });
           await tx.insert(auditoria).values({
@@ -835,20 +851,24 @@ export class AutomatizacionService {
   // correo (la consulta de scoring lo excluye a propósito por Gemini) y
   // n8n tenía que ignorar por su cuenta las ventanas de campañas
   // inactivas. Las omitidas ya quedaron reclamadas (vencida) por el poll:
-  // no vuelven a salir, así que el recordatorio queda cancelado, no en
-  // pausa -- si la campaña se reactiva no se disparan todas juntas.
+  // no vuelven a salir, así que el recordatorio queda cancelado. Eso aplica
+  // a campañas inactivas (finalizada, borrador, fecha_fin pasada). Las de
+  // campañas en espera (pausada o sin empezar) ni siquiera llegan aquí:
+  // listarVentanasVencidas las deja abiertas en el SELECT y siguen al
+  // reactivarse (pausa = espera, decisión del 1-oct-2026).
   //
   // La última ventana de la persona (es_ultimo_contacto) se devuelve
   // aunque no haya correo o la campaña ya no esté activa: ahí n8n no manda
   // nada, marca al prospecto inactivo. Solo se omite si el prospecto ya
-  // está cerrado.
-  private async destinoDeRecordatorio(tx: DrizzleTx, prospectoId: number, contactoId: number, canal: "correo" | "whatsapp", esUltimoContacto: boolean): Promise<{ motivo: MotivoRecordatorioOmitido } | DatosRecordatorio> {
+  // está cerrado. Si la campaña está en espera, esa ventana también espera.
+  private async destinoDeRecordatorio(tx: DrizzleTx, prospectoId: number, contactoId: number, canal: "correo" | "whatsapp", esUltimoContacto: boolean, hoy: string): Promise<{ motivo: MotivoRecordatorioOmitido } | DatosRecordatorio> {
     const [contexto] = await tx
       .select({
         estado: prospectos.estado,
         campanaId: prospectos.campanaId,
         campanaEstado: campanas.estado,
-        campanaVigente: sql<number | null>`(${campanas.fechaFin} IS NULL OR ${campanas.fechaFin} >= CURDATE())`,
+        campanaYaEmpezo: campanaYaEmpezoSql(hoy),
+        campanaNoHaTerminado: campanaNoHaTerminadoSql(hoy),
         contactoNombre: contactos.nombre,
         empresaNombre: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
         giro: empresas.giro
@@ -862,7 +882,12 @@ export class AutomatizacionService {
 
     if (!contexto || ESTADOS_PROSPECTO_CERRADO.includes(contexto.estado)) return { motivo: "prospecto_cerrado" as const };
 
-    const campanaActiva = contexto.campanaId === null ? null : contexto.campanaEstado === "activa" && !!Number(contexto.campanaVigente);
+    // Una campaña en espera no llega aquí (listarVentanasVencidas la filtra
+    // en el SELECT); si se pausó justo entre ese SELECT y esta lectura, la
+    // ventana ya quedó reclamada y cuenta como inactiva.
+    const campanaActiva = contexto.campanaId === null || contexto.campanaEstado === null
+      ? null
+      : vigenciaCampana(contexto.campanaEstado, contexto.campanaYaEmpezo, contexto.campanaNoHaTerminado).vigencia === "activa";
     const correo: CorreoDeRecordatorio = canal === "correo" ? await this.correoParaRecordatorio(tx, contactoId) : { motivo: "canal_desactivado" };
     const datos = {
       correo: "valor" in correo ? correo.valor : null,
@@ -905,29 +930,33 @@ export class AutomatizacionService {
   // consulta esto justo antes de disparar un envío para no seguir
   // mandando mensajes de una campaña que ya se pausó o finalizó después de
   // que el prospecto entró al flujo. `activa` combina el campo `estado`
-  // con `fecha_fin`: una campaña puede seguir marcada "activa" en la BD
+  // con las fechas: una campaña puede seguir marcada "activa" en la BD
   // porque nadie la cerró a tiempo, pero si ya pasó su fecha de fin no
   // debe seguir enviando.
+  //
+  // La regla vive en shared/campana-vigente.ts (compartida con
+  // /envios/vencidas y la lista de campañas). Desde el 1-oct-2026 también
+  // revisa fecha_inicio y compara contra la fecha de México: antes usaba
+  // CURDATE(), que con la conexión en UTC cambia de día a las 6 pm de
+  // México. `motivo` dice por qué no manda: con "pausada" o
+  // "aun_no_empieza" PT1 debe dejar al prospecto esperando, no cerrarlo.
   async consultarCampanaActiva(query: CampanaActivaQuery) {
-    // La comparación de "hoy" se hace con CURDATE() del propio MySQL, no
-    // con new Date() en Node: comparar contra una fecha calculada en JS
-    // (típicamente UTC) contra fecha_fin (DATE simple, sin hora) desalinea
-    // el resultado varias horas alrededor de medianoche según la zona
-    // horaria del servidor de la API.
+    const hoy = fechaMx(new Date());
     const [row] = await this.db
       .select({
         nombre: campanas.nombre,
         estado: campanas.estado,
-        vigente: sql<number>`(${campanas.fechaFin} IS NULL OR ${campanas.fechaFin} >= CURDATE())`
+        yaEmpezo: campanaYaEmpezoSql(hoy),
+        noHaTerminado: campanaNoHaTerminadoSql(hoy)
       })
       .from(campanas)
       .where(eq(campanas.id, query.campana_id))
       .limit(1);
     if (!row) throw new HttpError(404, "Campaña no encontrada");
 
-    const activa = row.estado === "activa" && !!row.vigente;
+    const { vigencia, motivo } = vigenciaCampana(row.estado, row.yaEmpezo, row.noHaTerminado);
 
-    return { campana_id: query.campana_id, nombre: row.nombre, estado: row.estado, activa };
+    return { campana_id: query.campana_id, nombre: row.nombre, estado: row.estado, activa: vigencia === "activa", motivo };
   }
 
   // --- Consulta de supresión -------------------------------------------------------

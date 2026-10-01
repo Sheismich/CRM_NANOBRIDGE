@@ -141,13 +141,19 @@ correo:
 - `campana_id` y `campana_activa`, que vale `null` cuando no hay campaña. Con eso n8n ya no
   necesita llamar a "Campaña activa".
 
-**Filas que la API no devuelve.** Las deja reclamadas (`vencida`), así que **el recordatorio queda
-cancelado, no en pausa**: si la campaña se reactiva, no se disparan todas juntas. Las lista en
-`omitidas: [{ envio_id, prospecto_id, motivo }]`, con una fila de auditoría
-`recordatorio_omitido` cada una. Los motivos son:
+**Campañas en espera (cambiado 1-oct-2026: pausa = espera).** Si la campaña está **pausada** o
+todavía no llega su `fecha_inicio`, la API **no toca** sus ventanas: no salen en `data` ni en
+`omitidas`, siguen abiertas y aparecen cuando la campaña vuelve a mandar. Esto incluye la última
+ventana de la persona. Para que no salgan todas el mismo día al reactivar, las reparte el tope
+diario (bloque "antes de encender"). Las fechas de campaña se comparan con la fecha de México, no
+con la de UTC.
+
+**Filas que la API no devuelve.** Las deja reclamadas (`vencida`), así que el recordatorio queda
+**cancelado**. Las lista en `omitidas: [{ envio_id, prospecto_id, motivo }]`, con una fila de
+auditoría `recordatorio_omitido` cada una. Los motivos son:
 - `prospecto_cerrado`: el prospecto está en baja, interesado, no_interesado, descartado,
   excluido o inactivo;
-- `campana_inactiva`: la campaña está pausada, finalizada o ya pasó su fecha de fin;
+- `campana_inactiva`: la campaña está finalizada, en borrador o ya pasó su fecha de fin;
 - `sin_correo`: la persona no tiene correo utilizable;
 - `suprimido`: sus correos están dados de baja;
 - `canal_desactivado`: el envío era por WhatsApp.
