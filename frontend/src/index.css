@@ -75,3 +75,8 @@ body {
 .tabla-scroll > table {
   min-width: 44rem;
 }
+/* Tablas de pocas columnas cortas dentro de media tarjeta (forecast de
+   Reportes): con 44rem se cortaban aun en escritorio. */
+.tabla-scroll.tabla-compacta > table {
+  min-width: 18rem;
+}

@@ -350,7 +350,7 @@ function Forecast({ responsableId }: { responsableId?: number }) {
       {data && data.length > 0 && (
         <>
           <GraficaForecast meses={data} />
-          <div className="tabla-scroll"><table className="mt-4 w-full border-collapse text-xs tabular-nums">
+          <div className="tabla-scroll tabla-compacta"><table className="mt-4 w-full border-collapse text-xs tabular-nums">
             <thead>
               <tr className="text-ink-2">
                 <th className="py-1.5 text-left font-bold">Mes</th>
