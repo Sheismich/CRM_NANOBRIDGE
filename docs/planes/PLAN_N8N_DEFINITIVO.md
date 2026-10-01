@@ -102,6 +102,18 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
   (responde `ya_existia`), pero es trabajo de más. Ese endpoint queda para supresiones que no
   vienen de una respuesta clasificada, como el link de baja de SendGrid (ver "Envío real con
   SendGrid").
+- **Bajas por evento de SendGrid (PT3, decidido 1-oct-2026).** PT3 manda en
+  `POST /automatizacion/supresion` el campo `evento`, con el nombre del evento de SendGrid. La API
+  decide el alcance según ese campo:
+  - **`unsubscribe`, `group_unsubscribe` y `spamreport`** son la persona pidiendo que no la
+    contacten. La API suprime **todos** los medios de quien tenga ese correo (correo, teléfono y
+    WhatsApp) y pasa **todos sus prospectos** a `baja`. Lo deja en el Historial, en la misma
+    transacción. Es la misma regla que una respuesta clasificada `baja`.
+  - **`bounce`** (rebote definitivo) suprime **solo ese correo**: no es una petición de la
+    persona.
+  - **Sin `evento`** se comporta igual que `bounce`, por compatibilidad.
+
+  La respuesta agrega `alcance` (`persona` o `medio`), `supresion_ids` y `prospectos_en_baja`.
 - La clasificación manual (cola de clasificación) aplica su decisión en la API y el evento
   `prospecto_clasificado` llega a n8n **solo como aviso**: la rama del Switch de B3 no tiene que
   cambiar estados ni registrar supresiones.
