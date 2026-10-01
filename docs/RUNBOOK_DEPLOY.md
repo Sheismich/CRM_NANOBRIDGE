@@ -185,6 +185,7 @@ Actualiza esta tabla en cada deploy.
 |---|---|---|---|---|
 | 1-oct-2026 | `nanobridge-api-00008-6wj` | `91b88d5` | `023_sugerencia_clasificacion.sql` | Sugerencia de la IA, interesado → tarea, `/vencidas` con datos del recordatorio, "Sin asignar" y reporte de prospección |
 | 1-oct-2026 | `nanobridge-api-00009-jfk` | `ff9f3d3` | (sin migración) | Baja por link o spam de SendGrid = persona completa |
+| 1-oct-2026 | `nanobridge-api-00010-dq5` | `def4d07` | (sin migración) | "La baja manda": la baja cancela seguimientos y una clasificación posterior no la deshace |
 
 ## 7. Consultar o rotar secretos
 
