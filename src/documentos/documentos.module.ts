@@ -17,6 +17,7 @@ import { OutboxModule } from "../outbox/outbox.module.js";
   // pide LocalStorageDriver directo (no vía STORAGE_SERVICE) para poder
   // servir descargas locales ya emitidas aunque el driver activo para
   // subidas nuevas sea 'gcs'.
-  providers: [DocumentosService, LocalStorageDriver, GcsStorageDriver, storageServiceProvider]
+  providers: [DocumentosService, LocalStorageDriver, GcsStorageDriver, storageServiceProvider],
+  exports: [DocumentosService]
 })
 export class DocumentosModule {}

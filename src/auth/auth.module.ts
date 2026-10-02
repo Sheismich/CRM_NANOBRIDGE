@@ -11,6 +11,6 @@ import { ApiKeyGuard } from "./guards/api-key.guard.js";
   providers: [AuthService, SessionService, SessionAuthGuard, RolesGuard, ApiKeyGuard],
   // Se exportan los guards para que otros módulos (como CrmModule) los usen
   // en @UseGuards(...) sin tener que redeclararlos.
-  exports: [SessionService, SessionAuthGuard, RolesGuard, ApiKeyGuard]
+  exports: [AuthService, SessionService, SessionAuthGuard, RolesGuard, ApiKeyGuard]
 })
 export class AuthModule {}

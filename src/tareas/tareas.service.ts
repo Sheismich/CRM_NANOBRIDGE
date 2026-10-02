@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { Interval } from "@nestjs/schedule";
 import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, contactos, empresas, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
@@ -563,7 +562,8 @@ export class TareasService {
   // NULLABLE -- una tarea sin fecha límite nunca puede "vencer", y
   // lt(tareas.fechaLimite, ...) ya la excluye sola (NULL < X es falso en
   // SQL, no hace falta un isNotNull aparte).
-  @Interval(24 * 60 * 60 * 1000)
+  // Lo dispara n8n cada día (POST /automatizacion/jobs/..., B5 del plan de
+  // fixes, 2-oct-2026): con @Interval(24h) nunca corría en Cloud Run.
   async alertarTareasSlaVencidas() {
     const candidatas = await this.db
       .select({ id: tareas.id, tipo: tareas.tipo, responsableId: tareas.responsableId, fechaLimite: tareas.fechaLimite })

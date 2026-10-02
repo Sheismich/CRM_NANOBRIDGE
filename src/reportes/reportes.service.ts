@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { Interval } from "@nestjs/schedule";
 import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { actividades, campanas, catalogoEtapaEmbudo, envios, historialEtapaOportunidad, metricasComercialesDiarias, oportunidades, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { toCsv } from "../shared/csv.js";
+import { fechaMx } from "../shared/dia-habil.js";
 import type { MetricasDiariasQuery, ProspeccionQuery, ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). A diferencia de los
@@ -384,7 +384,7 @@ export class ReportesService {
   // Job diario de métricas comerciales (PLAN_API_DEFINITIVO.md, "Jobs
   // internos"; tabla metricas_comerciales_diarias, PLAN_CRM_DEFINITIVO.md):
   // pipelineResumen() de arriba es siempre en vivo, sin foto histórica de
-  // "cómo estaba el pipeline el día X". @Interval fijo (no env var), mismo
+  // "cómo estaba el pipeline el día X". Lo dispara n8n cada día (ver abajo); mismo
   // criterio que ProspectosService.limpiarBorradoresVencidos.
   //
   // "hoy" se resuelve UNA sola vez en MySQL (no Node, por el desfase de
@@ -393,7 +393,7 @@ export class ReportesService {
   // cada consulta podía escribir en un día y no encontrar la fila si la
   // corrida caía justo a medianoche (hallazgo de code-review, 15-sep-2026).
   //
-  // No relee la fila después del UPSERT: dos invocaciones (el @Interval y
+  // No relee la fila después del UPSERT: dos invocaciones (el trabajo diario y
   // el endpoint manual de abajo) pueden solaparse, y una relectura después
   // de escribir no es atómica con la propia escritura -- se devuelve
   // directo lo que esta invocación calculó, con el mismo `calculadoEn`
@@ -403,12 +403,17 @@ export class ReportesService {
   // invocaciones concurrentes -- aceptada a propósito: es una foto
   // informativa que se autocorrige en la siguiente corrida, no un
   // invariante de negocio que amerite un lock como el de usuarios.service.ts.
-  @Interval(24 * 60 * 60 * 1000)
-  async calcularMetricasDelDia() {
-    const [rows] = (await this.db.execute<{ hoy: string }[]>(sql`SELECT CURDATE() AS hoy`)) as unknown as [{ hoy: string }[], unknown];
-    const hoy = rows[0]!.hoy;
+  //
+  // Desde el 2-oct-2026 (B5 del plan de fixes) ya no corre con @Interval
+  // (en Cloud Run nunca llegaba: la instancia se apaga sola): lo dispara n8n
+  // vía POST /automatizacion/jobs/metricas-diarias con el día ANTERIOR, ya
+  // completo. El día es de México, no de UTC: la conexión corre en UTC y
+  // DATE(actualizado_en) cambiaba de día a las 6 pm de México. México no
+  // tiene horario de verano desde 2022, por eso basta restar 6 horas.
+  async calcularMetricasDelDia(fecha: string = fechaMx(new Date())) {
+    const hoy = fecha;
 
-    const condicionHoy = sql`DATE(${oportunidades.actualizadoEn}) = ${hoy}`;
+    const condicionHoy = sql`DATE(DATE_SUB(${oportunidades.actualizadoEn}, INTERVAL 6 HOUR)) = ${hoy}`;
     const [abiertas, ganadas, perdidas] = await Promise.all([
       this.contarOportunidadesAbiertas(undefined),
       this.contarOportunidadesCerradas(true, condicionHoy),

@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { Interval } from "@nestjs/schedule";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
@@ -438,7 +437,8 @@ export class DocumentosService {
   // TareasService.cerrar/clasificar) para que n8n decida el canal real de
   // aviso. alertado_en evita reencolar el mismo documento cada día -- ver
   // comentario en 019_alertas_sla.sql.
-  @Interval(24 * 60 * 60 * 1000)
+  // Lo dispara n8n cada día (POST /automatizacion/jobs/..., B5 del plan de
+  // fixes, 2-oct-2026): con @Interval(24h) nunca corría en Cloud Run.
   async alertarDocumentosPendientes() {
     const candidatos = await this.db
       .select({ id: documentos.id, empresaId: documentos.empresaId, nombreOriginal: documentos.nombreOriginal, creadoEn: documentos.creadoEn })

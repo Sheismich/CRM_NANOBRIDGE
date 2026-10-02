@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { Interval } from "@nestjs/schedule";
 import { and, eq, inArray, like, lt, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, borradoresCaptura, campanas, contactos, empresas, mediosContacto, prospectos } from "../database/schema.js";
@@ -441,7 +440,8 @@ export class ProspectosService {
   // no hay ningún caso de negocio que requiera ajustarlo en runtime, a
   // diferencia del despachador de outbox (ese sí necesita tunearse según
   // la disponibilidad real de n8n).
-  @Interval(24 * 60 * 60 * 1000)
+  // Lo dispara n8n cada día (POST /automatizacion/jobs/..., B5 del plan de
+  // fixes, 2-oct-2026): con @Interval(24h) nunca corría en Cloud Run.
   async limpiarBorradoresVencidos() {
     const [result] = await this.db
       .update(borradoresCaptura)

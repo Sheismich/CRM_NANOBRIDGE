@@ -90,6 +90,18 @@ export class AuthService {
     return { user: currentUser, session };
   }
 
+  // Limpieza diaria de login_fallos (la dispara n8n con el trabajo
+  // limpiar-borradores, B5 del plan de fixes): borra contadores de hace más
+  // de un día que no estén bloqueando nada en este momento. Sin esto la
+  // tabla crecería con cada correo inventado que alguien pruebe.
+  async limpiarLoginFallosViejos() {
+    const [result] = await this.db.delete(loginFallos).where(and(
+      sql`${loginFallos.ventanaInicio} < CURRENT_TIMESTAMP - INTERVAL 1 DAY`,
+      sql`(${loginFallos.bloqueadoHasta} IS NULL OR ${loginFallos.bloqueadoHasta} < CURRENT_TIMESTAMP)`
+    ));
+    return result.affectedRows;
+  }
+
   // Un solo UPDATE atómico por fila: si la ventana de 15 minutos ya pasó,
   // el conteo arranca de nuevo; al llegar a MAX_FALLOS_POR_CUENTA se bloquea
   // 15 minutos. MySQL evalúa las asignaciones de izquierda a derecha, así

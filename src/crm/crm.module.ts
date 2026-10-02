@@ -14,6 +14,7 @@ import { AuthModule } from "../auth/auth.module.js";
 @Module({
   imports: [AuthModule],
   controllers: [EmpresasController, ContactosController, ActividadesController, ProspectosController, CatalogosController],
-  providers: [EmpresasService, ContactosService, ActividadesService, ProspectosService, CatalogosService]
+  providers: [EmpresasService, ContactosService, ActividadesService, ProspectosService, CatalogosService],
+  exports: [ProspectosService]
 })
 export class CrmModule {}
