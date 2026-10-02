@@ -1,9 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, ne, or } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, catalogoEtapaEmbudo, contactos, cotizacionPartidas, cotizaciones, empresas, oportunidades } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
+import { fechaMx } from "../shared/dia-habil.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CambiarEstadoCotizacionInput, CrearCotizacionInput, DatosCotizacionInput, ListCotizacionesQuery, PartidaInput } from "./dto/cotizacion.schema.js";
 
@@ -140,10 +141,9 @@ export class CotizacionesService {
         descuento: input.descuento.toFixed(2),
         impuestos: input.impuestos.toFixed(2),
         total: total.toFixed(2),
-        // CURDATE() del propio MySQL, no new Date() en Node -- mismo
-        // motivo que consultarCampanaActiva: evita el desfase de zona
-        // horaria de un new Date() calculado en el servidor de la API.
-        fechaEmision: sql`CURDATE()`,
+        // Día de México (D3 del plan de fixes, 2-oct-2026): CURDATE() en la
+        // conexión UTC ya es "mañana" desde las 6 pm de México.
+        fechaEmision: fechaMx(new Date()),
         fechaEsperadaCierre: input.fechaEsperadaCierre ?? null,
         probabilidad: input.probabilidad ?? oportunidad.probabilidad,
         creadoPor: user.id
@@ -216,7 +216,7 @@ export class CotizacionesService {
         descuento: input.descuento.toFixed(2),
         impuestos: input.impuestos.toFixed(2),
         total: total.toFixed(2),
-        fechaEmision: sql`CURDATE()`,
+        fechaEmision: fechaMx(new Date()),
         fechaEsperadaCierre: input.fechaEsperadaCierre ?? actual.fechaEsperadaCierre,
         probabilidad: input.probabilidad ?? actual.probabilidad,
         creadoPor: user.id
@@ -321,7 +321,7 @@ export class CotizacionesService {
           .limit(1).for("update");
         if (otra) throw new HttpError(409, "Esta oportunidad ya tiene una cotización aceptada", CODIGO_YA_HAY_COTIZACION_ACEPTADA);
       }
-      const set = input.estado === "enviada" ? { estado: input.estado, fechaEnvio: sql`CURDATE()` } : { estado: input.estado };
+      const set = input.estado === "enviada" ? { estado: input.estado, fechaEnvio: fechaMx(new Date()) } : { estado: input.estado };
       const [result] = await tx.update(cotizaciones).set(set).where(and(eq(cotizaciones.id, id), eq(cotizaciones.estado, cotizacion.estado)));
       if (result.affectedRows === 0) {
         throw new HttpError(409, "El estado de la cotización cambió, vuelve a intentarlo");

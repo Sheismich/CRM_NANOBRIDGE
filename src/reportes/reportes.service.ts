@@ -5,7 +5,7 @@ import { actividades, campanas, catalogoEtapaEmbudo, envios, historialEtapaOport
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { toCsv } from "../shared/csv.js";
-import { fechaMx } from "../shared/dia-habil.js";
+import { diaSiguiente, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
 import type { MetricasDiariasQuery, ProspeccionQuery, ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). A diferencia de los
@@ -15,10 +15,23 @@ import type { MetricasDiariasQuery, ProspeccionQuery, ReporteExportable, Reporte
 // controller), así que responsableId en la query es solo un filtro
 // opcional, nunca una restricción de visibilidad.
 
+// Rango de días de México sobre una columna DATETIME (guardada en UTC): de
+// las 00:00 de fechaInicio a antes de las 00:00 del día después de
+// fechaFin, hora de México (D3 del plan de fixes, 2-oct-2026). Antes era
+// DATE(columna) en UTC: una llamada del lunes 7 pm contaba como del martes,
+// y además DATE() no deja usar índices.
 function condicionRangoFecha(columna: unknown, fechaInicio?: string, fechaFin?: string) {
   const condiciones = [];
-  if (fechaInicio) condiciones.push(sql`DATE(${columna}) >= ${fechaInicio}`);
-  if (fechaFin) condiciones.push(sql`DATE(${columna}) <= ${fechaFin}`);
+  if (fechaInicio) condiciones.push(sql`${columna} >= ${inicioDelDiaMxSql(fechaInicio)}`);
+  if (fechaFin) condiciones.push(sql`${columna} < ${inicioDelDiaMxSql(diaSiguiente(fechaFin))}`);
+  return condiciones;
+}
+
+// Lo mismo para una columna DATE (ya es un día de calendario, sin hora).
+function condicionRangoDia(columna: unknown, fechaInicio?: string, fechaFin?: string) {
+  const condiciones = [];
+  if (fechaInicio) condiciones.push(sql`${columna} >= ${fechaInicio}`);
+  if (fechaFin) condiciones.push(sql`${columna} <= ${fechaFin}`);
   return condiciones;
 }
 
@@ -469,7 +482,7 @@ export class ReportesService {
       eq(oportunidades.cerrada, false),
       isNotNull(oportunidades.fechaCierreEstimada),
       query.responsableId ? eq(oportunidades.responsableId, query.responsableId) : undefined,
-      ...condicionRangoFecha(oportunidades.fechaCierreEstimada, query.fechaInicio, query.fechaFin)
+      ...condicionRangoDia(oportunidades.fechaCierreEstimada, query.fechaInicio, query.fechaFin)
     ]);
 
     const mes = sql<string>`DATE_FORMAT(${oportunidades.fechaCierreEstimada}, '%Y-%m')`;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fechaMx, finSiguienteDiaHabilMx, sumarDiasHabilesMx } from "../src/shared/dia-habil.js";
+import { diaSiguiente, fechaMx, finSiguienteDiaHabilMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../src/shared/dia-habil.js";
 
 // La fecha límite de "Contactar prospecto interesado" se calcula en hora de
 // México, no en la del servidor (Cloud Run corre en UTC): un jueves a las
@@ -56,5 +56,17 @@ describe("fechaMx", () => {
   it("medianoche en México cambia de día", () => {
     expect(fechaMx(new Date("2026-10-02T05:59:59Z"))).toBe("2026-10-01");
     expect(fechaMx(new Date("2026-10-02T06:00:00Z"))).toBe("2026-10-02");
+  });
+});
+
+// Rangos de reportes en día de México (D3 del plan de fixes, 2-oct-2026).
+describe("inicioDelDiaMxSql y diaSiguiente", () => {
+  it("las 00:00 de México son las 06:00 UTC, como texto para MySQL", () => {
+    expect(inicioDelDiaMxSql("2026-10-05")).toBe("2026-10-05 06:00:00");
+  });
+
+  it("el día siguiente cruza fin de mes y de año", () => {
+    expect(diaSiguiente("2026-10-31")).toBe("2026-11-01");
+    expect(diaSiguiente("2026-12-31")).toBe("2027-01-01");
   });
 });

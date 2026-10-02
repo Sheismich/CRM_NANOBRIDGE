@@ -13,6 +13,22 @@ export function fechaMx(instante: Date): string {
   return formatoFecha.format(instante);
 }
 
+// Instante UTC en que empieza el día `fecha` (AAAA-MM-DD) en México, ya
+// formateado "AAAA-MM-DD HH:MM:SS" para MySQL (D3 del plan de fixes,
+// 2-oct-2026). Va como texto porque mysql2 formatea un Date de JS con la
+// zona de la máquina: en una compu en hora de México se corría 6 horas.
+export function inicioDelDiaMxSql(fecha: string): string {
+  const instante = new Date(`${fecha}T00:00:00${desfaseMx(new Date(`${fecha}T18:00:00Z`))}`);
+  return instante.toISOString().slice(0, 19).replace("T", " ");
+}
+
+// El día siguiente a `fecha` (AAAA-MM-DD), en calendario.
+export function diaSiguiente(fecha: string): string {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // "GMT-06:00" -> "-06:00" (desfase de México en ese instante).
 function desfaseMx(instante: Date): string {
   const nombre = formatoDesfase.formatToParts(instante).find((p) => p.type === "timeZoneName")!.value;
