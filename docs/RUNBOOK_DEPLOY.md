@@ -186,6 +186,11 @@ Actualiza esta tabla en cada deploy.
 | 1-oct-2026 | `nanobridge-api-00008-6wj` | `91b88d5` | `023_sugerencia_clasificacion.sql` | Sugerencia de la IA, interesado → tarea, `/vencidas` con datos del recordatorio, "Sin asignar" y reporte de prospección |
 | 1-oct-2026 | `nanobridge-api-00009-jfk` | `ff9f3d3` | (sin migración) | Baja por link o spam de SendGrid = persona completa |
 | 1-oct-2026 | `nanobridge-api-00010-dq5` | `def4d07` | (sin migración) | "La baja manda": la baja cancela seguimientos y una clasificación posterior no la deshace |
+| 2-oct-2026 | `nanobridge-api-00011-6cg` | `def4d07` (misma imagen) | (sin migración) | Solo configuración: `TRUST_PROXY=true` (antes todos los usuarios compartían el límite de intentos de login, por la IP del proxy de Google) |
+
+**Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
+conserva; no uses `--set-env-vars`, que borra las que no menciones):
+- `TRUST_PROXY=true` — sin ella, el límite de login es uno solo para todos los usuarios.
 
 ## 7. Consultar o rotar secretos
 
