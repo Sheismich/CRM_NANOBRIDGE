@@ -492,8 +492,13 @@ export class AutomatizacionService {
     // estado sin ningún rastro en auditoria, y no hay ningún mecanismo de
     // reintento que lo repare (a diferencia de registrarRespuesta/
     // clasificarRespuesta, que sí son idempotentes por execution_id).
-    await this.db.transaction(async (tx) => {
-      await tx.update(prospectos).set({ estado }).where(eq(prospectos.id, input.prospecto_id));
+    //
+    // La baja no se deshace (A3, 2-oct-2026): un prospecto en baja no pasa a
+    // validado/excluido. Se responde no válido con el motivo
+    // prospecto_en_baja, así PT1 toma su rama de exclusión de siempre.
+    const cambio = await this.db.transaction(async (tx) => {
+      const [result] = await tx.update(prospectos).set({ estado }).where(and(eq(prospectos.id, input.prospecto_id), ne(prospectos.estado, "baja")));
+      if (result.affectedRows === 0) return false;
       await tx.insert(auditoria).values({
         usuarioId: null,
         entidad: "prospecto",
@@ -501,9 +506,11 @@ export class AutomatizacionService {
         accion: "validar_automatizacion",
         despues: { execution_id: input.execution_id, valido, motivos, estado }
       });
+      return true;
     });
 
-    return { id: input.prospecto_id, valido, motivos, estado };
+    if (!cambio) return { id: input.prospecto_id, valido: false, motivos: ["prospecto_en_baja"], estado: "baja", en_baja: true as const };
+    return { id: input.prospecto_id, valido, motivos, estado, en_baja: false as const };
   }
 
   // --- Estado de prospecto -------------------------------------------------------
@@ -513,8 +520,15 @@ export class AutomatizacionService {
 
     // Transacción agregada (hallazgo de code review, 14-sep-2026), mismo
     // motivo que validarProspecto() arriba.
-    await this.db.transaction(async (tx) => {
-      await tx.update(prospectos).set({ estado: input.estado }).where(eq(prospectos.id, input.prospecto_id));
+    //
+    // La baja no se deshace (A3 del plan de fixes, 2-oct-2026): el UPDATE
+    // no toca a un prospecto en baja. Antes PT4 marcaba "inactivo" a alguien
+    // que acababa de darse de baja, y con eso salía de baja. No es error:
+    // responde lo que hay, con en_baja, para que n8n siga sin caer al
+    // Error Workflow.
+    const cambio = await this.db.transaction(async (tx) => {
+      const [result] = await tx.update(prospectos).set({ estado: input.estado }).where(and(eq(prospectos.id, input.prospecto_id), ne(prospectos.estado, "baja")));
+      if (result.affectedRows === 0) return false;
       await tx.insert(auditoria).values({
         usuarioId: null,
         entidad: "prospecto",
@@ -523,9 +537,11 @@ export class AutomatizacionService {
         antes: { estado: prospecto.estado },
         despues: { execution_id: input.execution_id, estado: input.estado, motivo: input.motivo }
       });
+      return true;
     });
 
-    return { id: input.prospecto_id, estado: input.estado, motivo: input.motivo };
+    if (!cambio) return { id: input.prospecto_id, estado: "baja", motivo: input.motivo, en_baja: true as const };
+    return { id: input.prospecto_id, estado: input.estado, motivo: input.motivo, en_baja: false as const };
   }
 
   // Compartido por verificarEnvio() y registrarEnvio(): true si el medio

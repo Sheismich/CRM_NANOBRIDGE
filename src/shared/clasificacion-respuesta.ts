@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, prospectos } from "../database/schema.js";
 import type { ClasificacionRespuesta } from "./clasificaciones.js";
@@ -75,7 +75,11 @@ export async function aplicarClasificacionAlProspecto(tx: DrizzleTx, prospectoId
 
   const estadoProspecto = ESTADO_PROSPECTO_POR_CLASIFICACION[clasificacion];
   if (estadoProspecto) {
-    await tx.update(prospectos).set({ estado: estadoProspecto }).where(eq(prospectos.id, prospectoId));
+    // Guarda dentro del UPDATE (A3, 2-oct-2026): si una baja se confirmó
+    // entre la revisión de arriba y esta escritura, el UPDATE no la pisa y
+    // la clasificación se trata como de alguien en baja.
+    const [result] = await tx.update(prospectos).set({ estado: estadoProspecto }).where(and(eq(prospectos.id, prospectoId), ne(prospectos.estado, "baja")));
+    if (result.affectedRows === 0) return { estadoProspecto: null, supresionIds: [] as number[], enBaja: true };
     await tx.insert(auditoria).values({
       usuarioId: origen.usuarioId,
       entidad: "prospecto",

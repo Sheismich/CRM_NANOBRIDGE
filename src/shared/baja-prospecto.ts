@@ -1,5 +1,5 @@
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
-import type { DrizzleTx } from "../database/drizzle.constants.js";
+import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, prospectos, tareas } from "../database/schema.js";
 
 export const RESULTADO_TAREA_CANCELADA_POR_BAJA = "Cancelada: el prospecto pidió la baja";
@@ -49,10 +49,15 @@ export async function darDeBajaProspecto(tx: DrizzleTx, prospectoId: number, ori
     });
   }
 
+  // FOR UPDATE: lectura con bloqueo, que ve lo último confirmado. Con una
+  // lectura normal (la "foto" de REPEATABLE READ) se escapaba una tarea de
+  // vendedor creada por una clasificación justo mientras esta baja esperaba
+  // el bloqueo del prospecto, y esa tarea se quedaba abierta (A3, 2-oct-2026).
   const abiertas = await tx
     .select({ id: tareas.id })
     .from(tareas)
-    .where(and(eq(tareas.prospectoId, prospectoId), eq(tareas.tipo, "seguimiento"), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
+    .where(and(eq(tareas.prospectoId, prospectoId), eq(tareas.tipo, "seguimiento"), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`))
+    .for("update");
   const tareasCanceladas = abiertas.map((t) => t.id);
   if (tareasCanceladas.length > 0) {
     await tx.update(tareas).set({
@@ -91,7 +96,7 @@ export async function darDeBajaPersona(tx: DrizzleTx, contactoId: number, origen
  * baja. Un rebote NO cuenta (suprime un correo, pero no es una petición de
  * la persona), por eso no se mira lista_supresion aquí.
  */
-export async function personaEnBaja(tx: DrizzleTx, contactoId: number) {
+export async function personaEnBaja(tx: DrizzleDb | DrizzleTx, contactoId: number) {
   const [fila] = await tx.select({ id: prospectos.id }).from(prospectos).where(and(eq(prospectos.contactoId, contactoId), eq(prospectos.estado, "baja"))).limit(1);
   return !!fila;
 }

@@ -221,6 +221,74 @@ describe("baja por evento de SendGrid (link de baja, spam, rebote)", () => {
     expect(cambios).toHaveLength(1);
   });
 
+  // A3 del plan de fixes (2-oct-2026): la baja no se puede deshacer por
+  // ninguna vía. Antes /prospectos/estado y /validaciones (PT1, PT4)
+  // sobrescribían cualquier estado, y las tareas de seguimiento se creaban
+  // igual para alguien en baja. Ahora responden 200 sin tocar nada, para que
+  // n8n no caiga al Error Workflow.
+  describe("la baja no se deshace", () => {
+    async function personaEnBaja() {
+      const persona = await registrarProspecto();
+      expect((await evento(persona.correo, "unsubscribe")).status).toBe(201);
+      expect(await estado(persona.id)).toBe("baja");
+      return persona;
+    }
+
+    it("POST /prospectos/estado (p. ej. 'inactivo' de PT4) no la saca de baja y responde 200 con en_baja", async () => {
+      const persona = await personaEnBaja();
+      const res = await api().post("/api/v1/automatizacion/prospectos/estado").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), prospecto_id: persona.id, estado: "inactivo", motivo: "Tres contactos sin respuesta" });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ estado: "baja", en_baja: true });
+      expect(await estado(persona.id)).toBe("baja");
+    });
+
+    it("POST /validaciones (PT1) responde no válido por baja, sin cambiar el estado", async () => {
+      const persona = await personaEnBaja();
+      const res = await api().post("/api/v1/automatizacion/validaciones").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), prospecto_id: persona.id });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ valido: false, estado: "baja", en_baja: true });
+      expect(res.body.motivos).toContain("prospecto_en_baja");
+      expect(await estado(persona.id)).toBe("baja");
+    });
+
+    it("una tarea de seguimiento para alguien en baja no se crea; una de la cola de clasificación sí", async () => {
+      const persona = await personaEnBaja();
+      const crear = (tipo: string) => api().post("/api/v1/automatizacion/tareas").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), prospecto_id: persona.id, tipo, titulo: `Tarea ${tipo}` });
+
+      const seguimiento = await crear("seguimiento");
+      expect(seguimiento.status).toBe(200);
+      expect(seguimiento.body).toMatchObject({ id: null, omitida: "prospecto_en_baja" });
+
+      const clasificacion = await crear("clasificacion");
+      expect(clasificacion.status).toBe(201);
+      expect(clasificacion.body.id).toEqual(expect.any(Number));
+    });
+
+    it("una respuesta tardía de alguien en baja no crea 'Respuesta tardía de prospecto'", async () => {
+      const persona = await personaEnBaja();
+      const res = await api().post("/api/v1/automatizacion/respuestas").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), prospecto_id: persona.id, canal: "correo", contenido: "¿siguen ahí?" });
+      expect(res.status).toBe(201);
+      expect(res.body.tarea_id).toBeNull();
+      const tardias = await db.select().from(tareas).where(and(eq(tareas.prospectoId, persona.id), eq(tareas.titulo, "Respuesta tardía de prospecto")));
+      expect(tardias).toHaveLength(0);
+    });
+
+    it("clasificar 'interesado' y darse de baja al mismo tiempo: termina en baja y sin tarea de vendedor abierta", async () => {
+      const persona = await registrarProspecto();
+      const resp = await api().post("/api/v1/automatizacion/respuestas").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), prospecto_id: persona.id, canal: "correo", contenido: "me interesa", crear_tarea_clasificacion: true });
+      const tareaId = resp.body.tarea_id as number;
+
+      await Promise.all([
+        api().post(`/api/v1/cola-clasificacion/${tareaId}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "interesado" }),
+        evento(persona.correo, "unsubscribe")
+      ]);
+
+      expect(await estado(persona.id)).toBe("baja");
+      const abiertas = await db.select().from(tareas).where(and(eq(tareas.prospectoId, persona.id), eq(tareas.titulo, "Contactar prospecto interesado"), eq(tareas.estado, "pendiente")));
+      expect(abiertas).toHaveLength(0);
+    });
+  });
+
   it("un evento desconocido: 400", async () => {
     const persona = await registrarProspecto();
     expect((await evento(persona.correo, "open")).status).toBe(400);

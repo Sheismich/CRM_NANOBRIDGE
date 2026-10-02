@@ -100,7 +100,9 @@ export class AutomatizacionController {
   async tareas(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
     const input = tareaAutomatizacionInputSchema.parse(body);
     const result = await this.tareasService.createFromAutomation(input);
-    response.status(result.ya_existia ? 200 : 201);
+    // 200 también cuando no se creó nada (seguimiento de alguien en baja):
+    // no es error, para que n8n no caiga al Error Workflow.
+    response.status(result.ya_existia || result.id === null ? 200 : 201);
     return result;
   }
 

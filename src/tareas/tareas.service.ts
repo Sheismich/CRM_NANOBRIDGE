@@ -12,6 +12,7 @@ import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
+import { personaEnBaja } from "../shared/baja-prospecto.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
 import type { TareaAutomatizacionInput } from "../automatizacion/dto/automatizacion.schema.js";
@@ -503,6 +504,14 @@ export class TareasService {
     const { contactoId, empresaId } = input.prospecto_id
       ? await this.contextoDeProspecto(db, input.prospecto_id)
       : { contactoId: null, empresaId: null };
+
+    // La baja no se deshace (A3, 2-oct-2026): a quien pidió la baja no se le
+    // crean tareas de seguimiento (contactarlo). Las de la cola de
+    // clasificación sí, para que alguien lea lo que contestó. No es error:
+    // id null con el motivo.
+    if (input.tipo === "seguimiento" && contactoId !== null && await personaEnBaja(db, contactoId)) {
+      return { id: null, ya_existia: false as const, omitida: "prospecto_en_baja" as const };
+    }
 
     try {
       const [result] = await db.insert(tareas).values({
