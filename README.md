@@ -17,7 +17,7 @@ El health check queda disponible en `GET /health`.
 
 **✅ Desplegado (17-sep-2026)**, proyecto GCP `crm-prospeccion-outbound`, región `us-central1`:
 
-- Cloud Run (`nanobridge-api`) sirve la imagen construida desde `Dockerfile` (multi-stage sobre `node:20-bookworm-slim` — `argon2` necesita compilar un binario nativo, requiere `python3 make g++` en la etapa de build).
+- Cloud Run (`nanobridge-api`) sirve la imagen construida desde `Dockerfile` (multi-stage sobre `node:22-bookworm-slim` fijado por digest, corre sin root — `argon2` necesita compilar un binario nativo, requiere `python3 make g++` en la etapa de build).
 - Cloud SQL (`nanobridge-db`, MySQL 8.0) conectado vía el socket nativo de Cloud Run (`--add-cloudsql-instances`), sin exponer IP privada a la app.
 - Documentos usan `STORAGE_DRIVER=gcs` en producción (no `local`: el filesystem de Cloud Run es efímero y no persiste entre reinicios ni se comparte entre instancias).
 - Secretos (`CRM_CALLBACK_API_KEY`, `WEBHOOK_ENTRADA_API_KEY`, `REPLY_TO_SIGNING_SECRET`, `DATABASE_URL`) viven en Secret Manager, nunca en el código ni en variables de entorno planas.

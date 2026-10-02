@@ -85,10 +85,10 @@ gcloud run deploy nanobridge-api \
   `git checkout <commit>` fija exactamente la versión que se va a desplegar:
   así un commit que alguien suba mientras tanto no se cuela.
 - `git checkout -- package-lock.json`: el npm de Cloud Shell es más nuevo y
-  reescribe ese archivo cada vez que corres `npm install` (por ejemplo para
-  migrar). `gcloud builds submit` sube la carpeta tal cual, así que sin esto
-  el build usaría ese archivo modificado y no el del repo (visto el
-  1-oct-2026).
+  reescribía ese archivo con `npm install`. `gcloud builds submit` sube la
+  carpeta tal cual, así que el build usaba ese archivo modificado y no el
+  del repo (visto el 1-oct-2026). Desde el 2-oct las migraciones usan
+  `npm ci`, que no lo toca; el comando se queda por si acaso.
 - Al terminar, `git checkout main` para no dejar la copia en un commit fijo.
 - `gcloud builds submit` empaqueta el código con el `Dockerfile` y sube la
   imagen a Artifact Registry (siempre con la misma etiqueta `v1`, se
@@ -122,38 +122,47 @@ gcloud sql instances patch nanobridge-db --authorized-networks=$MY_IP/32 --proje
 (`echo $MY_IP` es necesario — el primer comando por sí solo no imprime
 nada, y sin ver la IP es fácil confundirse en el siguiente paso.)
 
-**Paso 2 — exportar las variables que necesita `npm run migrate`.** El
-validador de entorno del proyecto exige que existan `CRM_CALLBACK_API_KEY`,
-`WEBHOOK_ENTRADA_API_KEY` y `REPLY_TO_SIGNING_SECRET` aunque una
-migración no las use para nada — así que hay que sacarlas de Secret Manager
-antes de correr el comando, o falla con un error de Zod:
+**Paso 2 — instalar dependencias, ANTES de sacar cualquier secreto:**
 
 ```bash
-export CRM_CALLBACK_API_KEY=$(gcloud secrets versions access latest --secret=CRM_CALLBACK_API_KEY --project=crm-prospeccion-outbound)
-export WEBHOOK_ENTRADA_API_KEY=$(gcloud secrets versions access latest --secret=WEBHOOK_ENTRADA_API_KEY --project=crm-prospeccion-outbound)
-export REPLY_TO_SIGNING_SECRET=$(gcloud secrets versions access latest --secret=REPLY_TO_SIGNING_SECRET --project=crm-prospeccion-outbound)
+npm ci
 ```
 
-**Paso 3 — armar el `DATABASE_URL` apuntando a la IP pública de Cloud SQL**
-(no al socket que usa Cloud Run — aquí necesitas host y puerto reales,
-`3306`):
+- `npm ci` instala exactamente lo del `package-lock.json` y no lo
+  reescribe (`npm install` sí, con el npm más nuevo de Cloud Shell).
+- Va antes que los secretos porque al instalar corren scripts de terceros
+  (los de cada dependencia): si los secretos ya estuvieran en el ambiente,
+  esos scripts podrían leerlos.
+
+**Paso 3 — cargar los secretos y el `DATABASE_URL` sin que se vean en
+pantalla ni queden en el historial.** `npm run migrate` valida todo el
+ambiente, así que pide `CRM_CALLBACK_API_KEY`, `WEBHOOK_ENTRADA_API_KEY` y
+`REPLY_TO_SIGNING_SECRET` aunque la migración no las use. El `DATABASE_URL`
+del secreto apunta al socket de Cloud Run (`@localhost/...?socketPath=...`);
+aquí se cambia por la IP pública y el puerto `3306`, sin imprimirlo:
 
 ```bash
-gcloud sql instances describe nanobridge-db --format='value(ipAddresses[0].ipAddress)'
-gcloud secrets versions access latest --secret=DATABASE_URL --project=crm-prospeccion-outbound
+P=crm-prospeccion-outbound
+export CRM_CALLBACK_API_KEY=$(gcloud secrets versions access latest --secret=CRM_CALLBACK_API_KEY --project=$P)
+export WEBHOOK_ENTRADA_API_KEY=$(gcloud secrets versions access latest --secret=WEBHOOK_ENTRADA_API_KEY --project=$P)
+export REPLY_TO_SIGNING_SECRET=$(gcloud secrets versions access latest --secret=REPLY_TO_SIGNING_SECRET --project=$P)
+DB_IP=$(gcloud sql instances describe nanobridge-db --project=$P --format="value(ipAddresses[0].ipAddress)")
+export DATABASE_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=$P | sed -e "s#@localhost/#@$DB_IP:3306/#" -e "s#?socketPath=.*##")
+# Revisar que quedó bien, con la contraseña tapada:
+echo "$DATABASE_URL" | sed -E "s#(://[^:]+:)[^@]*@#\1****@#"
 ```
 
-Del segundo comando, saca la contraseña (el texto entre `appuser:` y
-`@localhost`). **Cuidado:** si corres estos dos comandos uno tras otro sin
-pausa, Cloud Shell a veces pega las dos salidas en una sola línea sin
-separador (la IP queda pegada al final del secreto) — si ves eso, corre los
-comandos por separado y confírmalos uno a la vez.
+Debe verse `mysql://appuser:****@<ip>:3306/nanobridge_crm`. Luego:
 
 ```bash
-export DATABASE_URL="mysql://appuser:<password>@<ip_publica>:3306/nanobridge_crm"
-npm install
 npm run migrate
+unset CRM_CALLBACK_API_KEY WEBHOOK_ENTRADA_API_KEY REPLY_TO_SIGNING_SECRET DATABASE_URL
 ```
+
+**Nunca** escribas la contraseña dentro de un comando (`export
+DATABASE_URL="mysql://appuser:LA_CONTRASEÑA@..."`): queda guardada en el
+historial de Cloud Shell. Y no pegues en un chat la salida de `gcloud
+secrets versions access`.
 
 **Paso 4 — revocar el acceso que diste** (siempre, apenas termines):
 
@@ -169,12 +178,16 @@ las columnas nuevas (con la 023, `GET /cola-clasificacion` tronaba sin
 ellas); el código viejo con columnas de más no se rompe.
 
 **Si `npm run migrate` se queda colgado en Cloud Shell**, la migración se
-aplica a mano:
-1. Conéctate con el cliente de MySQL, usando la IP y el usuario del paso 3:
-   `mysql -h <ip_publica> -u appuser -p nanobridge_crm`
-2. Pega las sentencias del archivo tal cual.
-3. Regístrala como aplicada, igual que lo hace `apply-migrations.ts`:
-   `INSERT INTO schema_migrations (version) VALUES ('<archivo>.sql');`
+aplica a mano con el cliente de MySQL (`-p` pide la contraseña sin
+mostrarla ni guardarla en el historial; `$DB_IP` es la del paso 3):
+
+```bash
+mysql -h "$DB_IP" -u appuser -p nanobridge_crm < src/database/migrations/<archivo>.sql
+mysql -h "$DB_IP" -u appuser -p nanobridge_crm -e "INSERT INTO schema_migrations (version) VALUES ('<archivo>.sql');"
+```
+
+El segundo comando la registra como aplicada, igual que lo hace
+`apply-migrations.ts`. Una migración a la vez, en orden.
 
 ### Qué está en producción
 
@@ -237,8 +250,11 @@ Si necesitas la contraseña de MySQL y no la tienes, no es recuperable desde
 Cloud SQL directamente — resetéala con:
 
 ```bash
-gcloud sql users set-password appuser --instance=nanobridge-db --password=<nueva> --project=crm-prospeccion-outbound
+gcloud sql users set-password appuser --instance=nanobridge-db --prompt-for-password --project=crm-prospeccion-outbound
 ```
+
+(`--prompt-for-password` la pide sin mostrarla; con `--password=...`
+quedaría en el historial.)
 
 (y luego actualiza el secreto `DATABASE_URL` en Secret Manager con la
 contraseña nueva).
@@ -248,6 +264,22 @@ contraseña nueva).
 - URL base: `https://nanobridge-api-165032456965.us-central1.run.app`
 - Header: `X-API-Key: <valor de CRM_CALLBACK_API_KEY>` (sacarlo con el
   comando del punto 7, no asumir que sigue siendo el mismo de siempre)
+
+## Actualizar la imagen base de Node
+
+El `Dockerfile` fija `node:22-bookworm-slim` por digest (`@sha256:...`): dos
+builds del mismo commit usan exactamente la misma base. A cambio, los parches
+de seguridad de la imagen no llegan solos. Una vez al mes, o cuando salga un
+aviso de seguridad de Node:
+
+```bash
+docker pull node:22-bookworm-slim
+docker inspect --format "{{index .RepoDigests 0}}" node:22-bookworm-slim
+```
+
+Copia el `sha256:...` nuevo en la línea `ARG NODE_IMAGE=` del `Dockerfile`,
+corre la suite y despliega como cualquier cambio de código. Node 22 recibe
+parches hasta abril de 2027; antes de esa fecha hay que pasar a Node 24.
 
 ## 9. Pendientes de infraestructura (no urgentes, pero abiertos)
 
