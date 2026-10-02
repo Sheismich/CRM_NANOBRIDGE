@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, contactos, empresas, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
+import { auditoria, contactos, empresas, prospectos, respuestas, tareas } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { aplicarClasificacionAlProspecto, type ClasificacionRespuesta, type OrigenClasificacion } from "../shared/clasificacion-respuesta.js";
@@ -12,6 +12,7 @@ import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { personaEnBaja } from "../shared/baja-prospecto.js";
+import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
 import type { TareaAutomatizacionInput } from "../automatizacion/dto/automatizacion.schema.js";
@@ -116,19 +117,24 @@ export class TareasService {
   }
 
   async create(user: CurrentUser, input: CrearTareaInput) {
-    const [result] = await this.db.insert(tareas).values({
-      tipo: input.tipo,
-      titulo: input.titulo,
-      descripcion: input.descripcion ?? null,
-      prioridad: input.prioridad,
-      responsableId: input.responsableId,
-      empresaId: input.empresaId ?? null,
-      contactoId: input.contactoId ?? null,
-      prospectoId: input.prospectoId ?? null,
-      fechaLimite: input.fechaLimite ?? null,
-      creadaPor: user.id
+    const responsable = await responsableAsignable(this.db, input.responsableId);
+    return this.db.transaction(async (tx) => {
+      const [result] = await tx.insert(tareas).values({
+        tipo: input.tipo,
+        titulo: input.titulo,
+        descripcion: input.descripcion ?? null,
+        prioridad: input.prioridad,
+        responsableId: input.responsableId,
+        empresaId: input.empresaId ?? null,
+        contactoId: input.contactoId ?? null,
+        prospectoId: input.prospectoId ?? null,
+        fechaLimite: input.fechaLimite ?? null,
+        creadaPor: user.id
+      });
+      // Asignar = dar dueño: ver shared/empresa-de-agente.ts.
+      if (input.empresaId) await darEmpresaAlAgente(tx, { empresaId: input.empresaId, responsable, actor: user, origen: { tarea_id: result.insertId } });
+      return result.insertId;
     });
-    return result.insertId;
   }
 
   async get(user: CurrentUser, id: number) {
@@ -159,15 +165,7 @@ export class TareasService {
   // persona la cerró entre la lectura y la escritura, no se reasigna.
   async asignar(user: CurrentUser, id: number, responsableId: number) {
     const row = await this.findAssignable(user, id);
-    const [destino] = await this.db
-      .select({ id: usuarios.id, activo: usuarios.activo, rol: roles.clave })
-      .from(usuarios)
-      .innerJoin(roles, eq(roles.id, usuarios.rolId))
-      .where(eq(usuarios.id, responsableId))
-      .limit(1);
-    if (!destino || !destino.activo || destino.rol === "sistema") {
-      throw new HttpError(409, "El responsable debe ser un usuario activo");
-    }
+    const responsable = await responsableAsignable(this.db, responsableId);
     if (row.responsableId === responsableId) return;
 
     await this.db.transaction(async (tx) => {
@@ -182,6 +180,8 @@ export class TareasService {
         antes: { responsable_id: row.responsableId },
         despues: { responsable_id: responsableId }
       });
+      // Asignar = dar dueño: ver shared/empresa-de-agente.ts.
+      if (row.empresaId) await darEmpresaAlAgente(tx, { empresaId: row.empresaId, responsable, actor: user, origen: { tarea_id: id } });
     });
   }
 

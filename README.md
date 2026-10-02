@@ -191,6 +191,10 @@ Probado de extremo a extremo con un receptor HTTP de prueba haciendo de n8n: cie
   - un prospecto nuevo suyo nace en `baja`;
   - ninguna clasificación, validación o cambio de estado lo saca de ahí.
 
+## Dueño de las empresas: asignar = dar dueño (2-oct-2026)
+
+Un agente solo ve las empresas de las que es dueño (`propietario_id`). Cuando un **admin o supervisor** le da trabajo a un **agente** (asignar una tarea, crear una tarea ya asignada o crear una oportunidad para él), la empresa pasa a ese agente si hoy no tiene como dueño a otro agente activo: sin dueño (las que crea n8n), a nombre de un admin o supervisor, o de un agente desactivado. Si ya es de otro agente activo, no cambia: la asignación sigue y decide el supervisor. Queda en la auditoría como `tomar_empresa` (entidad `empresa`, con `tarea_id` u `oportunidad_id`). Un agente que se crea su propia tarea no toma empresas ajenas. Al confirmar una fila del CSV, la empresa nueva queda de quien la importó, no de quien confirma. Código: `src/shared/empresa-de-agente.ts`.
+
 ## Probado de extremo a extremo
 
 Igual que las versiones anteriores, no me quedé solo en que compilara: instalé MySQL real en el entorno de build, corrí `npm run migrate`, y con el build compilado (`npm run build` + `node dist/main.js`) probé en caliente: `GET /health`, un 404 en una ruta cualquiera y en una ruta bajo `/api/v1`, bootstrap de la cuenta admin, `GET /api/v1/auth/me`, crear una empresa con un contacto (dos medios de contacto, en una transacción), listar empresas, consultarla por id con el join a contactos/medios, una empresa inexistente (404), bootstrap duplicado (409), login y logout. Todo respondió exactamente igual que en las versiones en Express y en Next.js.

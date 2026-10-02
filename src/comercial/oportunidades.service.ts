@@ -4,6 +4,7 @@ import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, catalogoEtapaEmbudo, catalogoMotivoPerdida, contactos, empresas, historialEtapaOportunidad, oportunidades, prospectos } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
+import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CambiarEtapaInput, CrearOportunidadInput, ListOportunidadesQuery, ReabrirOportunidadInput } from "./dto/oportunidad.schema.js";
 
@@ -190,6 +191,7 @@ export class OportunidadesService {
     // Un agente solo puede tomar la oportunidad para sí mismo, igual que
     // TareasService.scopedFilters restringe la bandeja por responsable.
     const responsableId = user.rol === "agente" ? user.id : (input.responsableId ?? user.id);
+    const responsable = await responsableAsignable(this.db, responsableId);
 
     return this.db.transaction(async (tx) => {
       const [created] = await tx.insert(oportunidades).values({
@@ -217,6 +219,8 @@ export class OportunidadesService {
         accion: "crear",
         despues: { empresa_id: input.empresaId, titulo: input.titulo, responsable_id: responsableId }
       });
+      // Asignar = dar dueño: ver shared/empresa-de-agente.ts.
+      await darEmpresaAlAgente(tx, { empresaId: input.empresaId, responsable, actor: user, origen: { oportunidad_id: created.insertId } });
 
       return created.insertId;
     });

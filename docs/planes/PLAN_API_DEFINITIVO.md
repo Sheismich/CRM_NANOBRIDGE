@@ -107,6 +107,10 @@ CORS: el frontend CRM (React) vive en un origen distinto al backend; configurar 
 
 CSRF (2-oct-2026): toda petición que cambia datos (POST, PATCH, PUT, DELETE) y trae `Origin` solo pasa si ese origen está en `CORS_ORIGINS`, si el navegador manda `Sec-Fetch-Site: same-origin` o si coincide con el host de la API; si no, 403 `ORIGEN_NO_PERMITIDO` (`src/shared/origen-csrf.ts`). `SameSite=Lax` no basta: otros subdominios del mismo dominio cuentan como el mismo sitio. Sin `Origin` (n8n, curl) no aplica. Si el front se publica en un dominio distinto al de la API (sin rewrite), ese origen tiene que ir en `CORS_ORIGINS`.
 
+### Dueño de las empresas: asignar = dar dueño (2-oct-2026)
+
+Un agente solo ve las empresas de las que es dueño (`propietario_id`). Cuando un **admin o supervisor** le da trabajo a un **agente** (asignar una tarea, crear una tarea ya asignada o crear una oportunidad para él), la empresa pasa a ese agente si hoy no tiene como dueño a otro agente activo: sin dueño (las que crea n8n), a nombre de un admin o supervisor, o de un agente desactivado. Si ya es de otro agente activo, no cambia: la asignación sigue y decide el supervisor. Queda en la auditoría como `tomar_empresa` (entidad `empresa`, con `tarea_id` u `oportunidad_id`). Un agente que se crea su propia tarea no toma empresas ajenas. Al confirmar una fila del CSV, la empresa nueva queda de quien la importó, no de quien confirma. Código: `src/shared/empresa-de-agente.ts`.
+
 ## Reglas técnicas obligatorias
 
 - Migraciones versionadas desde el primer commit.

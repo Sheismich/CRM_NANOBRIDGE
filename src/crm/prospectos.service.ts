@@ -353,7 +353,11 @@ export class ProspectosService {
             ciudad: borrador.empresaCiudad,
             pais: borrador.empresaPais,
             sitioWeb: borrador.empresaSitioWeb,
-            propietarioId: user.id
+            // De quien importó la fila, no de quien la confirma (C1 del plan
+            // de fixes, 2-oct-2026): si un supervisor confirmaba la
+            // importación de un agente, la empresa quedaba a nombre del
+            // supervisor y el agente la perdía.
+            propietarioId: borrador.creadoPor
           });
           empresaId = empresa.insertId;
         }
