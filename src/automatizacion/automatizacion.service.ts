@@ -8,7 +8,7 @@ import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
-import { darDeBajaProspecto } from "../shared/baja-prospecto.js";
+import { darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { fechaMx } from "../shared/dia-habil.js";
@@ -365,11 +365,14 @@ export class AutomatizacionService {
             ]);
           }
 
+          // Una persona que ya pidió la baja no vuelve a entrar al flujo: su
+          // prospecto nuevo nace en baja (A2, 2-oct-2026).
+          const enBaja = duplicado && await personaEnBaja(tx, contactoId);
           const [prospecto] = await tx.insert(prospectos).values({
             contactoId,
             campanaId: input.campana_id ?? null,
             executionId: input.execution_id,
-            estado: "capturado",
+            estado: enBaja ? "baja" : "capturado",
             fuenteUrl: input.fuente_url ?? null,
             confianza: input.confianza ?? null
           });
@@ -379,7 +382,7 @@ export class AutomatizacionService {
             entidad: "prospecto",
             entidadId: prospecto.insertId,
             accion: "registrar_automatizacion",
-            despues: { execution_id: input.execution_id, contacto_id: contactoId, empresa_id: empresaId, duplicado, empresa_reutilizada: empresaReutilizada }
+            despues: { execution_id: input.execution_id, contacto_id: contactoId, empresa_id: empresaId, duplicado, empresa_reutilizada: empresaReutilizada, nace_en_baja: enBaja }
           });
 
           return { id: prospecto.insertId, contacto_id: contactoId, empresa_id: empresaId, duplicado, empresa_reutilizada: empresaReutilizada, ya_existia: false as const };
@@ -1025,13 +1028,10 @@ export class AutomatizacionService {
       for (const { contactoId } of duenos) {
         for (const id of await suprimirMediosDeContacto(tx, contactoId!, origen)) supresionIds.add(id);
 
-        const suyos = await tx.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.contactoId, contactoId!)).orderBy(prospectos.id);
-        for (const prospecto of suyos) {
-          // Misma acción que POST /prospectos/estado: el Historial de la
-          // ficha de cliente la muestra como cambio de estado.
-          const { cambio } = await darDeBajaProspecto(tx, prospecto.id, { accion: "cambiar_estado_automatizacion", motivo: input.motivo, executionId: input.execution_id, usuarioId: null });
-          if (cambio) prospectosEnBaja.push(prospecto.id);
-        }
+        // Misma acción que POST /prospectos/estado: el Historial de la
+        // ficha de cliente la muestra como cambio de estado.
+        const baja = await darDeBajaPersona(tx, contactoId!, { accion: "cambiar_estado_automatizacion", motivo: input.motivo, executionId: input.execution_id, usuarioId: null });
+        prospectosEnBaja.push(...baja.prospectosEnBaja);
       }
 
       return { ...supresion, alcance: "persona" as const, supresion_ids: [...supresionIds], prospectos_en_baja: prospectosEnBaja };

@@ -10,6 +10,7 @@ import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { parseCsv } from "../shared/csv.js";
 import { buscarPersona } from "../shared/identidad.js";
+import { personaEnBaja } from "../shared/baja-prospecto.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ProspectoInput } from "./dto/prospecto.schema.js";
 
@@ -371,10 +372,13 @@ export class ProspectosService {
         ]);
       }
 
+      // Una persona que ya pidió la baja no vuelve a entrar: su prospecto
+      // nuevo nace en baja (A2, 2-oct-2026; misma regla que en n8n).
+      const enBaja = borrador.estado === "duplicado" && await personaEnBaja(tx, contactoId);
       const [prospecto] = await tx.insert(prospectos).values({
         contactoId,
         campanaId: borrador.campanaId,
-        estado: "capturado",
+        estado: enBaja ? "baja" : "capturado",
         score: borrador.score,
         prioridad: borrador.prioridad,
         fuenteUrl: borrador.fuenteUrl,

@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import type { DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, prospectos } from "../database/schema.js";
 import type { ClasificacionRespuesta } from "./clasificaciones.js";
-import { darDeBajaProspecto } from "./baja-prospecto.js";
+import { darDeBajaPersona, personaEnBaja } from "./baja-prospecto.js";
+import { HttpError } from "./http-error.js";
 import { suprimirContactoPorBaja } from "./supresion.js";
 
 export type { ClasificacionRespuesta };
@@ -56,14 +57,21 @@ export type OrigenClasificacion = {
  */
 export async function aplicarClasificacionAlProspecto(tx: DrizzleTx, prospectoId: number, clasificacion: ClasificacionRespuesta, origen: OrigenClasificacion) {
   const motivo = `Clasificada como ${clasificacion} (${origen.descripcion})`;
+  const [antes] = await tx.select({ estado: prospectos.estado, contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
+  if (!antes) throw new HttpError(404, "Prospecto no encontrado");
+
   if (clasificacion === "baja") {
-    await darDeBajaProspecto(tx, prospectoId, { accion: ACCION_CAMBIO_ESTADO_POR_CLASIFICACION, motivo, executionId: origen.executionId, usuarioId: origen.usuarioId });
+    // La baja es de la persona: todos sus prospectos (A2, 2-oct-2026).
+    await darDeBajaPersona(tx, antes.contactoId, { accion: ACCION_CAMBIO_ESTADO_POR_CLASIFICACION, motivo, executionId: origen.executionId, usuarioId: origen.usuarioId });
     const supresionIds = await suprimirContactoPorBaja(tx, prospectoId, { motivo: `Baja pedida en respuesta (${origen.descripcion})`, executionId: origen.executionId, usuarioId: origen.usuarioId });
     return { estadoProspecto: "baja", supresionIds, enBaja: true };
   }
 
-  const [antes] = await tx.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
-  if (antes?.estado === "baja") return { estadoProspecto: null, supresionIds: [] as number[], enBaja: true };
+  // "La baja manda" se mide por persona: si cualquiera de sus prospectos
+  // está en baja, este no cambia de estado ni recibe tareas.
+  if (antes.estado === "baja" || await personaEnBaja(tx, antes.contactoId)) {
+    return { estadoProspecto: null, supresionIds: [] as number[], enBaja: true };
+  }
 
   const estadoProspecto = ESTADO_PROSPECTO_POR_CLASIFICACION[clasificacion];
   if (estadoProspecto) {

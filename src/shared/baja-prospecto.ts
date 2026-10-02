@@ -64,3 +64,34 @@ export async function darDeBajaProspecto(tx: DrizzleTx, prospectoId: number, ori
 
   return { cambio, tareasCanceladas };
 }
+
+/**
+ * La baja es de la PERSONA (contacto), no de un prospecto suyo: pone en
+ * baja a todos sus prospectos y cancela sus seguimientos. La usan los dos
+ * caminos de baja -- respuesta clasificada "baja" (manual o n8n) y link de
+ * baja / queja de spam de SendGrid -- para que no vuelvan a separarse
+ * (A2 del plan de fixes, 2-oct-2026: antes la respuesta solo tocaba ese
+ * prospecto y un reingreso de la misma persona seguía "interesado" con su
+ * tarea de vendedor abierta). Devuelve los prospectos que sí cambiaron.
+ */
+export async function darDeBajaPersona(tx: DrizzleTx, contactoId: number, origen: OrigenBaja) {
+  const suyos = await tx.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.contactoId, contactoId)).orderBy(prospectos.id);
+  const prospectosEnBaja: number[] = [];
+  const tareasCanceladas: number[] = [];
+  for (const prospecto of suyos) {
+    const resultado = await darDeBajaProspecto(tx, prospecto.id, origen);
+    if (resultado.cambio) prospectosEnBaja.push(prospecto.id);
+    tareasCanceladas.push(...resultado.tareasCanceladas);
+  }
+  return { prospectosEnBaja, tareasCanceladas };
+}
+
+/**
+ * ¿Esta persona pidió la baja? Sí, si cualquiera de sus prospectos está en
+ * baja. Un rebote NO cuenta (suprime un correo, pero no es una petición de
+ * la persona), por eso no se mira lista_supresion aquí.
+ */
+export async function personaEnBaja(tx: DrizzleTx, contactoId: number) {
+  const [fila] = await tx.select({ id: prospectos.id }).from(prospectos).where(and(eq(prospectos.contactoId, contactoId), eq(prospectos.estado, "baja"))).limit(1);
+  return !!fila;
+}

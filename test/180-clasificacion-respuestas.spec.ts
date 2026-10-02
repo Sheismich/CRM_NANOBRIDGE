@@ -623,6 +623,75 @@ describe("respuestas: clasificación automática y manual", () => {
     });
   });
 
+  // La baja es de la PERSONA, no del prospecto (A2 del plan de fixes,
+  // 2-oct-2026). Antes una respuesta "baja" solo tocaba ese prospecto: si la
+  // persona había entrado dos veces, el otro seguía "interesado" con su
+  // tarea de vendedor abierta, mientras que el link de SendGrid sí daba de
+  // baja a todos. Ahora los dos caminos usan darDeBajaPersona.
+  describe("la baja es de la persona completa", () => {
+    async function dosProspectosDeLaMismaPersona() {
+      const correo = `persona.${randomUUID()}@respuestas.test`;
+      const registrar = () => api().post("/api/v1/automatizacion/prospectos").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), empresa: { nombreLegal: `Empresa Persona ${randomUUID()}` }, contacto: { nombre: "Persona Dos Veces", correo } });
+      const a = await registrar();
+      const b = await registrar();
+      expect(b.body.contacto_id).toBe(a.body.contacto_id);
+      return { a: a.body.id as number, b: b.body.id as number, correo, contactoId: a.body.contacto_id as number };
+    }
+
+    async function estadoDe(prospectoId: number) {
+      const [fila] = await db.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, prospectoId));
+      return fila!.estado;
+    }
+
+    it("una respuesta 'baja' de n8n en un prospecto da de baja a todos los de la persona y cancela sus seguimientos", async () => {
+      const { a, b } = await dosProspectosDeLaMismaPersona();
+      expect((await clasificarAutomatica(await registrarRespuesta(a, "me interesa"), "interesado")).status).toBe(201);
+      expect((await clasificarAutomatica(await registrarRespuesta(b, "mejor ya no"), "baja")).status).toBe(201);
+
+      expect(await estadoDe(a)).toBe("baja");
+      expect(await estadoDe(b)).toBe("baja");
+      const [contactar] = await db.select().from(tareas).where(and(eq(tareas.prospectoId, a), eq(tareas.titulo, "Contactar prospecto interesado")));
+      expect(contactar!.estado).toBe("cancelada");
+    });
+
+    it("una 'baja' manual en la cola también alcanza al otro prospecto", async () => {
+      const { a, b } = await dosProspectosDeLaMismaPersona();
+      const tareaId = (await clasificarAutomatica(await registrarRespuesta(b, "mmm"), "ambigua")).body.tarea_id as number;
+      expect((await api().post(`/api/v1/cola-clasificacion/${tareaId}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "baja" })).status).toBe(200);
+      expect(await estadoDe(a)).toBe("baja");
+    });
+
+    it("después de la baja, 'interesado' en una respuesta pendiente del OTRO prospecto no lo saca de baja ni crea tarea", async () => {
+      const { a, b } = await dosProspectosDeLaMismaPersona();
+      const tareaDeA = (await clasificarAutomatica(await registrarRespuesta(a, "sí me interesa"), "ambigua")).body.tarea_id as number;
+      expect((await clasificarAutomatica(await registrarRespuesta(b, "ya no me escriban"), "baja")).status).toBe(201);
+
+      expect((await api().post(`/api/v1/cola-clasificacion/${tareaDeA}/clasificar`).set("Cookie", adminCookie).send({ clasificacion: "interesado" })).status).toBe(200);
+      expect(await estadoDe(a)).toBe("baja");
+      expect(await db.select().from(tareas).where(and(eq(tareas.prospectoId, a), eq(tareas.titulo, "Contactar prospecto interesado")))).toHaveLength(0);
+    });
+
+    it("un prospecto nuevo de alguien ya dado de baja nace en baja (n8n)", async () => {
+      const { correo } = await dosProspectosDeLaMismaPersona();
+      await api().post("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), tipo: "correo", valor: correo, motivo: "baja por link", evento: "unsubscribe" });
+
+      const reingreso = await api().post("/api/v1/automatizacion/prospectos").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), empresa: { nombreLegal: `Empresa Persona ${randomUUID()}` }, contacto: { nombre: "Persona Dos Veces", correo } });
+      expect(reingreso.status).toBe(201);
+      expect(await estadoDe(reingreso.body.id)).toBe("baja");
+    });
+
+    it("un prospecto nuevo de alguien ya dado de baja nace en baja (CRM, usando el contacto existente)", async () => {
+      const { correo } = await dosProspectosDeLaMismaPersona();
+      await api().post("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), tipo: "correo", valor: correo, motivo: "baja por link", evento: "unsubscribe" });
+
+      const borrador = await api().post("/api/v1/prospectos").set("Cookie", adminCookie).send({ empresaNombreLegal: `Empresa CRM ${randomUUID()}`, contactoNombre: "Persona Dos Veces", correo, canalInicial: "correo" });
+      expect(borrador.body.estado).toBe("duplicado");
+      const confirmado = await api().post(`/api/v1/prospectos/importaciones/${borrador.body.lote_id}/filas/${borrador.body.id}/confirmar`).set("Cookie", adminCookie).send({ usarContactoExistente: true });
+      expect(confirmado.status).toBe(200);
+      expect(await estadoDe(confirmado.body.id)).toBe("baja");
+    });
+  });
+
   // El Historial de la ficha de cliente (GET /actividades) solo mostraba los
   // cambios de estado hechos por POST /automatizacion/prospectos/estado: una
   // clasificación cambiaba el estado del prospecto sin dejar ese rastro
