@@ -9,6 +9,7 @@ import { compactConditions } from "../shared/drizzle-utils.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { parseCsv } from "../shared/csv.js";
+import { buscarPersona } from "../shared/identidad.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ProspectoInput } from "./dto/prospecto.schema.js";
 
@@ -113,8 +114,13 @@ export class ProspectosService {
       const fila = candidato.fila;
       const correoNormalizado = fila.correo ? normalizeEmail(fila.correo) : null;
       const telefonoNormalizado = fila.telefono ? normalizePhone(fila.telefono) : null;
-      const claveLote = correoNormalizado ? `correo:${correoNormalizado}` : telefonoNormalizado ? `telefono:${telefonoNormalizado}` : null;
-      const filaPrevia = claveLote ? vistosEnLote.get(claveLote) : undefined;
+      // Duplicados dentro del archivo con la misma regla que buscarPersona
+      // ("el correo manda"): con correo, solo choca con otra fila del mismo
+      // correo; sin correo, con cualquier fila del mismo teléfono. Dos filas
+      // con el mismo conmutador y distinto correo son dos personas.
+      const claveCorreo = correoNormalizado ? `correo:${correoNormalizado}` : null;
+      const claveTelefono = telefonoNormalizado ? `telefono:${telefonoNormalizado}` : null;
+      const filaPrevia = claveCorreo ? vistosEnLote.get(claveCorreo) : claveTelefono ? vistosEnLote.get(claveTelefono) : undefined;
 
       let estado: "pendiente_revision" | "duplicado" = "pendiente_revision";
       let matchContactoId: number | null = null;
@@ -125,24 +131,16 @@ export class ProspectosService {
         estado = "duplicado";
         errores = [{ campo: "correo/telefono", mensaje: `Mismo correo o teléfono que la fila ${filaPrevia} de este mismo archivo` }];
       } else {
-        const [match] = await this.db
-          .select({ contactoId: contactos.id, esCorreo: sql<number>`(${mediosContacto.tipo} = 'correo')` })
-          .from(mediosContacto)
-          .innerJoin(contactos, eq(contactos.id, mediosContacto.contactoId))
-          .where(
-            sql`(${mediosContacto.tipo} = 'correo' AND ${mediosContacto.valorNormalizado} = ${correoNormalizado}) OR (${mediosContacto.tipo} = 'telefono' AND ${mediosContacto.valorNormalizado} = ${telefonoNormalizado})`
-          )
-          .orderBy(sql`(${mediosContacto.tipo} = 'correo') DESC`)
-          .limit(1);
-
-        if (match) {
+        const identidad = await buscarPersona(this.db, { correoNormalizado, telefonoNormalizado });
+        if (identidad.tipo === "misma_persona") {
           estado = "duplicado";
-          matchContactoId = match.contactoId;
-          matchMotivo = match.esCorreo ? "correo" : "telefono";
+          matchContactoId = identidad.contactoId;
+          matchMotivo = identidad.motivo;
         }
       }
 
-      if (claveLote) vistosEnLote.set(claveLote, candidato.numero);
+      if (claveCorreo && !vistosEnLote.has(claveCorreo)) vistosEnLote.set(claveCorreo, candidato.numero);
+      if (claveTelefono && !vistosEnLote.has(claveTelefono)) vistosEnLote.set(claveTelefono, candidato.numero);
 
       resultados.push(
         await this.insertarBorrador(user, loteId, fuente, candidato, expiraEn, { estado, matchContactoId, matchMotivo, errores }, { correoNormalizado, telefonoNormalizado })
@@ -320,18 +318,42 @@ export class ProspectosService {
         contactoId = contacto.id;
         empresaId = contacto.empresaId;
       } else {
-        const [empresa] = await tx.insert(empresas).values({
-          nombreLegal: borrador.empresaNombreLegal,
-          giro: borrador.empresaGiro,
-          tamano: borrador.empresaTamano,
-          region: borrador.empresaRegion,
-          estado: borrador.empresaEstado,
-          ciudad: borrador.empresaCiudad,
-          pais: borrador.empresaPais,
-          sitioWeb: borrador.empresaSitioWeb,
-          propietarioId: user.id
-        });
-        empresaId = empresa.insertId;
+        // La identidad se revisa otra vez al confirmar: entre la importación
+        // y este momento la misma persona pudo haber entrado (por n8n o por
+        // otra fila), y crearla de nuevo chocaba con el UNIQUE de
+        // medios_contacto como un 500.
+        const identidad = await buscarPersona(tx, { correoNormalizado: borrador.correoNormalizado, telefonoNormalizado: borrador.telefonoNormalizado });
+        if (identidad.tipo === "misma_persona") {
+          throw new HttpError(409, "Esta persona ya existe en el CRM (se registró después de importar la fila); vuelve a importarla para confirmarla como duplicado, o recházala");
+        }
+
+        // Persona nueva que comparte el teléfono (conmutador) con alguien ya
+        // registrado: va a la empresa de esa persona si quien confirma puede
+        // verla (administrador, supervisor o su dueño); si no, a una empresa
+        // propia. En los dos casos el teléfono no se le vuelve a guardar: ya
+        // es de otro contacto.
+        let empresaDelTelefono: number | null = null;
+        if (identidad.empresaDelTelefono !== null) {
+          const [empresa] = await tx.select({ propietarioId: empresas.propietarioId }).from(empresas).where(eq(empresas.id, identidad.empresaDelTelefono)).limit(1);
+          if (user.rol !== "agente" || empresa?.propietarioId === user.id) empresaDelTelefono = identidad.empresaDelTelefono;
+        }
+
+        if (empresaDelTelefono !== null) {
+          empresaId = empresaDelTelefono;
+        } else {
+          const [empresa] = await tx.insert(empresas).values({
+            nombreLegal: borrador.empresaNombreLegal,
+            giro: borrador.empresaGiro,
+            tamano: borrador.empresaTamano,
+            region: borrador.empresaRegion,
+            estado: borrador.empresaEstado,
+            ciudad: borrador.empresaCiudad,
+            pais: borrador.empresaPais,
+            sitioWeb: borrador.empresaSitioWeb,
+            propietarioId: user.id
+          });
+          empresaId = empresa.insertId;
+        }
 
         const [contacto] = await tx.insert(contactos).values({
           empresaId,
@@ -345,7 +367,7 @@ export class ProspectosService {
           // El teléfono se registra como whatsapp o como telefono según el
           // canal declarado en la fila -- el borrador solo guarda un
           // número, no dos.
-          { tipo: borrador.canalInicial === "whatsapp" ? "whatsapp" : "telefono", valor: borrador.telefono ?? undefined, valorNormalizado: borrador.telefonoNormalizado }
+          ...(identidad.telefonoOcupado ? [] : [{ tipo: borrador.canalInicial === "whatsapp" ? "whatsapp" as const : "telefono" as const, valor: borrador.telefono ?? undefined, valorNormalizado: borrador.telefonoNormalizado }])
         ]);
       }
 

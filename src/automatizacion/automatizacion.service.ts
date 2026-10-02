@@ -9,6 +9,7 @@ import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
 import { darDeBajaProspecto } from "../shared/baja-prospecto.js";
+import { buscarPersona } from "../shared/identidad.js";
 import { campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { fechaMx } from "../shared/dia-habil.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
@@ -269,9 +270,10 @@ export class AutomatizacionService {
   }
 
   // --- Registro de prospecto ----------------------------------------------------
-  // Deduplica por correo normalizado y, si no hay coincidencia, por teléfono
-  // normalizado del CONTACTO — nunca por razón social de la empresa (regla
-  // explícita de PLAN_CRM_DEFINITIVO.md). Idempotente por execution_id.
+  // Deduplica personas con buscarPersona (shared/identidad.ts, "el correo
+  // manda", 2-oct-2026): con correo, solo por correo; sin correo, por
+  // teléfono — nunca por razón social de la empresa (regla explícita de
+  // PLAN_CRM_DEFINITIVO.md). Idempotente por execution_id.
   async registrarProspecto(input: RegistroProspectoInput) {
     const [existing] = await this.db
       .select({ id: prospectos.id, contactoId: prospectos.contactoId, empresaId: contactos.empresaId })
@@ -306,25 +308,34 @@ export class AutomatizacionService {
     for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
       try {
         return await this.db.transaction(async (tx) => {
-          // Coincidencia existente de correo o teléfono, sin importar si el
-          // contacto está activo: el UNIQUE(tipo, valor_normalizado) de
-          // medios_contacto es global, así que reusar aquí evita chocar con
-          // esa restricción al intentar insertar el mismo valor de nuevo.
-          const matches = await tx
-            .select({ contactoId: contactos.id, empresaId: contactos.empresaId, esCorreo: sql<number>`(${mediosContacto.tipo} = 'correo')` })
-            .from(mediosContacto)
-            .innerJoin(contactos, eq(contactos.id, mediosContacto.contactoId))
-            .where(sql`(${mediosContacto.tipo} = 'correo' AND ${mediosContacto.valorNormalizado} = ${correoNormalizado}) OR (${mediosContacto.tipo} = 'telefono' AND ${mediosContacto.valorNormalizado} = ${telefonoNormalizado})`)
-            .orderBy(sql`(${mediosContacto.tipo} = 'correo') DESC`)
-            .limit(1);
+          // ¿Quién es? "El correo manda" (shared/identidad.ts, 2-oct-2026):
+          // con correo solo identifica el correo; sin correo, el teléfono.
+          // Sin importar si el contacto está activo: el UNIQUE(tipo,
+          // valor_normalizado) de medios_contacto es global, así que reusar
+          // evita chocar con esa restricción al insertar el mismo valor.
+          const identidad = await buscarPersona(tx, { correoNormalizado, telefonoNormalizado });
 
           let contactoId: number;
           let empresaId: number;
-          const duplicado = matches.length > 0;
+          const duplicado = identidad.tipo === "misma_persona";
+          // Persona nueva que comparte teléfono (conmutador) con alguien ya
+          // registrado: va a la empresa de esa persona, no a una empresa nueva.
+          const empresaReutilizada = identidad.tipo === "nueva" && identidad.empresaDelTelefono !== null;
 
-          if (duplicado) {
-            contactoId = matches[0]!.contactoId;
-            empresaId = matches[0]!.empresaId;
+          if (identidad.tipo === "misma_persona") {
+            contactoId = identidad.contactoId;
+            empresaId = identidad.empresaId;
+          } else if (identidad.empresaDelTelefono !== null) {
+            empresaId = identidad.empresaDelTelefono;
+            const [contact] = await tx.insert(contactos).values({
+              empresaId,
+              nombre: input.contacto.nombre,
+              puesto: input.contacto.puesto ?? null,
+              area: input.contacto.area ?? null
+            });
+            contactoId = contact.insertId;
+            // El teléfono ya es de otra persona: solo se guarda el correo.
+            await insertarMediosContacto(tx, contactoId, [{ tipo: "correo", valor: input.contacto.correo, valorNormalizado: correoNormalizado }]);
           } else {
             const [company] = await tx.insert(empresas).values({
               nombreLegal: input.empresa.nombreLegal,
@@ -368,10 +379,10 @@ export class AutomatizacionService {
             entidad: "prospecto",
             entidadId: prospecto.insertId,
             accion: "registrar_automatizacion",
-            despues: { execution_id: input.execution_id, contacto_id: contactoId, empresa_id: empresaId, duplicado }
+            despues: { execution_id: input.execution_id, contacto_id: contactoId, empresa_id: empresaId, duplicado, empresa_reutilizada: empresaReutilizada }
           });
 
-          return { id: prospecto.insertId, contacto_id: contactoId, empresa_id: empresaId, duplicado, ya_existia: false as const };
+          return { id: prospecto.insertId, contacto_id: contactoId, empresa_id: empresaId, duplicado, empresa_reutilizada: empresaReutilizada, ya_existia: false as const };
         });
       } catch (error) {
         if (!isDuplicateEntry(error)) throw error;
