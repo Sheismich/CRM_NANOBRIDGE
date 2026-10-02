@@ -45,7 +45,7 @@ describe("documentos: archivos, estados, versionado y descarga", () => {
   function subir(cookie: string[], fields: Record<string, string | number> = {}, archivo: Archivo | null = {}) {
     let req = request(app.getHttpServer()).post("/api/v1/documentos").set("Cookie", cookie).field("empresaId", String(fields.empresaId ?? empresaId));
     for (const [key, value] of Object.entries(fields)) if (key !== "empresaId") req = req.field(key, String(value));
-    if (archivo) req = req.attach("archivo", archivo.buffer ?? Buffer.from("contenido de prueba"), { filename: archivo.filename ?? "prueba.pdf", contentType: archivo.contentType ?? "application/pdf" });
+    if (archivo) req = req.attach("archivo", archivo.buffer ?? Buffer.from("%PDF-1.4 contenido de prueba"), { filename: archivo.filename ?? "prueba.pdf", contentType: archivo.contentType ?? "application/pdf" });
     return req;
   }
 
@@ -55,10 +55,10 @@ describe("documentos: archivos, estados, versionado y descarga", () => {
     return res.body.id as number;
   }
 
-  function version(cookie: string[], id: number, archivo: Archivo | null = { buffer: Buffer.from("version nueva"), filename: "v2.pdf" }, fields: Record<string, string> = {}) {
+  function version(cookie: string[], id: number, archivo: Archivo | null = { buffer: Buffer.from("%PDF-1.4 version nueva"), filename: "v2.pdf" }, fields: Record<string, string> = {}) {
     let req = request(app.getHttpServer()).post(`/api/v1/documentos/${id}/version`).set("Cookie", cookie);
     for (const [key, value] of Object.entries(fields)) req = req.field(key, value);
-    if (archivo) req = req.attach("archivo", archivo.buffer ?? Buffer.from("x"), { filename: archivo.filename ?? "v.pdf", contentType: archivo.contentType ?? "application/pdf" });
+    if (archivo) req = req.attach("archivo", archivo.buffer ?? Buffer.from("%PDF-1.4 x"), { filename: archivo.filename ?? "v.pdf", contentType: archivo.contentType ?? "application/pdf" });
     return req;
   }
 
@@ -87,20 +87,22 @@ describe("documentos: archivos, estados, versionado y descarga", () => {
     });
 
     it("acepta los cinco tipos permitidos", async () => {
-      const tipos = [
-        ["a.pdf", "application/pdf"],
-        ["b.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
-        ["c.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
-        ["d.png", "image/png"],
-        ["e.jpg", "image/jpeg"]
+      // Desde C5 (2-oct-2026) el contenido tiene que ser del tipo declarado.
+      const zip = (carpeta: string) => Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from(`${carpeta}document.xml`)]);
+      const tipos: [string, string, Buffer][] = [
+        ["a.pdf", "application/pdf", Buffer.from("%PDF-1.4 a")],
+        ["b.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", zip("word/")],
+        ["c.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", zip("xl/")],
+        ["d.png", "image/png", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+        ["e.jpg", "image/jpeg", Buffer.from([0xff, 0xd8, 0xff, 0xe0])]
       ];
-      for (const [filename, contentType] of tipos) {
-        expect((await subir(adminCookie, {}, { filename, contentType })).status).toBe(201);
+      for (const [filename, contentType, buffer] of tipos) {
+        expect((await subir(adminCookie, {}, { filename, contentType, buffer })).status).toBe(201);
       }
     });
 
     it("la extensión guardada sale del mimetype validado, no del nombre que manda el cliente", async () => {
-      const id = await subirOk(adminCookie, {}, { filename: "shell.php", contentType: "image/png" });
+      const id = await subirOk(adminCookie, {}, { filename: "shell.php", contentType: "image/png", buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]) });
       const [fila] = await db.select().from(documentos).where(eq(documentos.id, id));
       expect(fila!.storageKey).toMatch(new RegExp(`^documentos/${empresaId}/[0-9a-f-]{36}\\.png$`));
       expect(fila!.nombreOriginal).toBe("shell.php");
@@ -179,7 +181,7 @@ describe("documentos: archivos, estados, versionado y descarga", () => {
       expect(d2.politica_retencion).toBe("10_anios");
       expect(d2.nombre_original).toBe("v2.pdf");
 
-      const res3 = await version(adminCookie, v2, { buffer: Buffer.from("v3"), filename: "v3.pdf" }, { politicaRetencion: "1_anio" });
+      const res3 = await version(adminCookie, v2, { buffer: Buffer.from("%PDF-1.4 v3"), filename: "v3.pdf" }, { politicaRetencion: "1_anio" });
       const d3 = await detalle(adminCookie, res3.body.id);
       expect(d3.documento_raiz_id).toBe(v1);
       expect(d3.politica_retencion).toBe("1_anio");

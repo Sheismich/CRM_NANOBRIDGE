@@ -89,6 +89,7 @@ Reglas clave:
 - Tamaño máximo configurable (`STORAGE_MAX_FILE_SIZE_MB`, 25 MB por default, como pide el plan). Tipos permitidos: PDF, DOCX, XLSX, PNG, JPG.
 - La extensión del archivo guardado sale del mimetype ya validado, no del nombre que manda el cliente (evita que alguien suba un `.exe` renombrado a `.pdf`).
 - `GET /:id/descarga` — la API manda el archivo (con sesión, scoping y auditoría; `nosniff`, `no-store`). Hasta el 2-oct-2026 era una URL firmada de GCS, que en Cloud Run daba 500 por falta de `signBlob`.
+- Desde el 2-oct-2026 (C5): el contenido se revisa contra el tipo declarado por sus primeros bytes (PDF, PNG, JPG; DOCX/XLSX como ZIP con `word/` o `xl/`), si no 400. El nombre de descarga termina siempre en la extensión del tipo validado ("factura.exe" subido como PDF baja como "factura.exe.pdf"). `PATCH /:id/revisar` solo sobre la versión vigente (409 `DOCUMENTO_NO_VIGENTE`). Código: `src/documentos/tipo-de-archivo.ts`.
 - `POST /:id/version`, `PATCH /:id/estado`, `PATCH /:id/revisar` — versionado y flujo de revisión; cada acción queda en `auditoria`.
 - `FileInterceptor` fuerza `defParamCharset: "utf8"` (22-sep-2026) — multer decodifica el nombre del archivo subido como `latin1` por default, así que un archivo con acentos o "ñ" en el nombre (`Cotización firmada.pdf`) se guardaba ya con `nombre_original` corrupto sin esto.
 

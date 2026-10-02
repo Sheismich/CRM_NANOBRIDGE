@@ -28,7 +28,7 @@ describe("catalogo_tipo_documento", () => {
   function subir(cookie: string[], fields: Record<string, string | number>) {
     let req = request(app.getHttpServer()).post("/api/v1/documentos").set("Cookie", cookie);
     for (const [key, value] of Object.entries(fields)) req = req.field(key, String(value));
-    return req.attach("archivo", Buffer.from("contenido de prueba"), { filename: "prueba.pdf", contentType: "application/pdf" });
+    return req.attach("archivo", Buffer.from("%PDF-1.4 contenido de prueba"), { filename: "prueba.pdf", contentType: "application/pdf" });
   }
 
   it("sin sesión responde 401", async () => {
@@ -61,7 +61,7 @@ describe("catalogo_tipo_documento", () => {
     const nuevaVersion = await request(app.getHttpServer())
       .post(`/api/v1/documentos/${subida.body.id}/version`)
       .set("Cookie", adminCookie)
-      .attach("archivo", Buffer.from("contenido version 2"), { filename: "prueba-v2.pdf", contentType: "application/pdf" });
+      .attach("archivo", Buffer.from("%PDF-1.4 contenido version 2"), { filename: "prueba-v2.pdf", contentType: "application/pdf" });
     expect(nuevaVersion.status).toBe(201);
 
     const detalleV2 = await request(app.getHttpServer()).get(`/api/v1/documentos/${nuevaVersion.body.id}`).set("Cookie", adminCookie);

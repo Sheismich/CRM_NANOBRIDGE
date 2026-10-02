@@ -52,7 +52,7 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
       .post("/api/v1/documentos")
       .set("Cookie", adminCookie)
       .field("empresaId", String(empresaId))
-      .attach("archivo", Buffer.from("contenido de prueba"), { filename: "pendiente.pdf", contentType: "application/pdf" });
+      .attach("archivo", Buffer.from("%PDF-1.4 contenido de prueba"), { filename: "pendiente.pdf", contentType: "application/pdf" });
     expect(subida.status).toBe(201);
     const documentoId = subida.body.id as number;
 
@@ -82,7 +82,7 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
       .post("/api/v1/documentos")
       .set("Cookie", adminCookie)
       .field("empresaId", String(empresaId))
-      .attach("archivo", Buffer.from("contenido de prueba"), { filename: "revisado.pdf", contentType: "application/pdf" });
+      .attach("archivo", Buffer.from("%PDF-1.4 contenido de prueba"), { filename: "revisado.pdf", contentType: "application/pdf" });
     expect(subida.status).toBe(201);
     const documentoId = subida.body.id as number;
 
@@ -98,7 +98,7 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
       .post("/api/v1/documentos")
       .set("Cookie", adminCookie)
       .field("empresaId", String(empresaId))
-      .attach("archivo", Buffer.from("contenido de prueba"), { filename: "reactivado.pdf", contentType: "application/pdf" });
+      .attach("archivo", Buffer.from("%PDF-1.4 contenido de prueba"), { filename: "reactivado.pdf", contentType: "application/pdf" });
     expect(subida.status).toBe(201);
     const documentoId = subida.body.id as number;
 

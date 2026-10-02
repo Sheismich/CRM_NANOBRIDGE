@@ -11,10 +11,13 @@ import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { STORAGE_SERVICE } from "./storage/storage.constants.js";
 import type { StorageService } from "./storage/storage.types.js";
+import { contenidoEsDelTipo, nombreDeDescarga } from "./tipo-de-archivo.js";
 import { EXTENSION_POR_MIME, TIPOS_MIME_PERMITIDOS, type CambiarEstadoDocumentoInput, type ListDocumentosQuery, type NuevaVersionDocumentoInput, type RevisarDocumentoInput, type SubirDocumentoInput } from "./dto/documento.schema.js";
 
 /** Subconjunto de Express.Multer.File que de verdad usa el servicio (memoryStorage: sin destination/filename/path). */
 export type ArchivoSubido = { originalname: string; mimetype: string; size: number; buffer: Buffer };
+
+export const CODIGO_DOCUMENTO_NO_VIGENTE = "DOCUMENTO_NO_VIGENTE";
 
 // Estados (PLAN_CRM_DEFINITIVO.md #8 no detalla el criterio, se define
 // aquí): 'obsoleto' nunca es destino de un cambio de estado manual -- solo
@@ -151,6 +154,11 @@ export class DocumentosService {
       throw new HttpError(400, `El archivo excede el tamaño máximo permitido (${env.STORAGE_MAX_FILE_SIZE_MB} MB)`);
     }
     if (archivo.size <= 0) throw new HttpError(400, "El archivo está vacío");
+    // El tipo declarado lo escribe quien sube; se revisa contra el contenido
+    // (ver tipo-de-archivo.ts, C5 del plan de fixes).
+    if (!contenidoEsDelTipo(archivo.mimetype as (typeof TIPOS_MIME_PERMITIDOS)[number], archivo.buffer)) {
+      throw new HttpError(400, "El contenido del archivo no corresponde a su tipo; sube el archivo original (PDF, DOCX, XLSX, PNG o JPG)");
+    }
     // nombre_original es VARCHAR(255) NOT NULL (014_documentos.sql) -- sin
     // este chequeo, un nombre de archivo más largo (viene del
     // Content-Disposition del multipart, controlado por quien sube) pasaba
@@ -300,7 +308,7 @@ export class DocumentosService {
       throw error;
     }
 
-    return { ...archivo, nombreArchivo: documento.nombreOriginal, mimeType: documento.mimeType };
+    return { ...archivo, nombreArchivo: nombreDeDescarga(documento.nombreOriginal, documento.mimeType), mimeType: documento.mimeType };
   }
 
   async nuevaVersion(user: CurrentUser, id: number, input: NuevaVersionDocumentoInput, archivo: ArchivoSubido | undefined) {
@@ -405,11 +413,16 @@ export class DocumentosService {
     await this.obtenerScoped(user, id);
 
     await this.db.transaction(async (tx) => {
+      // Solo la versión vigente (C5 del plan de fixes, 2-oct-2026): marcar
+      // revisada una obsoleta o archivada dejaba la vigente sin revisar y
+      // la alerta de pendientes seguía sonando. La condición va en el
+      // UPDATE para que un cambio de estado al mismo tiempo no se cuele.
       // sql`CURRENT_TIMESTAMP` (hora del propio MySQL), no `new Date()` en
       // Node -- mismo motivo que fechaEmision en CotizacionesService: evita
       // el desfase de zona horaria de un valor calculado en el servidor de
       // la API.
-      await tx.update(documentos).set({ revisadoPor: user.id, revisadoEn: sql`CURRENT_TIMESTAMP` }).where(eq(documentos.id, id));
+      const [result] = await tx.update(documentos).set({ revisadoPor: user.id, revisadoEn: sql`CURRENT_TIMESTAMP` }).where(and(eq(documentos.id, id), eq(documentos.estado, "vigente")));
+      if (result.affectedRows === 0) throw new HttpError(409, "Solo se revisa la versión vigente del documento", CODIGO_DOCUMENTO_NO_VIGENTE);
 
       await tx.insert(auditoria).values({
         usuarioId: user.id,
