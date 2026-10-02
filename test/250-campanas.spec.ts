@@ -132,6 +132,48 @@ describe("campañas", () => {
       expect((await api().patch(`/api/v1/campanas/${id}`).set("Cookie", adminCookie).send({ fechaInicio: diasDesdeHoy(10) })).status).toBe(400);
     });
 
+    // B7 del plan de fixes (2-oct-2026): poner una fecha de fin pasada a
+    // una campaña que manda la dejaba vencida en silencio, y PT4 cancelaba
+    // todos sus recordatorios. Para terminarla está "finalizar".
+    it.each(["activa", "pausada"] as const)("a una campaña %s no se le pone una fecha de fin pasada: 409 y no cambia nada", async (estado) => {
+      const id = await crearId({ fechaInicio: diasDesdeHoy(-10), fechaFin: diasDesdeHoy(30) });
+      expect((await accion(id, "activar")).status).toBe(200);
+      if (estado === "pausada") expect((await accion(id, "pausar")).status).toBe(200);
+
+      const res = await api().patch(`/api/v1/campanas/${id}`).set("Cookie", adminCookie).send({ nombre: "Ya no debería cambiar", fechaFin: diasDesdeHoy(-1) });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("CAMPANA_VENCIDA");
+      const guardada = (await api().get(`/api/v1/campanas/${id}`).set("Cookie", adminCookie)).body;
+      expect(guardada).toMatchObject({ estado, fecha_fin: diasDesdeHoy(30) });
+      expect(guardada.nombre).not.toBe("Ya no debería cambiar");
+    });
+
+    it("fecha de fin hoy sí se puede (todavía manda hoy); en borrador también una pasada", async () => {
+      const activa = await crearId({ fechaInicio: diasDesdeHoy(-10) });
+      expect((await accion(activa, "activar")).status).toBe(200);
+      const hoy = await api().patch(`/api/v1/campanas/${activa}`).set("Cookie", adminCookie).send({ fechaFin: diasDesdeHoy(0) });
+      expect(hoy.status).toBe(200);
+      expect(hoy.body).toMatchObject({ fecha_fin: diasDesdeHoy(0), activa_hoy: true });
+
+      const borrador = await crearId({ fechaInicio: diasDesdeHoy(-10) });
+      expect((await api().patch(`/api/v1/campanas/${borrador}`).set("Cookie", adminCookie).send({ fechaFin: diasDesdeHoy(-1) })).status).toBe(200);
+    });
+
+    // Antes se leía la campaña fuera de la transacción: dos ediciones al
+    // mismo tiempo validaban cada una contra la versión vieja y podían
+    // dejar inicio después de fin.
+    it("dos ediciones al mismo tiempo no dejan un rango de fechas imposible", async () => {
+      const ids = await Promise.all(Array.from({ length: 5 }, () => crearId()));
+      await Promise.all(ids.map((id) => Promise.all([
+        api().patch(`/api/v1/campanas/${id}`).set("Cookie", adminCookie).send({ fechaInicio: diasDesdeHoy(20) }),
+        api().patch(`/api/v1/campanas/${id}`).set("Cookie", adminCookie).send({ fechaFin: diasDesdeHoy(10) })
+      ])));
+      for (const id of ids) {
+        const { body } = await api().get(`/api/v1/campanas/${id}`).set("Cookie", adminCookie);
+        if (body.fecha_inicio && body.fecha_fin) expect(body.fecha_inicio <= body.fecha_fin).toBe(true);
+      }
+    });
+
     it("una finalizada ya no se edita: 409; un agente no edita: 403", async () => {
       const id = await crearId();
       expect((await api().patch(`/api/v1/campanas/${id}`).set("Cookie", agenteCookie).send({ nombre: "x123" })).status).toBe(403);

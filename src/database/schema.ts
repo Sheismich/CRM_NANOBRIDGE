@@ -361,7 +361,8 @@ export const envios = mysqlTable("envios", {
 }, (table) => [
   uniqueIndex("uq_envios_execution_id").on(table.executionId),
   uniqueIndex("uq_envios_prospecto_canal_numero").on(table.prospectoId, table.canal, table.numeroContacto),
-  index("idx_envios_prospecto_canal").on(table.prospectoId, table.canal)
+  index("idx_envios_prospecto_canal").on(table.prospectoId, table.canal),
+  index("idx_envios_ventana").on(table.ventanaEstado, table.ventanaVenceEn)
 ]);
 
 export const respuestas = mysqlTable("respuestas", {

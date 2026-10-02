@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
@@ -194,5 +194,14 @@ describe("Envíos: límite de contactos y ventana de espera por persona", () => 
     // siguiente poll.
     const restantes = await db.select({ estado: envios.ventanaEstado }).from(envios).where(eq(envios.prospectoId, p1.id));
     expect(restantes.every((row) => row.estado === "vencida")).toBe(true);
+  });
+
+  // B7 del plan de fixes (2-oct-2026): /envios/vencidas busca por
+  // (ventana_estado, ventana_vence_en) con FOR UPDATE. Sin índice, MySQL
+  // recorre y bloquea TODA la tabla envios mientras dura la consulta, y un
+  // /envios o una respuesta que llega para otro envío se queda esperando.
+  it("envios tiene el índice (ventana_estado, ventana_vence_en) que usa /envios/vencidas", async () => {
+    const [filas] = await db.execute(sql`SELECT COLUMN_NAME AS columna FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'envios' AND INDEX_NAME = 'idx_envios_ventana' ORDER BY SEQ_IN_INDEX`);
+    expect((filas as unknown as { columna: string }[]).map((f) => f.columna)).toEqual(["ventana_estado", "ventana_vence_en"]);
   });
 });

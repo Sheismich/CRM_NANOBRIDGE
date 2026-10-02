@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, count, desc, eq } from "drizzle-orm";
-import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
+import { count, desc, eq } from "drizzle-orm";
+import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, prospectos } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
@@ -108,59 +108,71 @@ export class CampanasService {
     return this.get(id);
   }
 
+  // Lee la campaña dentro de la transacción y la deja bloqueada hasta el
+  // commit (B7 del plan de fixes, 2-oct-2026). Antes se leía afuera: dos
+  // ediciones al mismo tiempo validaban cada una contra la versión vieja y
+  // podían dejar fecha de inicio después de la de fin, y la auditoría
+  // guardaba un "antes" que ya no era cierto.
+  private async bloquear(tx: DrizzleTx, id: number) {
+    const [actual] = await tx.select().from(campanas).where(eq(campanas.id, id)).limit(1).for("update");
+    if (!actual) throw new HttpError(404, "Campaña no encontrada");
+    return actual;
+  }
+
   // Nombre y fechas. Una finalizada ya no se edita: es el registro de lo
   // que pasó. El rango de fechas se valida contra lo que ya está guardado.
   async update(user: CurrentUser, id: number, input: EditarCampanaInput) {
-    const actual = await this.get(id);
-    if (actual.estado === "finalizada") throw new HttpError(409, "La campaña ya está finalizada", CODIGO_CAMPANA_FINALIZADA);
+    const hoy = fechaMx(new Date());
+    await this.db.transaction(async (tx) => {
+      const actual = await this.bloquear(tx, id);
+      if (actual.estado === "finalizada") throw new HttpError(409, "La campaña ya está finalizada", CODIGO_CAMPANA_FINALIZADA);
 
-    const fechaInicio = input.fechaInicio === undefined ? actual.fecha_inicio : input.fechaInicio;
-    const fechaFin = input.fechaFin === undefined ? actual.fecha_fin : input.fechaFin;
-    if (fechaInicio && fechaFin && fechaInicio > fechaFin) throw new HttpError(400, ERROR_RANGO_FECHAS_CAMPANA);
+      const fechaInicio = input.fechaInicio === undefined ? actual.fechaInicio : input.fechaInicio;
+      const fechaFin = input.fechaFin === undefined ? actual.fechaFin : input.fechaFin;
+      if (fechaInicio && fechaFin && fechaInicio > fechaFin) throw new HttpError(400, ERROR_RANGO_FECHAS_CAMPANA);
+      // Una fecha de fin pasada deja vencida a una campaña que manda, y
+      // PT4 cancela todos sus recordatorios: es terminarla sin decirlo.
+      // Para eso está "finalizar". En borrador no manda nada, se permite.
+      if (input.fechaFin && input.fechaFin < hoy && actual.estado !== "borrador") {
+        throw new HttpError(409, "La fecha de fin no puede quedar en el pasado; para terminar la campaña usa finalizar", CODIGO_CAMPANA_VENCIDA);
+      }
 
-    const cambios = {
-      ...(input.nombre !== undefined ? { nombre: input.nombre } : {}),
-      ...(input.fechaInicio !== undefined ? { fechaInicio: input.fechaInicio } : {}),
-      ...(input.fechaFin !== undefined ? { fechaFin: input.fechaFin } : {})
-    };
-    if (Object.keys(cambios).length > 0) {
-      await this.db.transaction(async (tx) => {
-        // Revalida dentro del UPDATE: si alguien la finalizó entre la
-        // lectura y esta escritura, no se edita.
-        const [result] = await tx.update(campanas).set(cambios).where(and(eq(campanas.id, id), eq(campanas.estado, actual.estado)));
-        if (result.affectedRows === 0) throw new HttpError(409, "La campaña cambió mientras se editaba; vuelve a intentarlo", CODIGO_TRANSICION_CAMPANA_INVALIDA);
-        await tx.insert(auditoria).values({
-          usuarioId: user.id,
-          entidad: "campana",
-          entidadId: id,
-          accion: "editar",
-          antes: { nombre: actual.nombre, fecha_inicio: actual.fecha_inicio, fecha_fin: actual.fecha_fin },
-          despues: { nombre: input.nombre ?? actual.nombre, fecha_inicio: fechaInicio, fecha_fin: fechaFin }
-        });
+      const cambios = {
+        ...(input.nombre !== undefined ? { nombre: input.nombre } : {}),
+        ...(input.fechaInicio !== undefined ? { fechaInicio: input.fechaInicio } : {}),
+        ...(input.fechaFin !== undefined ? { fechaFin: input.fechaFin } : {})
+      };
+      if (Object.keys(cambios).length === 0) return;
+
+      await tx.update(campanas).set(cambios).where(eq(campanas.id, id));
+      await tx.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "campana",
+        entidadId: id,
+        accion: "editar",
+        antes: { nombre: actual.nombre, fecha_inicio: actual.fechaInicio, fecha_fin: actual.fechaFin },
+        despues: { nombre: input.nombre ?? actual.nombre, fecha_inicio: fechaInicio, fecha_fin: fechaFin }
       });
-    }
+    });
     return this.get(id);
   }
 
-  // activar / pausar / finalizar. Guarda contra carreras: el UPDATE exige el
-  // estado que se leyó (mismo patrón que TareasService.cerrar), así dos
-  // clics simultáneos dejan una sola transición y una sola auditoría.
+  // activar / pausar / finalizar. La fila bloqueada hace que dos clics
+  // simultáneos dejen una sola transición y una sola auditoría: el segundo
+  // espera al primero y ya ve el estado nuevo.
   async cambiarEstado(user: CurrentUser, id: number, accion: AccionCampana) {
-    const actual = await this.get(id);
-    const { desde, hacia } = TRANSICIONES[accion];
-    if (!desde.includes(actual.estado)) {
-      throw new HttpError(409, `No se puede ${accion} una campaña ${actual.estado}`, CODIGO_TRANSICION_CAMPANA_INVALIDA);
-    }
-    // Activar una campaña que ya terminó no la haría mandar: mejor avisar.
-    if (accion === "activar" && actual.fecha_fin && actual.fecha_fin < fechaMx(new Date())) {
-      throw new HttpError(409, "La fecha de fin de la campaña ya pasó; cámbiala antes de activarla", CODIGO_CAMPANA_VENCIDA);
-    }
-
     await this.db.transaction(async (tx) => {
-      const [result] = await tx.update(campanas).set({ estado: hacia }).where(and(eq(campanas.id, id), eq(campanas.estado, actual.estado)));
-      if (result.affectedRows === 0) {
-        throw new HttpError(409, "La campaña cambió de estado mientras tanto; vuelve a intentarlo", CODIGO_TRANSICION_CAMPANA_INVALIDA);
+      const actual = await this.bloquear(tx, id);
+      const { desde, hacia } = TRANSICIONES[accion];
+      if (!desde.includes(actual.estado)) {
+        throw new HttpError(409, `No se puede ${accion} una campaña ${actual.estado}`, CODIGO_TRANSICION_CAMPANA_INVALIDA);
       }
+      // Activar una campaña que ya terminó no la haría mandar: mejor avisar.
+      if (accion === "activar" && actual.fechaFin && actual.fechaFin < fechaMx(new Date())) {
+        throw new HttpError(409, "La fecha de fin de la campaña ya pasó; cámbiala antes de activarla", CODIGO_CAMPANA_VENCIDA);
+      }
+
+      await tx.update(campanas).set({ estado: hacia }).where(eq(campanas.id, id));
       await tx.insert(auditoria).values({
         usuarioId: user.id,
         entidad: "campana",

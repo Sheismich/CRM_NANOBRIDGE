@@ -88,7 +88,9 @@ Crear grupos REST para:
   - Nace en `borrador` y solo con canal correo.
   - Las transiciones están en un mapa único. Una transición inválida responde 409
     `TRANSICION_CAMPANA_INVALIDA`; editar una finalizada, 409 `CAMPANA_FINALIZADA`; activar una
-    con la fecha de fin pasada, 409 `CAMPANA_VENCIDA`.
+    con la fecha de fin pasada, 409 `CAMPANA_VENCIDA`; ponerle una fecha de fin pasada a una activa
+    o pausada, también 409 `CAMPANA_VENCIDA` (la dejaría vencida y PT4 cancelaría sus recordatorios; para
+    terminarla está finalizar).
   - La lista trae `prospectos`, `activa_hoy` y `motivo`, con la misma regla que PT1 y PT4
     (`src/shared/campana-vigente.ts`, fechas de México).
   - Pausada o aún sin empezar significa **en espera**: sus recordatorios no se cancelan y PT1 no

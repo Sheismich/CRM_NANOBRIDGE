@@ -169,7 +169,7 @@ Probado de extremo a extremo con un receptor HTTP de prueba haciendo de n8n: cie
 |---|---|---|
 | `GET /` y `GET /:id` | todos | Lista o detalle, con `prospectos` (cuántos), `activa_hoy` y `motivo` |
 | `POST /` | admin, supervisor | Crea en `borrador`. Solo canal correo (WhatsApp → 400); fechas al revés → 400 |
-| `PATCH /:id` | admin, supervisor | Nombre y fechas (`null` quita la fecha). Una finalizada → 409 `CAMPANA_FINALIZADA` |
+| `PATCH /:id` | admin, supervisor | Nombre y fechas (`null` quita la fecha). Una finalizada → 409 `CAMPANA_FINALIZADA`. Fecha de fin pasada en una activa o pausada → 409 `CAMPANA_VENCIDA` (para terminarla, `finalizar`) |
 | `POST /:id/activar` | admin, supervisor | Borrador o pausada → activa. Fecha de fin pasada → 409 `CAMPANA_VENCIDA` |
 | `POST /:id/pausar` | admin, supervisor | Activa → pausada |
 | `POST /:id/finalizar` | admin, supervisor | Es definitivo |
