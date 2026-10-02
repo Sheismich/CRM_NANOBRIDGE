@@ -22,6 +22,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
 
     if (exception instanceof HttpError) {
+      if (exception.headers) response.set(exception.headers);
       response.status(exception.status).json({ error: "request_error", message: exception.message, ...(exception.code ? { code: exception.code } : {}) });
       return;
     }

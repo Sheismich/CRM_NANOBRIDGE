@@ -47,6 +47,14 @@ export const sesiones = mysqlTable("sesiones", {
   index("idx_sesiones_expira").on(table.expiraEn)
 ]);
 
+// 025_login_fallos.sql: freno de login por cuenta (AuthService.login).
+export const loginFallos = mysqlTable("login_fallos", {
+  correo: varchar("correo", { length: 254 }).primaryKey(),
+  fallos: int("fallos", { unsigned: true }).notNull().default(0),
+  ventanaInicio: datetime("ventana_inicio").notNull().default(sql`CURRENT_TIMESTAMP`),
+  bloqueadoHasta: datetime("bloqueado_hasta")
+});
+
 export const empresas = mysqlTable("empresas", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   nombreLegal: varchar("nombre_legal", { length: 255 }).notNull(),

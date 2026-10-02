@@ -1,12 +1,16 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { roles, usuarios } from "../database/schema.js";
+import { loginFallos, roles, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from "./passwords.js";
 import { SessionService } from "./session.service.js";
 import type { CurrentUser } from "./current-user.type.js";
+
+// Freno por cuenta: 10 fallos en 15 minutos bloquean esa cuenta 15 minutos.
+const MAX_FALLOS_POR_CUENTA = 10;
+export const CODIGO_CUENTA_BLOQUEADA = "CUENTA_BLOQUEADA_TEMPORALMENTE";
 
 @Injectable()
 export class AuthService {
@@ -45,7 +49,22 @@ export class AuthService {
     return { user, session };
   }
 
+  // Freno de login por cuenta (B1 del plan de fixes, 2-oct-2026): ver
+  // 025_login_fallos.sql. Complementa al límite por IP (RateLimitGuard), que
+  // vive en la memoria de cada instancia y se esquiva cambiando de IP o
+  // esperando una instancia nueva. Corre igual para correos que no existen,
+  // para no revelar cuáles son reales. Costo aceptado: quien conozca un
+  // correo puede bloquearlo 15 minutos a propósito (por eso es temporal).
   async login(input: { correo: string; password: string }) {
+    const [bloqueo] = await this.db
+      .select({ segundos: sql<number>`TIMESTAMPDIFF(SECOND, CURRENT_TIMESTAMP, ${loginFallos.bloqueadoHasta})` })
+      .from(loginFallos)
+      .where(and(eq(loginFallos.correo, input.correo), sql`${loginFallos.bloqueadoHasta} > CURRENT_TIMESTAMP`))
+      .limit(1);
+    if (bloqueo) {
+      throw new HttpError(429, "Demasiados intentos fallidos para esta cuenta; intenta de nuevo más tarde", CODIGO_CUENTA_BLOQUEADA, { "Retry-After": String(Math.max(1, Number(bloqueo.segundos))) });
+    }
+
     const [user] = await this.db
       .select({ id: usuarios.id, nombre: usuarios.nombre, correo: usuarios.correo, passwordHash: usuarios.passwordHash, activo: usuarios.activo, rol: roles.clave })
       .from(usuarios)
@@ -61,11 +80,26 @@ export class AuthService {
     const passwordValida = await verifyPassword(user?.passwordHash ?? DUMMY_PASSWORD_HASH, input.password);
 
     if (!user || !user.activo || user.rol === "sistema" || !passwordValida) {
+      await this.registrarFallo(input.correo);
       throw new HttpError(401, "Correo o contraseña incorrectos");
     }
 
+    await this.db.delete(loginFallos).where(eq(loginFallos.correo, input.correo));
     const session = await this.sessionService.createSession(user.id);
     const currentUser: CurrentUser = { id: user.id, nombre: user.nombre, correo: user.correo, rol: user.rol as CurrentUser["rol"] };
     return { user: currentUser, session };
+  }
+
+  // Un solo UPDATE atómico por fila: si la ventana de 15 minutos ya pasó,
+  // el conteo arranca de nuevo; al llegar a MAX_FALLOS_POR_CUENTA se bloquea
+  // 15 minutos. MySQL evalúa las asignaciones de izquierda a derecha, así
+  // que la tercera ya ve el `fallos` nuevo.
+  private async registrarFallo(correo: string) {
+    await this.db.insert(loginFallos).ignore().values({ correo });
+    await this.db.update(loginFallos).set({
+      fallos: sql`IF(${loginFallos.ventanaInicio} < CURRENT_TIMESTAMP - INTERVAL 15 MINUTE, 1, ${loginFallos.fallos} + 1)`,
+      ventanaInicio: sql`IF(${loginFallos.ventanaInicio} < CURRENT_TIMESTAMP - INTERVAL 15 MINUTE, CURRENT_TIMESTAMP, ${loginFallos.ventanaInicio})`,
+      bloqueadoHasta: sql`IF(${loginFallos.fallos} >= ${MAX_FALLOS_POR_CUENTA}, CURRENT_TIMESTAMP + INTERVAL 15 MINUTE, ${loginFallos.bloqueadoHasta})`
+    }).where(eq(loginFallos.correo, correo));
   }
 }
