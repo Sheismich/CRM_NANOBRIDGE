@@ -31,10 +31,20 @@ describe("oportunidades: pipeline, cierre/reapertura y scoping", () => {
     return res.body.id as number;
   }
 
+  // Desde C3 (2-oct-2026) un agente solo crea oportunidades en sus empresas:
+  // aquí el admin se la crea a él (y con eso, C1, la empresa pasa a ser suya
+  // si no es de otro agente).
+  async function oportunidadPara(agenteCookie: string[], titulo: string) {
+    const agenteId = (await request(app.getHttpServer()).get("/api/v1/auth/me").set("Cookie", agenteCookie)).body.id as number;
+    const res = await request(app.getHttpServer()).post("/api/v1/oportunidades").set("Cookie", adminCookie).send({ empresaId, titulo, responsableId: agenteId });
+    expect(res.status).toBe(201);
+    return res.body.id as number;
+  }
+
   it("un agente no puede ver una oportunidad asignada a otro agente (404), pero sí la suya", async () => {
     const agente1 = await crearAgente(app, adminCookie, `op.agente1.${Date.now()}@test.local`);
     const agente2 = await crearAgente(app, adminCookie, `op.agente2.${Date.now()}@test.local`);
-    const oportunidadId = await crearOportunidad(agente1, "Oportunidad de agente 1");
+    const oportunidadId = await oportunidadPara(agente1, "Oportunidad de agente 1");
 
     const propia = await request(app.getHttpServer()).get(`/api/v1/oportunidades/${oportunidadId}`).set("Cookie", agente1);
     expect(propia.status).toBe(200);

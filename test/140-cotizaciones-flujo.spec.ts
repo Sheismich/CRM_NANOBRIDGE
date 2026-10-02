@@ -42,6 +42,15 @@ describe("cotizaciones: estados, versionado y scoping", () => {
     return res.body.id as number;
   }
 
+  // Desde C3 (2-oct-2026) un agente solo crea oportunidades en sus empresas:
+  // el admin se la crea a él, como pasa en la operación real.
+  async function oportunidadPara(agenteCookie: string[]) {
+    const agenteId = (await request(app.getHttpServer()).get("/api/v1/auth/me").set("Cookie", agenteCookie)).body.id as number;
+    const res = await request(app.getHttpServer()).post("/api/v1/oportunidades").set("Cookie", adminCookie).send({ empresaId, titulo: `Oportunidad ${Math.random()}`, responsableId: agenteId });
+    expect(res.status).toBe(201);
+    return res.body.id as number;
+  }
+
   const partidas = [{ descripcion: "Servicio de prueba", cantidad: 2, precioUnitario: 100 }];
 
   async function crearCotizacion(cookie: string[], oportunidadId: number, extra: Record<string, unknown> = {}) {
@@ -203,7 +212,7 @@ describe("cotizaciones: estados, versionado y scoping", () => {
     it("un agente solo ve, versiona y cambia de estado las cotizaciones de SUS oportunidades", async () => {
       const agente1 = await crearAgente(app, adminCookie, `cot.agente1.${sufijo}@test.local`);
       const agente2 = await crearAgente(app, adminCookie, `cot.agente2.${sufijo}@test.local`);
-      const oportunidadId = await crearOportunidad(agente1);
+      const oportunidadId = await oportunidadPara(agente1);
       const id = await crearCotizacion(agente1, oportunidadId);
 
       expect((await request(app.getHttpServer()).get(`/api/v1/cotizaciones/${id}`).set("Cookie", agente1)).status).toBe(200);
@@ -227,7 +236,7 @@ describe("cotizaciones: estados, versionado y scoping", () => {
     it("sin empresaId (lista general) cada agente sigue viendo solo las de sus oportunidades, con empresa y oportunidad", async () => {
       const agente1 = await crearAgente(app, adminCookie, `cot.general1.${sufijo}@test.local`);
       const agente2 = await crearAgente(app, adminCookie, `cot.general2.${sufijo}@test.local`);
-      const id = await crearCotizacion(agente1, await crearOportunidad(agente1));
+      const id = await crearCotizacion(agente1, await oportunidadPara(agente1));
 
       const general = (cookie: string[], query: Record<string, string> = {}) => request(app.getHttpServer()).get("/api/v1/cotizaciones").query({ limit: 100, ...query }).set("Cookie", cookie);
       const propia = await general(agente1);

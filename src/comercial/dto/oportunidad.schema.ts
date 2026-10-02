@@ -13,7 +13,9 @@ export const crearOportunidadSchema = z.object({
   prospectoId: z.coerce.number().int().positive().optional(),
   titulo: z.string().trim().min(2).max(255),
   responsableId: z.coerce.number().int().positive().optional(),
-  valorEstimado: z.coerce.number().min(0).optional(),
+  // Tope de la columna DECIMAL(12,2): más grande tronaba en MySQL con 500
+  // (C3 del plan de fixes, 2-oct-2026).
+  valorEstimado: z.coerce.number().min(0).max(9_999_999_999.99).optional(),
   fechaCierreEstimada: z.string().date().optional()
 });
 export type CrearOportunidadInput = z.infer<typeof crearOportunidadSchema>;

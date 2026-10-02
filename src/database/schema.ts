@@ -551,10 +551,10 @@ export const auditoria = mysqlTable("auditoria", {
 export const metricasComercialesDiarias = mysqlTable("metricas_comerciales_diarias", {
   fecha: date("fecha", { mode: "string" }).primaryKey(),
   oportunidadesAbiertas: int("oportunidades_abiertas", { unsigned: true }).notNull(),
-  valorPipeline: decimal("valor_pipeline", { precision: 12, scale: 2 }).notNull(),
+  valorPipeline: decimal("valor_pipeline", { precision: 18, scale: 2 }).notNull(),
   oportunidadesGanadas: int("oportunidades_ganadas", { unsigned: true }).notNull(),
-  ingresosCerrados: decimal("ingresos_cerrados", { precision: 12, scale: 2 }).notNull(),
+  ingresosCerrados: decimal("ingresos_cerrados", { precision: 18, scale: 2 }).notNull(),
   oportunidadesPerdidas: int("oportunidades_perdidas", { unsigned: true }).notNull(),
-  valorPerdido: decimal("valor_perdido", { precision: 12, scale: 2 }).notNull(),
+  valorPerdido: decimal("valor_perdido", { precision: 18, scale: 2 }).notNull(),
   calculadoEn: datetime("calculado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 });

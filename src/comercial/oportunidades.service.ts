@@ -171,8 +171,10 @@ export class OportunidadesService {
     // 14-sep-2026): sin él, se podía crear una oportunidad nueva contra
     // una empresa ya desactivada (EmpresasService.deactivate), quedando
     // "huérfana" de cualquier registro de empresa visible.
-    const [empresa] = await this.db.select({ id: empresas.id }).from(empresas).where(and(eq(empresas.id, input.empresaId), eq(empresas.activo, true))).limit(1);
-    if (!empresa) throw new HttpError(404, "Empresa no encontrada");
+    const [empresa] = await this.db.select({ id: empresas.id, propietarioId: empresas.propietarioId }).from(empresas).where(and(eq(empresas.id, input.empresaId), eq(empresas.activo, true))).limit(1);
+    // Un agente solo en sus empresas (C3 del plan de fixes, 2-oct-2026):
+    // antes podía crearla en cualquier empresa activa.
+    if (!empresa || (user.rol === "agente" && empresa.propietarioId !== user.id)) throw new HttpError(404, "Empresa no encontrada");
 
     const [etapaInicial] = await this.db.select({ id: catalogoEtapaEmbudo.id }).from(catalogoEtapaEmbudo).where(eq(catalogoEtapaEmbudo.clave, "calificada")).limit(1);
     if (!etapaInicial) throw new HttpError(500, "Catálogo de etapas sin sembrar");
