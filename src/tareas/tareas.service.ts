@@ -11,7 +11,7 @@ import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
-import { personaEnBaja } from "../shared/baja-prospecto.js";
+import { CODIGO_PERSONA_EN_BAJA, personaEnBaja } from "../shared/baja-prospecto.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
@@ -116,25 +116,65 @@ export class TareasService {
     return { page, limit, data: rows.map((r) => ({ ...toRow(r.tarea), empresa_nombre: r.empresaNombre })) };
   }
 
+  // C2 del plan de fixes (2-oct-2026): antes no se revisaba nada de esto.
+  // Un agente siempre se crea la tarea a sí mismo (igual que las
+  // oportunidades) y solo sobre sus empresas.
   async create(user: CurrentUser, input: CrearTareaInput) {
-    const responsable = await responsableAsignable(this.db, input.responsableId);
+    const responsableId = user.rol === "agente" ? user.id : input.responsableId;
+    const responsable = await responsableAsignable(this.db, responsableId);
+    const { empresaId, contactoId } = await this.contextoDeTarea(user, input);
+    if (input.tipo === "seguimiento" && contactoId !== null && await personaEnBaja(this.db, contactoId)) {
+      throw new HttpError(409, "La persona está dada de baja: no se le hacen seguimientos", CODIGO_PERSONA_EN_BAJA);
+    }
     return this.db.transaction(async (tx) => {
       const [result] = await tx.insert(tareas).values({
         tipo: input.tipo,
         titulo: input.titulo,
         descripcion: input.descripcion ?? null,
         prioridad: input.prioridad,
-        responsableId: input.responsableId,
-        empresaId: input.empresaId ?? null,
-        contactoId: input.contactoId ?? null,
+        responsableId,
+        empresaId,
+        contactoId,
         prospectoId: input.prospectoId ?? null,
         fechaLimite: input.fechaLimite ?? null,
         creadaPor: user.id
       });
       // Asignar = dar dueño: ver shared/empresa-de-agente.ts.
-      if (input.empresaId) await darEmpresaAlAgente(tx, { empresaId: input.empresaId, responsable, actor: user, origen: { tarea_id: result.insertId } });
+      if (empresaId !== null) await darEmpresaAlAgente(tx, { empresaId, responsable, actor: user, origen: { tarea_id: result.insertId } });
       return result.insertId;
     });
+  }
+
+  // De qué empresa y contacto es la tarea. El contacto y el prospecto tienen
+  // que ser de esa empresa; si solo llega el prospecto (o el contacto), la
+  // tarea toma su contacto y su empresa, así sale en la ficha. Un agente
+  // solo cuelga tareas de empresas suyas (lo ajeno, 404).
+  private async contextoDeTarea(user: CurrentUser, input: CrearTareaInput) {
+    let empresaId = input.empresaId ?? null;
+    let contactoId = input.contactoId ?? null;
+
+    if (input.prospectoId) {
+      const [p] = await this.db
+        .select({ contactoId: prospectos.contactoId, empresaId: contactos.empresaId, activo: contactos.activo })
+        .from(prospectos)
+        .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+        .where(eq(prospectos.id, input.prospectoId))
+        .limit(1);
+      if (!p || !p.activo || (empresaId !== null && p.empresaId !== empresaId)) throw new HttpError(404, "Prospecto no encontrado en esa empresa");
+      if (contactoId !== null && contactoId !== p.contactoId) throw new HttpError(400, "El prospecto no es de ese contacto");
+      contactoId = p.contactoId;
+      empresaId = p.empresaId;
+    } else if (contactoId !== null) {
+      const [c] = await this.db.select({ empresaId: contactos.empresaId, activo: contactos.activo }).from(contactos).where(eq(contactos.id, contactoId)).limit(1);
+      if (!c || !c.activo || (empresaId !== null && c.empresaId !== empresaId)) throw new HttpError(404, "Contacto no encontrado en esa empresa");
+      empresaId = c.empresaId;
+    }
+
+    if (empresaId !== null) {
+      const [e] = await this.db.select({ propietarioId: empresas.propietarioId }).from(empresas).where(and(eq(empresas.id, empresaId), eq(empresas.activo, true))).limit(1);
+      if (!e || (user.rol === "agente" && e.propietarioId !== user.id)) throw new HttpError(404, "Empresa no encontrada");
+    }
+    return { empresaId, contactoId };
   }
 
   async get(user: CurrentUser, id: number) {
@@ -208,8 +248,14 @@ export class TareasService {
         estado: "cerrada",
         resultado,
         cerradaEn: sql`CURRENT_TIMESTAMP`
-      }).where(and(eq(tareas.id, id), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
-      if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada");
+      }).where(and(
+        eq(tareas.id, id),
+        sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`,
+        // Un agente solo cierra la que sigue siendo suya: si se la
+        // reasignaron entre la lectura y este UPDATE, no la cierra (C2).
+        user.rol === "agente" ? eq(tareas.responsableId, user.id) : undefined
+      ));
+      if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada o ya no es tuya");
 
       await this.outboxService.enqueue(tx, {
         tipo: "tarea_cerrada",

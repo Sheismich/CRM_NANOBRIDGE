@@ -91,6 +91,9 @@ export async function darDeBajaPersona(tx: DrizzleTx, contactoId: number, origen
   return { prospectosEnBaja, tareasCanceladas };
 }
 
+// Code del 409 al crear a mano un seguimiento a una persona dada de baja.
+export const CODIGO_PERSONA_EN_BAJA = "PERSONA_EN_BAJA";
+
 /**
  * ¿Esta persona pidió la baja? Sí, si cualquiera de sus prospectos está en
  * baja. Un rebote NO cuenta (suprime un correo, pero no es una petición de
