@@ -177,11 +177,6 @@ aplica a mano:
 3. Regístrala como aplicada, igual que lo hace `apply-migrations.ts`:
    `INSERT INTO schema_migrations (version) VALUES ('<archivo>.sql');`
 
-**Siguiente deploy (Bloque A del plan de fixes, 2-oct-2026): trae la migración
-`024_respuestas_remitente.sql`** (una columna NULL en `respuestas`; MySQL 8 la agrega sin
-reescribir la tabla). Va **antes** del código: la API nueva escribe y lee
-`respuestas.remitente`, y sin la columna `POST /respuestas` y la cola de clasificación truenan.
-
 ### Qué está en producción
 
 Actualiza esta tabla en cada deploy.
@@ -192,6 +187,7 @@ Actualiza esta tabla en cada deploy.
 | 1-oct-2026 | `nanobridge-api-00009-jfk` | `ff9f3d3` | (sin migración) | Baja por link o spam de SendGrid = persona completa |
 | 1-oct-2026 | `nanobridge-api-00010-dq5` | `def4d07` | (sin migración) | "La baja manda": la baja cancela seguimientos y una clasificación posterior no la deshace |
 | 2-oct-2026 | `nanobridge-api-00011-6cg` | `def4d07` (misma imagen) | (sin migración) | Solo configuración: `TRUST_PROXY=true` (antes todos los usuarios compartían el límite de intentos de login, por la IP del proxy de Google) |
+| 2-oct-2026 | `nanobridge-api-00012-nrx` | `7ddf33a` | `024_respuestas_remitente.sql` | Bloque A de fixes: el correo manda en la identidad, la baja es de la persona y no se deshace, el CRM respeta la lista de supresión, spam de respuestas ignorado, remitente guardado; además /campanas y pausa = espera |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
