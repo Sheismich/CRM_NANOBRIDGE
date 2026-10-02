@@ -11,6 +11,10 @@ import type { CambiarEstadoCotizacionInput, CrearCotizacionInput, DatosCotizacio
 // obsoleta" (PLAN_CRM_DEFINITIVO.md #7) -- por eso 'obsoleta' no aparece
 // como destino de ninguna transición manual: solo nuevaVersion() la fija,
 // nunca cambiarEstado().
+export const CODIGO_COTIZACION_ACEPTADA = "COTIZACION_ACEPTADA";
+export const CODIGO_YA_HAY_COTIZACION_ACEPTADA = "YA_HAY_COTIZACION_ACEPTADA";
+export const CODIGO_OPORTUNIDAD_CERRADA = "OPORTUNIDAD_CERRADA";
+
 const TRANSICIONES: Record<string, string[]> = {
   borrador: ["enviada"],
   enviada: ["aceptada", "rechazada", "vencida"],
@@ -159,9 +163,24 @@ export class CotizacionesService {
     });
   }
 
+  // Bloquea la oportunidad hasta el commit y dice si sigue abierta (D2 del
+  // plan de fixes, 2-oct-2026): versionar, enviar o aceptar contra una
+  // oportunidad ya ganada o perdida, o de una empresa desactivada, la
+  // contradecía. El bloqueo además pone en fila dos aceptaciones al mismo
+  // tiempo de cotizaciones de la misma oportunidad.
+  private async oportunidadAbierta(tx: DrizzleTx, oportunidadId: number) {
+    const [op] = await tx.select({ cerrada: oportunidades.cerrada, empresaId: oportunidades.empresaId }).from(oportunidades).where(eq(oportunidades.id, oportunidadId)).limit(1).for("update");
+    if (!op || op.cerrada) return false;
+    const [empresa] = await tx.select({ id: empresas.id }).from(empresas).where(and(eq(empresas.id, op.empresaId), eq(empresas.activo, true))).limit(1);
+    return !!empresa;
+  }
+
   async nuevaVersion(user: CurrentUser, id: number, input: DatosCotizacionInput) {
     const actual = await this.obtenerScoped(user, id);
     if (actual.estado === "obsoleta") throw new HttpError(409, "No se puede versionar una cotización ya obsoleta");
+    // Versionar marca la anterior como obsoleta: con una aceptada se perdía
+    // el trato cerrado (D2).
+    if (actual.estado === "aceptada") throw new HttpError(409, "La cotización ya fue aceptada; no se versiona", CODIGO_COTIZACION_ACEPTADA);
 
     const contactoId = input.contactoId ?? actual.contactoId;
     if (contactoId) await this.validarContacto(actual.empresaId, contactoId);
@@ -179,7 +198,10 @@ export class CotizacionesService {
       // las dos solicitudes gana el marcado como obsoleta y continúa a
       // insertar la nueva versión (mismo patrón que TareasService.cerrar(),
       // hallazgo de code review, 11-sep-2026).
-      const [marcarObsoleta] = await tx.update(cotizaciones).set({ estado: "obsoleta" }).where(and(eq(cotizaciones.id, actual.id), ne(cotizaciones.estado, "obsoleta")));
+      if (!(await this.oportunidadAbierta(tx, actual.oportunidadId))) {
+        throw new HttpError(409, "La oportunidad ya está cerrada; no se crean versiones nuevas", CODIGO_OPORTUNIDAD_CERRADA);
+      }
+      const [marcarObsoleta] = await tx.update(cotizaciones).set({ estado: "obsoleta" }).where(and(eq(cotizaciones.id, actual.id), ne(cotizaciones.estado, "obsoleta"), ne(cotizaciones.estado, "aceptada")));
       if (marcarObsoleta.affectedRows === 0) {
         throw new HttpError(409, "La cotización ya fue versionada o marcada obsoleta por otra solicitud");
       }
@@ -285,6 +307,20 @@ export class CotizacionesService {
       // concurrentes ya no pueden aplicar ambos una transición mutuamente
       // excluyente (ej. aceptada y rechazada) sobre el mismo 'enviada'
       // (hallazgo de code review, 11-sep-2026).
+      // Enviar o aceptar solo con la oportunidad abierta; rechazar o marcar
+      // vencida sí, es limpieza (D2).
+      if ((input.estado === "enviada" || input.estado === "aceptada") && !(await this.oportunidadAbierta(tx, cotizacion.oportunidadId))) {
+        throw new HttpError(409, "La oportunidad ya está cerrada", CODIGO_OPORTUNIDAD_CERRADA);
+      }
+      // Una sola aceptada por oportunidad. FOR UPDATE: lee lo último ya
+      // confirmado (una lectura normal dentro de la transacción podría no
+      // ver la aceptación que otra acaba de guardar).
+      if (input.estado === "aceptada") {
+        const [otra] = await tx.select({ id: cotizaciones.id }).from(cotizaciones)
+          .where(and(eq(cotizaciones.oportunidadId, cotizacion.oportunidadId), eq(cotizaciones.estado, "aceptada"), ne(cotizaciones.id, id)))
+          .limit(1).for("update");
+        if (otra) throw new HttpError(409, "Esta oportunidad ya tiene una cotización aceptada", CODIGO_YA_HAY_COTIZACION_ACEPTADA);
+      }
       const set = input.estado === "enviada" ? { estado: input.estado, fechaEnvio: sql`CURDATE()` } : { estado: input.estado };
       const [result] = await tx.update(cotizaciones).set(set).where(and(eq(cotizaciones.id, id), eq(cotizaciones.estado, cotizacion.estado)));
       if (result.affectedRows === 0) {

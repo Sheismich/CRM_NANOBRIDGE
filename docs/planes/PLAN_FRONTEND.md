@@ -215,6 +215,8 @@ Avance:
       - La ficha rechaza ids que no son enteros positivos (`/empresas/abc`) sin llamar a la API.
       - `frontend/firebase.json` trae las cabeceras: `Content-Security-Policy` (solo el mismo origen, más Google Fonts), `X-Frame-Options: DENY`, `Referrer-Policy`, `X-Content-Type-Options: nosniff` y HSTS.
   - **Importación CSV (C4) — sin cambios obligatorios:** la plantilla ya trae exactamente las columnas válidas; un CSV con columnas desconocidas o repetidas responde 400 con un mensaje que se muestra tal cual. Una fila duplicada contra un contacto de otro agente llega a ese agente con `match_contacto_id: null` y el aviso en `errores` (la pantalla ya oculta "Usar contacto existente" y muestra el motivo). `CONTACTO_DE_OTRO_AGENTE` e `IMPORTACION_VENCIDA` (409) se muestran tal cual.
+  - **Pendiente — fecha de actividades (D4):** `POST /actividades` solo acepta `ocurridaEn` de los últimos 7 días y no futura (400 si no). En `NuevaActividadForm` poner `min`/`max` al campo `datetime-local` con ese rango.
+  - **Cotizaciones (D2):** nuevos 409 con `code`: `COTIZACION_ACEPTADA` (no se versiona una aceptada; ocultar "Nueva versión" en ese estado), `YA_HAY_COTIZACION_ACEPTADA` (solo una aceptada por oportunidad) y `OPORTUNIDAD_CERRADA` (con la oportunidad ganada o perdida no se versiona, envía ni acepta; rechazar sí). Mostrar el mensaje basta.
   - **Pendiente — publicar el front:**
     - `frontend/firebase.json` ya existe: sirve `dist`, hace el rewrite de `/api/**` al servicio de Cloud Run `nanobridge-api` (`us-central1`) y manda todo lo demás a `index.html`.
     - Falta lo siguiente:
