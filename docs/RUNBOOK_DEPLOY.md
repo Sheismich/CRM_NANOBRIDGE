@@ -200,6 +200,7 @@ Actualiza esta tabla en cada deploy.
 | 1-oct-2026 | `nanobridge-api-00010-dq5` | `def4d07` | (sin migración) | "La baja manda": la baja cancela seguimientos y una clasificación posterior no la deshace |
 | 2-oct-2026 | `nanobridge-api-00011-6cg` | `def4d07` (misma imagen) | (sin migración) | Solo configuración: `TRUST_PROXY=true` (antes todos los usuarios compartían el límite de intentos de login, por la IP del proxy de Google) |
 | 2-oct-2026 | `nanobridge-api-00012-nrx` | `7ddf33a` | `024_respuestas_remitente.sql` | Bloque A de fixes: el correo manda en la identidad, la baja es de la persona y no se deshace, el CRM respeta la lista de supresión, spam de respuestas ignorado, remitente guardado; además /campanas y pausa = espera |
+| 2-oct-2026 | `nanobridge-api-00013-kxh` | `270caf1` | `026_envios_indice_ventana.sql` | Bloque B de fixes: freno de login por cuenta (025), sesiones y reactivar usuario, errores 4xx en vez de 500, outbox que no se atora, trabajos diarios por endpoint (PT5), descargas con sesión, índice de ventanas (026), campañas sin fecha de fin pasada, días hábiles en hora de México, CSRF, Node 22 sin root |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
