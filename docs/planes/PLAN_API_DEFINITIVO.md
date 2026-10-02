@@ -82,6 +82,24 @@ Crear grupos REST para:
 - `/catalogos` (lectura para la UI del CRM; distinto del endpoint de automatización "Catálogos", que usa `X-API-Key`)
 - `/usuarios`
 - `/auditoria`
+- `/campanas` (1-oct-2026). Reglas:
+  - Crear, editar, activar, pausar y finalizar: solo administrador y supervisor. Los agentes solo
+    leen.
+  - Nace en `borrador` y solo con canal correo.
+  - Las transiciones están en un mapa único. Una transición inválida responde 409
+    `TRANSICION_CAMPANA_INVALIDA`; editar una finalizada, 409 `CAMPANA_FINALIZADA`; activar una
+    con la fecha de fin pasada, 409 `CAMPANA_VENCIDA`.
+  - La lista trae `prospectos`, `activa_hoy` y `motivo`, con la misma regla que PT1 y PT4
+    (`src/shared/campana-vigente.ts`, fechas de México).
+  - Pausada o aún sin empezar significa **en espera**: sus recordatorios no se cancelan y PT1 no
+    cierra a sus prospectos.
+
+**Contactos y la lista de supresión (2-oct-2026).** Todas las altas de medios (CRM, CSV y n8n)
+pasan por `insertarMediosContacto`. Si el valor está en `lista_supresion`, o la persona está en
+baja, el medio nace en `no_contactar`. Además:
+- Cambiar o borrar un medio en `no_contactar` responde 409 `MEDIO_SUPRIMIDO`.
+- Confirmar una fila de importación responde `medios_suprimidos`.
+- La identidad de las personas sigue "el correo manda" (`src/shared/identidad.ts`).
 
 CORS: el frontend CRM (React) vive en un origen distinto al backend; configurar `Access-Control-Allow-Origin` restringido a ese origen y cookies de sesión con `SameSite=Lax` o `None` + `Secure` según el despliegue final.
 

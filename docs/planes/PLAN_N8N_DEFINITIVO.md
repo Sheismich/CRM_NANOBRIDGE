@@ -132,6 +132,21 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
   de mandar otro. No hay que construir un job de "recordatorios" aparte de "ventanas vencidas".
 - Procesar respuestas tardías: crear tarea comercial, no reiniciar automáticamente el outbound.
 
+### Respuestas a direcciones que no son nuestras (2-oct-2026)
+
+Inbound Parse recibe correo para **cualquier** dirección del subdominio de respuestas, y antes el
+spam a `info@`, `ventas@`, etc. creaba una tarea "Respuesta no identificada" por correo. Ahora
+`POST /respuestas` funciona así:
+- **Sin la forma** `r+<id>.<firma>@…`: responde 200 con `ignorada: "direccion_no_valida"` y no
+  crea tarea.
+- **Con la forma pero firma inválida:** sigue creando "Respuesta no identificada", porque puede
+  ser una respuesta real alterada.
+- **El `remitente`** que manda PT2 ahora se guarda en `respuestas.remitente` (migración 024) y
+  la cola de clasificación lo muestra. Así se ve quién escribió de verdad si el prospecto reenvió
+  el correo.
+
+`POST /supresion` con `tipo: "correo"` exige un correo válido (400 si no).
+
 ### Flujo de recordatorios (correos 2 y 3): contrato con la API (30-sep-2026)
 
 **`GET /automatizacion/envios/vencidas`.** Cada fila de `data` trae lo necesario para mandar el
@@ -411,6 +426,24 @@ Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no
 - Cinco días hábiles de espera entre flujo y seguimiento (también por persona).
 - WhatsApp permanece apagado hasta contar con proveedor y reglas aprobadas.
 - Correo entra por webhook del proveedor; no usar polling.
+- **Quién es la misma persona: "el correo manda"** (decidido 2-oct-2026, regla en
+  `src/shared/identidad.ts`, la usan n8n y el CRM).
+  - Si el prospecto trae correo, solo el correo identifica. Mismo teléfono con otro correo (el
+    conmutador de una empresa) es **otra persona**, en la empresa del dueño de ese teléfono, y el
+    teléfono no se le vuelve a guardar.
+  - Sin correo, identifica el teléfono, guardado como `telefono` o como `whatsapp`.
+  - Antes era "correo o teléfono, el primero que coincida", y dos personas del mismo conmutador
+    quedaban fundidas en una. `POST /automatizacion/prospectos` responde además
+    `empresa_reutilizada`.
+- **La baja es de la persona y no se deshace** (2-oct-2026, ver B2 "La baja manda").
+  - Una baja, por respuesta o por evento de SendGrid, pasa a `baja` a **todos** los prospectos de
+    la persona, y un prospecto nuevo de alguien dado de baja **nace en baja**.
+  - `POST /prospectos/estado` y `POST /validaciones` no tocan a un prospecto en baja. Responden
+    200 con `en_baja: true`; `validaciones` responde además `valido: false` con el motivo
+    `prospecto_en_baja`, así PT1 toma su rama de exclusión.
+  - `POST /tareas` no crea seguimientos para alguien en baja: responde 200 con `id: null` y
+    `omitida: "prospecto_en_baja"`.
+  - Ningún caso es un error, así que nada cae al Error Workflow.
 
 ## B3 Webhook de reingreso
 

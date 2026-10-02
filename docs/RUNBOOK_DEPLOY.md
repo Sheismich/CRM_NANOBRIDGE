@@ -177,6 +177,11 @@ aplica a mano:
 3. Regístrala como aplicada, igual que lo hace `apply-migrations.ts`:
    `INSERT INTO schema_migrations (version) VALUES ('<archivo>.sql');`
 
+**Siguiente deploy (Bloque A del plan de fixes, 2-oct-2026): trae la migración
+`024_respuestas_remitente.sql`** (una columna NULL en `respuestas`; MySQL 8 la agrega sin
+reescribir la tabla). Va **antes** del código: la API nueva escribe y lee
+`respuestas.remitente`, y sin la columna `POST /respuestas` y la cola de clasificación truenan.
+
 ### Qué está en producción
 
 Actualiza esta tabla en cada deploy.

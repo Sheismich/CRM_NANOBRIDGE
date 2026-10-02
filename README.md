@@ -161,6 +161,35 @@ Siguiente prioridad del backlog (`MATRICES_Y_BACKLOG_DEFINITIVO.md`, "Prioridad 
 
 Probado de extremo a extremo con un receptor HTTP de prueba haciendo de n8n: cierre de tarea → evento entregado y marcado `enviado`; clasificación de prospecto → mismo flujo con `entidad_tipo=prospecto`; receptor caído → 3 reintentos con el backoff exacto (5 s/30 s/120 s), evento marcado `fallido` y fila creada en `procesos_fallidos`; `POST /reintentar` con el receptor de vuelta → el evento se reenvía y queda `enviado`. También roles: un agente que cierra sesión ve la bandeja vacía si las tareas son de otro responsable, recibe 404 al pedir una tarea ajena por id, y 403 en `/eventos-pendientes`.
 
+## Campañas (1-oct-2026)
+
+`/api/v1/campanas`:
+
+| Endpoint | Quién | Qué hace |
+|---|---|---|
+| `GET /` y `GET /:id` | todos | Lista o detalle, con `prospectos` (cuántos), `activa_hoy` y `motivo` |
+| `POST /` | admin, supervisor | Crea en `borrador`. Solo canal correo (WhatsApp → 400); fechas al revés → 400 |
+| `PATCH /:id` | admin, supervisor | Nombre y fechas (`null` quita la fecha). Una finalizada → 409 `CAMPANA_FINALIZADA` |
+| `POST /:id/activar` | admin, supervisor | Borrador o pausada → activa. Fecha de fin pasada → 409 `CAMPANA_VENCIDA` |
+| `POST /:id/pausar` | admin, supervisor | Activa → pausada |
+| `POST /:id/finalizar` | admin, supervisor | Es definitivo |
+
+- Las transiciones están en un solo mapa; las inválidas responden 409 `TRANSICION_CAMPANA_INVALIDA`.
+- Cada acción queda en la auditoría, con una guarda contra dos clics simultáneos.
+- **Regla "¿manda hoy?"** (`shared/campana-vigente.ts`, la misma que usan PT1 y PT4, con fechas de México):
+  - **activa:** ya empezó y no ha terminado;
+  - **en espera:** pausada o aún sin empezar; sus recordatorios esperan y PT1 no cierra a sus prospectos;
+  - **inactiva:** finalizada, en borrador o con la fecha de fin pasada.
+
+## Contactos y lista de supresión (2-oct-2026)
+
+- **Todas las altas de medios** (empresas, contactos, CSV, alta manual y n8n) consultan `lista_supresion`. Si el valor está suprimido, o la persona está en baja, el medio nace en `no_contactar`. Un teléfono suprimido como WhatsApp también bloquea el mismo número como teléfono.
+- **Editar un contacto:** cambiar o borrar un medio en `no_contactar` responde 409 con `code: "MEDIO_SUPRIMIDO"`. Un valor nuevo que esté suprimido se guarda bloqueado. Una persona dada de baja sigue siendo editable: la regla es "al menos un medio no obsoleto".
+- **La baja es de la persona y no se deshace:**
+  - una baja (por respuesta o por SendGrid) pasa a `baja` a todos sus prospectos y cancela sus seguimientos;
+  - un prospecto nuevo suyo nace en `baja`;
+  - ninguna clasificación, validación o cambio de estado lo saca de ahí.
+
 ## Probado de extremo a extremo
 
 Igual que las versiones anteriores, no me quedé solo en que compilara: instalé MySQL real en el entorno de build, corrí `npm run migrate`, y con el build compilado (`npm run build` + `node dist/main.js`) probé en caliente: `GET /health`, un 404 en una ruta cualquiera y en una ruta bajo `/api/v1`, bootstrap de la cuenta admin, `GET /api/v1/auth/me`, crear una empresa con un contacto (dos medios de contacto, en una transacción), listar empresas, consultarla por id con el join a contactos/medios, una empresa inexistente (404), bootstrap duplicado (409), login y logout. Todo respondió exactamente igual que en las versiones en Express y en Next.js.
@@ -171,7 +200,7 @@ Igual que las versiones anteriores, no me quedé solo en que compilara: instalé
 
 - **Diferencia con `/api/v1/automatizacion/prospectos`**: ese endpoint es para n8n (`X-API-Key`, un registro confiable por evento de automatización). Este módulo es para un usuario de sesión dando de alta prospectos a mano o por lote — nunca escribe directo en `empresas`/`contactos`/`prospectos`, siempre pasa primero por un borrador.
 - **Alta manual** (`POST /api/v1/prospectos`): una fila = un lote de 1. Reusa el mismo camino de validación y deduplicación que la importación CSV en vez de tener su propia copia.
-- **Importación CSV** (`POST /api/v1/prospectos/importaciones`, multipart, campo `archivo`): parsea el CSV (parser RFC 4180 propio en `shared/csv.ts`, sin dependencia nueva), valida cada fila (correo, teléfono, giro, tamaño, canal) y deduplica — primero contra otras filas del mismo archivo, luego contra `medios_contacto` en BD, por correo normalizado y después por teléfono normalizado. Cada fila queda en `borradores_captura` como `pendiente_revision`, `duplicado` (con `match_contacto_id` si coincidió con un contacto real) o `rechazado` (con el detalle en `errores`) — ninguna fila se descarta en silencio, incluidas las que no traen ni nombre de empresa ni de contacto.
+- **Importación CSV** (`POST /api/v1/prospectos/importaciones`, multipart, campo `archivo`): parsea el CSV (parser RFC 4180 propio en `shared/csv.ts`, sin dependencia nueva), valida cada fila (correo, teléfono, giro, tamaño, canal) y deduplica — primero contra otras filas del mismo archivo, luego contra `medios_contacto` en BD, con la regla **"el correo manda"** (`shared/identidad.ts`, 2-oct-2026): con correo solo identifica el correo (mismo conmutador + otro correo = otra persona); sin correo, el teléfono (como teléfono o WhatsApp). Al confirmar se revisa la identidad otra vez, y los medios que estén en `lista_supresion` nacen en `no_contactar` (la respuesta los lista en `medios_suprimidos`). Cada fila queda en `borradores_captura` como `pendiente_revision`, `duplicado` (con `match_contacto_id` si coincidió con un contacto real) o `rechazado` (con el detalle en `errores`) — ninguna fila se descarta en silencio, incluidas las que no traen ni nombre de empresa ni de contacto.
 - **Lotes** (`GET /api/v1/prospectos/importaciones`, agregado 28-sep-2026): las importaciones hechas, más reciente primero, con el conteo de filas por estado. Sin él, el `lote_id` que devuelve la importación era la única forma de volver a un lote. No incluye las altas manuales (también son lotes de una fila, con fuente `manual`). Un agente solo ve sus propios lotes.
 - **Revisión** (`GET /api/v1/prospectos/importaciones/:loteId`): lista las filas del lote con su estado.
 - **Confirmación** (`POST .../filas/:id/confirmar`, `POST .../confirmar-todos`, `POST .../filas/:id/rechazar`): promueve un borrador a empresa+contacto+prospecto real (o rechaza). Confirmar una fila `duplicado` exige `usarContactoExistente:true` explícito — "la razón social nunca fusiona prospectos automáticamente" (PLAN_CRM_DEFINITIVO.md) aplicado aquí a nivel de contacto. `confirmar-todos` solo toca las `pendiente_revision` de un lote; las `duplicado` siempre se deciden una por una.
