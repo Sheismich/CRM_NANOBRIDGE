@@ -15,6 +15,12 @@ import { env } from "../config/env.js";
 // nunca a esperar esos 120s (hallazgo de code review, 14-sep-2026).
 const RETRY_BACKOFF_MS = [5_000, 30_000, 120_000];
 const BATCH_SIZE = 20;
+// Cuánto dura el reclamo de un evento 'procesando' antes de que otra
+// corrida lo pueda volver a tomar (B4, 2-oct-2026). Muy por encima de lo que
+// tarda un lote completo: cada envío tiene ENVIO_TIMEOUT_MS de tope.
+const RECLAMO_SEGUNDOS = 120;
+// Tope por envío a n8n: antes no había, y un n8n colgado trababa el lote.
+const ENVIO_TIMEOUT_MS = 10_000;
 
 /**
  * Despachador del patrón outbox: entrega asíncronamente a n8n los eventos
@@ -43,19 +49,32 @@ export class OutboxDispatcherService {
       // mismo evento dos veces (mismo patrón que se corrigió en
       // listarVentanasVencidas -- hallazgo de code review, 10-sep-2026).
       const pending = await this.db.transaction(async (tx) => {
+        // También toma los 'procesando' cuyo reclamo ya caducó: si la
+        // instancia que los reclamó se apagó a medio envío (Cloud Run lo
+        // hace solo), antes se quedaban atorados para siempre (B4 del plan
+        // de fixes, 2-oct-2026). Si el envío sí había llegado a n8n, n8n lo
+        // recibe otra vez y lo descarta por evento_uuid.
         const rows = await tx
           .select()
           .from(eventosPendientes)
-          .where(and(
-            eq(eventosPendientes.estado, "pendiente"),
-            or(isNull(eventosPendientes.proximoIntentoEn), lte(eventosPendientes.proximoIntentoEn, sql`CURRENT_TIMESTAMP`))
+          .where(or(
+            and(
+              eq(eventosPendientes.estado, "pendiente"),
+              or(isNull(eventosPendientes.proximoIntentoEn), lte(eventosPendientes.proximoIntentoEn, sql`CURRENT_TIMESTAMP`))
+            ),
+            and(eq(eventosPendientes.estado, "procesando"), lte(eventosPendientes.proximoIntentoEn, sql`CURRENT_TIMESTAMP`))
           ))
           .limit(BATCH_SIZE)
           .for("update", { skipLocked: true });
 
         if (rows.length === 0) return [];
 
-        await tx.update(eventosPendientes).set({ estado: "procesando" }).where(inArray(eventosPendientes.id, rows.map((row) => row.id)));
+        // El reclamo caduca en RECLAMO_SEGUNDOS: mientras tanto ninguna otra
+        // corrida lo toma; si nadie lo cierra antes, vuelve a la fila.
+        await tx.update(eventosPendientes).set({
+          estado: "procesando",
+          proximoIntentoEn: sql`DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${RECLAMO_SEGUNDOS} SECOND)`
+        }).where(inArray(eventosPendientes.id, rows.map((row) => row.id)));
         return rows;
       });
 
@@ -103,6 +122,7 @@ export class OutboxDispatcherService {
 
     const response = await fetch(env.N8N_WEBHOOK_URL, {
       method: "POST",
+      signal: AbortSignal.timeout(ENVIO_TIMEOUT_MS),
       headers: { "Content-Type": "application/json", "X-API-Key": env.WEBHOOK_ENTRADA_API_KEY },
       body: JSON.stringify({
         evento_uuid: event.eventoUuid,

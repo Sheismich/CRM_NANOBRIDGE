@@ -53,7 +53,12 @@ const schema = z.object({
   // que GCS_BUCKET/GCS_PROJECT_ID/GCS_KEY_FILE más abajo; sin esto, copiar
   // .env.example tal cual tumbaba el arranque entero con un ZodError en vez
   // de tratarse como "no configurado" (hallazgo de auditoría, 14-sep-2026).
-  N8N_WEBHOOK_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
+  // https obligatorio salvo en localhost (desarrollo): el despachador manda
+  // la API key en cada envío y no debe viajar sin cifrar (B4, 2-oct-2026).
+  N8N_WEBHOOK_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().refine((url) => {
+    const { protocol, hostname } = new URL(url);
+    return protocol === "https:" || (protocol === "http:" && ["localhost", "127.0.0.1"].includes(hostname));
+  }, { message: "N8N_WEBHOOK_URL debe ser https (http solo para localhost)" }).optional()),
   OUTBOX_DISPATCH_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
   // Expediente documental (PLAN_CRM_DEFINITIVO.md #8). STORAGE_DRIVER
   // decide en runtime qué StorageService implementa
