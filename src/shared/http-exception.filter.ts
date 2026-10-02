@@ -16,6 +16,23 @@ import { HttpError } from "./http-error.js";
  *   la de Next.js; se corrige aquí también.
  * - Cualquier otro error -> 500 genérico.
  */
+const MENSAJE_POR_STATUS: Record<number, string> = {
+  400: "Solicitud inválida",
+  413: "La solicitud es demasiado grande",
+  415: "Tipo de contenido no soportado"
+};
+
+// El status 4xx de un error del cliente, venga de Nest o de Express; null
+// si no es uno (entonces es una falla del servidor).
+function statusDeErrorDelCliente(exception: unknown): number | null {
+  const status = exception instanceof HttpException
+    ? exception.getStatus()
+    : typeof exception === "object" && exception !== null
+      ? Number((exception as { status?: unknown; statusCode?: unknown }).status ?? (exception as { statusCode?: unknown }).statusCode)
+      : NaN;
+  return Number.isInteger(status) && status >= 400 && status < 500 ? status : null;
+}
+
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
@@ -48,6 +65,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException && exception.getStatus() === HttpStatus.NOT_FOUND) {
       response.status(404).json({ error: "not_found", message: "Ruta no encontrada" });
+      return;
+    }
+
+    // Errores del CLIENTE que traen su propio status 4xx: HttpException de
+    // Nest (p. ej. multer con un campo equivocado) y los de Express
+    // (body-parser: JSON mal formado, body de más de 1 MB). Antes caían al
+    // 500 de abajo y se registraban como fallas del servidor (B3 del plan
+    // de fixes, 2-oct-2026). El mensaje es genérico, sin detalles internos.
+    const statusCliente = statusDeErrorDelCliente(exception);
+    if (statusCliente !== null) {
+      response.status(statusCliente).json({ error: "request_error", message: MENSAJE_POR_STATUS[statusCliente] ?? "Solicitud inválida" });
       return;
     }
 

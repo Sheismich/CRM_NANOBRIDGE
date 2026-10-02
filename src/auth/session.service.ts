@@ -10,6 +10,15 @@ import { env } from "../config/env.js";
 export class SessionService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
 
+  // El token de sesión de la petición, solo si es texto. cookie-parser
+  // convierte una cookie "j:{...}" en objeto, y hashToken(objeto) tronaba
+  // como 500 (B3 del plan de fixes, 2-oct-2026): ahora cuenta como "sin
+  // sesión".
+  tokenDeLaPeticion(request: { cookies?: Record<string, unknown> }): string | undefined {
+    const valor = request.cookies?.[env.SESSION_COOKIE_NAME];
+    return typeof valor === "string" && valor.length > 0 ? valor : undefined;
+  }
+
   hashToken(token: string) {
     return createHash("sha256").update(token).digest("hex");
   }

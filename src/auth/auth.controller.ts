@@ -7,7 +7,6 @@ import { RateLimitGuard } from "./guards/rate-limit.guard.js";
 import { CurrentUser } from "./decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "./current-user.type.js";
 import { bootstrapSchema, credentialsSchema } from "./dto/credentials.schema.js";
-import { env } from "../config/env.js";
 
 const QUINCE_MINUTOS_MS = 15 * 60 * 1000;
 
@@ -67,7 +66,7 @@ export class AuthController {
   @Post("logout")
   @HttpCode(204)
   async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
-    await this.sessionService.deleteSession(request.cookies?.[env.SESSION_COOKIE_NAME] as string | undefined);
+    await this.sessionService.deleteSession(this.sessionService.tokenDeLaPeticion(request));
     this.sessionService.clearSessionCookie(response);
   }
 

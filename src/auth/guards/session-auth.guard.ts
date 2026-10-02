@@ -3,7 +3,6 @@ import type { Request } from "express";
 import { and, eq, gt, ne, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../../database/drizzle.constants.js";
 import { roles, sesiones, usuarios } from "../../database/schema.js";
-import { env } from "../../config/env.js";
 import { HttpError } from "../../shared/http-error.js";
 import { SessionService } from "../session.service.js";
 import type { CurrentUser } from "../current-user.type.js";
@@ -23,7 +22,7 @@ export class SessionAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request & { currentUser?: CurrentUser }>();
-    const token = request.cookies?.[env.SESSION_COOKIE_NAME] as string | undefined;
+    const token = this.sessionService.tokenDeLaPeticion(request);
     if (!token) throw new HttpError(401, "Sesión requerida");
 
     const rows = await this.db
