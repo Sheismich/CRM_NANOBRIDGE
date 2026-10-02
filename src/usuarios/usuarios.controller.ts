@@ -50,6 +50,13 @@ export class UsuariosController {
     return this.usuariosService.update(actor, id, input);
   }
 
+  @Post(":id/reactivar")
+  @HttpCode(200)
+  @Roles("administrador")
+  reactivate(@Param("id") idParam: string, @CurrentUser() actor: CurrentUserType) {
+    return this.usuariosService.reactivate(actor, idParamSchema.parse(idParam));
+  }
+
   @Delete(":id")
   @HttpCode(204)
   @Roles("administrador")

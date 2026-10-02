@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, count, eq, ne } from "drizzle-orm";
+import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, roles, usuarios } from "../database/schema.js";
+import { auditoria, roles, sesiones, tareas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { buildAntes, compactConditions } from "../shared/drizzle-utils.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
@@ -202,6 +202,13 @@ export class UsuariosService {
         throw error;
       }
 
+      // Contraseña nueva = se cierran todas sus sesiones (B2 del plan de
+      // fixes, 2-oct-2026): antes una cookie robada seguía sirviendo hasta
+      // que expiraba, aunque ya se hubiera cambiado la contraseña.
+      if (nuevoPasswordHash !== undefined) {
+        await tx.delete(sesiones).where(eq(sesiones.usuarioId, id));
+      }
+
       await tx.insert(auditoria).values({
         usuarioId: actor.id,
         entidad: "usuario",
@@ -212,6 +219,30 @@ export class UsuariosService {
       });
     });
 
+    return this.get(id);
+  }
+
+  // Restringido a administrador. Antes desactivar era para siempre: el
+  // correo quedaba ocupado (UNIQUE) y no había forma de volver a dejar entrar
+  // a alguien desactivado por error (B2 del plan de fixes, 2-oct-2026). Sus
+  // tareas no regresan solas: al desactivarlo pasaron a "Sin asignar" y un
+  // supervisor las reparte.
+  async reactivate(actor: CurrentUser, id: number) {
+    await this.db.transaction(async (tx) => {
+      const [existing] = await tx.select({ id: usuarios.id, activo: usuarios.activo }).from(usuarios).where(eq(usuarios.id, id)).limit(1).for("update");
+      if (!existing) throw new HttpError(404, "Usuario no encontrado");
+      if (existing.activo) throw new HttpError(409, "El usuario ya está activo");
+
+      await tx.update(usuarios).set({ activo: true }).where(eq(usuarios.id, id));
+      await tx.insert(auditoria).values({
+        usuarioId: actor.id,
+        entidad: "usuario",
+        entidadId: id,
+        accion: "reactivar",
+        antes: { activo: false },
+        despues: { activo: true }
+      });
+    });
     return this.get(id);
   }
 
@@ -253,13 +284,27 @@ export class UsuariosService {
         throw new HttpError(409, "El usuario ya fue desactivado por otra solicitud");
       }
 
+      // Sus sesiones se borran (ya no podían entrar, pero las filas quedaban
+      // vivas) y sus tareas abiertas pasan a "Sin asignar": antes se quedaban
+      // a su nombre y nadie las veía (B2 del plan de fixes, 2-oct-2026).
+      await tx.delete(sesiones).where(eq(sesiones.usuarioId, id));
+      const abiertas = await tx
+        .select({ id: tareas.id })
+        .from(tareas)
+        .where(and(eq(tareas.responsableId, id), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`))
+        .for("update");
+      const tareasLiberadas = abiertas.map((t) => t.id);
+      if (tareasLiberadas.length > 0) {
+        await tx.update(tareas).set({ responsableId: null }).where(inArray(tareas.id, tareasLiberadas));
+      }
+
       await tx.insert(auditoria).values({
         usuarioId: actor.id,
         entidad: "usuario",
         entidadId: id,
         accion: "desactivar",
         antes: { activo: true },
-        despues: { activo: false }
+        despues: { activo: false, tareas_liberadas: tareasLiberadas }
       });
     });
   }
