@@ -20,25 +20,51 @@ function desfaseMx(instante: Date): string {
   return desfase === "" ? "+00:00" : desfase;
 }
 
+// El día de calendario de México en `instante`, como fecha UTC "de
+// mentiras" a medianoche (solo importan año, mes y día): así la aritmética
+// de calendario no depende de la zona del servidor.
+function calendarioMx(instante: Date): Date {
+  const [anio, mes, dia] = fechaMx(instante).split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(anio, mes - 1, dia));
+}
+
+// Avanza `fecha` (de calendarioMx) `dias` días hábiles: solo brinca sábado
+// y domingo; no conoce días festivos (16-sep, 20-nov, 25-dic...). Si hace
+// falta, va una tabla de festivos.
+function avanzarDiasHabiles(fecha: Date, dias: number): Date {
+  const result = new Date(fecha);
+  let sumados = 0;
+  while (sumados < dias) {
+    result.setUTCDate(result.getUTCDate() + 1);
+    if (result.getUTCDay() !== 0 && result.getUTCDay() !== 6) sumados++;
+  }
+  return result;
+}
+
+/**
+ * `ahora` + `dias` días hábiles del calendario de México, a la misma hora
+ * (B8 del plan de fixes, 2-oct-2026). Es la ventana de espera entre envíos
+ * ("cinco días hábiles", PLAN_N8N_DEFINITIVO.md). Antes se contaba con el
+ * reloj del servidor (UTC en Cloud Run): un envío del viernes 7 pm en
+ * México ya era sábado y la ventana vencía el jueves siguiente.
+ *
+ * Se suman días completos de 24 h: México no cambia de horario desde 2022,
+ * así que la hora en México queda igual.
+ */
+export function sumarDiasHabilesMx(ahora: Date, dias: number): Date {
+  const inicio = calendarioMx(ahora);
+  const diasCalendario = Math.round((avanzarDiasHabiles(inicio, dias).getTime() - inicio.getTime()) / 86_400_000);
+  return new Date(ahora.getTime() + diasCalendario * 86_400_000);
+}
+
 /**
  * Fin (23:59:59, hora de México) del siguiente día hábil después de
  * `ahora`, como instante UTC -- así se guarda y así lo compara la alerta de
  * SLA (fecha_limite < CURRENT_TIMESTAMP). Un jueves a las 7 pm en México ya
  * es viernes en UTC: contar en UTC daba lunes en vez de viernes.
- *
- * Limitación: solo brinca sábado y domingo; no conoce días festivos
- * (16-sep, 20-nov, 25-dic...). Si hace falta, va una tabla de festivos.
  */
 export function finSiguienteDiaHabilMx(ahora: Date): Date {
-  const [anio, mes, dia] = formatoFecha.format(ahora).split("-").map(Number) as [number, number, number];
-  // Aritmética de calendario sobre una fecha UTC "de mentiras" (solo
-  // importan año, mes y día), para no depender de la zona del servidor.
-  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
-  do {
-    fecha.setUTCDate(fecha.getUTCDate() + 1);
-  } while (fecha.getUTCDay() === 0 || fecha.getUTCDay() === 6);
-
-  const iso = fecha.toISOString().slice(0, 10);
+  const iso = avanzarDiasHabiles(calendarioMx(ahora), 1).toISOString().slice(0, 10);
   // Desfase a mediodía de ese día: México ya no cambia de horario desde
   // 2022, pero así sigue siendo correcto si eso cambiara.
   return new Date(`${iso}T23:59:59${desfaseMx(new Date(`${iso}T18:00:00Z`))}`);

@@ -423,7 +423,8 @@ Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no
   persona reingresa al flujo de ingesta, sus envíos anteriores cuentan. Tras **6 meses sin
   ningún contacto** puede arrancar un ciclo nuevo de 3. Lo aplica la API en
   `envios/verificacion`, `POST /envios` y `envios/vencidas`; n8n no necesita lógica extra.
-- Cinco días hábiles de espera entre flujo y seguimiento (también por persona).
+- Cinco días hábiles de espera entre flujo y seguimiento (también por persona). Se cuentan en el
+  calendario de México, a la misma hora del envío (sin festivos todavía).
 - WhatsApp permanece apagado hasta contar con proveedor y reglas aprobadas.
 - Correo entra por webhook del proveedor; no usar polling.
 - **Quién es la misma persona: "el correo manda"** (decidido 2-oct-2026, regla en

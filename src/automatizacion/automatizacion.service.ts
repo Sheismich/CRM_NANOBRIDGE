@@ -11,7 +11,7 @@ import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto 
 import { darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
-import { fechaMx } from "../shared/dia-habil.js";
+import { fechaMx, sumarDiasHabilesMx } from "../shared/dia-habil.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo, tieneFormaDeReplyTo } from "../shared/reply-to.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
@@ -56,20 +56,6 @@ type DatosRecordatorio = {
 function sumarMeses(fecha: Date, meses: number): Date {
   const result = new Date(fecha);
   result.setMonth(result.getMonth() + meses);
-  return result;
-}
-
-// Política de contactos (PLAN_N8N_DEFINITIVO.md): "cinco días hábiles de
-// espera" entre un envío y el siguiente. Solo descuenta sábado/domingo —
-// no hay calendario de festivos definido en ningún plan todavía.
-function addBusinessDays(start: Date, days: number): Date {
-  const result = new Date(start);
-  let added = 0;
-  while (added < days) {
-    result.setDate(result.getDate() + 1);
-    const day = result.getDay();
-    if (day !== 0 && day !== 6) added++;
-  }
   return result;
 }
 
@@ -683,7 +669,9 @@ export class AutomatizacionService {
     const [prospecto] = await this.db.select({ id: prospectos.id, contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
 
-    const ventanaVenceEn = addBusinessDays(new Date(), 5);
+    // "Cinco días hábiles de espera" (PLAN_N8N_DEFINITIVO.md), en el
+    // calendario de México.
+    const ventanaVenceEn = sumarDiasHabilesMx(new Date(), 5);
 
     // Reintento acotado: envios tiene UNIQUE(prospecto_id, canal,
     // numero_contacto) (migración 011), así que si otra llamada
