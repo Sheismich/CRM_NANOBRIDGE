@@ -4,7 +4,7 @@ import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.con
 import { auditoria, contactos, empresas, mediosContacto } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { buildAntes } from "../shared/drizzle-utils.js";
-import { insertarMediosContacto, buildMedioCandidatos } from "../shared/medios-contacto.js";
+import { insertarMediosContacto, buildMedioCandidatos, estadoInicialDeMedio, CODIGO_MEDIO_SUPRIMIDO } from "../shared/medios-contacto.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
@@ -292,6 +292,15 @@ export class EmpresasService {
 
         const existing = existingByTipo.get(medio.tipo);
 
+        // Un medio en no_contactar no se cambia ni se borra (A4 del plan de
+        // fixes, 2-oct-2026): antes un PATCH a otro valor sobrescribía la
+        // fila como activo y el bloqueo se perdía; luego se podía volver a
+        // poner el valor suprimido. Mandar el mismo valor sin cambios sigue
+        // permitido (se ignora más abajo).
+        if (existing?.estadoContacto === "no_contactar" && (medio.valor === null || medio.normalizar(medio.valor) !== existing.valorNormalizado)) {
+          throw new HttpError(409, `El ${medio.tipo} de este contacto pidió no ser contactado; no se puede cambiar ni borrar`, CODIGO_MEDIO_SUPRIMIDO);
+        }
+
         if (medio.valor === null) {
           // Borrar el medio = marcarlo obsoleto, nunca DELETE (PLAN_CRM_
           // DEFINITIVO.md #2, "no se borra información").
@@ -321,7 +330,10 @@ export class EmpresasService {
 
         try {
           if (existing) {
-            await tx.update(mediosContacto).set({ valor: medio.valor, valorNormalizado, estadoContacto: "activo" }).where(eq(mediosContacto.id, existing.id));
+            // Un valor nuevo que está en lista_supresion (o de alguien en
+            // baja) queda bloqueado desde el inicio.
+            const estadoContacto = await estadoInicialDeMedio(tx, contactoId, medio.tipo, valorNormalizado);
+            await tx.update(mediosContacto).set({ valor: medio.valor, valorNormalizado, estadoContacto }).where(eq(mediosContacto.id, existing.id));
           } else {
             await insertarMediosContacto(tx, contactoId, [{ tipo: medio.tipo, valor: medio.valor, valorNormalizado }]);
           }
@@ -348,15 +360,18 @@ export class EmpresasService {
 
       // Invariante de creación (contactInputSchema: "al menos un medio de
       // contacto") reforzada también en la edición -- sin esto, un PATCH
-      // que limpia el único medio activo dejaba el contacto sin ninguna
-      // forma de contactarlo, algo que crear() nunca permitió (hallazgo de
-      // code review, 14-sep-2026).
-      const [{ activos }] = await tx
-        .select({ activos: sql<number>`count(*)` })
+      // que limpia el único medio dejaba el contacto sin ningún dato de
+      // contacto, algo que crear() nunca permitió (hallazgo de code review,
+      // 14-sep-2026). Cuenta los no obsoletos, no solo los activos: una
+      // persona dada de baja tiene todos sus medios en no_contactar y aun así
+      // se debe poder editar (p. ej. corregir su puesto); antes cualquier
+      // PATCH suyo daba 409 (A4, 2-oct-2026).
+      const [{ vigentes }] = await tx
+        .select({ vigentes: sql<number>`count(*)` })
         .from(mediosContacto)
-        .where(and(eq(mediosContacto.contactoId, contactoId), eq(mediosContacto.estadoContacto, "activo")));
-      if (Number(activos) === 0) {
-        throw new HttpError(409, "El contacto debe conservar al menos un medio de contacto activo");
+        .where(and(eq(mediosContacto.contactoId, contactoId), inArray(mediosContacto.estadoContacto, ["activo", "no_contactar"])));
+      if (Number(vigentes) === 0) {
+        throw new HttpError(409, "El contacto debe conservar al menos un medio de contacto");
       }
 
       // Si el PATCH terminó sin cambiar nada de verdad (ej. reenviar el

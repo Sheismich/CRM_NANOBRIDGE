@@ -86,6 +86,11 @@ describe("supresión", () => {
         .set("X-API-Key", API_KEY)
         .send({ execution_id: randomUUID(), empresa: { nombreLegal: `Empresa Supresión ${randomUUID()}` }, contacto: { nombre: "Persona Suprimida Antes", correo } });
       const [prospecto] = await db.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, res.body.id));
+      // Desde el 2-oct-2026 (A4) un correo ya suprimido nace en
+      // no_contactar. Lo que este test cubre sigue valiendo para filas
+      // creadas antes de eso: se simula una fila vieja en "activo".
+      expect(await estadoDelCorreo(prospecto!.contactoId)).toBe("no_contactar");
+      await db.update(mediosContacto).set({ estadoContacto: "activo" }).where(and(eq(mediosContacto.contactoId, prospecto!.contactoId), eq(mediosContacto.tipo, "correo")));
       expect(await estadoDelCorreo(prospecto!.contactoId)).toBe("activo");
 
       const otra = await registrarPorEndpoint(correo);

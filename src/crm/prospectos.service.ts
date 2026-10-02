@@ -305,6 +305,9 @@ export class ProspectosService {
       }
 
       let contactoId: number;
+      // Medios que nacieron bloqueados por estar en lista_supresion (A4,
+      // 2-oct-2026): la respuesta lo dice para que la pantalla lo avise.
+      let mediosSuprimidos: string[] = [];
       let empresaId: number;
 
       if (borrador.estado === "duplicado") {
@@ -363,7 +366,7 @@ export class ProspectosService {
         });
         contactoId = contacto.insertId;
 
-        await insertarMediosContacto(tx, contactoId, [
+        mediosSuprimidos = await insertarMediosContacto(tx, contactoId, [
           { tipo: "correo", valor: borrador.correo ?? undefined, valorNormalizado: borrador.correoNormalizado },
           // El teléfono se registra como whatsapp o como telefono según el
           // canal declarado en la fila -- el borrador solo guarda un
@@ -398,7 +401,7 @@ export class ProspectosService {
         despues: { borrador_id: id, lote_id: loteId, empresa_id: empresaId, contacto_id: contactoId, reutilizo_contacto: borrador.estado === "duplicado" }
       });
 
-      return { id: prospecto.insertId, contacto_id: contactoId, empresa_id: empresaId, ya_existia: false as const };
+      return { id: prospecto.insertId, contacto_id: contactoId, empresa_id: empresaId, medios_suprimidos: mediosSuprimidos, ya_existia: false as const };
     });
   }
 
