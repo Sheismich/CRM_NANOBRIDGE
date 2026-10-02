@@ -4,14 +4,14 @@ import { and, eq, inArray, like, lt, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, borradoresCaptura, campanas, contactos, empresas, mediosContacto, prospectos } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
-import { compactConditions } from "../shared/drizzle-utils.js";
+import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { parseCsv } from "../shared/csv.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { personaEnBaja } from "../shared/baja-prospecto.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
-import { filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ProspectoInput } from "./dto/prospecto.schema.js";
+import { COLUMNAS_CSV, filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ProspectoInput } from "./dto/prospecto.schema.js";
 
 const BORRADORES_TTL_DIAS = 30;
 // Tope defensivo por importación: STEELSAFE (el primer caso de uso real)
@@ -19,6 +19,9 @@ const BORRADORES_TTL_DIAS = 30;
 // gigante bloquee la petición completa fila por fila (cada una hace al
 // menos un SELECT de deduplicación).
 const CSV_MAX_FILAS = 2000;
+const CSV_MAX_COLUMNAS = 40;
+export const CODIGO_IMPORTACION_VENCIDA = "IMPORTACION_VENCIDA";
+export const CODIGO_CONTACTO_DE_OTRO_AGENTE = "CONTACTO_DE_OTRO_AGENTE";
 
 type ErrorFila = { campo: string; mensaje: string };
 type BorradorRow = typeof borradoresCaptura.$inferSelect;
@@ -47,7 +50,8 @@ export class ProspectosService {
     const [borrador] = await this.crearBorradores(user, loteId, "manual", [
       { numero: 1, filaOriginal: input as Record<string, unknown>, fila: input, errores: null }
     ]);
-    return this.toJson(borrador!);
+    const visibles = await this.contactosVisibles(user, [borrador!]);
+    return this.toJson(borrador!, visibles);
   }
 
   // --- Importación CSV --------------------------------------------------
@@ -59,7 +63,8 @@ export class ProspectosService {
       if (!campana) throw new HttpError(404, "Campaña no encontrada");
     }
 
-    const filas = parseCsv(archivo.buffer.toString("utf-8"));
+    const { encabezados, filas } = parseCsv(archivo.buffer.toString("utf-8"));
+    this.validarEncabezados(encabezados);
     if (filas.length === 0) throw new HttpError(400, "El CSV no tiene filas de datos (¿le falta la fila de encabezados?)");
     if (filas.length > CSV_MAX_FILAS) throw new HttpError(400, `El CSV tiene ${filas.length} filas; el máximo por importación es ${CSV_MAX_FILAS}`);
 
@@ -81,6 +86,23 @@ export class ProspectosService {
     for (const b of insertados) resumen[b.estado] = (resumen[b.estado] ?? 0) + 1;
 
     return { lote_id: loteId, fuente: archivo.originalname || "importacion.csv", total: insertados.length, resumen };
+  }
+
+  // C4 del plan de fixes (2-oct-2026): antes una columna mal escrita
+  // ("correo electronico") se ignoraba en silencio y una repetida pisaba a
+  // la primera sin avisar. Las columnas sin nombre (Excel a veces agrega
+  // comas al final) se ignoran.
+  private validarEncabezados(encabezados: string[]) {
+    if (encabezados.length > CSV_MAX_COLUMNAS) {
+      throw new HttpError(400, `El CSV tiene ${encabezados.length} columnas; el máximo es ${CSV_MAX_COLUMNAS}`);
+    }
+    const conNombre = encabezados.filter((e) => e !== "");
+    const repetidas = [...new Set(conNombre.filter((e, i) => conNombre.indexOf(e) !== i))];
+    if (repetidas.length > 0) throw new HttpError(400, `Columnas repetidas: ${repetidas.join(", ")}`);
+    const desconocidas = conNombre.filter((e) => !COLUMNAS_CSV.includes(e));
+    if (desconocidas.length > 0) {
+      throw new HttpError(400, `Columnas que no se reconocen: ${desconocidas.join(", ")}. Se aceptan: ${COLUMNAS_CSV.join(", ")}`);
+    }
   }
 
   // Núcleo compartido por crearManual() e importarCsv(): valida (ya viene
@@ -260,7 +282,8 @@ export class ProspectosService {
       .orderBy(borradoresCaptura.filaNumero);
 
     if (rows.length === 0) throw new HttpError(404, "Lote no encontrado");
-    return { lote_id: loteId, total: rows.length, filas: rows.map((r) => this.toJson(r)) };
+    const visibles = await this.contactosVisibles(user, rows);
+    return { lote_id: loteId, total: rows.length, filas: rows.map((r) => this.toJson(r, visibles)) };
   }
 
   // Confirma que el usuario puede operar sobre este lote antes de dejar que
@@ -296,6 +319,10 @@ export class ProspectosService {
         .for("update");
       if (!borrador) throw new HttpError(404, "Fila no encontrada en este lote");
       if (borrador.estado === "importado") return { id: borrador.prospectoId, ya_existia: true as const };
+      // Antes se podía confirmar después de su vencimiento (C4).
+      if (borrador.expiraEn && borrador.expiraEn.getTime() < Date.now()) {
+        throw new HttpError(409, "Esta importación ya venció; vuelve a importar el archivo", CODIGO_IMPORTACION_VENCIDA);
+      }
       if (borrador.estado !== "pendiente_revision" && borrador.estado !== "duplicado") {
         throw new HttpError(409, `La fila está en estado '${borrador.estado}' y ya no se puede confirmar`);
       }
@@ -316,8 +343,17 @@ export class ProspectosService {
         if (!borrador.matchContactoId) {
           throw new HttpError(409, "Esta fila duplica otra fila del mismo archivo que todavía no ha sido confirmada ni rechazada; resuelve esa otra fila primero");
         }
-        const [contacto] = await tx.select({ id: contactos.id, empresaId: contactos.empresaId }).from(contactos).where(eq(contactos.id, borrador.matchContactoId)).limit(1);
+        const [contacto] = await tx
+          .select({ id: contactos.id, empresaId: contactos.empresaId, propietarioId: empresas.propietarioId })
+          .from(contactos)
+          .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+          .where(eq(contactos.id, borrador.matchContactoId))
+          .limit(1);
         if (!contacto) throw new HttpError(409, "El contacto con el que coincidía esta fila ya no existe");
+        // Un agente no cuelga su prospecto de un contacto de otro (C4).
+        if (user.rol === "agente" && contacto.propietarioId !== user.id) {
+          throw new HttpError(409, "Esta persona ya está en el CRM en una empresa de otro agente; pídele a un supervisor que confirme la fila", CODIGO_CONTACTO_DE_OTRO_AGENTE);
+        }
         contactoId = contacto.id;
         empresaId = contacto.empresaId;
       } else {
@@ -464,7 +500,7 @@ export class ProspectosService {
       ownsOnly ? eq(empresas.propietarioId, user.id) : undefined,
       query.estado ? eq(prospectos.estado, query.estado) : undefined,
       query.prioridad ? eq(prospectos.prioridad, query.prioridad) : undefined,
-      query.q ? or(like(empresas.nombreLegal, `%${query.q}%`), like(contactos.nombre, `%${query.q}%`)) : undefined
+      query.q ? or(like(empresas.nombreLegal, patronLike(query.q)), like(contactos.nombre, patronLike(query.q))) : undefined
     ]);
 
     const rows = await this.db
@@ -537,7 +573,23 @@ export class ProspectosService {
     };
   }
 
-  private toJson(row: BorradorRow) {
+  // Ids de los contactos con los que coinciden estas filas que el usuario
+  // sí puede ver (null = todos, admin y supervisor). Un agente no ve el id
+  // de un contacto de otro agente (C4): solo sabe que la persona ya existe.
+  private async contactosVisibles(user: CurrentUser, rows: BorradorRow[]): Promise<Set<number> | null> {
+    if (user.rol !== "agente") return null;
+    const ids = [...new Set(rows.map((r) => r.matchContactoId).filter((id): id is number => id !== null))];
+    if (ids.length === 0) return new Set();
+    const propios = await this.db
+      .select({ id: contactos.id })
+      .from(contactos)
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .where(and(inArray(contactos.id, ids), eq(empresas.propietarioId, user.id)));
+    return new Set(propios.map((c) => c.id));
+  }
+
+  private toJson(row: BorradorRow, contactosVisibles: Set<number> | null) {
+    const matchAjeno = row.matchContactoId !== null && contactosVisibles !== null && !contactosVisibles.has(row.matchContactoId);
     return {
       id: row.id,
       lote_id: row.loteId,
@@ -552,9 +604,10 @@ export class ProspectosService {
       prioridad: row.prioridad,
       score: row.score,
       estado: row.estado,
-      match_contacto_id: row.matchContactoId,
+      match_contacto_id: matchAjeno ? null : row.matchContactoId,
       match_motivo: row.matchMotivo,
-      errores: row.errores,
+      // Sin el id, la pantalla dice por qué y qué hacer.
+      errores: matchAjeno ? [{ campo: "correo/telefono", mensaje: "Esta persona ya está en el CRM en una empresa de otro agente; pídele a un supervisor que confirme la fila" }] : row.errores,
       prospecto_id: row.prospectoId,
       creado_en: row.creadoEn,
       expira_en: row.expiraEn

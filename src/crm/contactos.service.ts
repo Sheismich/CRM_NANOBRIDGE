@@ -3,7 +3,7 @@ import { and, eq, inArray, like } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { contactos, empresas, mediosContacto } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
-import { compactConditions } from "../shared/drizzle-utils.js";
+import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { EmpresasService } from "./empresas.service.js";
 import type { UpdateContactInput } from "./dto/empresa.schema.js";
@@ -35,7 +35,7 @@ export class ContactosService {
         eq(empresas.activo, true),
         user.rol === "agente" ? eq(empresas.propietarioId, user.id) : undefined,
         query.empresaId ? eq(contactos.empresaId, query.empresaId) : undefined,
-        query.q ? like(contactos.nombre, `%${query.q.replace(/[\\%_]/g, "\\$&")}%`) : undefined
+        query.q ? like(contactos.nombre, patronLike(query.q)) : undefined
       ])
     );
 

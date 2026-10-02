@@ -1,3 +1,9 @@
+// Texto de búsqueda para LIKE: escapa \, % y _ para que "%" busque un
+// porcentaje y no "cualquier cosa" (C4 del plan de fixes, 2-oct-2026).
+export function patronLike(texto: string): string {
+  return `%${texto.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
 // Filtra los `undefined` de un arreglo de condiciones drizzle opcionales
 // (filtros que solo aplican cuando el query param correspondiente vino en
 // la petición) antes de pasarlo a and(...). El type guard se repetía

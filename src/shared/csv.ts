@@ -50,16 +50,20 @@ function escapeCsvValue(value: unknown): string {
 // proyecto parsea CSV todavía, así que no vale la pena la dependencia
 // nueva para un formato de por sí simple. Soporta comillas dobles,
 // comas dentro de campos citados y comillas escapadas ("").
-export function parseCsv(contenido: string): Record<string, string>[] {
+//
+// Devuelve también los encabezados tal cual (sin quitar repetidos ni
+// vacíos), para que quien importa pueda revisarlos: en `filas` una columna
+// repetida ya pisó a la primera (C4 del plan de fixes, 2-oct-2026).
+export function parseCsv(contenido: string): { encabezados: string[]; filas: Record<string, string>[] } {
   // Quita el BOM UTF-8 si viene (el mismo que escribe toCsv, o el que
   // agrega Excel al exportar "CSV UTF-8" -- sin esto, el primer header
   // queda con el BOM pegado y nunca hace match por nombre de columna).
   const texto = contenido.replace(/^\uFEFF/, "");
   const filas = parseCsvFilas(texto);
-  if (filas.length === 0) return [];
+  if (filas.length === 0) return { encabezados: [], filas: [] };
 
   const headers = filas[0]!.map((h) => h.trim());
-  return filas.slice(1)
+  const datos = filas.slice(1)
     .filter((fila) => fila.some((valor) => valor.trim() !== "")) // ignora líneas en blanco al final del archivo
     .map((fila) => {
       const row: Record<string, string> = {};
@@ -68,6 +72,7 @@ export function parseCsv(contenido: string): Record<string, string>[] {
       });
       return row;
     });
+  return { encabezados: headers, filas: datos };
 }
 
 function parseCsvFilas(texto: string): string[][] {

@@ -64,7 +64,7 @@ const catalogoCsv = <const T extends readonly [string, ...string[]]>(valores: T)
     z.enum(valores, { error: `Valor no válido; usa ${valores.slice(0, -1).join(", ")} o ${valores.at(-1)}` })
   );
 
-export const filaCsvSchema = refinarProspecto(z.object({
+const camposFilaCsv = z.object({
   empresaNombreLegal: z.string({ error: "Falta el nombre de la empresa" }).trim().min(2, "Mínimo 2 caracteres").max(255, "Máximo 255 caracteres"),
   empresaGiro: vacioComoUndefined(z.string().trim().max(120)),
   empresaTamano: vacioComoUndefined(catalogoCsv(["micro", "pequena", "mediana", "grande"])),
@@ -87,7 +87,11 @@ export const filaCsvSchema = refinarProspecto(z.object({
   fuenteUrl: vacioComoUndefined(httpUrlSchema),
   observaciones: vacioComoUndefined(z.string().trim().max(2000)),
   campanaId: vacioComoUndefined(z.coerce.number({ error: "Debe ser un número" }).int("Debe ser un número entero").positive("Debe ser un número positivo"))
-}));
+});
+export const filaCsvSchema = refinarProspecto(camposFilaCsv);
+// Las columnas que acepta el CSV, sacadas del mismo esquema que valida cada
+// fila: así no hay una segunda lista que mantener a mano.
+export const COLUMNAS_CSV: readonly string[] = Object.keys(camposFilaCsv.shape);
 export type FilaCsv = z.infer<typeof filaCsvSchema>;
 
 export const importarCsvBodySchema = z.object({
