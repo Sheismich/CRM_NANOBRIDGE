@@ -15,7 +15,6 @@ process.env.DATABASE_URL = DATABASE_URL;
 // real.
 process.env.CRM_CALLBACK_API_KEY = "test_crm_callback_api_key_0001";
 process.env.WEBHOOK_ENTRADA_API_KEY = "test_webhook_entrada_api_key_0002";
-process.env.STORAGE_LOCAL_SIGNING_SECRET = "test_storage_signing_secret_0003";
 process.env.REPLY_TO_SIGNING_SECRET = "test_reply_to_signing_secret_000000004";
 process.env.REPLY_TO_DOMAIN = "respuestas.contacto.nano-bridge-mex.com";
 process.env.N8N_WEBHOOK_URL = "";
@@ -45,4 +44,3 @@ process.env.SESSION_TTL_HOURS = "12";
 // la suite, así que en la práctica nunca dispara durante las pruebas.
 process.env.OUTBOX_DISPATCH_INTERVAL_MS = String(60 * 60 * 1000);
 process.env.STORAGE_MAX_FILE_SIZE_MB = "25";
-process.env.STORAGE_SIGNED_URL_TTL_SECONDS = "300";

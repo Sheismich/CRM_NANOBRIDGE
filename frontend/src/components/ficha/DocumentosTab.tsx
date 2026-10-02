@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Field, ServerError, inputClass } from "../ui/Field";
-import { ApiError, api, resolverUrlApi } from "../../lib/api";
+import { ApiError, api } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { formatoFecha, formatoFechaHora, formatoTamano } from "../../lib/formato";
 import type { Documento, Paginated } from "../../types";
@@ -213,9 +213,7 @@ function DocumentoFila({ documento: d, tipo, oportunidad, puedeEliminar }: { doc
   async function descargar() {
     setError(null);
     try {
-      // La URL firmada dura poco: se pide al momento de descargar, no antes.
-      const { url } = await api.get<{ url: string }>(`/api/v1/documentos/${d.id}/descarga`);
-      window.location.assign(resolverUrlApi(url));
+      await api.descargar(`/api/v1/documentos/${d.id}/descarga`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
     }

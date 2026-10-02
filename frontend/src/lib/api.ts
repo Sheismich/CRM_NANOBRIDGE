@@ -54,25 +54,55 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   // 204 No Content (logout, DELETE): no hay body que parsear.
   if (response.status === 204) return undefined as T;
 
-  const contentType = response.headers.get("content-type") ?? "";
-  const payload = contentType.includes("application/json") ? await response.json() : await response.text();
-
-  if (!response.ok) {
-    const message = typeof payload === "object" && payload !== null && "message" in payload ? String((payload as { message: unknown }).message) : "Error inesperado";
-    const details = typeof payload === "object" && payload !== null ? (payload as { details?: unknown }).details : undefined;
-    const code = typeof payload === "object" && payload !== null && typeof (payload as { code?: unknown }).code === "string" ? (payload as { code: string }).code : undefined;
-    throw new ApiError(response.status, message, details, code);
-  }
-
+  const payload = await leerPayload(response);
+  if (!response.ok) throw errorDeRespuesta(response.status, payload);
   return payload as T;
 }
 
-// GET /documentos/:id/descarga devuelve una ruta relativa con el driver
-// local ("/api/v1/storage/local/descarga?token=...") y una URL absoluta con
-// GCS. La relativa es relativa a la API, no al frontend: en producción son
-// orígenes distintos.
-export function resolverUrlApi(url: string) {
-  return url.startsWith("/") ? `${BASE_URL}${url}` : url;
+async function leerPayload(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type") ?? "";
+  return contentType.includes("application/json") ? response.json() : response.text();
+}
+
+function errorDeRespuesta(status: number, payload: unknown) {
+  const message = typeof payload === "object" && payload !== null && "message" in payload ? String((payload as { message: unknown }).message) : "Error inesperado";
+  const details = typeof payload === "object" && payload !== null ? (payload as { details?: unknown }).details : undefined;
+  const code = typeof payload === "object" && payload !== null && typeof (payload as { code?: unknown }).code === "string" ? (payload as { code: string }).code : undefined;
+  return new ApiError(status, message, details, code);
+}
+
+// Nombre real del archivo desde el Content-Disposition del backend
+// (src/shared/content-disposition.ts): filename*=UTF-8''<codificado> trae
+// acentos y ñ; filename="..." es el respaldo ASCII.
+function nombreDeDescarga(contentDisposition: string | null) {
+  const utf8 = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8) {
+    try {
+      return decodeURIComponent(utf8[1]!);
+    } catch {
+      // Codificación rota: se cae al respaldo ASCII.
+    }
+  }
+  return contentDisposition?.match(/filename="([^"]+)"/i)?.[1] ?? "descarga";
+}
+
+// Descarga de documentos (B6 del plan de fixes del backend, 2-oct-2026): el
+// backend manda el archivo con la sesión (cookie), ya no una URL firmada.
+// Por eso no basta con navegar a la URL: se pide con fetch (credentials),
+// se arma un Blob y se guarda con un <a download> temporal.
+async function descargar(path: string) {
+  const response = await fetch(buildUrl(path), { credentials: "include" });
+  if (!response.ok) throw errorDeRespuesta(response.status, await leerPayload(response));
+
+  const url = URL.createObjectURL(await response.blob());
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = nombreDeDescarga(response.headers.get("content-disposition"));
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  // El navegador ya tomó el archivo con el click; liberar la memoria del Blob.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export const api = {
@@ -80,5 +110,6 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
   postForm: <T>(path: string, formData: FormData) => request<T>(path, { method: "POST", formData }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" })
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  descargar
 };

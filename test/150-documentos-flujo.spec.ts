@@ -11,7 +11,7 @@ import { env } from "../src/config/env.js";
 import { LocalStorageDriver } from "../src/documentos/storage/local-storage.driver.js";
 
 // Validación de archivos, estados, versionado, revisión, eliminación,
-// descarga firmada (driver local) y scoping. 110-documentos-tipo.spec.ts ya
+// descarga con sesión y scoping. 110-documentos-tipo.spec.ts ya
 // cubre el catálogo de tipos y 120-alertas-jobs.spec.ts el job de alertas.
 describe("documentos: archivos, estados, versionado y descarga", () => {
   let app: INestApplication;
@@ -299,67 +299,55 @@ describe("documentos: archivos, estados, versionado y descarga", () => {
     });
   });
 
-  describe("descarga por URL firmada (driver local)", () => {
-    it("emite una URL de corta duración que sirve el archivo tal cual, sin sesión, como adjunto", async () => {
-      const contenido = Buffer.from("%PDF-1.4 contenido real de la prueba");
-      const id = await subirOk(adminCookie, {}, { buffer: contenido, filename: "Contrato final ñ.pdf" });
-
-      const emitida = await request(app.getHttpServer()).get(`/api/v1/documentos/${id}/descarga`).set("Cookie", adminCookie);
-      expect(emitida.status).toBe(200);
-      expect(emitida.body.url).toMatch(/^\/api\/v1\/storage\/local\/descarga\?token=/);
-      expect(emitida.body.expira_en_segundos).toBe(env.STORAGE_SIGNED_URL_TTL_SECONDS);
-
-      // Sin cookie: el token firmado ES la credencial.
-      const descarga = await request(app.getHttpServer()).get(emitida.body.url).buffer(true).parse((res, cb) => {
+  describe("descarga a través de la API (con sesión)", () => {
+    // B6 del plan de fixes (2-oct-2026): la API manda el archivo ella misma,
+    // con la sesión del usuario. Ya no hay URL firmada: un enlace firmado
+    // sirve a quien lo tenga, y en producción GCS ni siquiera podía firmarlo
+    // (faltaba iam.serviceAccounts.signBlob → 500).
+    const bajarArchivo = (cookie: string[] | undefined, id: number) => {
+      const peticion = request(app.getHttpServer()).get(`/api/v1/documentos/${id}/descarga`);
+      if (cookie) peticion.set("Cookie", cookie);
+      return peticion.buffer(true).parse((res, cb) => {
         const partes: Buffer[] = [];
         res.on("data", (parte: Buffer) => partes.push(parte));
         res.on("end", () => cb(null, Buffer.concat(partes)));
       });
+    };
+    const descargasAuditadas = (id: number) =>
+      db.select().from(auditoria).where(and(eq(auditoria.entidad, "documento"), eq(auditoria.entidadId, id), eq(auditoria.accion, "descargar")));
+
+    it("manda el archivo tal cual, como adjunto, sin caché y sin que el navegador adivine el tipo", async () => {
+      const contenido = Buffer.from("%PDF-1.4 contenido real de la prueba");
+      const id = await subirOk(adminCookie, {}, { buffer: contenido, filename: "Contrato final ñ.pdf" });
+
+      const descarga = await bajarArchivo(adminCookie, id);
       expect(descarga.status).toBe(200);
       expect(Buffer.compare(descarga.body as Buffer, contenido)).toBe(0);
       expect(descarga.headers["content-type"]).toContain("application/pdf");
+      expect(descarga.headers["content-length"]).toBe(String(contenido.length));
       expect(descarga.headers["content-disposition"]).toMatch(/^attachment; filename="Contrato final _\.pdf"; filename\*=UTF-8''Contrato%20final%20%C3%B1\.pdf$/);
-
-      const auditadas = await db.select().from(auditoria).where(and(eq(auditoria.entidad, "documento"), eq(auditoria.entidadId, id), eq(auditoria.accion, "descargar")));
-      expect(auditadas).toHaveLength(1);
+      expect(descarga.headers["x-content-type-options"]).toBe("nosniff");
+      expect(descarga.headers["cache-control"]).toBe("no-store");
+      expect(await descargasAuditadas(id)).toHaveLength(1);
     });
 
-    it("un token alterado, sin firma, expirado o ausente responde 400", async () => {
+    it("sin sesión responde 401 y no audita nada", async () => {
       const id = await subirOk();
-      const { url } = (await request(app.getHttpServer()).get(`/api/v1/documentos/${id}/descarga`).set("Cookie", adminCookie)).body as { url: string };
-      const token = decodeURIComponent(url.split("token=")[1]!);
-      const [encoded, firma] = token.split(".") as [string, string];
-
-      const pedir = (t: string) => request(app.getHttpServer()).get(`/api/v1/storage/local/descarga?token=${encodeURIComponent(t)}`);
-
-      // Firma con un carácter cambiado.
-      const firmaAlterada = `${firma.slice(0, -1)}${firma.endsWith("A") ? "B" : "A"}`;
-      expect((await pedir(`${encoded}.${firmaAlterada}`)).status).toBe(400);
-      // Payload modificado (otra key) conservando la firma vieja.
-      const payloadFalso = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(encoded, "base64url").toString()), k: "documentos/1/otro.pdf" })).toString("base64url");
-      expect((await pedir(`${payloadFalso}.${firma}`)).status).toBe(400);
-      // Sin firma / basura.
-      expect((await pedir(encoded)).status).toBe(400);
-      expect((await pedir("basura")).status).toBe(400);
-      // Sin parámetro token.
-      expect((await request(app.getHttpServer()).get("/api/v1/storage/local/descarga")).status).toBe(400);
-
-      // Bien firmado (con el secreto real) pero ya vencido.
-      const vencido = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(encoded, "base64url").toString()), e: Math.floor(Date.now() / 1000) - 10 })).toString("base64url");
-      const firmaVencido = createHmac("sha256", env.STORAGE_LOCAL_SIGNING_SECRET).update(vencido).digest("base64url");
-      const respuesta = await pedir(`${vencido}.${firmaVencido}`);
-      expect(respuesta.status).toBe(400);
-      expect(JSON.stringify(respuesta.body)).toContain("expir");
+      expect((await bajarArchivo(undefined, id)).status).toBe(401);
+      expect(await descargasAuditadas(id)).toHaveLength(0);
     });
 
-    it("un token válido cuyo archivo ya no está en disco responde 404, no 500", async () => {
+    it("la ruta pública de descarga por token ya no existe", async () => {
+      expect((await request(app.getHttpServer()).get("/api/v1/storage/local/descarga?token=x.y")).status).toBe(404);
+    });
+
+    it("si el archivo ya no está en storage responde 404 (no 500) y no audita una descarga que no hubo", async () => {
       const id = await subirOk();
       const [fila] = await db.select().from(documentos).where(eq(documentos.id, id));
-      const { url } = (await request(app.getHttpServer()).get(`/api/v1/documentos/${id}/descarga`).set("Cookie", adminCookie)).body as { url: string };
-
       await app.get(LocalStorageDriver).eliminar(fila!.storageKey);
 
-      expect((await request(app.getHttpServer()).get(url)).status).toBe(404);
+      expect((await bajarArchivo(adminCookie, id)).status).toBe(404);
+      expect(await descargasAuditadas(id)).toHaveLength(0);
     });
 
     it("el driver local no deja escapar rutas fuera de su directorio", async () => {

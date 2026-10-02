@@ -6,7 +6,7 @@ import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { ServerError, inputBaseClass } from "../components/ui/Field";
 import { Paginacion } from "../components/ui/Paginacion";
-import { ApiError, api, resolverUrlApi } from "../lib/api";
+import { ApiError, api } from "../lib/api";
 import { formatoFecha, formatoTamano } from "../lib/formato";
 import type { Documento, Paginated } from "../types";
 
@@ -130,11 +130,7 @@ export function DocumentosPage() {
                       className="px-3 py-1.5"
                       disabled={ocupadoId === d.id}
                       onClick={() =>
-                        void accion(d.id, async () => {
-                          // La URL firmada dura poco: se pide al momento, igual que en la ficha.
-                          const { url } = await api.get<{ url: string }>(`/api/v1/documentos/${d.id}/descarga`);
-                          window.location.assign(resolverUrlApi(url));
-                        })
+                        void accion(d.id, () => api.descargar(`/api/v1/documentos/${d.id}/descarga`))
                       }
                     >
                       Descargar

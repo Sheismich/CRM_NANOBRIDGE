@@ -1,5 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import type { Response } from "express";
+import { pipeline } from "node:stream/promises";
 import { memoryStorage } from "multer";
 import { z } from "zod";
 import { DocumentosService } from "./documentos.service.js";
@@ -9,6 +11,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { env } from "../config/env.js";
+import { contentDispositionAdjunto } from "../shared/content-disposition.js";
 import { cambiarEstadoDocumentoSchema, listDocumentosQuerySchema, nuevaVersionDocumentoSchema, revisarDocumentoSchema, subirDocumentoSchema } from "./dto/documento.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
@@ -75,10 +78,30 @@ export class DocumentosController {
     return this.documentosService.get(user, id);
   }
 
+  // La API manda el archivo ella misma, con la sesión del usuario (B6 del
+  // plan de fixes, 2-oct-2026): no hay enlace que reenviar, cada descarga
+  // pasa por el scoping y queda auditada. nosniff evita que el navegador
+  // "adivine" otro tipo (p. ej. HTML dentro de un supuesto PDF) y no-store
+  // que quede copia en caché de un equipo compartido.
   @Get(":id/descarga")
-  descarga(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
+  async descarga(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType, @Res() response: Response) {
     const id = idParamSchema.parse(idParam);
-    return this.documentosService.obtenerUrlDescarga(user, id);
+    const { stream, tamanoBytes, nombreArchivo, mimeType } = await this.documentosService.abrirDescarga(user, id);
+    response.status(200).set({
+      "Content-Type": mimeType,
+      "Content-Length": String(tamanoBytes),
+      "Content-Disposition": contentDispositionAdjunto(nombreArchivo),
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store"
+    });
+    try {
+      await pipeline(stream, response);
+    } catch (error) {
+      // Las cabeceras ya salieron: no se puede responder un error. Pasa si
+      // el usuario cancela la descarga o si storage falla a la mitad;
+      // pipeline() ya cerró las dos puntas.
+      console.error(`[documentos] descarga ${id} interrumpida:`, (error as Error).message);
+    }
   }
 
   @Post(":id/version")

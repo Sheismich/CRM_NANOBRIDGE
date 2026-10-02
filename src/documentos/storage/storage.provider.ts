@@ -8,10 +8,7 @@ import { GcsStorageDriver } from "./gcs-storage.driver.js";
  * Selección de driver por variable de entorno (STORAGE_DRIVER=local|gcs),
  * como pide la tarea. Ambos drivers se registran siempre en el módulo (ver
  * documentos.module.ts) -- este provider solo decide cuál de los dos
- * satisface @Inject(STORAGE_SERVICE); LocalStorageDriver además se usa
- * directo (no vía STORAGE_SERVICE) desde LocalStorageController para poder
- * servir descargas locales aunque el driver activo para subidas nuevas sea
- * 'gcs'.
+ * satisface @Inject(STORAGE_SERVICE).
  */
 export const storageServiceProvider: Provider = {
   provide: STORAGE_SERVICE,

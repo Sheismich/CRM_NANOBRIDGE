@@ -123,7 +123,7 @@ export class DocumentosService {
     // 11-sep-2026): sin él, una empresa dada de baja (soft-delete) seguía
     // dejando ver/descargar/versionar/archivar sus documentos por esta vía
     // -- validarEmpresaScoped() (usada en subir()/list()) sí lo exige, pero
-    // get()/obtenerUrlDescarga()/nuevaVersion()/cambiarEstado()/revisar()/
+    // get()/abrirDescarga()/nuevaVersion()/cambiarEstado()/revisar()/
     // eliminar() pasan todos por aquí, no por ahí.
     const [row] = await this.db
       .select({ documento: documentos, propietarioId: empresas.propietarioId })
@@ -277,33 +277,30 @@ export class DocumentosService {
     };
   }
 
-  // "descarga" (PLAN_CRM_DEFINITIVO.md #8: "Cada carga, descarga...
-  // queda auditado") se define como el momento en que se EMITE la URL
-  // firmada, no el de la transferencia de bytes: con el driver GCS, una
-  // vez emitida la URL firmada el archivo lo sirve GCS directamente (esta
-  // API ya no está en el camino de esa petición), así que auditar "al
-  // servir bytes" sería imposible de implementar igual para ambos drivers.
-  // Auditar aquí, en el único punto que SÍ pasa siempre por esta API
-  // (pedir la URL, con sesión y scoping ya validados), es lo que se puede
-  // garantizar de forma uniforme entre local y gcs.
-  async obtenerUrlDescarga(user: CurrentUser, id: number) {
+  // "Cada carga, descarga... queda auditado" (PLAN_CRM_DEFINITIVO.md #8).
+  // Abre el archivo para que DocumentosController lo mande en la respuesta
+  // (B6 del plan de fixes, 2-oct-2026). Se audita DESPUÉS de abrirlo: si el
+  // archivo ya no está en storage, leer() lanza 404 y no queda registrada
+  // una descarga que no hubo.
+  async abrirDescarga(user: CurrentUser, id: number) {
     const documento = await this.obtenerScoped(user, id);
+    const archivo = await this.storageService.leer(documento.storageKey);
 
-    const url = await this.storageService.urlFirmada(documento.storageKey, {
-      nombreArchivo: documento.nombreOriginal,
-      mimeType: documento.mimeType,
-      ttlSegundos: env.STORAGE_SIGNED_URL_TTL_SECONDS
-    });
+    try {
+      await this.db.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "documento",
+        entidadId: id,
+        accion: "descargar",
+        despues: { version: documento.version }
+      });
+    } catch (error) {
+      // Sin auditoría no hay descarga; se cierra el archivo ya abierto.
+      archivo.stream.destroy();
+      throw error;
+    }
 
-    await this.db.insert(auditoria).values({
-      usuarioId: user.id,
-      entidad: "documento",
-      entidadId: id,
-      accion: "descargar",
-      despues: { version: documento.version }
-    });
-
-    return { url, expira_en_segundos: env.STORAGE_SIGNED_URL_TTL_SECONDS };
+    return { ...archivo, nombreArchivo: documento.nombreOriginal, mimeType: documento.mimeType };
   }
 
   async nuevaVersion(user: CurrentUser, id: number, input: NuevaVersionDocumentoInput, archivo: ArchivoSubido | undefined) {

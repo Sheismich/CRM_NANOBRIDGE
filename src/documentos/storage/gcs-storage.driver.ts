@@ -1,19 +1,17 @@
 import { Injectable } from "@nestjs/common";
 import { Storage } from "@google-cloud/storage";
 import { env } from "../../config/env.js";
-import { contentDispositionAdjunto } from "../../shared/content-disposition.js";
-import type { ArchivoParaSubir, OpcionesUrlFirmada, StorageService } from "./storage.types.js";
+import { HttpError } from "../../shared/http-error.js";
+import type { ArchivoLeido, ArchivoParaSubir, StorageService } from "./storage.types.js";
 
 /**
  * Driver real de Google Cloud Storage (PLAN_CRM_DEFINITIVO.md #8:
- * "Archivos en Google Cloud Storage privado... URL firmadas de corta
- * duración para descarga"), implementado según la documentación oficial de
- * @google-cloud/storage (Storage.bucket(...).file(...).save/getSignedUrl).
+ * "Archivos en Google Cloud Storage privado"), implementado según la
+ * documentación oficial de @google-cloud/storage
+ * (Storage.bucket(...).file(...).save/getMetadata/createReadStream).
  *
- * NO se pudo probar en este entorno: no existe un proyecto ni bucket de
- * GCS configurado, ni credenciales (ADC o cuenta de servicio) disponibles.
- * Queda seleccionable con STORAGE_DRIVER=gcs para cuando el usuario
- * aprovisione un bucket real.
+ * Es el driver de producción (STORAGE_DRIVER=gcs). Los tests corren con el
+ * driver local: aquí no hay bucket ni credenciales.
  */
 @Injectable()
 export class GcsStorageDriver implements StorageService {
@@ -46,27 +44,29 @@ export class GcsStorageDriver implements StorageService {
   async subir(key: string, archivo: ArchivoParaSubir): Promise<void> {
     // Bucket privado por definición del plan: nunca se llama a
     // makePublic() ni se sube con predefinedAcl público. El único acceso
-    // de lectura es vía urlFirmada().
+    // de lectura es vía leer(), desde la propia API.
     await this.bucket.file(key).save(archivo.buffer, {
       contentType: archivo.mimeType,
       resumable: false
     });
   }
 
-  async urlFirmada(key: string, opciones: OpcionesUrlFirmada): Promise<string> {
-    const [url] = await this.bucket.file(key).getSignedUrl({
-      version: "v4",
-      action: "read",
-      expires: Date.now() + opciones.ttlSegundos * 1000,
-      // contentDispositionAdjunto() escapa comillas/backslashes del nombre
-      // original -- sin esto, un nombre de archivo con una comilla
-      // literal rompía la cadena del header e inyectaba atributos
-      // adicionales en la respuesta que GCS sirve a cada descarga
-      // (hallazgo de code review, 11-sep-2026).
-      responseDisposition: contentDispositionAdjunto(opciones.nombreArchivo),
-      responseType: opciones.mimeType
-    });
-    return url;
+  // Antes era una URL firmada v4 (B6 del plan de fixes, 2-oct-2026): en
+  // Cloud Run firmar necesita iam.serviceAccounts.signBlob, que la cuenta de
+  // servicio no tenía, y toda descarga daba 500. Ahora solo se lee el objeto,
+  // que roles/storage.objectAdmin sobre el bucket ya permite.
+  // getMetadata() va primero para responder 404 antes de mandar cabeceras y
+  // para tener el tamaño (Content-Length).
+  async leer(key: string): Promise<ArchivoLeido> {
+    const archivo = this.bucket.file(key);
+    let tamano: string | number | undefined;
+    try {
+      [{ size: tamano }] = await archivo.getMetadata();
+    } catch (error) {
+      if ((error as { code?: number }).code === 404) throw new HttpError(404, "El archivo ya no está disponible");
+      throw error;
+    }
+    return { stream: archivo.createReadStream(), tamanoBytes: Number(tamano) };
   }
 
   async eliminar(key: string): Promise<void> {

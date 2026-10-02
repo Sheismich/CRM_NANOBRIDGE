@@ -25,7 +25,9 @@ async function bootstrap() {
   // credentials:true es obligatorio para que el navegador mande la cookie
   // de sesión en fetch/XHR cross-origin; con eso, `origin` no puede ser
   // "*" (spec de CORS), de ahí la whitelist explícita en vez de comodín.
-  app.enableCors({ origin: env.CORS_ORIGINS.length > 0 ? env.CORS_ORIGINS : false, credentials: true });
+  // exposedHeaders: sin él, un front en otro origen no puede leer el nombre
+  // del archivo de una descarga (GET /documentos/:id/descarga).
+  app.enableCors({ origin: env.CORS_ORIGINS.length > 0 ? env.CORS_ORIGINS : false, credentials: true, exposedHeaders: ["Content-Disposition"] });
   app.useGlobalFilters(new HttpExceptionFilter());
 
   await app.listen(env.PORT);

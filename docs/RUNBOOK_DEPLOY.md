@@ -124,14 +124,13 @@ nada, y sin ver la IP es fácil confundirse en el siguiente paso.)
 
 **Paso 2 — exportar las variables que necesita `npm run migrate`.** El
 validador de entorno del proyecto exige que existan `CRM_CALLBACK_API_KEY`,
-`WEBHOOK_ENTRADA_API_KEY` y `STORAGE_LOCAL_SIGNING_SECRET` aunque una
+`WEBHOOK_ENTRADA_API_KEY` y `REPLY_TO_SIGNING_SECRET` aunque una
 migración no las use para nada — así que hay que sacarlas de Secret Manager
 antes de correr el comando, o falla con un error de Zod:
 
 ```bash
 export CRM_CALLBACK_API_KEY=$(gcloud secrets versions access latest --secret=CRM_CALLBACK_API_KEY --project=crm-prospeccion-outbound)
 export WEBHOOK_ENTRADA_API_KEY=$(gcloud secrets versions access latest --secret=WEBHOOK_ENTRADA_API_KEY --project=crm-prospeccion-outbound)
-export STORAGE_LOCAL_SIGNING_SECRET=$(gcloud secrets versions access latest --secret=STORAGE_LOCAL_SIGNING_SECRET --project=crm-prospeccion-outbound)
 export REPLY_TO_SIGNING_SECRET=$(gcloud secrets versions access latest --secret=REPLY_TO_SIGNING_SECRET --project=crm-prospeccion-outbound)
 ```
 
@@ -203,7 +202,8 @@ gcloud secrets versions access latest --secret=<NOMBRE> --project=crm-prospeccio
 ```
 
 Nombres válidos: `CRM_CALLBACK_API_KEY`, `WEBHOOK_ENTRADA_API_KEY`,
-`STORAGE_LOCAL_SIGNING_SECRET`, `REPLY_TO_SIGNING_SECRET`, `DATABASE_URL`.
+`REPLY_TO_SIGNING_SECRET`, `DATABASE_URL`. (`STORAGE_LOCAL_SIGNING_SECRET`
+ya no se usa desde el 2-oct-2026: las descargas no llevan URL firmada.)
 
 **Rotar `REPLY_TO_SIGNING_SECRET` invalida los Reply-To de los correos ya
 enviados:** sus respuestas llegarían como "Respuesta no identificada". Solo

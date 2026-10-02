@@ -64,14 +64,13 @@ const schema = z.object({
   // decide en runtime qué StorageService implementa
   // src/documentos/storage/storage.provider.ts:
   // - 'local' (default): guarda los archivos en disco bajo
-  //   STORAGE_LOCAL_DIR y sirve descargas por
-  //   src/documentos/storage/local-storage.controller.ts con una URL
-  //   "firmada" (token HMAC de corta duración) propia -- no requiere un
-  //   bucket real, así el proyecto funciona sin credenciales de GCS.
+  //   STORAGE_LOCAL_DIR -- no requiere un bucket real, así el proyecto
+  //   funciona sin credenciales de GCS.
   // - 'gcs': usa @google-cloud/storage contra un bucket privado real
   //   (GCS_BUCKET obligatorio, credenciales del SDK de Google vía ADC o
-  //   GCS_KEY_FILE) -- no probado en este entorno por falta de bucket y
-  //   credenciales.
+  //   GCS_KEY_FILE). Es el de producción.
+  // Con los dos, la descarga la manda la API con la sesión del usuario; no
+  // hay URL firmada (B6 del plan de fixes, 2-oct-2026).
   STORAGE_DRIVER: z.enum(["local", "gcs"]).default("local"),
   // "Tamaño inicial máximo: 25 MB" (PLAN_CRM_DEFINITIVO.md #8), configurable.
   STORAGE_MAX_FILE_SIZE_MB: z.coerce.number().int().positive().max(1000).default(25),
@@ -80,11 +79,6 @@ const schema = z.object({
   // que usaría un bucket real de GCS), así que el directorio base no debe
   // repetirlo.
   STORAGE_LOCAL_DIR: z.string().min(1).default("./storage"),
-  // Firma las URLs "firmadas" locales (no hay bucket real que las emita).
-  // Sin default, mismo criterio que CRM_CALLBACK_API_KEY/
-  // WEBHOOK_ENTRADA_API_KEY: un secreto de firma no debe tener un valor
-  // conocido de fábrica.
-  STORAGE_LOCAL_SIGNING_SECRET: z.string().min(16),
   // Firma el Reply-To de cada correo (r+<envio_id>.<firma>@REPLY_TO_DOMAIN,
   // src/shared/reply-to.ts). Vive aquí y no en n8n: n8n Cloud no tiene dónde
   // guardar un secreto fuera de un nodo (ronda 3 de SendGrid, 29-sep-2026).
@@ -92,9 +86,6 @@ const schema = z.object({
   // como "no identificadas".
   REPLY_TO_SIGNING_SECRET: z.string().min(32),
   REPLY_TO_DOMAIN: z.string().trim().toLowerCase().min(3).default("respuestas.contacto.nano-bridge-mex.com"),
-  // "URLs firmadas de corta duración para descarga" (PLAN_CRM_DEFINITIVO.md
-  // #8) -- aplica a ambos drivers (TTL que se le pide a GCS también).
-  STORAGE_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().positive().max(3600).default(300),
   // Solo obligatorios cuando STORAGE_DRIVER=gcs (ver superRefine abajo).
   // z.preprocess normaliza "" a undefined: .env.example los deja vacíos
   // (documentados, sin valor) cuando STORAGE_DRIVER=local -- una cadena
@@ -112,16 +103,13 @@ const schema = z.object({
   }
 
   // Estos secretos protegen superficies distintas (callback del CRM,
-  // intake de webhooks de n8n, firma de URLs de descarga locales, firma del
-  // Reply-To); antes
-  // nada impedía que un copy-paste accidental pusiera el mismo valor en
-  // dos de ellos, lo que dejaría una credencial pensada para un uso
-  // sirviendo también para autenticarse en el otro (hallazgo de code
-  // review, 14-sep-2026).
+  // intake de webhooks de n8n, firma del Reply-To); antes nada impedía que
+  // un copy-paste accidental pusiera el mismo valor en dos de ellos, lo que
+  // dejaría una credencial pensada para un uso sirviendo también para
+  // autenticarse en el otro (hallazgo de code review, 14-sep-2026).
   const secretos: [string, string][] = [
     ["CRM_CALLBACK_API_KEY", data.CRM_CALLBACK_API_KEY],
     ["WEBHOOK_ENTRADA_API_KEY", data.WEBHOOK_ENTRADA_API_KEY],
-    ["STORAGE_LOCAL_SIGNING_SECRET", data.STORAGE_LOCAL_SIGNING_SECRET],
     ["REPLY_TO_SIGNING_SECRET", data.REPLY_TO_SIGNING_SECRET]
   ];
   for (let i = 0; i < secretos.length; i++) {
