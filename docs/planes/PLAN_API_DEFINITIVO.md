@@ -105,6 +105,8 @@ baja, el medio nace en `no_contactar`. Además:
 
 CORS: el frontend CRM (React) vive en un origen distinto al backend; configurar `Access-Control-Allow-Origin` restringido a ese origen y cookies de sesión con `SameSite=Lax` o `None` + `Secure` según el despliegue final.
 
+CSRF (2-oct-2026): toda petición que cambia datos (POST, PATCH, PUT, DELETE) y trae `Origin` solo pasa si ese origen está en `CORS_ORIGINS`, si el navegador manda `Sec-Fetch-Site: same-origin` o si coincide con el host de la API; si no, 403 `ORIGEN_NO_PERMITIDO` (`src/shared/origen-csrf.ts`). `SameSite=Lax` no basta: otros subdominios del mismo dominio cuentan como el mismo sitio. Sin `Origin` (n8n, curl) no aplica. Si el front se publica en un dominio distinto al de la API (sin rewrite), ese origen tiene que ir en `CORS_ORIGINS`.
+
 ## Reglas técnicas obligatorias
 
 - Migraciones versionadas desde el primer commit.

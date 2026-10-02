@@ -22,6 +22,7 @@ El health check queda disponible en `GET /health`.
 - Documentos usan `STORAGE_DRIVER=gcs` en producción (no `local`: el filesystem de Cloud Run es efímero y no persiste entre reinicios ni se comparte entre instancias).
 - Secretos (`CRM_CALLBACK_API_KEY`, `WEBHOOK_ENTRADA_API_KEY`, `REPLY_TO_SIGNING_SECRET`, `DATABASE_URL`) viven en Secret Manager, nunca en el código ni en variables de entorno planas.
 - El servicio es públicamente alcanzable (requirió una excepción a la política organizacional `iam.allowedPolicyMemberDomains`, aprobada por el Owner del proyecto) — la seguridad real la sigue haciendo la propia API (`ApiKeyGuard`/`SessionAuthGuard`), no el borde de Cloud Run.
+- CSRF: una petición que cambia datos desde otro origen responde 403 `ORIGEN_NO_PERMITIDO` (`src/shared/origen-csrf.ts`). Si el front se publica en un dominio distinto al de la API (sin rewrite `/api/**`), ese origen va en `CORS_ORIGINS`.
 
 Redesplegar tras un cambio de código:
 ```bash
@@ -86,7 +87,7 @@ completa — ver "Qué falta" más abajo.
 
 ```
 src/
-  main.ts                              bootstrap: cookie-parser, límite de body, filtro global de errores
+  main.ts                              arranque; el armado (CSRF, body, cookies, CORS, filtro) está en shared/configurar-app.ts
   app.module.ts                        módulo raíz
   health/health.controller.ts          GET /health
   config/env.ts                        variables de entorno validadas con Zod
