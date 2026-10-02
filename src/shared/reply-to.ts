@@ -19,6 +19,15 @@ export function firmarReplyTo(envioId: number) {
   return `r+${envioId}.${firma(envioId)}@${env.REPLY_TO_DOMAIN}`;
 }
 
+// ¿La dirección tiene la forma de un Reply-To nuestro (r+<id>.<firma>@…),
+// aunque la firma no sea válida? Inbound Parse recibe correo para cualquier
+// dirección del subdominio de respuestas; las que ni siquiera tienen esta
+// forma (info@, ventas@... casi siempre spam) no son respuestas a un correo
+// nuestro (A5 del plan de fixes, 2-oct-2026).
+export function tieneFormaDeReplyTo(direccion: string): boolean {
+  return FORMATO.test(direccion.trim().toLowerCase());
+}
+
 // Devuelve el envio_id si la dirección es un Reply-To nuestro con firma
 // válida; null en cualquier otro caso (otro dominio, sin firma, alterada).
 export function leerReplyTo(direccion: string): number | null {

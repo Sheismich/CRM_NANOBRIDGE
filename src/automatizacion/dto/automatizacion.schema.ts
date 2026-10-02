@@ -108,6 +108,11 @@ export const registroSupresionInputSchema = z.object({
   valor: z.string().trim().min(1).max(512),
   motivo: z.string().trim().min(2).max(255),
   evento: z.enum([...EVENTOS_BAJA_DE_PERSONA, "bounce"]).optional()
+}).refine((input) => input.tipo !== "correo" || z.email().safeParse(input.valor).success, {
+  // Antes "Juan <j@x.com>" respondía 201 y no bloqueaba a nadie: no
+  // coincide con ningún correo guardado (A5 del plan de fixes, 2-oct-2026).
+  message: "Con tipo correo, valor debe ser un correo válido",
+  path: ["valor"]
 });
 export type RegistroSupresionInput = z.infer<typeof registroSupresionInputSchema>;
 

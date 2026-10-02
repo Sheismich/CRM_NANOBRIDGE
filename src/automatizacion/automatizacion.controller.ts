@@ -150,7 +150,8 @@ export class AutomatizacionController {
   async respuestaRecibida(@Body() body: unknown, @Res({ passthrough: true }) response: Response) {
     const input = respuestaRecibidaInputSchema.parse(body);
     const result = await this.automatizacionService.registrarRespuesta(input);
-    response.status(result.ya_existia ? 200 : 201);
+    // 200 también si se ignoró (dirección que no es de nuestras respuestas).
+    response.status(result.ya_existia || "ignorada" in result ? 200 : 201);
     return result;
   }
 

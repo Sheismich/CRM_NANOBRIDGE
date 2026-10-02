@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { ensureSeedAdmin } from "./support/seed.js";
 import { respuestas, tareas } from "../src/database/schema.js";
 import { firmarReplyTo } from "../src/shared/reply-to.js";
 
@@ -132,17 +133,29 @@ describe("Reply-To firmado", () => {
       expect(segundo.body.tarea_id).toBe(primero.body.tarea_id);
     });
 
+    // Con la forma r+<id>.<firma>@ pero sin firma válida: puede ser una
+    // respuesta real alterada, así que se deja tarea.
     it.each([
       ["otro dominio", (id: number) => firmarReplyTo(id).replace("@respuestas.contacto.nano-bridge-mex.com", "@otro-dominio.test")],
-      ["sin firma", (id: number) => `r+${id}@respuestas.contacto.nano-bridge-mex.com`],
-      ["texto cualquiera", () => "ventas@respuestas.contacto.nano-bridge-mex.com"],
       ["envío que no existe, aunque la firma sea válida", () => firmarReplyTo(999_999_999)]
-    ])("%s", async (_caso, direccion) => {
+    ])("%s: tarea 'no identificada'", async (_caso, direccion) => {
       const prospectoId = await registrarProspecto();
       const envio = await registrarEnvio(prospectoId);
       const res = await registrarRespuesta({ reply_to: direccion(envio.body.id as number) });
       expect(res.status).toBe(201);
       expect(res.body.identificada).toBe(false);
+    });
+
+    // Sin la forma: no es respuesta a un correo nuestro (A5, 2-oct-2026).
+    it.each([
+      ["sin firma", (id: number) => `r+${id}@respuestas.contacto.nano-bridge-mex.com`],
+      ["texto cualquiera", () => "ventas@respuestas.contacto.nano-bridge-mex.com"]
+    ])("%s: se ignora sin tarea", async (_caso, direccion) => {
+      const prospectoId = await registrarProspecto();
+      const envio = await registrarEnvio(prospectoId);
+      const res = await registrarRespuesta({ reply_to: direccion(envio.body.id as number) });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ identificada: false, ignorada: "direccion_no_valida", tarea_id: null });
     });
 
     it("una respuesta automática sin firma válida se descarta, sin tarea", async () => {
@@ -151,6 +164,50 @@ describe("Reply-To firmado", () => {
       expect(res.status).toBe(201);
       expect(res.body.identificada).toBe(false);
       expect(res.body.tarea_id).toBeNull();
+    });
+  });
+
+  // A5 del plan de fixes (2-oct-2026). Inbound Parse recibe correo para
+  // CUALQUIER dirección del subdominio de respuestas: el spam a info@,
+  // ventas@... creaba una tarea "Respuesta no identificada" cada uno. Solo
+  // una dirección con la forma r+<id>.<firma>@ es una respuesta nuestra
+  // (alterada o no); las demás se ignoran sin tarea.
+  describe("direcciones que no son de nuestras respuestas", () => {
+    it("una dirección sin la forma r+<id>.<firma>: 200, ignorada y sin tarea", async () => {
+      const contenido = `spam ${randomUUID()}`;
+      const res = await registrarRespuesta({ reply_to: "info@respuestas.contacto.nano-bridge-mex.com", remitente: "spam@spam.test", contenido, crear_tarea_clasificacion: true });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ identificada: false, ignorada: "direccion_no_valida", tarea_id: null });
+      const tareasCreadas = await db.select().from(tareas).where(eq(tareas.descripcion, `De: spam@spam.test\nPara: info@respuestas.contacto.nano-bridge-mex.com\n\n${contenido}`));
+      expect(tareasCreadas).toHaveLength(0);
+    });
+
+    it("una respuesta identificada guarda quién la mandó (remitente)", async () => {
+      const prospectoId = await registrarProspecto();
+      const envio = await registrarEnvio(prospectoId);
+      const res = await registrarRespuesta({ reply_to: envio.body.reply_to, remitente: "Compañero <companero@empresa.test>", crear_tarea_clasificacion: true });
+      expect(res.status).toBe(201);
+      const [fila] = await db.select({ remitente: respuestas.remitente }).from(respuestas).where(eq(respuestas.id, res.body.id));
+      expect(fila!.remitente).toBe("Compañero <companero@empresa.test>");
+
+      const cola = await api().get("/api/v1/cola-clasificacion").query({ limit: 100 }).set("Cookie", await ensureSeedAdmin(app));
+      const item = (cola.body.data as { id: number; respuesta: { remitente?: string } | null }[]).find((t) => t.id === res.body.tarea_id);
+      expect(item?.respuesta?.remitente).toBe("Compañero <companero@empresa.test>");
+    });
+  });
+
+  describe("POST /supresion con tipo correo", () => {
+    function suprimir(valor: string) {
+      return api().post("/api/v1/automatizacion/supresion").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), tipo: "correo", valor, motivo: "prueba" });
+    }
+
+    it("un valor que no es un correo: 400 (antes 201 sin bloquear a nadie)", async () => {
+      expect((await suprimir("Juan <juan@empresa.test>")).status).toBe(400);
+      expect((await suprimir("no-es-correo")).status).toBe(400);
+    });
+
+    it("un correo válido sigue funcionando", async () => {
+      expect((await suprimir(`valido.${randomUUID()}@empresa.test`)).status).toBe(201);
     });
   });
 

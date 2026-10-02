@@ -379,7 +379,9 @@ export const respuestas = mysqlTable("respuestas", {
   confianzaSugerida: tinyint("confianza_sugerida", { unsigned: true }),
   motivoSugerencia: varchar("motivo_sugerencia", { length: 500 }),
   executionIdSugerencia: varchar("execution_id_sugerencia", { length: 100 }),
-  sugeridoEn: datetime("sugerido_en")
+  sugeridoEn: datetime("sugerido_en"),
+  // 024_respuestas_remitente.sql: el "From" del correo, tal cual lo manda n8n.
+  remitente: varchar("remitente", { length: 320 })
 }, (table) => [
   uniqueIndex("uq_respuestas_execution_id").on(table.executionId),
   uniqueIndex("uq_respuestas_execution_id_clasificacion").on(table.executionIdClasificacion),

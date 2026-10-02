@@ -13,7 +13,7 @@ import { buscarPersona } from "../shared/identidad.js";
 import { campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { fechaMx } from "../shared/dia-habil.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
-import { firmarReplyTo, leerReplyTo } from "../shared/reply-to.js";
+import { firmarReplyTo, leerReplyTo, tieneFormaDeReplyTo } from "../shared/reply-to.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import { EVENTOS_BAJA_DE_PERSONA } from "./dto/automatizacion.schema.js";
@@ -1074,6 +1074,14 @@ export class AutomatizacionService {
 
     let prospectoId = input.prospecto_id;
     if (input.reply_to !== undefined) {
+      // Sin la forma r+<id>.<firma>@… no es respuesta a un correo nuestro
+      // (casi siempre spam a otra dirección del subdominio): se ignora sin
+      // crear tarea (A5, 2-oct-2026). Con la forma pero firma inválida sí
+      // se crea "Respuesta no identificada": puede ser una respuesta real
+      // alterada.
+      if (!tieneFormaDeReplyTo(input.reply_to)) {
+        return { id: null, identificada: false as const, ignorada: "direccion_no_valida" as const, prospecto_id: null, envio_id: null, tardia: null, tarea_id: null, ya_existia: false as const };
+      }
       const envioFirmado = leerReplyTo(input.reply_to);
       const [envio] = envioFirmado === null
         ? []
@@ -1110,6 +1118,7 @@ export class AutomatizacionService {
           envioId,
           canal: input.canal,
           contenido: input.contenido ?? null,
+          remitente: input.remitente ?? null,
           tardia,
           executionId: input.execution_id,
           // Una respuesta automática (fuera de oficina) no es una respuesta

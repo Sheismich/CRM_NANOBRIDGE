@@ -249,7 +249,8 @@ export class TareasService {
         respuestaClasificacion: respuestas.clasificacion,
         respuestaClasificacionSugerida: respuestas.clasificacionSugerida,
         respuestaConfianzaSugerida: respuestas.confianzaSugerida,
-        respuestaMotivoSugerencia: respuestas.motivoSugerencia
+        respuestaMotivoSugerencia: respuestas.motivoSugerencia,
+        respuestaRemitente: respuestas.remitente
       })
       .from(tareas)
       .leftJoin(empresas, eq(empresas.id, tareas.empresaId))
@@ -283,7 +284,9 @@ export class TareasService {
               // este campo como "n8n: …".
               clasificacion_sugerida: r.respuestaClasificacionSugerida ?? r.respuestaClasificacion,
               confianza_sugerida: r.respuestaConfianzaSugerida,
-              motivo_sugerencia: r.respuestaMotivoSugerencia
+              motivo_sugerencia: r.respuestaMotivoSugerencia,
+              // Quién la mandó (puede no ser el prospecto si reenvió el correo).
+              remitente: r.respuestaRemitente
             }
           : null
       }))
