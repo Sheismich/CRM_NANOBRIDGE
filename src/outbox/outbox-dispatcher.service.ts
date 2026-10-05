@@ -15,12 +15,15 @@ import { env } from "../config/env.js";
 // nunca a esperar esos 120s (hallazgo de code review, 14-sep-2026).
 const RETRY_BACKOFF_MS = [5_000, 30_000, 120_000];
 const BATCH_SIZE = 20;
-// Cuánto dura el reclamo de un evento 'procesando' antes de que otra
-// corrida lo pueda volver a tomar (B4, 2-oct-2026). Muy por encima de lo que
-// tarda un lote completo: cada envío tiene ENVIO_TIMEOUT_MS de tope.
-const RECLAMO_SEGUNDOS = 120;
 // Tope por envío a n8n: antes no había, y un n8n colgado trababa el lote.
 const ENVIO_TIMEOUT_MS = 10_000;
+// Cuánto dura el reclamo de un evento 'procesando' antes de que otra
+// corrida lo pueda volver a tomar (B4, 2-oct-2026). Tiene que cubrir el PEOR
+// lote completo (todos los envíos llegando a su tope) más margen para la
+// base: con 120 s fijos, un lote de 20 x 10 s dejaba que otra instancia
+// volviera a tomar eventos que la primera seguía enviando (code review de
+// verificación, 5-oct-2026).
+const RECLAMO_SEGUNDOS = (BATCH_SIZE * ENVIO_TIMEOUT_MS) / 1000 + 60;
 
 /**
  * Despachador del patrón outbox: entrega asíncronamente a n8n los eventos
@@ -62,7 +65,12 @@ export class OutboxDispatcherService {
               eq(eventosPendientes.estado, "pendiente"),
               or(isNull(eventosPendientes.proximoIntentoEn), lte(eventosPendientes.proximoIntentoEn, sql`CURRENT_TIMESTAMP`))
             ),
-            and(eq(eventosPendientes.estado, "procesando"), lte(eventosPendientes.proximoIntentoEn, sql`CURRENT_TIMESTAMP`))
+            // NULL = reclamado por la versión de antes del Bloque B, que no
+            // ponía vencimiento: sin esto se quedaban atorados para siempre.
+            and(
+              eq(eventosPendientes.estado, "procesando"),
+              or(isNull(eventosPendientes.proximoIntentoEn), lte(eventosPendientes.proximoIntentoEn, sql`CURRENT_TIMESTAMP`))
+            )
           ))
           .limit(BATCH_SIZE)
           .for("update", { skipLocked: true });
@@ -107,8 +115,15 @@ export class OutboxDispatcherService {
     // siendo casi siempre un problema transitorio de la propia base (no de
     // n8n), así que solo se deja constancia para revisión manual en vez de
     // depender exclusivamente de la deduplicación de n8n.
+    //
+    // La entrega confirmada gana sobre un reintento que otra corrida dejó
+    // 'pendiente' (así no se reenvía), pero no toca uno 'fallido': ese ya
+    // está en procesos_fallidos para revisión manual.
     try {
-      await this.db.update(eventosPendientes).set({ estado: "enviado" }).where(eq(eventosPendientes.id, event.id));
+      await this.db.update(eventosPendientes).set({ estado: "enviado" }).where(and(
+        eq(eventosPendientes.id, event.id),
+        inArray(eventosPendientes.estado, ["procesando", "pendiente"])
+      ));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Evento ${event.id} (${event.tipo}) se entregó a n8n pero no se pudo marcar 'enviado' en la base -- revisar manualmente para no reenviarlo: ${message}`);
@@ -146,13 +161,25 @@ export class OutboxDispatcherService {
     // intento (el 4°) también falló -- ahí sí se agotan los reintentos.
     const delayMs = RETRY_BACKOFF_MS[attempts - 1];
 
+    // Solo cuenta el fallo si el evento sigue como esta corrida lo reclamó:
+    // 'procesando' y con el mismo número de intentos. Si otra corrida ya lo
+    // envió, ya lo reintentó o ya lo dio por fallido, este fallo atrasado no
+    // le pisa nada (antes lo regresaba a 'pendiente' y se reenviaba, o
+    // creaba un procesos_fallidos falso -- code review, 5-oct-2026).
+    const sigueSiendoMio = and(
+      eq(eventosPendientes.id, event.id),
+      eq(eventosPendientes.estado, "procesando"),
+      eq(eventosPendientes.intentos, event.intentos)
+    );
+
     if (delayMs === undefined) {
-      await this.db.transaction(async (tx) => {
-        await tx.update(eventosPendientes).set({
+      const marcado = await this.db.transaction(async (tx) => {
+        const [result] = await tx.update(eventosPendientes).set({
           estado: "fallido",
           intentos: attempts,
           ultimoError: message
-        }).where(eq(eventosPendientes.id, event.id));
+        }).where(sigueSiendoMio);
+        if (result.affectedRows === 0) return false;
 
         await tx.insert(procesosFallidos).values({
           eventoId: event.id,
@@ -160,17 +187,26 @@ export class OutboxDispatcherService {
           payload: event.payload,
           mensaje: message
         });
+        return true;
       });
+      if (!marcado) {
+        this.logger.warn(`Evento ${event.id} (${event.tipo}) falló, pero otra corrida ya lo había resuelto: no se toca`);
+        return;
+      }
       this.logger.error(`Evento ${event.id} (${event.tipo}) agotó reintentos tras ${attempts} intentos: ${message}`);
       return;
     }
 
-    await this.db.update(eventosPendientes).set({
+    const [result] = await this.db.update(eventosPendientes).set({
       estado: "pendiente",
       intentos: attempts,
       ultimoError: message,
       proximoIntentoEn: sql`DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ${delayMs / 1000} SECOND)`
-    }).where(eq(eventosPendientes.id, event.id));
+    }).where(sigueSiendoMio);
+    if (result.affectedRows === 0) {
+      this.logger.warn(`Evento ${event.id} (${event.tipo}) falló, pero otra corrida ya lo había resuelto: no se toca`);
+      return;
+    }
     this.logger.warn(`Evento ${event.id} (${event.tipo}) falló (intento ${attempts}), reintenta en ${delayMs / 1000}s: ${message}`);
   }
 }
