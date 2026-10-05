@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
-import { contactos, mediosContacto } from "../database/schema.js";
+import { contactos, empresas, mediosContacto } from "../database/schema.js";
 
 export type IdentidadPersona =
   | { tipo: "misma_persona"; contactoId: number; empresaId: number; motivo: "correo" | "telefono" }
@@ -26,13 +26,20 @@ export type IdentidadPersona =
  *   whatsapp (antes solo se buscaba como telefono).
  *
  * No toca medios de empresa (contacto_id NULL): esos no son personas.
+ *
+ * Contactos y empresas desactivados SÍ cuentan como la misma persona:
+ * desactivar no borra sus medios (el UNIQUE global los sigue apartando) y
+ * verificarEnvio ya no les manda nada. Lo que no se hace es meter a una
+ * persona NUEVA en la empresa desactivada de quien tiene su teléfono: ahí
+ * nadie la vería (code review de verificación, 5-oct-2026).
  */
 export async function buscarPersona(db: DrizzleDb | DrizzleTx, datos: { correoNormalizado: string | null; telefonoNormalizado: string | null }): Promise<IdentidadPersona> {
   const [porTelefono] = datos.telefonoNormalizado
     ? await db
-      .select({ contactoId: contactos.id, empresaId: contactos.empresaId })
+      .select({ contactoId: contactos.id, empresaId: contactos.empresaId, empresaActiva: empresas.activo })
       .from(mediosContacto)
       .innerJoin(contactos, eq(contactos.id, mediosContacto.contactoId))
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
       .where(and(inArray(mediosContacto.tipo, ["telefono", "whatsapp"]), eq(mediosContacto.valorNormalizado, datos.telefonoNormalizado)))
       .orderBy(mediosContacto.id)
       .limit(1)
@@ -46,7 +53,7 @@ export async function buscarPersona(db: DrizzleDb | DrizzleTx, datos: { correoNo
       .where(and(eq(mediosContacto.tipo, "correo"), eq(mediosContacto.valorNormalizado, datos.correoNormalizado)))
       .limit(1);
     if (porCorreo) return { tipo: "misma_persona", contactoId: porCorreo.contactoId, empresaId: porCorreo.empresaId, motivo: "correo" };
-    return { tipo: "nueva", empresaDelTelefono: porTelefono?.empresaId ?? null, telefonoOcupado: !!porTelefono };
+    return { tipo: "nueva", empresaDelTelefono: porTelefono?.empresaActiva ? porTelefono.empresaId : null, telefonoOcupado: !!porTelefono };
   }
 
   if (porTelefono) return { tipo: "misma_persona", contactoId: porTelefono.contactoId, empresaId: porTelefono.empresaId, motivo: "telefono" };

@@ -2,7 +2,7 @@ import { and, eq, ne } from "drizzle-orm";
 import type { DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, prospectos } from "../database/schema.js";
 import type { ClasificacionRespuesta } from "./clasificaciones.js";
-import { darDeBajaPersona, personaEnBaja } from "./baja-prospecto.js";
+import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "./baja-prospecto.js";
 import { HttpError } from "./http-error.js";
 import { suprimirContactoPorBaja } from "./supresion.js";
 
@@ -59,6 +59,9 @@ export async function aplicarClasificacionAlProspecto(tx: DrizzleTx, prospectoId
   const motivo = `Clasificada como ${clasificacion} (${origen.descripcion})`;
   const [antes] = await tx.select({ estado: prospectos.estado, contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
   if (!antes) throw new HttpError(404, "Prospecto no encontrado");
+  // La persona antes que el prospecto (ver bloquearPersona): después de
+  // esto puede venir el UPDATE del prospecto y la tarea de seguimiento.
+  await bloquearPersona(tx, antes.contactoId);
 
   if (clasificacion === "baja") {
     // La baja es de la persona: todos sus prospectos (A2, 2-oct-2026).

@@ -6,7 +6,8 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, eventosPendientes, tareas } from "../src/database/schema.js";
+import { auditoria, empresas, eventosPendientes, tareas } from "../src/database/schema.js";
+import { TareasService } from "../src/tareas/tareas.service.js";
 
 // Mismo valor fijado en test/setup/setup-env.ts.
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -147,6 +148,28 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       expect(audit?.despues).toEqual({ responsable_id: agente1.id });
     });
 
+    // Code review de verificación, 5-oct-2026: "ya es suya" salía antes de
+    // revisar la empresa. Una tarea que el agente ya tenía desde antes de C1
+    // (o cuya empresa era de un agente que luego se desactivó) no se podía
+    // arreglar reasignándosela.
+    it("reasignar al mismo agente también le da la empresa sin dueño", async () => {
+      const prospecto = await request(app.getHttpServer())
+        .post("/api/v1/automatizacion/prospectos")
+        .set("X-API-Key", API_KEY)
+        .send({ execution_id: randomUUID(), empresa: { nombreLegal: `Empresa Reasignar ${randomUUID()}` }, contacto: { nombre: "Persona Reasignar", correo: `reasignar.${randomUUID()}@test.local` } });
+      const creada = await request(app.getHttpServer())
+        .post("/api/v1/automatizacion/tareas")
+        .set("X-API-Key", API_KEY)
+        .send({ execution_id: `reasignar-${randomUUID()}`, tipo: "seguimiento", titulo: "Ya era del agente", prospecto_id: prospecto.body.id });
+      // Asignada al agente antes de que asignar diera la empresa.
+      await db.update(tareas).set({ responsableId: agente1.id }).where(eq(tareas.id, creada.body.id));
+
+      expect((await asignar(adminCookie, creada.body.id, agente1.id)).status).toBe(200);
+
+      const [empresa] = await db.select({ propietarioId: empresas.propietarioId }).from(empresas).where(eq(empresas.id, prospecto.body.empresa_id));
+      expect(empresa.propietarioId).toBe(agente1.id);
+    });
+
     it("solo administrador/supervisor asignan (un agente recibe 403)", async () => {
       const id = await crearTarea(adminCookie, { titulo: "No la reasigna un agente", responsableId: agente1.id });
       expect((await asignar(agente1.cookie, id, agente2.id)).status).toBe(403);
@@ -189,7 +212,9 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
     it("una tarea ya cerrada, o cancelada (estado no alcanzable por la API), no se puede volver a cerrar", async () => {
       const idCerrada = await crearTarea(adminCookie, { titulo: "Tarea doble cierre", responsableId: agente1.id });
       await cerrar(agente1.cookie, idCerrada);
-      expect((await cerrar(agente1.cookie, idCerrada)).status).toBe(409);
+      const otraVez = await cerrar(agente1.cookie, idCerrada);
+      expect(otraVez.status).toBe(409);
+      expect(otraVez.body.code).toBe("TAREA_CERRADA");
 
       // 'cancelada' no lo fija ningún endpoint hoy (ver comentario en
       // tareas.service.ts) -- se simula escribiendo directo, mismo criterio
@@ -213,10 +238,31 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       expect(tarea!.estado).toBe("pendiente");
     });
 
+    it("si se la reasignaron mientras la cerraba, el agente recibe 409 TAREA_REASIGNADA", async () => {
+      const id = await crearTarea(adminCookie, { titulo: "Reasignada a medio cierre", responsableId: agente1.id });
+      // El agente la lee como suya; justo antes del UPDATE se la pasan a otro.
+      const servicio = app.get(TareasService);
+      const original = servicio["findAssignable"].bind(servicio);
+      servicio["findAssignable"] = async (...args: Parameters<typeof original>) => {
+        const row = await original(...args);
+        await db.update(tareas).set({ responsableId: agente2.id }).where(eq(tareas.id, id));
+        return row;
+      };
+      try {
+        const res = await cerrar(agente1.cookie, id);
+        expect(res.status).toBe(409);
+        expect(res.body.code).toBe("TAREA_REASIGNADA");
+      } finally {
+        servicio["findAssignable"] = original;
+      }
+    });
+
     it("dos cierres simultáneos sobre la misma tarea: solo uno gana", async () => {
       const id = await crearTarea(adminCookie, { titulo: "Tarea cierre concurrente", responsableId: agente1.id });
       const [a, b] = await Promise.all([cerrar(adminCookie, id, "primero"), cerrar(adminCookie, id, "segundo")]);
       expect([a.status, b.status].sort()).toEqual([200, 409]);
+      // Quien pierde sabe por qué: ya estaba cerrada (no "o ya no es tuya").
+      expect((a.status === 409 ? a : b).body.code).toBe("TAREA_CERRADA");
     });
   });
 

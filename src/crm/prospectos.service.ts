@@ -22,6 +22,8 @@ const CSV_MAX_FILAS = 2000;
 const CSV_MAX_COLUMNAS = 40;
 export const CODIGO_IMPORTACION_VENCIDA = "IMPORTACION_VENCIDA";
 export const CODIGO_CONTACTO_DE_OTRO_AGENTE = "CONTACTO_DE_OTRO_AGENTE";
+export const CODIGO_CONTACTO_DESACTIVADO = "CONTACTO_DESACTIVADO";
+export const CODIGO_PERSONA_YA_REGISTRADA = "PERSONA_YA_REGISTRADA";
 
 type ErrorFila = { campo: string; mensaje: string };
 type BorradorRow = typeof borradoresCaptura.$inferSelect;
@@ -344,12 +346,19 @@ export class ProspectosService {
           throw new HttpError(409, "Esta fila duplica otra fila del mismo archivo que todavía no ha sido confirmada ni rechazada; resuelve esa otra fila primero");
         }
         const [contacto] = await tx
-          .select({ id: contactos.id, empresaId: contactos.empresaId, propietarioId: empresas.propietarioId })
+          .select({ id: contactos.id, empresaId: contactos.empresaId, propietarioId: empresas.propietarioId, contactoActivo: contactos.activo, empresaActiva: empresas.activo })
           .from(contactos)
           .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
           .where(eq(contactos.id, borrador.matchContactoId))
           .limit(1);
         if (!contacto) throw new HttpError(409, "El contacto con el que coincidía esta fila ya no existe");
+        // Colgarle el prospecto a un contacto o empresa desactivados lo
+        // dejaba invisible en el CRM (code review de verificación,
+        // 5-oct-2026). No se crea otra persona con su mismo correo: el UNIQUE
+        // de medios_contacto no lo permite y además se saltaría su historial.
+        if (!contacto.contactoActivo || !contacto.empresaActiva) {
+          throw new HttpError(409, "Esta persona está desactivada en el CRM; no se le puede crear un prospecto. Recházala", CODIGO_CONTACTO_DESACTIVADO);
+        }
         // Un agente no cuelga su prospecto de un contacto de otro (C4).
         if (user.rol === "agente" && contacto.propietarioId !== user.id) {
           throw new HttpError(409, "Esta persona ya está en el CRM en una empresa de otro agente; pídele a un supervisor que confirme la fila", CODIGO_CONTACTO_DE_OTRO_AGENTE);
@@ -363,7 +372,7 @@ export class ProspectosService {
         // medios_contacto como un 500.
         const identidad = await buscarPersona(tx, { correoNormalizado: borrador.correoNormalizado, telefonoNormalizado: borrador.telefonoNormalizado });
         if (identidad.tipo === "misma_persona") {
-          throw new HttpError(409, "Esta persona ya existe en el CRM (se registró después de importar la fila); vuelve a importarla para confirmarla como duplicado, o recházala");
+          throw new HttpError(409, "Esta persona ya existe en el CRM (se registró después de importar la fila); vuelve a importarla para confirmarla como duplicado, o recházala", CODIGO_PERSONA_YA_REGISTRADA);
         }
 
         // Persona nueva que comparte el teléfono (conmutador) con alguien ya

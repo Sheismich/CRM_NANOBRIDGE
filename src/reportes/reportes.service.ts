@@ -400,11 +400,11 @@ export class ReportesService {
   // "cómo estaba el pipeline el día X". Lo dispara n8n cada día (ver abajo); mismo
   // criterio que ProspectosService.limpiarBorradoresVencidos.
   //
-  // "hoy" se resuelve UNA sola vez en MySQL (no Node, por el desfase de
-  // zona horaria de siempre) y se reusa en el filtro de ganadas/perdidas,
-  // el UPSERT y el valor devuelto -- evaluar CURDATE() por separado en
-  // cada consulta podía escribir en un día y no encontrar la fila si la
-  // corrida caía justo a medianoche (hallazgo de code-review, 15-sep-2026).
+  // El día se resuelve UNA sola vez (el que manda n8n, o fechaMx() de hoy)
+  // y se reusa en el filtro de ganadas/perdidas, el UPSERT y el valor
+  // devuelto -- evaluar CURDATE() por separado en cada consulta podía
+  // escribir en un día y no encontrar la fila si la corrida caía justo a
+  // medianoche (hallazgo de code-review, 15-sep-2026).
   //
   // No relee la fila después del UPSERT: dos invocaciones (el trabajo diario y
   // el endpoint manual de abajo) pueden solaparse, y una relectura después
@@ -421,12 +421,13 @@ export class ReportesService {
   // (en Cloud Run nunca llegaba: la instancia se apaga sola): lo dispara n8n
   // vía POST /automatizacion/jobs/metricas-diarias con el día ANTERIOR, ya
   // completo. El día es de México, no de UTC: la conexión corre en UTC y
-  // DATE(actualizado_en) cambiaba de día a las 6 pm de México. México no
-  // tiene horario de verano desde 2022, por eso basta restar 6 horas.
+  // DATE(actualizado_en) cambiaba de día a las 6 pm de México. Se filtra con
+  // el mismo rango de instantes que los reportes (condicionRangoFecha), en
+  // vez de restar las 6 horas aparte.
   async calcularMetricasDelDia(fecha: string = fechaMx(new Date())) {
     const hoy = fecha;
 
-    const condicionHoy = sql`DATE(DATE_SUB(${oportunidades.actualizadoEn}, INTERVAL 6 HOUR)) = ${hoy}`;
+    const condicionHoy = sql.join(condicionRangoFecha(oportunidades.actualizadoEn, hoy, hoy), sql` AND `);
     const [abiertas, ganadas, perdidas] = await Promise.all([
       this.contarOportunidadesAbiertas(undefined),
       this.contarOportunidadesCerradas(true, condicionHoy),

@@ -11,7 +11,7 @@ import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
-import { CODIGO_PERSONA_EN_BAJA, personaEnBaja } from "../shared/baja-prospecto.js";
+import { CODIGO_PERSONA_EN_BAJA, personaEnBajaBloqueando } from "../shared/baja-prospecto.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
@@ -72,6 +72,10 @@ function toRow(row: typeof tareas.$inferSelect) {
   };
 }
 
+// Codes de los 409 al cerrar una tarea.
+export const CODIGO_TAREA_CERRADA = "TAREA_CERRADA";
+export const CODIGO_TAREA_REASIGNADA = "TAREA_REASIGNADA";
+
 @Injectable()
 export class TareasService {
   private readonly logger = new Logger(TareasService.name);
@@ -122,11 +126,15 @@ export class TareasService {
   async create(user: CurrentUser, input: CrearTareaInput) {
     const responsableId = user.rol === "agente" ? user.id : input.responsableId;
     const responsable = await responsableAsignable(this.db, responsableId);
-    const { empresaId, contactoId } = await this.contextoDeTarea(user, input);
-    if (input.tipo === "seguimiento" && contactoId !== null && await personaEnBaja(this.db, contactoId)) {
-      throw new HttpError(409, "La persona está dada de baja: no se le hacen seguimientos", CODIGO_PERSONA_EN_BAJA);
-    }
     return this.db.transaction(async (tx) => {
+      // Dentro de la transacción y con la persona bloqueada: si la baja se
+      // confirmaba entre la revisión y el INSERT, el seguimiento nacía
+      // después de que la baja cancelara los suyos y se quedaba abierto
+      // (code review de verificación, 5-oct-2026).
+      const { empresaId, contactoId } = await this.contextoDeTarea(tx, user, input);
+      if (input.tipo === "seguimiento" && contactoId !== null && await personaEnBajaBloqueando(tx, contactoId)) {
+        throw new HttpError(409, "La persona está dada de baja: no se le hacen seguimientos", CODIGO_PERSONA_EN_BAJA);
+      }
       const [result] = await tx.insert(tareas).values({
         tipo: input.tipo,
         titulo: input.titulo,
@@ -149,12 +157,12 @@ export class TareasService {
   // que ser de esa empresa; si solo llega el prospecto (o el contacto), la
   // tarea toma su contacto y su empresa, así sale en la ficha. Un agente
   // solo cuelga tareas de empresas suyas (lo ajeno, 404).
-  private async contextoDeTarea(user: CurrentUser, input: CrearTareaInput) {
+  private async contextoDeTarea(db: DrizzleDb | DrizzleTx, user: CurrentUser, input: CrearTareaInput) {
     let empresaId = input.empresaId ?? null;
     let contactoId = input.contactoId ?? null;
 
     if (input.prospectoId) {
-      const [p] = await this.db
+      const [p] = await db
         .select({ contactoId: prospectos.contactoId, empresaId: contactos.empresaId, activo: contactos.activo })
         .from(prospectos)
         .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
@@ -165,13 +173,13 @@ export class TareasService {
       contactoId = p.contactoId;
       empresaId = p.empresaId;
     } else if (contactoId !== null) {
-      const [c] = await this.db.select({ empresaId: contactos.empresaId, activo: contactos.activo }).from(contactos).where(eq(contactos.id, contactoId)).limit(1);
+      const [c] = await db.select({ empresaId: contactos.empresaId, activo: contactos.activo }).from(contactos).where(eq(contactos.id, contactoId)).limit(1);
       if (!c || !c.activo || (empresaId !== null && c.empresaId !== empresaId)) throw new HttpError(404, "Contacto no encontrado en esa empresa");
       empresaId = c.empresaId;
     }
 
     if (empresaId !== null) {
-      const [e] = await this.db.select({ propietarioId: empresas.propietarioId }).from(empresas).where(and(eq(empresas.id, empresaId), eq(empresas.activo, true))).limit(1);
+      const [e] = await db.select({ propietarioId: empresas.propietarioId }).from(empresas).where(and(eq(empresas.id, empresaId), eq(empresas.activo, true))).limit(1);
       if (!e || (user.rol === "agente" && e.propietarioId !== user.id)) throw new HttpError(404, "Empresa no encontrada");
     }
     return { empresaId, contactoId };
@@ -206,7 +214,17 @@ export class TareasService {
   async asignar(user: CurrentUser, id: number, responsableId: number) {
     const row = await this.findAssignable(user, id);
     const responsable = await responsableAsignable(this.db, responsableId);
-    if (row.responsableId === responsableId) return;
+
+    // Ya es suya: la tarea no cambia, pero la empresa sí se revisa. Antes
+    // salía aquí y no había forma de darle la empresa a un agente que ya
+    // tenía la tarea desde antes de C1 (code review, 5-oct-2026).
+    if (row.responsableId === responsableId) {
+      if (row.empresaId) {
+        const empresaId = row.empresaId;
+        await this.db.transaction((tx) => darEmpresaAlAgente(tx, { empresaId, responsable, actor: user, origen: { tarea_id: id } }));
+      }
+      return;
+    }
 
     await this.db.transaction(async (tx) => {
       const [result] = await tx.update(tareas).set({ responsableId })
@@ -229,7 +247,7 @@ export class TareasService {
   // obligatorio, PLAN_CRM_DEFINITIVO.md #5): nunca se llama a n8n desde aquí
   // directamente, solo se encola el evento en la misma transacción.
   async cerrar(user: CurrentUser, id: number, resultado: string) {
-    const row = await this.findAssignable(user, id);
+    const row = await this.findAssignable(user, id, CODIGO_TAREA_CERRADA);
     // Una tarea de clasificación cerrada por aquí quedaba "resuelta" sin
     // aplicar nada: la respuesta sin clasificar y el prospecto en
     // en_revision para siempre (hallazgo de /code-review, 25-sep-2026).
@@ -255,7 +273,15 @@ export class TareasService {
         // reasignaron entre la lectura y este UPDATE, no la cierra (C2).
         user.rol === "agente" ? eq(tareas.responsableId, user.id) : undefined
       ));
-      if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada o ya no es tuya");
+      if (result.affectedRows === 0) {
+        // Dos causas distintas que la pantalla explica distinto (code review,
+        // 5-oct-2026). Lectura con bloqueo: lo último confirmado.
+        const [actual] = await tx.select({ estado: tareas.estado }).from(tareas).where(eq(tareas.id, id)).limit(1).for("share");
+        if (actual && actual.estado !== "cerrada" && actual.estado !== "cancelada") {
+          throw new HttpError(409, "Te reasignaron esta tarea mientras la cerrabas; ya no es tuya", CODIGO_TAREA_REASIGNADA);
+        }
+        throw new HttpError(409, "La tarea ya está cerrada", CODIGO_TAREA_CERRADA);
+      }
 
       await this.outboxService.enqueue(tx, {
         tipo: "tarea_cerrada",
@@ -545,7 +571,12 @@ export class TareasService {
   // (n8n no lo manda): solo lo pasa AutomatizacionService.clasificarRespuesta
   // al crear la tarea de una respuesta "ambigua", para que la clasificación
   // manual sepa qué respuesta está resolviendo.
-  async createFromAutomation(input: TareaAutomatizacionInput & { respuesta_id?: number }, db: DrizzleDb | DrizzleTx = this.db) {
+  async createFromAutomation(input: TareaAutomatizacionInput & { respuesta_id?: number }, db: DrizzleDb | DrizzleTx = this.db): Promise<{ id: number; ya_existia: boolean } | { id: null; ya_existia: false; omitida: "prospecto_en_baja" }> {
+    // La revisión de baja bloquea a la persona hasta el fin de la
+    // transacción: sin una de quien llama, se abre una propia.
+    if (db === this.db) return this.db.transaction((tx) => this.createFromAutomation(input, tx));
+    const tx = db as DrizzleTx;
+
     const [existing] = await db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
     if (existing) return { id: existing.id, ya_existia: true as const };
 
@@ -557,7 +588,7 @@ export class TareasService {
     // crean tareas de seguimiento (contactarlo). Las de la cola de
     // clasificación sí, para que alguien lea lo que contestó. No es error:
     // id null con el motivo.
-    if (input.tipo === "seguimiento" && contactoId !== null && await personaEnBaja(db, contactoId)) {
+    if (input.tipo === "seguimiento" && contactoId !== null && await personaEnBajaBloqueando(tx, contactoId)) {
       return { id: null, ya_existia: false as const, omitida: "prospecto_en_baja" as const };
     }
 
@@ -579,7 +610,9 @@ export class TareasService {
       return { id: result.insertId, ya_existia: false as const };
     } catch (error) {
       if (isDuplicateEntry(error)) {
-        const [retry] = await db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1);
+        // Lectura con bloqueo: ve la fila que la otra llamada confirmó; la
+        // foto de esta transacción es de antes y no la vería.
+        const [retry] = await db.select({ id: tareas.id }).from(tareas).where(eq(tareas.executionId, input.execution_id)).limit(1).for("share");
         if (retry) return { id: retry.id, ya_existia: true as const };
       }
       throw error;

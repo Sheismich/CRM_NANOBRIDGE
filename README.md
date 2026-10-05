@@ -65,9 +65,9 @@ versionado con CAS contra dos versiones concurrentes, scoping por
 responsable y las reglas de negocio al crear), documentos (validación de
 archivo -- tipo/tamaño/vacío/nombre largo, los 5 tipos permitidos, que la
 extensión de storage sale del mimetype y no del nombre del archivo,
-estados, versionado con CAS, revisión, baja lógica, descarga por URL
-firmada del driver local incluido un token alterado/vencido/con el archivo
-ya borrado, y scoping por agente), tareas y cola de clasificación (cierre
+estados, versionado con CAS, revisión, baja lógica, descarga por el
+propio API con sesión -- sin URL firmada; la ruta pública por token ya no
+existe -- incluido el archivo ya borrado de storage, y scoping por agente), tareas y cola de clasificación (cierre
 con CAS, el endpoint de automatización para n8n con idempotencia por
 `execution_id`, y las reglas propias de clasificar -- tipo y prospecto
 asociado obligatorios), el job diario de métricas comerciales, `/catalogos`

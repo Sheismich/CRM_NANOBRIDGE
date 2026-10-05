@@ -8,7 +8,7 @@ import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
-import { darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
+import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { fechaMx, sumarDiasHabilesMx } from "../shared/dia-habil.js";
@@ -298,7 +298,8 @@ export class AutomatizacionService {
           // con correo solo identifica el correo; sin correo, el teléfono.
           // Sin importar si el contacto está activo: el UNIQUE(tipo,
           // valor_normalizado) de medios_contacto es global, así que reusar
-          // evita chocar con esa restricción al insertar el mismo valor.
+          // evita chocar con esa restricción al insertar el mismo valor (y
+          // verificarEnvio no le manda nada a un contacto desactivado).
           const identidad = await buscarPersona(tx, { correoNormalizado, telefonoNormalizado });
 
           let contactoId: number;
@@ -345,9 +346,13 @@ export class AutomatizacionService {
             });
             contactoId = contact.insertId;
 
+            // El teléfono puede ser de otra persona aunque se cree empresa
+            // nueva (la de esa persona está desactivada): no se vuelve a
+            // guardar, chocaría con el UNIQUE de medios_contacto.
+            const telefonoOcupado = identidad.tipo === "nueva" && identidad.telefonoOcupado;
             await insertarMediosContacto(tx, contactoId, [
               { tipo: "correo", valor: input.contacto.correo, valorNormalizado: correoNormalizado },
-              { tipo: "telefono", valor: input.contacto.telefono, valorNormalizado: telefonoNormalizado }
+              ...(telefonoOcupado ? [] : [{ tipo: "telefono" as const, valor: input.contacto.telefono, valorNormalizado: telefonoNormalizado }])
             ]);
           }
 
@@ -1101,6 +1106,11 @@ export class AutomatizacionService {
     // crear la tarea perdida (hallazgo de code review, 10-sep-2026).
     try {
       return await this.db.transaction(async (tx) => {
+        // La persona antes que el prospecto (ver bloquearPersona): el INSERT
+        // de abajo bloquea al prospecto por la llave foránea y luego puede
+        // venir la tarea de seguimiento de una respuesta tardía.
+        const [duenoDeLaRespuesta] = await tx.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
+        if (duenoDeLaRespuesta) await bloquearPersona(tx, duenoDeLaRespuesta.contactoId);
         const [result] = await tx.insert(respuestas).values({
           prospectoId,
           envioId,

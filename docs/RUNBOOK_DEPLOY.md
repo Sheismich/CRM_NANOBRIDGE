@@ -206,6 +206,34 @@ Actualiza esta tabla en cada deploy.
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
 - `TRUST_PROXY=true` — sin ella, el límite de login es uno solo para todos los usuarios.
 
+### Revisión única: personas fundidas por teléfono (antes del 2-oct-2026)
+
+Antes del Bloque A, una persona que compartía teléfono (el conmutador de su empresa) con
+alguien ya registrado quedaba **fundida** con esa persona: su prospecto se colgaba del
+contacto equivocado y su correo ni se guardaba. El arreglo evita casos nuevos, pero no
+corrige los viejos. Esta consulta (solo lectura) lista los contactos con más de un
+prospecto creado antes del arreglo:
+
+```sql
+SELECT c.id AS contacto_id, c.nombre, e.nombre_legal,
+       COUNT(p.id) AS prospectos,
+       GROUP_CONCAT(p.id ORDER BY p.id) AS prospecto_ids,
+       GROUP_CONCAT(DISTINCT p.fuente_url ORDER BY p.id SEPARATOR ' | ') AS fuentes
+FROM contactos c
+JOIN empresas e ON e.id = c.empresa_id
+JOIN prospectos p ON p.contacto_id = c.id
+WHERE p.creado_en < '2026-10-03'
+GROUP BY c.id, c.nombre, e.nombre_legal
+HAVING COUNT(p.id) > 1
+ORDER BY prospectos DESC;
+```
+
+No todo lo que sale es un error: la misma persona que vuelve a entrar con su mismo correo
+también aparece. Hay que revisar a mano las fuentes de cada fila: si son de personas
+distintas, ese contacto está fundido. El CRM todavía no tiene pantalla para separar
+personas: anota los `prospecto_ids` y se prepara el arreglo en SQL aparte, revisado antes
+de correrlo.
+
 ## 7. Consultar o rotar secretos
 
 Los valores actuales de los secretos no están escritos en ningún documento

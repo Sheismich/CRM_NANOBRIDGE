@@ -1,6 +1,6 @@
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, prospectos, tareas } from "../database/schema.js";
+import { auditoria, contactos, prospectos, tareas } from "../database/schema.js";
 
 export const RESULTADO_TAREA_CANCELADA_POR_BAJA = "Cancelada: el prospecto pidió la baja";
 
@@ -80,7 +80,11 @@ export async function darDeBajaProspecto(tx: DrizzleTx, prospectoId: number, ori
  * tarea de vendedor abierta). Devuelve los prospectos que sí cambiaron.
  */
 export async function darDeBajaPersona(tx: DrizzleTx, contactoId: number, origen: OrigenBaja) {
-  const suyos = await tx.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.contactoId, contactoId)).orderBy(prospectos.id);
+  await bloquearPersona(tx, contactoId);
+  // FOR UPDATE: lo último confirmado, no la foto de la transacción; si no,
+  // un prospecto que entró mientras esta baja esperaba el bloqueo se
+  // quedaba fuera.
+  const suyos = await tx.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.contactoId, contactoId)).orderBy(prospectos.id).for("update");
   const prospectosEnBaja: number[] = [];
   const tareasCanceladas: number[] = [];
   for (const prospecto of suyos) {
@@ -88,7 +92,54 @@ export async function darDeBajaPersona(tx: DrizzleTx, contactoId: number, origen
     if (resultado.cambio) prospectosEnBaja.push(prospecto.id);
     tareasCanceladas.push(...resultado.tareasCanceladas);
   }
+
+  // Los seguimientos ligados solo a la persona (un vendedor los crea desde
+  // la ficha sin prospecto) también se cancelan: antes solo se buscaban por
+  // prospecto y estos se quedaban abiertos (code review, 5-oct-2026).
+  const deLaPersona = await tx
+    .select({ id: tareas.id })
+    .from(tareas)
+    .where(and(eq(tareas.contactoId, contactoId), eq(tareas.tipo, "seguimiento"), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`))
+    .for("update");
+  const sueltas = deLaPersona.map((t) => t.id).filter((id) => !tareasCanceladas.includes(id));
+  if (sueltas.length > 0) {
+    await tx.update(tareas).set({
+      estado: "cancelada",
+      resultado: RESULTADO_TAREA_CANCELADA_POR_BAJA,
+      cerradaEn: sql`CURRENT_TIMESTAMP`
+    }).where(and(inArray(tareas.id, sueltas), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
+    tareasCanceladas.push(...sueltas);
+  }
   return { prospectosEnBaja, tareasCanceladas };
+}
+
+/**
+ * Bloquea a la persona (su fila de contactos) hasta el fin de la
+ * transacción. Es el punto de encuentro entre la baja y quien le crea un
+ * seguimiento: los dos lo toman primero, así que uno espera al otro (code
+ * review de verificación, 5-oct-2026).
+ *
+ * Orden de bloqueo: SIEMPRE la persona antes que sus prospectos. Quien toque
+ * un prospecto (UPDATE, o un INSERT con llave foránea hacia él) y luego le
+ * cree un seguimiento, la bloquea al inicio; al revés, contra una baja en
+ * curso, cada transacción esperaría a la otra (deadlock).
+ */
+export async function bloquearPersona(tx: DrizzleTx, contactoId: number) {
+  await tx.select({ id: contactos.id }).from(contactos).where(eq(contactos.id, contactoId)).for("update");
+}
+
+/**
+ * personaEnBaja para quien va a crearle algo a la persona (un seguimiento):
+ * la bloquea primero y lee lo último confirmado. Si una baja está en curso,
+ * espera a que termine y la ve; si la baja llega después, espera a que este
+ * seguimiento exista y lo cancela. Antes se revisaba sin bloqueo y fuera de
+ * la transacción: el seguimiento nacía justo después de la baja y quedaba
+ * abierto.
+ */
+export async function personaEnBajaBloqueando(tx: DrizzleTx, contactoId: number) {
+  await bloquearPersona(tx, contactoId);
+  const [fila] = await tx.select({ id: prospectos.id }).from(prospectos).where(and(eq(prospectos.contactoId, contactoId), eq(prospectos.estado, "baja"))).limit(1).for("share");
+  return !!fila;
 }
 
 // Code del 409 al crear a mano un seguimiento a una persona dada de baja.

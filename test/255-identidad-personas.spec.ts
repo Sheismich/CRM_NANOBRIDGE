@@ -148,6 +148,7 @@ describe("identidad de personas: el correo manda", () => {
 
       const res = await confirmar(borrador.body.lote_id, borrador.body.id);
       expect(res.status).toBe(409);
+      expect(res.body.code).toBe("PERSONA_YA_REGISTRADA");
       const [medio] = await db.select({ contactoId: mediosContacto.contactoId }).from(mediosContacto).where(and(eq(mediosContacto.tipo, "correo"), eq(mediosContacto.valorNormalizado, correo)));
       expect(medio).toBeDefined();
     });
