@@ -12,8 +12,8 @@ import { formatoFecha } from "../../lib/formato";
 import type { Paginated, Rol, Usuario } from "../../types";
 
 // Usuarios (UsuariosController): administrador y supervisor consultan; solo
-// el administrador da de alta, edita y desactiva. No hay reactivación en el
-// backend: un usuario desactivado se queda así (se muestra, sin acciones).
+// el administrador da de alta, edita, desactiva y reactiva
+// (POST /usuarios/:id/reactivar, 2-oct-2026).
 
 const LIMIT = 25;
 const ETIQUETA_ROL: Record<Rol, string> = { administrador: "Administrador", supervisor: "Supervisor", agente: "Agente", sistema: "Sistema (n8n)" };
@@ -39,12 +39,30 @@ export function UsuariosAdmin({ esAdmin, usuarioActualId }: { esAdmin: boolean; 
   const [activo, setActivo] = useState("true");
   const [creando, setCreando] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [reactivandoId, setReactivandoId] = useState<number | null>(null);
+  const [errorFila, setErrorFila] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const filtros = { page, limit: LIMIT, rol: rol || undefined, activo: activo || undefined };
   const { data, isPending, isError } = useQuery({
     queryKey: ["usuarios", "admin", filtros],
     queryFn: () => api.get<Paginated<Usuario>>("/api/v1/usuarios", filtros)
   });
+
+  async function reactivar(id: number) {
+    setErrorFila(null);
+    setReactivandoId(id);
+    try {
+      await api.post(`/api/v1/usuarios/${id}/reactivar`);
+      await queryClient.invalidateQueries({ queryKey: ["usuarios"] });
+    } catch (error) {
+      // 409: ya estaba activo (otra persona lo reactivó antes).
+      setErrorFila(error instanceof ApiError ? error.message : "No se pudo conectar con el servidor");
+      await queryClient.invalidateQueries({ queryKey: ["usuarios"] });
+    } finally {
+      setReactivandoId(null);
+    }
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -77,6 +95,7 @@ export function UsuariosAdmin({ esAdmin, usuarioActualId }: { esAdmin: boolean; 
       </div>
 
       {creando && <UsuarioForm onDone={() => setCreando(false)} />}
+      {errorFila && <div className="px-5 pb-3"><ServerError message={errorFila} /></div>}
 
       {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los usuarios.</div>}
@@ -114,6 +133,11 @@ export function UsuariosAdmin({ esAdmin, usuarioActualId }: { esAdmin: boolean; 
               setCreando(false);
             }}>
                         {editandoId === u.id ? "Cancelar" : "Editar"}
+                      </Button>
+                    )}
+                    {esAdmin && !u.activo && u.rol !== "sistema" && (
+                      <Button variant="ghost" className="border border-border px-3 py-1.5" disabled={reactivandoId === u.id} onClick={() => void reactivar(u.id)}>
+                        Reactivar
                       </Button>
                     )}
                   </td>
@@ -228,7 +252,7 @@ function UsuarioForm({ usuario, esUnoMismo = false, onDone }: { usuario?: Usuari
           <div className="ml-auto flex items-center gap-2">
             {confirmarBaja ? (
               <>
-                <span className="text-xs text-danger">Ya no podrá iniciar sesión y no se puede reactivar desde aquí.</span>
+                <span className="text-xs text-danger">Se cierran sus sesiones y sus tareas abiertas quedan "Sin asignar". Se puede reactivar después.</span>
                 <Button type="button" variant="primary" onClick={() => void desactivar()}>
                   Sí, desactivar
                 </Button>

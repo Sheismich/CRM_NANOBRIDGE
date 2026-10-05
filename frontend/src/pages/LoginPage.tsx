@@ -34,10 +34,11 @@ export function LoginPage() {
     try {
       await login(values.correo, values.password);
     } catch (error) {
-      // 401 (credenciales incorrectas) y 429 (RateLimitGuard) son los dos
-      // casos esperados del lado del backend -- cualquier otro status se
-      // muestra igual pero es señal de que algo más está mal.
-      setServerError(error instanceof ApiError ? error.message : "No se pudo conectar con el servidor");
+      // 401 (credenciales incorrectas) y 429 (RateLimitGuard por IP, o el
+      // freno por cuenta) son los casos esperados del lado del backend --
+      // cualquier otro status se muestra igual pero es señal de que algo
+      // más está mal.
+      setServerError(mensajeDeLogin(error));
     }
   }
 
@@ -138,6 +139,22 @@ export function LoginPage() {
       </div>
     </div>
   );
+}
+
+function mensajeDeLogin(error: unknown) {
+  if (!(error instanceof ApiError)) return "No se pudo conectar con el servidor";
+  // 10 contraseñas mal en 15 minutos bloquean la cuenta 15 minutos, desde
+  // cualquier IP. Retry-After trae los segundos que faltan.
+  if (error.code === "CUENTA_BLOQUEADA_TEMPORALMENTE") {
+    const minutos = error.retryAfter ? Math.max(1, Math.ceil(error.retryAfter / 60)) : null;
+    return minutos
+      ? `Demasiados intentos fallidos con esta cuenta. Intenta de nuevo en ${minutos} ${minutos === 1 ? "minuto" : "minutos"}.`
+      : "Demasiados intentos fallidos con esta cuenta. Intenta de nuevo más tarde.";
+  }
+  // Protección CSRF: el sitio se abrió desde un dominio que el backend no
+  // tiene en CORS_ORIGINS.
+  if (error.code === "ORIGEN_NO_PERMITIDO") return "Este sitio no está autorizado para conectarse con el CRM. Avisa al administrador.";
+  return error.message;
 }
 
 function Dot({ color }: { color: string }) {

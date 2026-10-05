@@ -296,6 +296,10 @@ function DetalleTarea({ tarea, esAdminOSupervisor, usuarios, onIrACola }: { tare
           <Button variant="outline" className="px-3 py-2" disabled={ocupado || !asignarA || Number(asignarA) === tarea.responsable_id} onClick={() => void asignar()}>
             Asignar
           </Button>
+          {/* Asignar = dar dueño (C1, 2-oct-2026): si la empresa no es de otro agente activo, pasa a este. */}
+          {tarea.empresa_id && usuarios.find((u) => String(u.id) === asignarA)?.rol === "agente" && Number(asignarA) !== tarea.responsable_id && (
+            <span className="pb-2 text-xs text-ink-3">Si la empresa no tiene otro agente activo como dueño, pasa a ser de este agente.</span>
+          )}
         </div>
       )}
 

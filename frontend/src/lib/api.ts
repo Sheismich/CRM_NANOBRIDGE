@@ -1,8 +1,10 @@
 // Cliente HTTP contra el backend (CRM_NANOBRIDGE, src/shared/http-exception.filter.ts
 // define el contrato de error: { error, message, details? }). Sin base URL
 // fija por default: en desarrollo el proxy de Vite (vite.config.ts) sirve
-// /api en el mismo origen; en producción VITE_API_URL apunta al backend
-// real (Cloud Run) y el backend necesita ese origen en CORS_ORIGINS.
+// /api en el mismo origen; en producción Firebase Hosting hace lo mismo con
+// un rewrite de /api/** a Cloud Run (firebase.json), así que VITE_API_URL
+// queda vacío. Solo si el front se publica en otro dominio sin rewrite se
+// usa VITE_API_URL, y ese dominio va en CORS_ORIGINS del backend.
 const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
 export class ApiError extends Error {
@@ -11,13 +13,26 @@ export class ApiError extends Error {
   // Código estable para distinguir un error en el cliente sin comparar el
   // texto del mensaje (ej. "RESPUESTA_YA_CLASIFICADA"); no todos lo traen.
   readonly code: string | undefined;
+  // Segundos del encabezado Retry-After (429 CUENTA_BLOQUEADA_TEMPORALMENTE
+  // del login); undefined si no vino.
+  readonly retryAfter: number | undefined;
 
-  constructor(status: number, message: string, details?: unknown, code?: string) {
+  constructor(status: number, message: string, details?: unknown, code?: string, retryAfter?: number) {
     super(message);
     this.status = status;
     this.details = details;
     this.code = code;
+    this.retryAfter = retryAfter;
   }
+}
+
+// Un 401 en cualquier petición significa que la sesión ya no existe (venció,
+// se cerró en otro lado o se cambió la contraseña). AuthProvider se suscribe
+// para vaciar el caché y mandar al login, así no se quedan en pantalla datos
+// del usuario anterior.
+let alPerderSesion: (() => void) | null = null;
+export function onSesionPerdida(callback: (() => void) | null) {
+  alPerderSesion = callback;
 }
 
 type RequestOptions = {
@@ -55,7 +70,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (response.status === 204) return undefined as T;
 
   const payload = await leerPayload(response);
-  if (!response.ok) throw errorDeRespuesta(response.status, payload);
+  if (!response.ok) {
+    if (response.status === 401) alPerderSesion?.();
+    throw errorDeRespuesta(response.status, payload, response.headers.get("retry-after"));
+  }
   return payload as T;
 }
 
@@ -64,11 +82,12 @@ async function leerPayload(response: Response): Promise<unknown> {
   return contentType.includes("application/json") ? response.json() : response.text();
 }
 
-function errorDeRespuesta(status: number, payload: unknown) {
+function errorDeRespuesta(status: number, payload: unknown, retryAfterHeader?: string | null) {
   const message = typeof payload === "object" && payload !== null && "message" in payload ? String((payload as { message: unknown }).message) : "Error inesperado";
   const details = typeof payload === "object" && payload !== null ? (payload as { details?: unknown }).details : undefined;
   const code = typeof payload === "object" && payload !== null && typeof (payload as { code?: unknown }).code === "string" ? (payload as { code: string }).code : undefined;
-  return new ApiError(status, message, details, code);
+  const retryAfter = retryAfterHeader && Number.isFinite(Number(retryAfterHeader)) ? Number(retryAfterHeader) : undefined;
+  return new ApiError(status, message, details, code, retryAfter);
 }
 
 // Nombre real del archivo desde el Content-Disposition del backend
@@ -92,7 +111,10 @@ function nombreDeDescarga(contentDisposition: string | null) {
 // se arma un Blob y se guarda con un <a download> temporal.
 async function descargar(path: string) {
   const response = await fetch(buildUrl(path), { credentials: "include" });
-  if (!response.ok) throw errorDeRespuesta(response.status, await leerPayload(response));
+  if (!response.ok) {
+    if (response.status === 401) alPerderSesion?.();
+    throw errorDeRespuesta(response.status, await leerPayload(response));
+  }
 
   const url = URL.createObjectURL(await response.blob());
   const enlace = document.createElement("a");

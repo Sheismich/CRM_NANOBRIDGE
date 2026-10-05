@@ -6,6 +6,7 @@ import { Card, SectionTitle } from "../components/ui/Card";
 import { ServerError, inputBaseClass } from "../components/ui/Field";
 import { GraficaConversion, GraficaForecast } from "../components/reportes/Graficas";
 import { ApiError, api } from "../lib/api";
+import { useCampanas } from "../lib/campanas";
 import { ETIQUETA_CLASIFICACION, ETIQUETA_TIPO_TAREA } from "../lib/tareas";
 import { etiquetaMes, fechaLocal, formatoFecha, formatoFechaHora, formatoMonedaEntera, plural } from "../lib/formato";
 import type { Clasificacion, ConversionEtapas, DesempenoAgente, ForecastMes, MetricaDiaria, Paginated, PipelineResumen, ReporteProspeccion, ReporteTareas, Usuario } from "../types";
@@ -48,7 +49,7 @@ function rangoDe(periodo: Exclude<Periodo, "personalizado">): { fechaInicio?: st
   }
 }
 
-type Filtros = { fechaInicio?: string; fechaFin?: string; responsableId?: number };
+type Filtros = { fechaInicio?: string; fechaFin?: string; responsableId?: number; campanaId?: number };
 
 // Mismo nombre de archivo que ReportesService.exportarCsv (el header
 // Content-Disposition no se puede leer desde fetch sin exponerlo en CORS).
@@ -421,10 +422,13 @@ function TareasPorTipo({ filtros }: { filtros: Filtros }) {
 // --- Prospección ----------------------------------------------------------------------
 
 // Envíos y respuestas de la automatización (n8n). Los correos no tienen
-// agente: el filtro de agente no aplica, solo el periodo. No hay selector
-// de campaña porque la tabla ya desglosa por campaña.
+// agente: el filtro de agente no aplica, solo el periodo y, opcional, la
+// campaña (campanaId de GET /reportes/prospeccion).
 function Prospeccion({ rango, filtradoPorAgente }: { rango: Pick<Filtros, "fechaInicio" | "fechaFin">; filtradoPorAgente: boolean }) {
-  const { data, isPending, isError } = useReporte<ReporteProspeccion>("prospeccion", rango);
+  const [campanaId, setCampanaId] = useState("");
+  const { data: campanas } = useCampanas();
+  const filtros: Filtros = { ...rango, campanaId: campanaId ? Number(campanaId) : undefined };
+  const { data, isPending, isError } = useReporte<ReporteProspeccion>("prospeccion", filtros);
   const pct = (v: number | null) => (v == null ? "—" : `${v}%`);
 
   return (
@@ -434,7 +438,17 @@ function Prospeccion({ rango, filtradoPorAgente }: { rango: Pick<Filtros, "fecha
           titulo="Prospección"
           nota={`Correos de la automatización. La tasa es de las personas contactadas en el periodo que respondieron; las respuestas automáticas no cuentan${filtradoPorAgente ? " (no se filtra por agente)" : ""}.`}
         >
-          <BotonExportar reporte="prospeccion" filtros={rango} />
+          {campanas && campanas.data.length > 0 && (
+            <select aria-label="Campaña" className={`${inputBaseClass} w-auto py-1.5 text-xs`} value={campanaId} onChange={(e) => setCampanaId(e.target.value)}>
+              <option value="">Todas las campañas</option>
+              {campanas.data.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          )}
+          <BotonExportar reporte="prospeccion" filtros={filtros} />
         </Encabezado>
       </div>
       <div className="px-5">

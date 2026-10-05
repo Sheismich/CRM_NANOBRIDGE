@@ -263,6 +263,8 @@ export type TareaClasificacion = Tarea & {
     clasificacion_sugerida: string | null;
     confianza_sugerida: number | null;
     motivo_sugerencia: string | null;
+    // El "From" del correo (migración 024); null en respuestas anteriores.
+    remitente: string | null;
   } | null;
 };
 

@@ -1,11 +1,25 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { api, ApiError } from "./api";
+import { useQueryClient } from "@tanstack/react-query";
+import { api, ApiError, onSesionPerdida } from "./api";
 import { AuthContext, type AuthState } from "./auth-context";
 import type { CurrentUser } from "../types";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [status, setStatus] = useState<AuthState["status"]>("loading");
+  const queryClient = useQueryClient();
+
+  // Cualquier 401 deja la sesión por perdida: se vacía el caché para que el
+  // siguiente usuario que entre en este navegador no vea datos del anterior,
+  // y ProtectedRoute manda al login.
+  useEffect(() => {
+    onSesionPerdida(() => {
+      queryClient.clear();
+      setUser(null);
+      setStatus("anonymous");
+    });
+    return () => onSesionPerdida(null);
+  }, [queryClient]);
 
   useEffect(() => {
     api
@@ -27,12 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(correo: string, password: string) {
     const current = await api.post<CurrentUser>("/api/v1/auth/login", { correo, password });
+    queryClient.clear();
     setUser(current);
     setStatus("authenticated");
   }
 
   async function logout() {
-    await api.post("/api/v1/auth/logout");
+    try {
+      await api.post("/api/v1/auth/logout");
+    } finally {
+      queryClient.clear();
+    }
     setUser(null);
     setStatus("anonymous");
   }

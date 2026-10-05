@@ -10,10 +10,16 @@ import { ApiError, api } from "../../lib/api";
 // Mismos límites que crearOportunidadSchema (src/comercial/dto/oportunidad.schema.ts).
 // Sin responsable: el backend la asigna a quien la crea (y a un agente
 // siempre a sí mismo). Nace en la etapa "calificada".
+const VALOR_MAXIMO = 9_999_999_999.99;
 const oportunidadSchema = z.object({
   titulo: z.string().trim().min(2, "Mínimo 2 caracteres").max(255, "Máximo 255 caracteres"),
   contactoId: z.string(),
-  valorEstimado: z.string().trim().refine((v) => v === "" || (Number.isFinite(Number(v)) && Number(v) >= 0), "Monto inválido"),
+  // Tope de DECIMAL(12,2), el mismo que el backend (arriba responde 400).
+  valorEstimado: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || (Number.isFinite(Number(v)) && Number(v) >= 0), "Monto inválido")
+    .refine((v) => v === "" || Number(v) <= VALOR_MAXIMO, "Máximo $9,999,999,999.99"),
   fechaCierreEstimada: z.string()
 });
 type OportunidadInput = z.infer<typeof oportunidadSchema>;

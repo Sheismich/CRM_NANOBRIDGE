@@ -257,7 +257,8 @@ function DocumentoFila({ documento: d, tipo, oportunidad, puedeEliminar }: { doc
         <Button variant="ghost" onClick={() => void descargar()}>
           Descargar
         </Button>
-        {!d.revisado_en && (
+        {/* Solo la versión vigente se revisa: en otra, 409 DOCUMENTO_NO_VIGENTE. */}
+        {!d.revisado_en && d.estado === "vigente" && (
           <Button variant="ghost" disabled={ocupado} onClick={() => void ejecutar(() => api.patch(`/api/v1/documentos/${d.id}/revisar`, {}))}>
             Marcar revisado
           </Button>

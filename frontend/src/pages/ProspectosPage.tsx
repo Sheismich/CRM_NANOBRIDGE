@@ -2,22 +2,27 @@ import { Fragment, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
+import { CampanasTab } from "../components/prospectos/CampanasTab";
 import { NuevoProspectoForm } from "../components/prospectos/NuevoProspectoForm";
 import { Button } from "../components/ui/Button";
 import { Card, SectionTitle } from "../components/ui/Card";
 import { ServerError, inputBaseClass, inputClass } from "../components/ui/Field";
 import { ApiError, api } from "../lib/api";
+import { useAuth } from "../lib/auth-context";
+import { campanasAsignables, useCampanas } from "../lib/campanas";
 import { formatoFecha, formatoFechaHora } from "../lib/formato";
-import { ETIQUETA_MEDIO, claseMedio } from "../lib/medios";
+import { ETIQUETA_MEDIO, avisoMediosSuprimidos, claseMedio } from "../lib/medios";
 import type { Borrador, EstadoBorrador, LoteImportacion, Paginated, ProspectoDetalle, ProspectoResumen } from "../types";
 
 const TABS = [
   { id: "importaciones", label: "Importaciones" },
-  { id: "prospectos", label: "Prospectos" }
+  { id: "prospectos", label: "Prospectos" },
+  { id: "campanas", label: "Campañas" }
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
 export function ProspectosPage() {
+  const { user } = useAuth();
   const [tab, setTab] = useState<TabId>("importaciones");
   // El alta manual vive en la pestaña Prospectos, pero también se lanza
   // desde Importaciones (ahí es donde se llega a capturar).
@@ -36,16 +41,16 @@ export function ProspectosPage() {
           </button>
         ))}
       </div>
-      {tab === "importaciones" ? (
+      {tab === "importaciones" && (
         <Importaciones
           onNuevo={() => {
             setTab("prospectos");
             setCreando(true);
           }}
         />
-      ) : (
-        <ListaProspectos creando={creando} setCreando={setCreando} />
       )}
+      {tab === "prospectos" && <ListaProspectos creando={creando} setCreando={setCreando} />}
+      {tab === "campanas" && <CampanasTab puedeEditar={user?.rol === "administrador" || user?.rol === "supervisor"} />}
     </AppShell>
   );
 }
@@ -103,6 +108,8 @@ const CLASE_ESTADO: Record<EstadoBorrador, string> = {
 };
 const ETIQUETA_CANAL = { correo: "Correo", telefono: "Teléfono", whatsapp: "WhatsApp" } as const;
 
+type Confirmacion = { id: number | null; medios_suprimidos?: string[] };
+
 function Importaciones({ onNuevo }: { onNuevo: () => void }) {
   const queryClient = useQueryClient();
   const archivoInput = useRef<HTMLInputElement>(null);
@@ -111,6 +118,9 @@ function Importaciones({ onNuevo }: { onNuevo: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // Campaña por default para las filas del CSV que no traigan campanaId.
+  const [campanaId, setCampanaId] = useState("");
+  const { data: campanas } = useCampanas();
 
   const { data: lotes, isPending: cargandoLotes } = useQuery({
     queryKey: ["lotes-importacion"],
@@ -153,6 +163,7 @@ function Importaciones({ onNuevo }: { onNuevo: () => void }) {
     void ejecutar(async () => {
       const form = new FormData();
       form.append("archivo", archivo);
+      if (campanaId) form.append("campanaId", campanaId);
       const res = await api.postForm<{ lote_id: string; total: number; resumen: Partial<Record<EstadoBorrador, number>> }>("/api/v1/prospectos/importaciones", form);
       setLoteElegido(res.lote_id);
       setFiltro("");
@@ -163,8 +174,10 @@ function Importaciones({ onNuevo }: { onNuevo: () => void }) {
 
   function confirmarFila(fila: Borrador, usarContactoExistente = false) {
     void ejecutar(async () => {
-      await api.post(`/api/v1/prospectos/importaciones/${loteId}/filas/${fila.id}/confirmar`, { usarContactoExistente });
+      const res = await api.post<Confirmacion>(`/api/v1/prospectos/importaciones/${loteId}/filas/${fila.id}/confirmar`, { usarContactoExistente });
       await refrescar();
+      const aviso = avisoMediosSuprimidos(res.medios_suprimidos);
+      if (aviso) setAviso(`Fila ${fila.fila_numero}: ${aviso}`);
     });
   }
 
@@ -215,6 +228,14 @@ function Importaciones({ onNuevo }: { onNuevo: () => void }) {
           <Button variant="outline" onClick={onNuevo}>
             + Nuevo prospecto
           </Button>
+          <select aria-label="Campaña del CSV" title="Campaña para las filas que no traigan campanaId" className={`${inputBaseClass} w-auto`} value={campanaId} onChange={(e) => setCampanaId(e.target.value)}>
+            <option value="">Sin campaña</option>
+            {campanasAsignables(campanas?.data).map((c) => (
+              <option key={c.id} value={c.id}>
+                Campaña: {c.nombre}
+              </option>
+            ))}
+          </select>
           <Button disabled={ocupado} onClick={() => archivoInput.current?.click()}>
             + Importar CSV
           </Button>
@@ -376,6 +397,7 @@ function ListaProspectos({ creando, setCreando }: { creando: boolean; setCreando
   // Recién creado a mano: su detalle se muestra arriba de la lista, porque
   // puede no caer en la página que se está viendo.
   const [nuevoId, setNuevoId] = useState<number | null>(null);
+  const [avisoNuevo, setAvisoNuevo] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [prioridad, setPrioridad] = useState("");
@@ -432,15 +454,17 @@ function ListaProspectos({ creando, setCreando }: { creando: boolean; setCreando
 
       {creando && (
         <NuevoProspectoForm
-          onDone={(id) => {
+          onDone={(id, aviso) => {
             setCreando(false);
             setNuevoId(id);
+            setAvisoNuevo(aviso ?? null);
           }}
         />
       )}
       {nuevoId && (
         <div className="border-b border-border">
           <div className="bg-ok-bg px-5 py-2.5 text-[13px] text-ok">Prospecto creado.</div>
+          {avisoNuevo && <div className="bg-warn-bg px-5 py-2.5 text-[13px] text-warn">{avisoNuevo}</div>}
           <ProspectoDetallePanel id={nuevoId} onClose={() => setNuevoId(null)} />
         </div>
       )}
@@ -507,6 +531,8 @@ function ProspectoDetallePanel({ id, onClose }: { id: number; onClose: () => voi
     queryKey: ["prospecto", id],
     queryFn: () => api.get<ProspectoDetalle>(`/api/v1/prospectos/${id}`)
   });
+  const { data: campanas } = useCampanas();
+  const campana = campanas?.data.find((c) => c.id === p?.campana_id);
 
   return (
     <div className="border-t border-border bg-bg p-5">
@@ -537,7 +563,7 @@ function ProspectoDetallePanel({ id, onClose }: { id: number; onClose: () => voi
             <Dato etiqueta="Prioridad">{p.prioridad ?? "—"}</Dato>
             <Dato etiqueta="Confianza">{p.confianza ?? "—"}</Dato>
             <Dato etiqueta="Score">{p.score != null ? Number(p.score) : "—"}</Dato>
-            <Dato etiqueta="Campaña">{p.campana_id != null ? `#${p.campana_id}` : "—"}</Dato>
+            <Dato etiqueta="Campaña">{p.campana_id != null ? (campana?.nombre ?? `#${p.campana_id}`) : "—"}</Dato>
             <Dato etiqueta="Fuente">
               {p.fuente_url ? (
                 <a href={p.fuente_url} target="_blank" rel="noopener noreferrer" className="break-all text-navy hover:underline">

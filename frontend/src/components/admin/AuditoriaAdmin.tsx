@@ -11,16 +11,19 @@ import type { Paginated, RegistroAuditoria, Usuario } from "../../types";
 // Auditoría (AuditoriaController, admin/supervisor): solo lectura, lo más
 // reciente primero. Los valores de los filtros son los que el backend
 // escribe hoy (entidad/accion en los insert(auditoria) de src/, incluida
-// ACCION_CAMBIO_ESTADO_POR_CLASIFICACION de shared/clasificacion-respuesta.ts).
+// ACCION_CAMBIO_ESTADO_POR_CLASIFICACION de shared/clasificacion-respuesta.ts
+// y las transiciones activar/pausar/finalizar de campanas.service.ts).
 // Si el backend agrega una acción nueva, hay que sumarla aquí.
 
 const LIMIT = 50;
 const ENTIDADES: Record<string, string> = {
   actividad: "Actividad",
+  campana: "Campaña",
   contacto: "Contacto",
   cotizacion: "Cotización",
   documento: "Documento",
   empresa: "Empresa",
+  envio: "Envío",
   evento_pendiente: "Evento pendiente",
   medio_contacto: "Medio de contacto",
   oportunidad: "Oportunidad",
@@ -31,6 +34,7 @@ const ENTIDADES: Record<string, string> = {
   usuario: "Usuario"
 };
 const ACCIONES = [
+  "activar",
   "actualizar",
   "asignar",
   "cambiar_estado",
@@ -43,15 +47,21 @@ const ACCIONES = [
   "crear",
   "desactivar",
   "descargar",
+  "editar",
   "eliminar",
+  "finalizar",
   "importar_borrador",
   "nueva_version",
+  "pausar",
   "reabrir",
+  "reactivar",
+  "recordatorio_omitido",
   "registrar_automatizacion",
   "registrar_supresion",
   "reintentar",
   "revisar",
   "subir",
+  "tomar_empresa",
   "validar_automatizacion"
 ];
 

@@ -40,8 +40,22 @@ function agruparContactos(filas: ContactoConMedio[]) {
   return [...porId.values()];
 }
 
+// Un id que no es entero positivo (/empresas/abc) ni se le pregunta a la
+// API: la respuesta sería un 400 y la pantalla se vería igual que "no
+// encontrada".
 export function FichaClientePage() {
   const { id } = useParams<{ id: string }>();
+  if (!id || !/^[1-9]\d{0,9}$/.test(id)) {
+    return (
+      <AppShell titulo="Ficha de cliente">
+        <div className="text-sm text-danger">No se encontró la empresa (o no tienes acceso a ella).</div>
+      </AppShell>
+    );
+  }
+  return <FichaCliente id={id} />;
+}
+
+function FichaCliente({ id }: { id: string }) {
   // ?tab= abre una pestaña directo (las listas generales de Cotizaciones y
   // Documentos ligan a la pestaña de su empresa).
   const [params, setParams] = useSearchParams();
@@ -50,8 +64,7 @@ export function FichaClientePage() {
 
   const { data: empresa, isPending, isError } = useQuery({
     queryKey: ["empresa", id],
-    queryFn: () => api.get<EmpresaDetalle>(`/api/v1/empresas/${id}`),
-    enabled: Boolean(id)
+    queryFn: () => api.get<EmpresaDetalle>(`/api/v1/empresas/${id}`)
   });
 
   const { user } = useAuth();

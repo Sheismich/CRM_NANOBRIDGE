@@ -6,8 +6,7 @@ import { defineConfig } from "vite";
 // en el mismo origen que el frontend (localhost:5173) y la cookie de
 // sesión (SameSite=Lax por default en el backend) viaja sin problemas de
 // CORS ni de cookie de terceros. En producción (Firebase Hosting, ver
-// PLAN_FRONTEND.md) esto no aplica: ahí el cliente llama VITE_API_URL
-// directo y el backend necesita esa URL en CORS_ORIGINS.
+// firebase.json) el rewrite de /api/** a Cloud Run hace el mismo papel.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {

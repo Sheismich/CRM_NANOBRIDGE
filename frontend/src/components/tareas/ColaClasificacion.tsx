@@ -154,6 +154,8 @@ function ItemCola({ tarea, onAviso }: { tarea: TareaClasificacion; onAviso: (tex
             {respuesta?.recibido_en && ` · respondió el ${formatoFechaHora.format(new Date(respuesta.recibido_en))}`}
             {respuesta?.canal && ` por ${respuesta.canal === "whatsapp" ? "WhatsApp" : "correo"}`}
           </div>
+          {/* El "From" del correo: puede no ser el contacto (reenvió el correo a alguien más). */}
+          {respuesta?.remitente && <div className="text-xs text-ink-3">De: {respuesta.remitente}</div>}
         </div>
         <div className="flex items-center gap-2">
           <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${CLASE_PRIORIDAD[tarea.prioridad]}`}>{ETIQUETA_PRIORIDAD[tarea.prioridad]}</span>

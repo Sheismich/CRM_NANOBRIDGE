@@ -19,3 +19,13 @@ export function claseMedio(estado: MedioContacto["estado_contacto"] | null) {
   if (estado === "obsoleto") return "bg-bg text-ink-3";
   return "bg-ok-bg text-ok";
 }
+
+// Medios que nacieron en no_contactar al confirmar un prospecto porque
+// estaban en la lista de baja (medios_suprimidos de confirmarFila,
+// 2-oct-2026). null si no hubo ninguno.
+const MEDIO_EN_FRASE: Record<string, string> = { correo: "correo", telefono: "teléfono", whatsapp: "WhatsApp" };
+export function avisoMediosSuprimidos(medios: string[] | undefined) {
+  if (!medios?.length) return null;
+  const nombres = medios.map((m) => MEDIO_EN_FRASE[m] ?? m).join(" y ");
+  return `El ${nombres} de esta persona está en la lista de baja: quedó marcado "no contactar" y la automatización no le escribirá por ahí.`;
+}

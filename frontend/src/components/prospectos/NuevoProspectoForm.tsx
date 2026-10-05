@@ -6,6 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { Field, ServerError, inputClass } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
+import { campanasAsignables, useCampanas } from "../../lib/campanas";
+import { avisoMediosSuprimidos } from "../../lib/medios";
 import type { Borrador } from "../../types";
 import { TAMANOS, correoOpcional, sinVacios, telefonoOpcional, textoOpcional, urlOpcional } from "../empresas/campos";
 
@@ -29,20 +31,24 @@ const prospectoSchema = z
     prioridad: z.string(),
     confianza: z.string(),
     fuenteUrl: urlOpcional,
-    observaciones: textoOpcional(2000)
+    observaciones: textoOpcional(2000),
+    // Id de la campaña como texto del <select>; vacío = sin campaña.
+    campanaId: z.string()
   })
   .refine((p) => p.correo || p.telefono, { message: "Captura correo o teléfono", path: ["correo"] })
   .refine((p) => (p.canalInicial === "correo" ? p.correo : p.telefono), { message: "El canal inicial necesita su medio (WhatsApp usa el teléfono)", path: ["canalInicial"] });
 type ProspectoInput = z.infer<typeof prospectoSchema>;
 
-type Confirmado = { id: number; empresa_id?: number };
+type Confirmado = { id: number; empresa_id?: number; medios_suprimidos?: string[] };
 
 // POST /prospectos crea un borrador de una fila (lote "manual") que pasa
 // por la misma deduplicación que el CSV; aquí se confirma en el mismo paso,
 // porque quien lo captura ya lo revisó. Si sale duplicado contra un
 // contacto existente, se pregunta antes de reutilizarlo.
-export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | null) => void }) {
+// Score sigue fuera: lo calcula la automatización.
+export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | null, aviso?: string | null) => void }) {
   const queryClient = useQueryClient();
+  const { data: campanas } = useCampanas();
   const [serverError, setServerError] = useState<string | null>(null);
   const [duplicado, setDuplicado] = useState<Borrador | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -68,20 +74,22 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
       prioridad: "",
       confianza: "",
       fuenteUrl: "",
-      observaciones: ""
+      observaciones: "",
+      campanaId: ""
     }
   });
 
   async function confirmar(borrador: Borrador, usarContactoExistente: boolean) {
     const res = await api.post<Confirmado>(`/api/v1/prospectos/importaciones/${borrador.lote_id}/filas/${borrador.id}/confirmar`, { usarContactoExistente });
     await Promise.all([queryClient.invalidateQueries({ queryKey: ["prospectos"] }), queryClient.invalidateQueries({ queryKey: ["empresas"] })]);
-    onDone(res.id);
+    onDone(res.id, avisoMediosSuprimidos(res.medios_suprimidos));
   }
 
   async function onSubmit(values: ProspectoInput) {
     setServerError(null);
     try {
-      const borrador = await api.post<Borrador>("/api/v1/prospectos", sinVacios(values));
+      const { campanaId, ...resto } = values;
+      const borrador = await api.post<Borrador>("/api/v1/prospectos", { ...sinVacios(resto), ...(campanaId ? { campanaId: Number(campanaId) } : {}) });
       if (borrador.estado === "duplicado") {
         setDuplicado(borrador);
         return;
@@ -213,6 +221,16 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
         </Field>
         <Field label="Fuente (URL, opcional)" htmlFor="pr-fuente" error={errors.fuenteUrl?.message}>
           <input id="pr-fuente" placeholder="https://" className={inputClass} {...register("fuenteUrl")} />
+        </Field>
+        <Field label="Campaña (opcional)" htmlFor="pr-campana">
+          <select id="pr-campana" className={inputClass} {...register("campanaId")}>
+            <option value="">— Sin campaña —</option>
+            {campanasAsignables(campanas?.data).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
         </Field>
       </div>
       <Field label="Observaciones (opcional)" htmlFor="pr-obs" error={errors.observaciones?.message}>

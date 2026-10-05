@@ -135,7 +135,8 @@ export function DocumentosPage() {
                     >
                       Descargar
                     </Button>
-                    {!d.revisado_en && (
+                    {/* Solo la versión vigente se revisa: en otra, 409 DOCUMENTO_NO_VIGENTE. */}
+                    {!d.revisado_en && d.estado === "vigente" && (
                       <Button
                         variant="outline"
                         className="ml-1.5 px-3 py-1.5"
