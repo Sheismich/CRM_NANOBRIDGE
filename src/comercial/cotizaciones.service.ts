@@ -6,6 +6,7 @@ import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { fechaMx } from "../shared/dia-habil.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
+import { aCentavos, calcularCotizacion, deCentavos } from "./dinero.js";
 import type { CambiarEstadoCotizacionInput, CrearCotizacionInput, DatosCotizacionInput, ListCotizacionesQuery, PartidaInput } from "./dto/cotizacion.schema.js";
 
 // "Una edición crea una nueva versión; la versión anterior queda
@@ -53,16 +54,21 @@ function toRow(row: typeof cotizaciones.$inferSelect) {
 export class CotizacionesService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
 
+  // En centavos enteros (comercial/dinero.ts, D1 del 5-oct-2026), la misma
+  // cuenta que valida el schema. Cada importe se redondea por línea antes de
+  // sumar: subtotal y total cuadran con lo que se guarda en
+  // cotizacion_partidas.importe (hallazgo de code review, 11-sep-2026).
+  // Devuelve los montos ya como texto DECIMAL, listos para guardar.
   private calcular(partidas: PartidaInput[], descuento: number, impuestos: number) {
-    // Cada importe se redondea aquí, no solo al guardarlo en
-    // insertarPartidas(): así subtotal/total se calculan sobre los mismos
-    // valores exactos que terminan en cotizacion_partidas.importe, en vez
-    // de sobre floats sin redondear que pueden diferir en un centavo de la
-    // suma de lo que realmente se guarda (hallazgo de code review, 11-sep-2026).
-    const calculadas = partidas.map((p, index) => ({ ...p, importe: Number((p.cantidad * p.precioUnitario).toFixed(2)), orden: index }));
-    const subtotal = Number(calculadas.reduce((acc, p) => acc + p.importe, 0).toFixed(2));
-    const total = Number((subtotal - descuento + impuestos).toFixed(2));
-    return { calculadas, subtotal, total };
+    const { importes, subtotal, total } = calcularCotizacion(partidas, descuento, impuestos);
+    const calculadas = partidas.map((p, index) => ({ ...p, importe: deCentavos(importes[index]!), orden: index }));
+    return {
+      calculadas,
+      subtotal: deCentavos(subtotal),
+      descuento: deCentavos(aCentavos(descuento)),
+      impuestos: deCentavos(aCentavos(impuestos)),
+      total: deCentavos(total)
+    };
   }
 
   private async insertarPartidas(tx: DrizzleTx, cotizacionId: number, partidas: ReturnType<typeof this.calcular>["calculadas"]) {
@@ -70,9 +76,9 @@ export class CotizacionesService {
       await tx.insert(cotizacionPartidas).values({
         cotizacionId,
         descripcion: p.descripcion,
-        cantidad: p.cantidad.toFixed(2),
-        precioUnitario: p.precioUnitario.toFixed(2),
-        importe: p.importe.toFixed(2),
+        cantidad: deCentavos(aCentavos(p.cantidad)),
+        precioUnitario: deCentavos(aCentavos(p.precioUnitario)),
+        importe: p.importe,
         orden: p.orden
       });
     }
@@ -128,7 +134,7 @@ export class CotizacionesService {
     const oportunidad = await this.validarOportunidad(user, input.empresaId, input.oportunidadId);
     if (input.contactoId) await this.validarContacto(input.empresaId, input.contactoId);
 
-    const { calculadas, subtotal, total } = this.calcular(input.partidas, input.descuento, input.impuestos);
+    const { calculadas, subtotal, descuento, impuestos, total } = this.calcular(input.partidas, input.descuento, input.impuestos);
 
     return this.db.transaction(async (tx) => {
       const [result] = await tx.insert(cotizaciones).values({
@@ -137,10 +143,10 @@ export class CotizacionesService {
         contactoId: input.contactoId ?? null,
         cotizacionRaizId: null,
         version: 1,
-        subtotal: subtotal.toFixed(2),
-        descuento: input.descuento.toFixed(2),
-        impuestos: input.impuestos.toFixed(2),
-        total: total.toFixed(2),
+        subtotal,
+        descuento,
+        impuestos,
+        total,
         // Día de México (D3 del plan de fixes, 2-oct-2026): CURDATE() en la
         // conexión UTC ya es "mañana" desde las 6 pm de México.
         fechaEmision: fechaMx(new Date()),
@@ -185,7 +191,7 @@ export class CotizacionesService {
     const contactoId = input.contactoId ?? actual.contactoId;
     if (contactoId) await this.validarContacto(actual.empresaId, contactoId);
 
-    const { calculadas, subtotal, total } = this.calcular(input.partidas, input.descuento, input.impuestos);
+    const { calculadas, subtotal, descuento, impuestos, total } = this.calcular(input.partidas, input.descuento, input.impuestos);
     const raizId = actual.cotizacionRaizId ?? actual.id;
     const nuevaVersionNum = actual.version + 1;
 
@@ -212,10 +218,10 @@ export class CotizacionesService {
         contactoId: contactoId ?? null,
         cotizacionRaizId: raizId,
         version: nuevaVersionNum,
-        subtotal: subtotal.toFixed(2),
-        descuento: input.descuento.toFixed(2),
-        impuestos: input.impuestos.toFixed(2),
-        total: total.toFixed(2),
+        subtotal,
+        descuento,
+        impuestos,
+        total,
         fechaEmision: fechaMx(new Date()),
         fechaEsperadaCierre: input.fechaEsperadaCierre ?? actual.fechaEsperadaCierre,
         probabilidad: input.probabilidad ?? actual.probabilidad,

@@ -4,17 +4,13 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 
-// Cubre CotizacionesService.calcular() (cotizaciones.service.ts): cada
-// importe se redondea a 2 decimales POR LÍNEA antes de sumar, no se suma en
-// crudo y se redondea una sola vez al final -- ver el comentario ahí
-// (hallazgo de code review, 11-sep-2026). Este caso concreto distingue las
-// dos estrategias por un centavo real:
-//   0.333 -> redondea a 0.33 (línea 1 y 2), 0.334 -> redondea a 0.33 (línea 3)
-//   sumando ya redondeado: 0.33 + 0.33 + 0.33 = 0.99  <- lo que debe pasar
-//   sumando en crudo y redondeando al final: 0.333+0.333+0.334 = 1.000 -> "1.00"
-// Si alguien "simplifica" calcular() a sumar primero y redondear después,
-// esta prueba detecta el centavo perdido.
-describe("cotizaciones: redondeo de montos", () => {
+// Cubre CotizacionesService.calcular() (cotizaciones.service.ts) y
+// validarMontos (dto/cotizacion.schema.ts). Desde D1 (plan de fixes,
+// 5-oct-2026) el dinero se calcula en centavos enteros, con redondeo de la
+// mitad hacia arriba por línea. Antes se multiplicaba con decimales de
+// JavaScript: 0.5 × 2.01 = 1.00499999… y toFixed(2) daba 1.00 en vez de
+// 1.01 -- un centavo de menos que el cliente sí ve en su calculadora.
+describe("cotizaciones: dinero en centavos", () => {
   let app: INestApplication;
   let adminCookie: string[];
   let empresaId: number;
@@ -43,48 +39,63 @@ describe("cotizaciones: redondeo de montos", () => {
     await app.close();
   });
 
-  it("redondea cada línea antes de sumar, en vez de sumar en crudo y redondear al final", async () => {
-    const res = await request(app.getHttpServer())
-      .post("/api/v1/cotizaciones")
-      .set("Cookie", adminCookie)
-      .send({
-        empresaId,
-        oportunidadId,
-        partidas: [
-          { descripcion: "Línea 1", cantidad: 1, precioUnitario: 0.333 },
-          { descripcion: "Línea 2", cantidad: 1, precioUnitario: 0.333 },
-          { descripcion: "Línea 3", cantidad: 1, precioUnitario: 0.334 }
-        ]
-      });
+  function crear(body: Record<string, unknown>) {
+    return request(app.getHttpServer()).post("/api/v1/cotizaciones").set("Cookie", adminCookie).send({ empresaId, oportunidadId, ...body });
+  }
+
+  async function detalle(id: number) {
+    const res = await request(app.getHttpServer()).get(`/api/v1/cotizaciones/${id}`).set("Cookie", adminCookie);
+    expect(res.status).toBe(200);
+    return res.body;
+  }
+
+  it("redondea cada línea a centavos con la mitad hacia arriba (0.5 × 2.01 = 1.01; 1.5 × 0.03 = 0.05)", async () => {
+    const res = await crear({
+      partidas: [
+        { descripcion: "Línea 1", cantidad: 0.5, precioUnitario: 2.01 },
+        { descripcion: "Línea 2", cantidad: 1.5, precioUnitario: 0.03 }
+      ]
+    });
     expect(res.status).toBe(201);
 
-    const detalle = await request(app.getHttpServer()).get(`/api/v1/cotizaciones/${res.body.id}`).set("Cookie", adminCookie);
-    expect(detalle.status).toBe(200);
-    expect(detalle.body.subtotal).toBe("0.99");
-    expect(detalle.body.total).toBe("0.99");
-    expect(detalle.body.partidas.map((p: { importe: string }) => p.importe)).toEqual(["0.33", "0.33", "0.33"]);
+    const cotizacion = await detalle(res.body.id);
+    expect(cotizacion.partidas.map((p: { importe: string }) => p.importe)).toEqual(["1.01", "0.05"]);
+    expect(cotizacion.subtotal).toBe("1.06");
+    expect(cotizacion.total).toBe("1.06");
   });
 
-  it("total = subtotal - descuento + impuestos, con descuento e impuestos reales", async () => {
-    const res = await request(app.getHttpServer())
-      .post("/api/v1/cotizaciones")
-      .set("Cookie", adminCookie)
-      .send({
-        empresaId,
-        oportunidadId,
-        descuento: 10.5,
-        impuestos: 16.08,
-        partidas: [{ descripcion: "Servicio", cantidad: 2.5, precioUnitario: 100.11 }]
-      });
+  it("total = subtotal - descuento + impuestos, exacto al centavo", async () => {
+    const res = await crear({
+      descuento: 10.5,
+      impuestos: 16.08,
+      partidas: [{ descripcion: "Servicio", cantidad: 2.5, precioUnitario: 100.11 }]
+    });
     expect(res.status).toBe(201);
 
-    const detalle = await request(app.getHttpServer()).get(`/api/v1/cotizaciones/${res.body.id}`).set("Cookie", adminCookie);
-    // 2.5 * 100.11 = 250.275 -> redondeado a 2 decimales: 250.28 (o 250.27,
-    // según el modo de redondeo del motor -- lo que importa es que total
-    // sea EXACTAMENTE subtotal - descuento + impuestos con esos mismos
-    // 2 decimales, no que adivinemos el redondeo de la línea).
-    const subtotal = Number(detalle.body.subtotal);
-    const total = Number(detalle.body.total);
-    expect(total).toBeCloseTo(subtotal - 10.5 + 16.08, 2);
+    const cotizacion = await detalle(res.body.id);
+    // 2.5 × 100.11 = 250.275 -> 250.28; 250.28 - 10.50 + 16.08 = 255.86.
+    expect(cotizacion.subtotal).toBe("250.28");
+    expect(cotizacion.descuento).toBe("10.50");
+    expect(cotizacion.total).toBe("255.86");
+  });
+
+  it("montos grandes sin perder centavos (la multiplicación no cabe en un número de JavaScript)", async () => {
+    const res = await crear({ partidas: [{ descripcion: "Grande", cantidad: 999_999.99, precioUnitario: 9_999.99 }] });
+    expect(res.status).toBe(201);
+    // 999,999.99 × 9,999.99 = 9,999,989,900.0001 -> 9,999,989,900.00
+    expect((await detalle(res.body.id)).subtotal).toBe("9999989900.00");
+  });
+
+  it("rechaza (400) más de 2 decimales en precio, cantidad, descuento o impuestos", async () => {
+    const partida = { descripcion: "Partida", cantidad: 1, precioUnitario: 1 };
+    expect((await crear({ partidas: [{ ...partida, precioUnitario: 0.333 }] })).status).toBe(400);
+    expect((await crear({ partidas: [{ ...partida, cantidad: 1.125 }] })).status).toBe(400);
+    expect((await crear({ descuento: 0.001, partidas: [partida] })).status).toBe(400);
+    expect((await crear({ impuestos: 0.005, partidas: [partida] })).status).toBe(400);
+  });
+
+  it("el descuento no puede ser mayor que el subtotal, aunque los impuestos lo cubran (400)", async () => {
+    const res = await crear({ descuento: 110, impuestos: 16, partidas: [{ descripcion: "Partida", cantidad: 1, precioUnitario: 100 }] });
+    expect(res.status).toBe(400);
   });
 });
