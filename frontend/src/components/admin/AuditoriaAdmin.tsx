@@ -221,7 +221,7 @@ function Json({ titulo, valor }: { titulo: string; valor: unknown }) {
   return (
     <div>
       <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-2">{titulo}</div>
-      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-[9px] border border-border bg-white p-3 font-mono text-xs text-ink">{valor == null ? "—" : JSON.stringify(valor, null, 2)}</pre>
+      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-[9px] border border-border bg-card p-3 font-mono text-xs text-ink">{valor == null ? "—" : JSON.stringify(valor, null, 2)}</pre>
     </div>
   );
 }

@@ -66,7 +66,7 @@ function AvisoCola() {
         <div className="text-sm font-bold">{textoPendientesCola(n)}</div>
         <div className="text-xs text-ink-3">Respuestas que la automatización no pudo clasificar sola.</div>
       </div>
-      <Link to="/tareas?tab=cola" className="rounded-[9px] border-[1.5px] border-navy bg-white px-4 py-2 text-[13px] font-bold text-navy">
+      <Link to="/tareas?tab=cola" className="rounded-[9px] border-[1.5px] border-navy bg-card px-4 py-2 text-[13px] font-bold text-navy">
         Ir a la cola
       </Link>
     </Card>

@@ -69,7 +69,7 @@ export function OportunidadDetallePanel({ id, onClose }: { id: number; onClose: 
             <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-2">Historial de etapas</div>
             <ol className="flex flex-col gap-2.5">
               {[...oportunidad.historial].reverse().map((h) => (
-                <li key={h.id} className="rounded-[9px] border border-border bg-white px-3 py-2">
+                <li key={h.id} className="rounded-[9px] border border-border bg-card px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[13px] font-semibold">{h.etapa_nombre}</span>
                     <span className="text-xs text-ink-3">{formatoFechaHora.format(new Date(h.creado_en))}</span>

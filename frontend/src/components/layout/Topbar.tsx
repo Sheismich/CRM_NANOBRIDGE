@@ -15,7 +15,7 @@ export function Topbar({ titulo, onAbrirMenu }: { titulo: string; onAbrirMenu: (
   const { user, logout } = useAuth();
 
   return (
-    <div className="relative flex h-[66px] min-h-[66px] items-center justify-between gap-3 bg-white px-4 lg:px-7.5">
+    <div className="relative flex h-[66px] min-h-[66px] items-center justify-between gap-3 bg-card px-4 lg:px-7.5">
       <div className="absolute inset-x-0 bottom-0 h-0.5 bg-[image:var(--grad)] opacity-50" />
       <div className="flex min-w-0 items-center gap-2">
         <button type="button" aria-label="Abrir menú" onClick={onAbrirMenu} className="-ml-1.5 rounded-[9px] p-1.5 text-navy hover:bg-bg lg:hidden">

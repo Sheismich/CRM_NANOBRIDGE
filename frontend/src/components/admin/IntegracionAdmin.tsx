@@ -310,5 +310,5 @@ function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode })
 
 function Json({ valor }: { valor: unknown }) {
   if (valor == null) return null;
-  return <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-[9px] border border-border bg-white p-3 font-mono text-xs text-ink">{JSON.stringify(valor, null, 2)}</pre>;
+  return <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-[9px] border border-border bg-card p-3 font-mono text-xs text-ink">{JSON.stringify(valor, null, 2)}</pre>;
 }

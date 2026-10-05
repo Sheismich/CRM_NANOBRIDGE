@@ -166,7 +166,7 @@ function Tablero({ etapas, responsableId, coincide, abiertaId, onAbrir, nombreDe
                       key={o.id}
                       type="button"
                       onClick={() => onAbrir(abiertaId === o.id ? null : o.id)}
-                      className={`flex flex-col gap-1 rounded-[10px] border bg-white p-3 text-left shadow-[0_1px_2px_rgba(21,28,54,0.04)] hover:border-navy ${abiertaId === o.id ? "border-navy ring-1 ring-navy" : "border-border"}`}
+                      className={`flex flex-col gap-1 rounded-[10px] border bg-card p-3 text-left shadow-[0_1px_2px_rgba(21,28,54,0.04)] hover:border-navy ${abiertaId === o.id ? "border-navy ring-1 ring-navy" : "border-border"}`}
                     >
                       <span className="text-[13px] font-semibold leading-snug">{o.titulo}</span>
                       <span className="truncate text-xs text-ink-2">{o.empresa_nombre ?? `Empresa ${o.empresa_id}`}</span>

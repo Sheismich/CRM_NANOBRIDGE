@@ -548,7 +548,7 @@ function ProspectoDetallePanel({ id, onClose }: { id: number; onClose: () => voi
         </div>
         <div className="flex gap-2">
           {p && (
-            <Link to={`/empresas/${p.empresa.id}`} className="rounded-[9px] border-[1.5px] border-navy bg-white px-4 py-2.5 text-[13px] font-bold text-navy">
+            <Link to={`/empresas/${p.empresa.id}`} className="rounded-[9px] border-[1.5px] border-navy bg-card px-4 py-2.5 text-[13px] font-bold text-navy">
               Ver ficha de la empresa
             </Link>
           )}

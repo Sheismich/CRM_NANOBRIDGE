@@ -229,6 +229,8 @@ function DetalleTarea({ tarea, esAdminOSupervisor, usuarios, onIrACola }: { tare
     try {
       await api.patch(`/api/v1/tareas/${tarea.id}/asignar`, { responsableId: Number(asignarA) });
       await queryClient.invalidateQueries({ queryKey: ["tareas"] });
+      // La empresa pudo cambiar de dueño.
+      if (tarea.empresa_id) await queryClient.invalidateQueries({ queryKey: ["empresa", String(tarea.empresa_id)] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
     } finally {
@@ -298,11 +300,20 @@ function DetalleTarea({ tarea, esAdminOSupervisor, usuarios, onIrACola }: { tare
               ))}
             </select>
           </label>
-          <Button variant="outline" className="px-3 py-2" disabled={ocupado || !asignarA || Number(asignarA) === tarea.responsable_id} onClick={() => void asignar()}>
+          {/* A la misma persona también vale si la tarea tiene empresa: el
+              backend vuelve a revisar la empresa y se la da al agente (sirve
+              para tareas asignadas antes de la regla C1). Sin empresa no
+              cambiaría nada. */}
+          <Button
+            variant="outline"
+            className="px-3 py-2"
+            disabled={ocupado || !asignarA || (Number(asignarA) === tarea.responsable_id && !tarea.empresa_id)}
+            onClick={() => void asignar()}
+          >
             Asignar
           </Button>
           {/* Asignar = dar dueño (C1, 2-oct-2026): si la empresa no es de otro agente activo, pasa a este. */}
-          {tarea.empresa_id && usuarios.find((u) => String(u.id) === asignarA)?.rol === "agente" && Number(asignarA) !== tarea.responsable_id && (
+          {tarea.empresa_id && usuarios.find((u) => String(u.id) === asignarA)?.rol === "agente" && (
             <span className="pb-2 text-xs text-ink-3">Si la empresa no tiene otro agente activo como dueño, pasa a ser de este agente.</span>
           )}
         </div>

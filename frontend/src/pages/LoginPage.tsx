@@ -52,7 +52,8 @@ export function LoginPage() {
         {/* Marca de agua: el logo completo en grande, casi transparente, detrás del título (mockup de login). */}
         <img src="/logo-nanobridge.png" alt="" aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 w-[340px] -translate-x-[40%] -translate-y-[45%] opacity-[0.06]" />
         <div className="relative flex h-full flex-col justify-between p-13 pr-21">
-          <img src="/logo-nanobridge.png" alt="NANOBRIDGE — Conectando la ficción con la realidad" className="w-[170px]" />
+          {/* El letrero del logo es azul marino: en modo oscuro va sobre una placa clara para que se lea. */}
+          <img src="/logo-nanobridge.png" alt="NANOBRIDGE — Conectando la ficción con la realidad" className="w-[170px] dark:box-content dark:w-[170px] dark:rounded-[14px] dark:bg-[#eef1f9] dark:p-3" />
           <div className="max-w-[440px]">
             <div className="mb-5 flex items-center gap-2.5">
               <Dot color="var(--mint)" />
@@ -90,7 +91,7 @@ export function LoginPage() {
                 type="email"
                 autoComplete="username"
                 placeholder="tu.nombre@nanobridge.mx"
-                className="rounded-[9px] border border-border bg-white px-3.5 py-2.75 text-sm"
+                className="rounded-[9px] border border-border bg-card px-3.5 py-2.75 text-sm"
                 {...register("correo")}
               />
               {errors.correo && <span className="text-xs text-danger">{errors.correo.message}</span>}
@@ -105,7 +106,7 @@ export function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className="w-full rounded-[9px] border border-border bg-white px-3.5 py-2.75 pr-10 text-sm"
+                  className="w-full rounded-[9px] border border-border bg-card px-3.5 py-2.75 pr-10 text-sm"
                   {...register("password")}
                 />
                 <button
@@ -129,7 +130,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="rounded-[9px] bg-[linear-gradient(135deg,var(--navy),var(--violet))] py-3.25 text-sm font-bold text-white shadow-[0_10px_24px_rgba(42,68,155,0.28)] disabled:opacity-60"
+            className="rounded-[9px] bg-[linear-gradient(135deg,var(--marca-navy),var(--marca-violet))] py-3.25 text-sm font-bold text-white shadow-[0_10px_24px_rgba(42,68,155,0.28)] disabled:opacity-60"
           >
             {isSubmitting ? "Entrando…" : "Iniciar sesión"}
           </button>

@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useMemo, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { Field, ServerError, inputClass } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
 import { ETIQUETA_PRIORIDAD, ETIQUETA_TIPO_TAREA } from "../../lib/tareas";
-import type { Usuario } from "../../types";
+import type { Empresa, EmpresaDetalle, Paginated, Usuario } from "../../types";
 
 // Mismos límites que crearTareaSchema (src/tareas/dto/tarea.schema.ts). Sin
 // "clasificacion": una tarea de ese tipo necesita un prospecto y solo se
@@ -18,6 +18,9 @@ const tareaSchema = z.object({
   tipo: z.enum(TIPOS),
   prioridad: z.enum(["baja", "media", "alta", "urgente"]),
   responsableId: z.string().min(1, "Elige a quién se asigna"),
+  // Opcionales; vacío = sin empresa / sin contacto.
+  empresaId: z.string(),
+  contactoId: z.string(),
   fechaLimite: z.string(),
   descripcion: z.string().trim().max(4000, "Máximo 4000 caracteres")
 });
@@ -31,11 +34,35 @@ export function NuevaTareaForm({ usuarioActualId, usuarios, onDone }: { usuarioA
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors, isSubmitting }
   } = useForm<TareaInput>({
     resolver: zodResolver(tareaSchema),
-    defaultValues: { titulo: "", tipo: "seguimiento", prioridad: "media", responsableId: String(usuarioActualId), fechaLimite: "", descripcion: "" }
+    defaultValues: { titulo: "", tipo: "seguimiento", prioridad: "media", responsableId: String(usuarioActualId), empresaId: "", contactoId: "", fechaLimite: "", descripcion: "" }
   });
+
+  // GET /empresas no tiene búsqueda: se traen las primeras 100 (por nombre)
+  // y se filtran aquí. A un agente le llegan solo las suyas, que son las
+  // únicas en las que puede crear tareas (C2: en otra responde 404).
+  const [filtroEmpresa, setFiltroEmpresa] = useState("");
+  const { data: empresas } = useQuery({
+    queryKey: ["empresas", "selector"],
+    queryFn: () => api.get<Paginated<Empresa>>("/api/v1/empresas", { limit: 100 })
+  });
+  const empresaId = useWatch({ control, name: "empresaId" });
+  const opcionesEmpresa = useMemo(() => {
+    const q = filtroEmpresa.trim().toLowerCase();
+    const todas = empresas?.data ?? [];
+    return q ? todas.filter((e) => e.id === Number(empresaId) || `${e.nombre_legal} ${e.nombre_comercial ?? ""}`.toLowerCase().includes(q)) : todas;
+  }, [empresas, filtroEmpresa, empresaId]);
+  const { data: empresa } = useQuery({
+    queryKey: ["empresa", empresaId],
+    queryFn: () => api.get<EmpresaDetalle>(`/api/v1/empresas/${empresaId}`),
+    enabled: Boolean(empresaId)
+  });
+  // Una fila por medio en GET /empresas/:id: un contacto activo por id.
+  const contactos = useMemo(() => [...new Map((empresa?.contactos ?? []).filter((c) => c.activo).map((c) => [c.id, c.nombre])).entries()], [empresa]);
 
   async function onSubmit(values: TareaInput) {
     setServerError(null);
@@ -45,6 +72,8 @@ export function NuevaTareaForm({ usuarioActualId, usuarios, onDone }: { usuarioA
         tipo: values.tipo,
         prioridad: values.prioridad,
         responsableId: Number(values.responsableId),
+        empresaId: values.empresaId ? Number(values.empresaId) : undefined,
+        contactoId: values.empresaId && values.contactoId ? Number(values.contactoId) : undefined,
         // datetime-local no trae zona horaria: se convierte con la del
         // navegador (igual que en NuevaActividadForm).
         fechaLimite: values.fechaLimite ? new Date(values.fechaLimite).toISOString() : undefined,
@@ -53,6 +82,8 @@ export function NuevaTareaForm({ usuarioActualId, usuarios, onDone }: { usuarioA
       await queryClient.invalidateQueries({ queryKey: ["tareas"] });
       onDone();
     } catch (error) {
+      // 409 PERSONA_EN_BAJA (seguimiento a alguien dado de baja), 404 si la
+      // empresa no es del agente: el mensaje tal cual.
       setServerError(error instanceof ApiError ? error.message : "No se pudo conectar con el servidor");
     }
   }
@@ -90,6 +121,33 @@ export function NuevaTareaForm({ usuarioActualId, usuarios, onDone }: { usuarioA
                 <option key={u.id} value={u.id}>
                   {u.nombre}
                   {u.id === usuarioActualId ? " (yo)" : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <div className="md:col-span-2">
+          <Field label="Empresa (opcional)" htmlFor="tarea-empresa">
+            <div className="flex gap-2">
+              <input aria-label="Filtrar empresas" placeholder="Filtrar…" className={`${inputClass} max-w-40`} value={filtroEmpresa} onChange={(e) => setFiltroEmpresa(e.target.value)} />
+              <select id="tarea-empresa" className={inputClass} {...register("empresaId", { onChange: () => setValue("contactoId", "") })}>
+                <option value="">— Sin empresa —</option>
+                {opcionesEmpresa.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.nombre_legal}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </Field>
+        </div>
+        {empresaId && (
+          <Field label="Contacto (opcional)" htmlFor="tarea-contacto">
+            <select id="tarea-contacto" className={inputClass} {...register("contactoId")}>
+              <option value="">— Ninguno —</option>
+              {contactos.map(([id, nombre]) => (
+                <option key={id} value={id}>
+                  {nombre}
                 </option>
               ))}
             </select>

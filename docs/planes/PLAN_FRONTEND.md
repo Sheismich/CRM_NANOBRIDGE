@@ -223,6 +223,17 @@ Avance:
     - **Cotizaciones (D2):** "Nueva versión" ya no aparece en una aceptada. `YA_HAY_COTIZACION_ACEPTADA` y `OPORTUNIDAD_CERRADA` se muestran tal cual.
     - **Importación CSV:** un 409 al confirmar (`CONTACTO_DESACTIVADO`, `PERSONA_YA_REGISTRADA`, `IMPORTACION_VENCIDA`…) muestra el mensaje y recarga el lote y sus contadores.
     - **Cerrar tarea:** con `TAREA_CERRADA` o `TAREA_REASIGNADA` se muestra el mensaje y se recarga la bandeja.
+  - **Hecho en el front (5-oct-2026, tercera tanda):**
+    - **Nueva tarea:** ahora se elige empresa (opcional, con filtro) y, ya con empresa, contacto. Manda `empresaId` y `contactoId`.
+      - `GET /empresas` no tiene búsqueda: el selector trae las primeras 100 por nombre y filtra en el cliente.
+      - A un agente solo le llegan las suyas, que son en las que puede crear tareas.
+    - **Asignar a la misma persona:** el botón ya no se apaga si la tarea tiene empresa, porque el backend vuelve a revisar la empresa y se la da al agente (tareas de antes de C1). Sin empresa sigue apagado.
+    - **Modo oscuro:**
+      - Botón de sol/luna abajo del menú lateral, para todos los roles. El ícono de Administración pasó a ser un engrane.
+      - `lib/tema.ts` guarda la elección en el navegador y, si no hay, sigue la del sistema. `index.css` redefine los tokens en `:root[data-theme="dark"]`.
+      - `bg-white` pasó a `bg-card` en todos los componentes. Los degradados con texto blanco usan `--marca-navy` y `--marca-violet`, que no cambian con el tema.
+      - En el login el logo va sobre una placa clara, porque su letrero azul marino no se leía.
+      - Se revisó en Edge contra el build con la API simulada: login, Inicio y Campañas en los dos modos, y el clic al botón.
   - **Pendiente — publicar el front:**
     - `frontend/firebase.json` ya existe: sirve `dist`, hace el rewrite de `/api/**` al servicio de Cloud Run `nanobridge-api` (`us-central1`) y manda todo lo demás a `index.html`.
     - Falta lo siguiente:

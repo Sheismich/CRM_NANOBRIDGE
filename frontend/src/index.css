@@ -6,6 +6,10 @@
 @import url("https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
+/* dark: aplica con <html data-theme="dark"> (lib/tema.ts), no con la
+   preferencia del sistema: la elección de la persona manda. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* Tokens calcados 1:1 de los .dc.html de los mockups (:root en cada
    pantalla) -- mismo nombre y mismo valor, para que quien compare el
    mockup contra la pantalla real no tenga que traducir nada. */
@@ -29,7 +33,38 @@
   --danger-bg: #fbe4e7;
   --ok: #177a55;
   --ok-bg: #e4f6ec;
-  --grad: linear-gradient(120deg, var(--mint) 0%, var(--cyan) 52%, var(--navy) 100%);
+  /* Colores de marca que NO cambian con el tema: los degradados llevan
+     texto blanco encima (botón principal, avatar, login). */
+  --marca-navy: #2a449b;
+  --marca-violet: #4a3a7a;
+  --sombra: rgba(21, 28, 54, 0.12);
+  --grad: linear-gradient(120deg, var(--mint) 0%, var(--cyan) 52%, var(--marca-navy) 100%);
+  color-scheme: light;
+}
+
+/* Modo oscuro: el botón de sol/luna del menú lateral pone data-theme en
+   <html> (lib/tema.ts). Mismos nombres de token, otros valores: los
+   componentes no cambian. navy-ink se queda oscuro porque es el texto
+   sobre los botones menta. */
+:root[data-theme="dark"] {
+  --navy: #93a9ff;
+  --navy-2: #7f95ea;
+  --navy-dark: #b3c2ff;
+  --violet: #a796e6;
+  --bg: #0e1322;
+  --card: #171d33;
+  --border: #29324f;
+  --ink: #e7eaf6;
+  --ink-2: #a6aecb;
+  --ink-3: #7b84a5;
+  --warn: #f1bd62;
+  --warn-bg: #3a2c12;
+  --danger: #ff8d98;
+  --danger-bg: #3e1a22;
+  --ok: #62d9a2;
+  --ok-bg: #123528;
+  --sombra: rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
 }
 
 /* Registra los tokens de arriba como utilidades de Tailwind (bg-navy,

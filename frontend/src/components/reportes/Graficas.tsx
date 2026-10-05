@@ -63,7 +63,7 @@ export function GraficaForecast({ meses }: { meses: ForecastMes[] }) {
                 <Columna valor={Number(m.valor_estimado_total)} tope={tope} color={SERIE_NOMINAL} />
                 <Columna valor={Number(m.valor_ponderado)} tope={tope} color={SERIE_PONDERADO} />
                 {activo === m.mes && (
-                  <div className="pointer-events-none absolute bottom-full z-10 mb-1 whitespace-nowrap rounded-[9px] border border-border bg-white px-3 py-2 text-xs shadow-[0_8px_20px_rgba(21,28,54,0.12)]">
+                  <div className="pointer-events-none absolute bottom-full z-10 mb-1 whitespace-nowrap rounded-[9px] border border-border bg-card px-3 py-2 text-xs shadow-[0_8px_20px_var(--sombra)]">
                     <div className="mb-1 font-semibold text-ink-2">
                       {etiquetaMes(m.mes)} · {m.cantidad} oportunidad{m.cantidad === 1 ? "" : "es"}
                     </div>

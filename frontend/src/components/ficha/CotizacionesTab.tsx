@@ -172,7 +172,7 @@ function CotizacionDetallePanel({
             </Button>
           </div>
 
-          <div className="tabla-scroll"><table className="w-full border-collapse rounded-[9px] bg-white text-[13px]">
+          <div className="tabla-scroll"><table className="w-full border-collapse rounded-[9px] bg-card text-[13px]">
             <thead>
               <tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wide text-ink-2">
                 <th className="px-3 py-2">Descripción</th>
@@ -205,7 +205,7 @@ function CotizacionDetallePanel({
               <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-2">Versiones</div>
               <div className="flex flex-wrap gap-2">
                 {cotizacion.versiones.map((v) => (
-                  <span key={v.id} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${v.id === cotizacion.id ? "bg-navy text-white" : "bg-white text-ink-2"}`}>
+                  <span key={v.id} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${v.id === cotizacion.id ? "bg-navy text-card" : "bg-card text-ink-2"}`}>
                     v{v.version} · {ETIQUETA_ESTADO_COTIZACION[v.estado]} · {formatoMoneda.format(Number(v.total))}
                   </span>
                 ))}
