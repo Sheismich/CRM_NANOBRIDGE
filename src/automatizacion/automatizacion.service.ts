@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, inArray, isNotNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, procesosFallidos, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
@@ -11,7 +11,8 @@ import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto 
 import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
-import { fechaMx, sumarDiasHabilesMx } from "../shared/dia-habil.js";
+import { diaSiguiente, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
+import { env } from "../config/env.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo, tieneFormaDeReplyTo } from "../shared/reply-to.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
@@ -596,6 +597,28 @@ export class AutomatizacionService {
   // inicial + dos recordatorios), o por una ventana de espera del último
   // envío que sigue abierta y vigente.
   async verificarEnvio(query: VerificacionEnvioQuery) {
+    const resultado = await this.verificarEnvioSinTope(query);
+    // Tope diario de correos (bloque "antes de encender", 5-oct-2026): solo
+    // cuando lo demás ya dejaría pasar. en_espera=true le dice a PT1 que NO
+    // marque "excluido": la persona no tiene nada malo, solo no hay lugar hoy.
+    if (resultado.puede_enviar && query.canal === "correo" && await this.correosEnviadosHoy(this.db) >= env.TOPE_DIARIO_CORREOS) {
+      return { ...resultado, puede_enviar: false, motivo: "Tope diario de correos alcanzado", en_espera: true };
+    }
+    return { ...resultado, en_espera: false };
+  }
+
+  // Correos registrados hoy (día de México), iniciales y recordatorios.
+  private async correosEnviadosHoy(db: DrizzleDb | DrizzleTx) {
+    const hoy = fechaMx(new Date());
+    const [fila] = await db.select({ n: sql<number>`COUNT(*)` }).from(envios).where(and(
+      eq(envios.canal, "correo"),
+      gte(envios.enviadoEn, sql`${inicioDelDiaMxSql(hoy)}`),
+      lt(envios.enviadoEn, sql`${inicioDelDiaMxSql(diaSiguiente(hoy))}`)
+    ));
+    return Number(fila?.n ?? 0);
+  }
+
+  private async verificarEnvioSinTope(query: VerificacionEnvioQuery) {
     if (query.canal === "whatsapp") {
       return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Canal WhatsApp desactivado (pendiente proveedor aprobado)", numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
@@ -785,6 +808,14 @@ export class AutomatizacionService {
     // Fecha de México para las reglas de campaña (ver shared/campana-vigente.ts).
     const hoy = fechaMx(new Date());
     return this.db.transaction(async (tx) => {
+      // Tope diario de correos (bloque "antes de encender", 5-oct-2026): solo
+      // se entregan los recordatorios que caben hoy. Los que no caben NO se
+      // reclaman: su ventana sigue abierta y salen otro día. Así, al
+      // reactivar una campaña pausada, sus recordatorios se reparten en
+      // varios días en vez de salir todos juntos.
+      const cupo = env.TOPE_DIARIO_CORREOS - await this.correosEnviadosHoy(tx);
+      if (cupo <= 0) return { data: [], omitidas: [], tope_diario_alcanzado: true };
+
       const rows = await tx
         .select({
           id: envios.id,
@@ -818,9 +849,7 @@ export class AutomatizacionService {
         // termine su transacción.
         .for("update", { skipLocked: true });
 
-      if (rows.length === 0) return { data: [], omitidas: [] };
-
-      await tx.update(envios).set({ ventanaEstado: "vencida" }).where(inArray(envios.id, rows.map((row) => row.id)));
+      if (rows.length === 0) return { data: [], omitidas: [], tope_diario_alcanzado: false };
 
       // contacto_id en una consulta aparte, no con un JOIN en el SELECT de
       // arriba: con FOR UPDATE SKIP LOCKED, el JOIN también bloquearía las
@@ -834,12 +863,23 @@ export class AutomatizacionService {
 
       const data = [];
       const omitidas: { envio_id: number; prospecto_id: number; motivo: MotivoRecordatorioOmitido }[] = [];
+      // Las que se marcan vencida al final: todas las revisadas menos las
+      // que se quedan esperando lugar.
+      const reclamadas: number[] = [];
+      let correosQueSalen = 0;
       for (const row of rows) {
         const contactoId = contactoDe.get(row.prospectoId)!;
         const ciclo = await this.cicloActualDePersona(tx, contactoId, row.canal);
-        if (ciclo[0]?.id !== row.id) continue;
+        if (ciclo[0]?.id !== row.id) {
+          reclamadas.push(row.id);
+          continue;
+        }
 
         const esUltimoContacto = ciclo.length >= MAX_CONTACTOS_POR_CICLO;
+        // La última ventana no manda correo (n8n marca inactivo): no ocupa
+        // lugar del tope.
+        if (!esUltimoContacto && row.canal === "correo" && correosQueSalen >= cupo) continue;
+        reclamadas.push(row.id);
         const destino = await this.destinoDeRecordatorio(tx, row.prospectoId, contactoId, row.canal, esUltimoContacto, hoy);
         if ("motivo" in destino) {
           omitidas.push({ envio_id: row.id, prospecto_id: row.prospectoId, motivo: destino.motivo });
@@ -853,6 +893,7 @@ export class AutomatizacionService {
           continue;
         }
 
+        if (!esUltimoContacto && row.canal === "correo") correosQueSalen++;
         data.push({
           envio_id: row.id,
           prospecto_id: row.prospectoId,
@@ -865,7 +906,10 @@ export class AutomatizacionService {
         });
       }
 
-      return { data, omitidas };
+      if (reclamadas.length > 0) {
+        await tx.update(envios).set({ ventanaEstado: "vencida" }).where(inArray(envios.id, reclamadas));
+      }
+      return { data, omitidas, tope_diario_alcanzado: correosQueSalen >= cupo };
     });
   }
 
@@ -1088,14 +1132,12 @@ export class AutomatizacionService {
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
 
     const [ultimo] = await this.db
-      .select({ id: envios.id, ventanaEstado: envios.ventanaEstado })
+      .select({ id: envios.id })
       .from(envios)
       .where(and(eq(envios.prospectoId, prospectoId), eq(envios.canal, input.canal)))
       .orderBy(desc(envios.numeroContacto))
       .limit(1);
 
-    const ventanaAbierta = ultimo?.ventanaEstado === "abierta";
-    const tardia = !ventanaAbierta;
     const envioId = ultimo?.id ?? null;
 
     // Insert de respuestas + cierre de ventana + creación de la tarea
@@ -1111,6 +1153,22 @@ export class AutomatizacionService {
         // venir la tarea de seguimiento de una respuesta tardía.
         const [duenoDeLaRespuesta] = await tx.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
         if (duenoDeLaRespuesta) await bloquearPersona(tx, duenoDeLaRespuesta.contactoId);
+
+        // Las ventanas abiertas de la PERSONA en este canal, no solo la del
+        // último envío de este prospecto: los 3 contactos se cuentan por
+        // persona, y si su último correo salió con otro prospecto (reingresó)
+        // y contesta un correo anterior, esa otra ventana seguía abierta y
+        // le llegaba el siguiente recordatorio (bloque "antes de encender",
+        // 5-oct-2026). Tardía = la persona no tenía ninguna abierta.
+        const ventanasAbiertas = duenoDeLaRespuesta
+          ? await tx
+            .select({ id: envios.id })
+            .from(envios)
+            .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+            .where(and(eq(prospectos.contactoId, duenoDeLaRespuesta.contactoId), eq(envios.canal, input.canal), eq(envios.ventanaEstado, "abierta")))
+            .for("update")
+          : [];
+        const tardia = ventanasAbiertas.length === 0;
         const [result] = await tx.insert(respuestas).values({
           prospectoId,
           envioId,
@@ -1129,8 +1187,8 @@ export class AutomatizacionService {
           return { id: result.insertId, identificada: true as const, prospecto_id: prospectoId, envio_id: envioId, tardia, tarea_id: null, ya_existia: false as const };
         }
 
-        if (ventanaAbierta && ultimo) {
-          await tx.update(envios).set({ ventanaEstado: "cerrada" }).where(eq(envios.id, ultimo.id));
+        if (ventanasAbiertas.length > 0) {
+          await tx.update(envios).set({ ventanaEstado: "cerrada" }).where(and(inArray(envios.id, ventanasAbiertas.map((v) => v.id)), eq(envios.ventanaEstado, "abierta")));
         }
 
         let tareaId: number | null = null;

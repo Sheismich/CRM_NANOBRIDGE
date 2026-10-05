@@ -60,6 +60,10 @@ const schema = z.object({
     return protocol === "https:" || (protocol === "http:" && ["localhost", "127.0.0.1"].includes(hostname));
   }, { message: "N8N_WEBHOOK_URL debe ser https (http solo para localhost)" }).optional()),
   OUTBOX_DISPATCH_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
+  // Tope de correos por día de México, iniciales y recordatorios juntos
+  // (bloque "antes de encender", decidido el 5-oct-2026: 50 para calentar el
+  // dominio). Se sube con --update-env-vars en Cloud Run, sin deploy de código.
+  TOPE_DIARIO_CORREOS: z.coerce.number().int().positive().default(50),
   // Expediente documental (PLAN_CRM_DEFINITIVO.md #8). STORAGE_DRIVER
   // decide en runtime qué StorageService implementa
   // src/documentos/storage/storage.provider.ts:

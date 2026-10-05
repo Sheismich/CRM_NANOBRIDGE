@@ -402,12 +402,30 @@ Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no
    - Al terminar, la limpieza **cierra las ventanas** de los envíos de prueba en lugar de
      borrar filas en producción.
 6. **Antes de encender (bloque aparte):**
-   - Tope diario de envíos que **no excluya** al prospecto. El camino actual de PT1 que marca
-     `excluido` es permanente y no sirve para esto.
-   - La ventana se cierra **por persona** al recibir respuesta. Hoy `registrarRespuesta` cierra
-     la del último envío del prospecto, no la de la persona.
-   - No volver a escribirle a quien ya respondió. Dirección decide si "no interesado" bloquea
-     6 meses o para siempre.
+   - **Tope diario de correos — en parte hecho (5-oct-2026).** 50 al día (día de México),
+     iniciales y recordatorios juntos; variable `TOPE_DIARIO_CORREOS` en Cloud Run (se sube con
+     `--update-env-vars`, sin deploy de código).
+     - `GET /envios/vencidas` solo entrega los recordatorios que caben hoy. Los demás **no se
+       reclaman**: su ventana sigue abierta y salen otro día. Nuevo campo
+       `tope_diario_alcanzado` (true = ya no cabe más hoy). La última ventana
+       (`es_ultimo_contacto`) no manda correo y no ocupa lugar.
+     - `GET /envios/verificacion` trae un campo nuevo `en_espera`. Con el tope lleno responde
+       `puede_enviar: false, en_espera: true`. **PT1 debe NO marcar `excluido` cuando
+       `en_espera` es true** (prompt pendiente de aplicar en n8n): la persona no tiene nada malo,
+       solo no hubo lugar ese día.
+     - Pendiente: la fila de espera de los **correos iniciales** (quién vuelve a intentar mandarle
+       a un prospecto que quedó `en_espera`). Se diseña cuando se sepa de dónde salen los
+       prospectos (Carlos): si llegan en lotes, el tope se aplica en la entrada.
+   - ~~La ventana se cierra **por persona** al recibir respuesta.~~ **Hecho (5-oct-2026):**
+     `registrarRespuesta` cierra todas las ventanas abiertas de la persona en ese canal, aunque
+     el último correo haya salido con otro prospecto suyo. PT2 no cambia.
+   - ~~No volver a escribirle a quien ya respondió.~~ **Decidido por Fabián (5-oct-2026): no se
+     bloquea.** Una respuesta detiene los recordatorios de ese ciclo (la ventana se cierra), pero
+     no impide que una campaña distinta le escriba después. Lo que sí protege a la persona: la
+     baja (para siempre) y el tope de 3 correos por persona cada 6 meses, que cuenta todas las
+     campañas juntas. Riesgo aceptado: un "interesado" que ya atiende un vendedor podría recibir
+     el correo de otra campaña; si se quiere evitar, excluir a quien tenga tarea u oportunidad
+     abierta.
    - Baja por link o spam suprime todos los medios y pasa el prospecto a baja. Un rebote
      definitivo suprime solo ese correo.
    - El flujo de recordatorios pregunta **si la campaña sigue activa** antes de mandar. Hoy

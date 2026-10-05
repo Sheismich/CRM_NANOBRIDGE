@@ -20,6 +20,9 @@ process.env.REPLY_TO_DOMAIN = "respuestas.contacto.nano-bridge-mex.com";
 process.env.N8N_WEBHOOK_URL = "";
 process.env.CORS_ORIGINS = "";
 process.env.TRUST_PROXY = "false";
+// Muy alto para que el tope diario de correos no le estorbe a la suite
+// (365-tope-diario.spec.ts lo baja a mano).
+process.env.TOPE_DIARIO_CORREOS = "100000";
 // Fijados explícitamente (no solo los de arriba): dotenv/config, que
 // src/config/env.ts carga después, NUNCA sobreescribe una variable que ya
 // esté en process.env -- sin esto, cualquier valor real presente en el
