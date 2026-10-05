@@ -8,6 +8,23 @@ import { Field, ServerError, inputClass } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
 
 // Mismos límites que crearActividadSchema (src/crm/dto/actividad.schema.ts).
+// La fecha va de hace 7 días a ahora (D4, 5-oct-2026): las actividades
+// cuentan en "Desempeño por agente" y con cualquier fecha inflaban otro periodo.
+const DIAS_ATRAS = 7;
+
+// "YYYY-MM-DDTHH:mm" en hora local, el formato de min/max de datetime-local.
+function datetimeLocal(fecha: Date) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${fecha.getFullYear()}-${p(fecha.getMonth() + 1)}-${p(fecha.getDate())}T${p(fecha.getHours())}:${p(fecha.getMinutes())}`;
+}
+
+function fechaEnRango(valor: string) {
+  if (!valor) return true;
+  const t = new Date(valor).getTime();
+  const ahora = Date.now();
+  return t >= ahora - DIAS_ATRAS * 86_400_000 && t <= ahora + 60_000;
+}
+
 // Los opcionales se manejan como string vacío en el formulario y se quitan
 // al armar el payload.
 const actividadSchema = z
@@ -17,7 +34,7 @@ const actividadSchema = z
     resultado: z.string().trim().max(255, "Máximo 255 caracteres"),
     proximaAccion: z.string().trim().max(255, "Máximo 255 caracteres"),
     comentario: z.string().trim().max(4000, "Máximo 4000 caracteres"),
-    ocurridaEn: z.string()
+    ocurridaEn: z.string().refine(fechaEnRango, "Tiene que ser de los últimos 7 días, no futura")
   })
   // El backend acepta todo vacío; aquí se exige lo mínimo para que el
   // registro diga algo en el Historial.
@@ -41,6 +58,11 @@ export function NuevaActividadForm({ empresaId, contactos, onDone }: { empresaId
     defaultValues: { tipo: "llamada", contactoId: "", resultado: "", proximaAccion: "", comentario: "", ocurridaEn: "" }
   });
   const tipo = useWatch({ control, name: "tipo" });
+  // Se calcula al abrir el formulario; la validación vuelve a revisar al guardar.
+  const [rango] = useState(() => {
+    const ahora = new Date();
+    return { min: datetimeLocal(new Date(ahora.getTime() - DIAS_ATRAS * 86_400_000)), max: datetimeLocal(ahora) };
+  });
 
   async function onSubmit(values: ActividadInput) {
     setServerError(null);
@@ -86,8 +108,8 @@ export function NuevaActividadForm({ empresaId, contactos, onDone }: { empresaId
             ))}
           </select>
         </Field>
-        <Field label="Fecha y hora (vacío = ahora)" htmlFor="act-fecha">
-          <input id="act-fecha" type="datetime-local" className={inputClass} {...register("ocurridaEn")} />
+        <Field label="Fecha y hora (vacío = ahora)" htmlFor="act-fecha" error={errors.ocurridaEn?.message}>
+          <input id="act-fecha" type="datetime-local" min={rango.min} max={rango.max} className={inputClass} {...register("ocurridaEn")} />
         </Field>
       </div>
 

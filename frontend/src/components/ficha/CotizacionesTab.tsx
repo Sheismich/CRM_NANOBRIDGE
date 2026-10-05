@@ -216,7 +216,10 @@ function CotizacionDetallePanel({
           <ServerError message={serverError} />
 
           <div className="flex flex-wrap justify-end gap-2">
-            {cotizacion.estado !== "obsoleta" && (
+            {/* Una aceptada ya no se versiona (409 COTIZACION_ACEPTADA, D2). Con la
+                oportunidad cerrada el backend responde OPORTUNIDAD_CERRADA y se
+                muestra el mensaje. */}
+            {cotizacion.estado !== "obsoleta" && cotizacion.estado !== "aceptada" && (
               <Button variant="outline" onClick={() => setVersionando(true)}>
                 Nueva versión
               </Button>

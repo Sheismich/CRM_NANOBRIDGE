@@ -148,6 +148,11 @@ function Importaciones({ onNuevo }: { onNuevo: () => void }) {
       await accion();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+      // Un 409 al confirmar (CONTACTO_DESACTIVADO, PERSONA_YA_REGISTRADA,
+      // IMPORTACION_VENCIDA…) suele significar que la fila cambió por fuera:
+      // se recargan el lote y sus contadores. Con PERSONA_YA_REGISTRADA la
+      // salida es volver a importar el archivo.
+      if (err instanceof ApiError && err.status === 409) await refrescar();
     } finally {
       setOcupado(false);
     }

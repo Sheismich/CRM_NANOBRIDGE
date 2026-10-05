@@ -248,6 +248,11 @@ function DetalleTarea({ tarea, esAdminOSupervisor, usuarios, onIrACola }: { tare
       await queryClient.invalidateQueries({ queryKey: ["tareas"] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+      // TAREA_CERRADA (ya la cerró o canceló alguien) o TAREA_REASIGNADA (se
+      // la pasaron a otra persona): la bandeja está vieja, se recarga.
+      if (err instanceof ApiError && (err.code === "TAREA_CERRADA" || err.code === "TAREA_REASIGNADA")) {
+        await queryClient.invalidateQueries({ queryKey: ["tareas"] });
+      }
     } finally {
       setOcupado(false);
     }

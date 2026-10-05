@@ -6,11 +6,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { Field, ServerError, inputClass } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
+import { aCentavos, calcularCotizacion, tieneMaxDosDecimales } from "../../lib/dinero";
 import { formatoMoneda } from "../../lib/formato";
 import type { CotizacionDetalle, Oportunidad } from "../../types";
 
-// Mismos límites que cotizacion.schema.ts del backend: DECIMAL(12,2).
+// Mismos límites que cotizacion.schema.ts del backend: DECIMAL(12,2), y
+// cantidades y montos con a lo más 2 decimales (D1, 5-oct-2026).
 const MAX_MONTO = 9_999_999_999.99;
+const MAX_MONTO_CENTAVOS = aCentavos(MAX_MONTO);
 const PARTIDA_MAX = 50;
 
 const numero = (max: number, { positivo = false } = {}) =>
@@ -18,6 +21,7 @@ const numero = (max: number, { positivo = false } = {}) =>
     .string()
     .trim()
     .refine((v) => v !== "" && Number.isFinite(Number(v)), "Número inválido")
+    .refine((v) => tieneMaxDosDecimales(Number(v)), "Máximo 2 decimales")
     .refine((v) => (positivo ? Number(v) > 0 : Number(v) >= 0), positivo ? "Debe ser mayor a 0" : "No puede ser negativo")
     .refine((v) => Number(v) <= max, `Máximo ${max.toLocaleString("es-MX")}`);
 
@@ -41,20 +45,21 @@ const cotizacionSchema = z
     probabilidad: z.string().refine((v) => v === "" || (Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 100), "Entero de 0 a 100")
   })
   .superRefine((v, ctx) => {
-    const { subtotal, total } = calcular(v);
-    if (subtotal > MAX_MONTO) ctx.addIssue({ code: "custom", path: ["descuento"], message: "El subtotal excede el máximo permitido" });
-    else if (total < 0) ctx.addIssue({ code: "custom", path: ["descuento"], message: "El descuento no puede exceder subtotal + impuestos" });
-    else if (total > MAX_MONTO) ctx.addIssue({ code: "custom", path: ["impuestos"], message: "El total excede el máximo permitido" });
+    const { subtotal, total } = calcularCentavos(v);
+    if (subtotal > MAX_MONTO_CENTAVOS) ctx.addIssue({ code: "custom", path: ["descuento"], message: "El subtotal excede el máximo permitido" });
+    // Desde D1 el descuento no puede pasar del subtotal (antes bastaba con
+    // que los impuestos lo cubrieran).
+    else if (aCentavos(Number(v.descuento) || 0) > subtotal) ctx.addIssue({ code: "custom", path: ["descuento"], message: "El descuento no puede ser mayor que el subtotal" });
+    else if (total > MAX_MONTO_CENTAVOS) ctx.addIssue({ code: "custom", path: ["impuestos"], message: "El total excede el máximo permitido" });
   });
 type CotizacionInput = z.infer<typeof cotizacionSchema>;
 
-// Igual que CotizacionesService.calcular(): cada línea se redondea a 2
-// decimales antes de sumar, para que el total mostrado sea el que se guarda.
-function calcular(v: { partidas: { cantidad: string; precioUnitario: string }[]; descuento: string; impuestos: string }) {
-  const redondear = (n: number) => Number(n.toFixed(2));
-  const subtotal = redondear(v.partidas.reduce((acc, p) => acc + redondear((Number(p.cantidad) || 0) * (Number(p.precioUnitario) || 0)), 0));
-  const total = redondear(subtotal - (Number(v.descuento) || 0) + (Number(v.impuestos) || 0));
-  return { subtotal, total };
+// Igual que CotizacionesService.calcular() (lib/dinero.ts): cada línea se
+// redondea a centavos antes de sumar, para que el total mostrado sea el que
+// se guarda. Resultado en centavos.
+function calcularCentavos(v: { partidas: { cantidad: string; precioUnitario: string }[]; descuento: string; impuestos: string }) {
+  const partidas = v.partidas.map((p) => ({ cantidad: Number(p.cantidad) || 0, precioUnitario: Number(p.precioUnitario) || 0 }));
+  return calcularCotizacion(partidas, Number(v.descuento) || 0, Number(v.impuestos) || 0);
 }
 
 type Props = {
@@ -98,7 +103,9 @@ export function CotizacionForm(props: Props) {
   const partidas = useWatch({ control, name: "partidas" });
   const descuento = useWatch({ control, name: "descuento" });
   const impuestos = useWatch({ control, name: "impuestos" });
-  const { subtotal, total } = calcular({ partidas: partidas ?? [], descuento, impuestos });
+  const centavos = calcularCentavos({ partidas: partidas ?? [], descuento, impuestos });
+  const subtotal = centavos.subtotal / 100;
+  const total = centavos.total / 100;
 
   async function onSubmit(values: CotizacionInput) {
     setServerError(null);
