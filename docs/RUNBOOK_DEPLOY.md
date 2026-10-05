@@ -201,10 +201,29 @@ Actualiza esta tabla en cada deploy.
 | 2-oct-2026 | `nanobridge-api-00011-6cg` | `def4d07` (misma imagen) | (sin migración) | Solo configuración: `TRUST_PROXY=true` (antes todos los usuarios compartían el límite de intentos de login, por la IP del proxy de Google) |
 | 2-oct-2026 | `nanobridge-api-00012-nrx` | `7ddf33a` | `024_respuestas_remitente.sql` | Bloque A de fixes: el correo manda en la identidad, la baja es de la persona y no se deshace, el CRM respeta la lista de supresión, spam de respuestas ignorado, remitente guardado; además /campanas y pausa = espera |
 | 2-oct-2026 | `nanobridge-api-00013-kxh` | `270caf1` | `026_envios_indice_ventana.sql` | Bloque B de fixes: freno de login por cuenta (025), sesiones y reactivar usuario, errores 4xx en vez de 500, outbox que no se atora, trabajos diarios por endpoint (PT5), descargas con sesión, índice de ventanas (026), campañas sin fecha de fin pasada, días hábiles en hora de México, CSRF, Node 22 sin root |
+| 5-oct-2026 | `nanobridge-api-00014-2mh` | `69bed7f` | `027_metricas_montos_grandes.sql` | Bloques C y D de fixes: asignar = dar dueño, permisos de agentes en tareas/oportunidades/CSV/documentos, métricas con montos grandes (027), cotizaciones en centavos y con estados cerrados, día de México en reportes, fecha de actividades; más el code review de verificación (outbox sin duplicados, personas desactivadas, carrera baja/seguimiento, códigos de error) |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
 - `TRUST_PROXY=true` — sin ella, el límite de login es uno solo para todos los usuarios.
+
+### Consultar la base desde Cloud Shell sin escribir la contraseña
+
+Para revisar algo rápido (p. ej. qué migraciones están aplicadas). La contraseña sale
+del secreto `DATABASE_URL` y solo vive durante el comando `mysql`: no se imprime ni queda
+en el historial. La última línea vuelve a cerrar la base: córrela aunque algo falle.
+
+```bash
+P=crm-prospeccion-outbound
+MY_IP=$(curl -s ifconfig.me); echo $MY_IP
+gcloud sql instances patch nanobridge-db --authorized-networks=$MY_IP/32 --project=$P --quiet
+DB_IP=$(gcloud sql instances describe nanobridge-db --project=$P --format="value(ipAddresses[0].ipAddress)")
+MYSQL_PWD=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=$P | sed -E 's#^mysql://[^:]+:([^@]*)@.*#\1#') \
+  mysql -h "$DB_IP" -u appuser nanobridge_crm -e "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 3;"
+gcloud sql instances patch nanobridge-db --clear-authorized-networks --project=$P --quiet
+```
+
+Cambia la consulta del `-e "..."` por la que necesites (solo lectura, de preferencia).
 
 ### Revisión única: personas fundidas por teléfono (antes del 2-oct-2026)
 
