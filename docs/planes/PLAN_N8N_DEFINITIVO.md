@@ -8,10 +8,15 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 
 1. Hoy después de las 3 pm: prueba en vivo de PT4, sin tocar nada antes.
 2. Aviso por correo desde B4 (Error Workflow), con la credencial de SendGrid que ya existe.
-3. Aviso al supervisor cuando llega una respuesta (en PT2, justo después de registrarla).
-4. Completar la lista de encendido (RUNBOOK_DEPLOY.md §10).
-5. Cupo para recordatorios y fila de espera de correos iniciales, cuando conteste Carlos.
-6. Con un mes de datos reales: revisar si la prioridad "alta" de verdad responde más. Si no,
+3. Backend: sin `N8N_WEBHOOK_URL`, el despachador del outbox no intenta mandar. Los eventos se
+   quedan `pendiente`, sin gastar reintentos, y se entregan cuando exista B3. Hoy cada evento
+   (`prospecto_clasificado`, `tarea_cerrada`, alertas diarias) termina en `procesos_fallidos`
+   (`outbox-dispatcher.service.ts`, `deliver`) y ese ruido esconde los errores reales de B4.
+   Con TDD; después cerrar como resueltos los procesos fallidos que dejó ese ruido.
+4. Aviso al supervisor cuando llega una respuesta (en PT2, justo después de registrarla).
+5. Completar la lista de encendido (RUNBOOK_DEPLOY.md §10).
+6. Cupo para recordatorios y fila de espera de correos iniciales, cuando conteste Carlos.
+7. Con un mes de datos reales: revisar si la prioridad "alta" de verdad responde más. Si no,
    ajustar el peso de Gemini (hoy 60%).
 
 **Después, no bloquean encender:**
