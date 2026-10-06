@@ -4,6 +4,34 @@
 
 n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 
+## Pendientes en orden (6-oct-2026)
+
+1. Hoy después de las 3 pm: prueba en vivo de PT4, sin tocar nada antes.
+2. Aviso por correo desde B4 (Error Workflow), con la credencial de SendGrid que ya existe.
+3. Aviso al supervisor cuando llega una respuesta (en PT2, justo después de registrarla).
+4. Completar la lista de encendido (RUNBOOK_DEPLOY.md §10).
+5. Cupo para recordatorios y fila de espera de correos iniciales, cuando conteste Carlos.
+6. Con un mes de datos reales: revisar si la prioridad "alta" de verdad responde más. Si no,
+   ajustar el peso de Gemini (hoy 60%).
+
+**Después, no bloquean encender:**
+- IA que sugiere la clasificación de respuestas en PT2: la API ya está lista; falta el workflow y el
+  permiso de Carlos para mandar el texto a Gemini (B2).
+- B3, webhook único de reingreso, y luego poner `N8N_WEBHOOK_URL`. Primero decidir qué hace n8n con
+  cada evento.
+- B4: marcar como resueltos los procesos fallidos 1 y 2 (de prueba).
+- Guardar la confirmación de SendGrid en `envios` (riesgo aceptado en "Flujo de recordatorios").
+- Backend: que el Historial muestre los documentos enviados y su revisión (PLAN_CRM_DEFINITIVO.md #4).
+- Backlog del code review y del plan de fixes: Gmail con puntos y `+`, teléfonos E.164, auditoría de
+  tareas liberadas, aviso de medio suprimido en el CSV, entre otros.
+- Documentos desactualizados: README "Qué falta", S3 §2.2, PLAN_FRONTEND §7 ("el envío sigue en
+  MOCK") y la línea de este plan que dice que `listarVentanasVencidas` no revisa la campaña.
+
+**Descartado, ya revisado:**
+- PT1 no adivina correos: solo limpia espacios y mayúsculas, y si sigue mal crea tarea.
+- Si Gemini falla, el puntaje es el de reglas (0-100); nadie sale castigado.
+- Asignar el "interesado" al dueño de la empresa: no aplica, las empresas de n8n nacen sin dueño.
+
 ## B0 Cerrar Parte 1
 
 1. Persistir incidencias de scoring.
@@ -411,7 +439,8 @@ Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no
        (`es_ultimo_contacto`) no manda correo y no ocupa lugar.
      - `GET /envios/verificacion` trae un campo nuevo `en_espera`. Con el tope lleno responde
        `puede_enviar: false, en_espera: true`. **PT1 debe NO marcar `excluido` cuando
-       `en_espera` es true** (prompt pendiente de aplicar en n8n): la persona no tiene nada malo,
+       `en_espera` es true** (aplicado el 6-oct-2026: la salida TRUE de "¿En espera?" va al No
+       Operation "En espera: sin lugar hoy"): la persona no tiene nada malo,
        solo no hubo lugar ese día.
      - Pendiente: la fila de espera de los **correos iniciales** (quién vuelve a intentar mandarle
        a un prospecto que quedó `en_espera`). Se diseña cuando se sepa de dónde salen los

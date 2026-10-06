@@ -346,3 +346,39 @@ parches hasta abril de 2027; antes de esa fecha hay que pasar a Node 24.
 - Borrar la cuenta de servicio `n8n-invoker-sa` (quedó de un intento de
   autenticación anterior, ya no se usa, no representa un riesgo activo pero
   es basura que se puede limpiar).
+- Quitar el secreto `STORAGE_LOCAL_SIGNING_SECRET` del servicio de Cloud Run
+  (ya no se usa desde el 2-oct-2026, ver §7).
+- Configurar DMARC del dominio de envío.
+
+## 10. Lista de encendido (antes de salir en vivo)
+
+Nada de esto se hace hasta que todo esté listo: el día que se encienda, se
+recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
+("Pendientes en orden").
+
+- [ ] Apagar `MODO_PRUEBAS` en PT1 y PT4.
+- [ ] Textos reales en los correos (quitar "correo de PRUEBA" en PT1b). Antes,
+      elegir con Carlos la opción A (plantilla por giro) o B (Gemini en vivo
+      con candados), `PLAN_N8N_DEFINITIVO.md` ronda 1 #3.
+- [ ] Pruebas en vivo que faltan: respuesta automática (fuera de oficina),
+      correo sin firma y rebote.
+- [ ] Respaldos automáticos de Cloud SQL activados (§9).
+- [ ] Tope diario a 20 para calentar el dominio:
+      `--update-env-vars TOPE_DIARIO_CORREOS=20`.
+- [ ] Cupo apartado para recordatorios y fila de espera de correos iniciales.
+      Depende de Carlos: ¿los prospectos llegan en lotes o uno por uno?
+- [ ] Publicar PT4.
+- [ ] Borrar los datos de prueba.
+- [ ] Domicilio de la empresa en el remitente (hoy el remitente de pruebas
+      tiene el de la casa de Fabián).
+- [ ] Cuenta definitiva de SendGrid (la de prueba vence el 24-nov-2026 y está
+      con el correo de pasante). Al cambiar: rehacer la autenticación del
+      dominio, dar de alta Inbound Parse y poner la API key nueva en n8n.
+      Antes de que termine la pasantía de Fabián.
+- [ ] Corregir el nombre del admin "Fabi�n" (quedó mal guardado al crearlo):
+      Administración → Usuarios → editar.
+- [ ] Las 5 respuestas de Carlos, incluida: ¿"no interesado" bloquea para
+      siempre o 6 meses?
+- [ ] Los 2 usuarios `root` de MySQL con contraseña desconocida: cambiarles
+      la contraseña o borrarlos.
+- [x] Contraseña de `appuser` rotada (6-oct-2026, revisión `00017-cbm`).
