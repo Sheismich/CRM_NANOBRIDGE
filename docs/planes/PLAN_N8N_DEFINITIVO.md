@@ -15,7 +15,19 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
    Con TDD; después cerrar como resueltos los procesos fallidos que dejó ese ruido.
 4. Aviso al supervisor cuando llega una respuesta (en PT2, justo después de registrarla).
 5. Completar la lista de encendido (RUNBOOK_DEPLOY.md §10).
-6. Cupo para recordatorios y fila de espera de correos iniciales, cuando conteste Carlos.
+6. Cómo entran los prospectos a PT1. **Carlos ya contestó la fuente (6-oct-2026):** un Excel suyo
+   con 30 prospectos (probablemente el de STEELSAFE de `S3_ESQUEMA_PROSPECTOS_Y_PLAN_PRUEBAS.md`
+   §2.1: 29 de 30 importables) y el resto a mano desde LinkedIn, de gente que pide el servicio.
+   - **Hueco:** confirmar una fila del importador CSV del CRM crea el prospecto en `capturado` y
+     no dispara nada (`prospectos.service.ts`). Lo importado por el CRM nunca recibe correo; solo
+     PT1 califica y manda.
+   - **Propuesta:** un workflow de n8n que lea el Excel (o una copia en Google Sheets) y mande unos
+     10 por día a PT1. 10 nuevos más los recordatorios dan unos 20 al día, que es el tope de
+     calentamiento, así que la fila de espera de iniciales casi no hace falta. La alternativa es
+     un botón "mandar a automatización" en el CRM, que es más trabajo.
+   - LinkedIn: sin correo, PT1 no puede escribirles. A quien pide el servicio quizá le conviene
+     más que le escriba un vendedor que la secuencia automática; lo decide Carlos.
+   - Sigue pendiente de Carlos lo legal (aviso de privacidad), que aplica a los dos orígenes.
 7. Con un mes de datos reales: revisar si la prioridad "alta" de verdad responde más. Si no,
    ajustar el peso de Gemini (hoy 60%).
 
