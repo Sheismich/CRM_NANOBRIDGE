@@ -348,7 +348,11 @@ parches hasta abril de 2027; antes de esa fecha hay que pasar a Node 24.
   es basura que se puede limpiar).
 - Quitar el secreto `STORAGE_LOCAL_SIGNING_SECRET` del servicio de Cloud Run
   (ya no se usa desde el 2-oct-2026, ver §7).
-- Configurar DMARC del dominio de envío.
+- DMARC: ya existe con `p=none` (solo vigilar; SPF, DKIM y DMARC pasan,
+  verificado el 6-oct-2026). Cuando haya volumen real sin problemas, subirlo
+  a `p=quarantine`.
+- Link Branding en SendGrid (2 registros DNS) para que el link de baja use
+  `contacto.nano-bridge-mex.com` en vez de `ct.sendgrid.net`. Menor.
 
 ## 10. Lista de encendido (antes de salir en vivo)
 
@@ -359,7 +363,11 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - [ ] Apagar `MODO_PRUEBAS` en PT1 y PT4.
 - [ ] Textos reales en los correos (quitar "correo de PRUEBA" en PT1b). Antes,
       elegir con Carlos la opción A (plantilla por giro) o B (Gemini en vivo
-      con candados), `PLAN_N8N_DEFINITIVO.md` ronda 1 #3.
+      con candados), `PLAN_N8N_DEFINITIVO.md` ronda 1 #3. El pie debe llevar
+      el link de baja visible: hoy `subscription_tracking: { enable: true }`
+      solo pone el encabezado `List-Unsubscribe` (con One-Click, verificado
+      el 6-oct-2026), no texto en el cuerpo. Pasarle `text` y `html` con la
+      marca `<% %>` que SendGrid convierte en el link.
 - [ ] Pruebas en vivo que faltan: respuesta automática (fuera de oficina),
       correo sin firma y rebote.
 - [ ] Respaldos automáticos de Cloud SQL activados (§9).
