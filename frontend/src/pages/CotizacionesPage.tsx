@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
+import { NuevaCotizacionPanel } from "../components/cotizaciones/NuevaCotizacionPanel";
+import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { inputBaseClass } from "../components/ui/Field";
 import { Paginacion } from "../components/ui/Paginacion";
@@ -14,6 +16,9 @@ import type { Cotizacion, EstadoCotizacion, Paginated } from "../types";
 // agente ve las de sus oportunidades. El detalle, las versiones y los
 // cambios de estado siguen en la pestaña Cotizaciones de la ficha, a donde
 // lleva cada fila. Por defecto, las enviadas: las que esperan respuesta.
+// "Nueva cotización" (NuevaCotizacionPanel) cotiza sin entrar a la ficha;
+// la nueva nace en borrador, así que al guardarla la lista cambia a
+// Borradores para que se vea.
 
 type CotizacionFila = Cotizacion & { empresa_nombre: string | null; oportunidad_titulo: string | null };
 const LIMIT = 25;
@@ -30,6 +35,7 @@ export function CotizacionesPage() {
   const navigate = useNavigate();
   const [estado, setEstado] = useState("enviada");
   const [page, setPage] = useState(1);
+  const [creando, setCreando] = useState(false);
 
   const filtros = { estado: estado || undefined, page, limit: LIMIT };
   const { data, isPending, isError } = useQuery({
@@ -57,12 +63,25 @@ export function CotizacionesPage() {
               </option>
             ))}
           </select>
-          {data && data.data.length > 0 && (
-            <div className="text-[13px] text-ink-2">
-              {data.data.length} en esta página · <b className="text-ink">{formatoMoneda.format(total)}</b>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {data && data.data.length > 0 && (
+              <div className="text-[13px] text-ink-2">
+                {data.data.length} en esta página · <b className="text-ink">{formatoMoneda.format(total)}</b>
+              </div>
+            )}
+            {!creando && <Button onClick={() => setCreando(true)}>+ Nueva cotización</Button>}
+          </div>
         </div>
+
+        {creando && (
+          <NuevaCotizacionPanel
+            onCerrar={() => setCreando(false)}
+            onGuardada={() => {
+              setPage(1);
+              setEstado("borrador");
+            }}
+          />
+        )}
 
         {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
         {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar las cotizaciones.</div>}

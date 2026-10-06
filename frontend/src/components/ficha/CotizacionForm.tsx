@@ -66,16 +66,19 @@ type Props = {
   empresaId: number;
   contactos: { id: number; nombre: string }[];
   onDone: () => void;
+  // Solo al guardar (onDone corre también al cancelar).
+  onGuardada?: () => void;
 } & (
   // Nueva cotización: se elige la oportunidad (solo abiertas: el backend
-  // rechaza con 409 una oportunidad cerrada).
-  | { modo: "crear"; oportunidades: Oportunidad[] }
+  // rechaza con 409 una oportunidad cerrada). `oportunidadId` la deja ya
+  // elegida (la que se acaba de crear desde "Nueva cotización").
+  | { modo: "crear"; oportunidades: Oportunidad[]; oportunidadId?: number }
   // Nueva versión: misma empresa y oportunidad; parte de la vigente.
   | { modo: "version"; base: CotizacionDetalle }
 );
 
 export function CotizacionForm(props: Props) {
-  const { empresaId, contactos, onDone } = props;
+  const { empresaId, contactos, onDone, onGuardada } = props;
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<string | null>(null);
   const base = props.modo === "version" ? props.base : null;
@@ -88,7 +91,7 @@ export function CotizacionForm(props: Props) {
   } = useForm<CotizacionInput>({
     resolver: zodResolver(cotizacionSchema),
     defaultValues: {
-      oportunidadId: "",
+      oportunidadId: props.modo === "crear" && props.oportunidadId ? String(props.oportunidadId) : "",
       contactoId: base?.contacto_id ? String(base.contacto_id) : "",
       partidas: base
         ? base.partidas.map((p) => ({ descripcion: p.descripcion, cantidad: String(Number(p.cantidad)), precioUnitario: String(Number(p.precio_unitario)) }))
@@ -130,6 +133,7 @@ export function CotizacionForm(props: Props) {
       }
       await queryClient.invalidateQueries({ queryKey: ["cotizaciones"] });
       await queryClient.invalidateQueries({ queryKey: ["cotizacion"] });
+      onGuardada?.();
       onDone();
     } catch (error) {
       setServerError(error instanceof ApiError ? error.message : "No se pudo conectar con el servidor");

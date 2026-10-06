@@ -7,9 +7,11 @@ import type { Oportunidad, Paginated } from "../../types";
 // Filtro empresaId en GET /oportunidades agregado para la ficha
 // (oportunidad.schema.ts). Para un agente el backend además acota a las
 // suyas -- puede haber otras oportunidades de la empresa que no vea.
+// empresaId 0 = todavía sin empresa ("Nueva cotización"): no consulta.
 export function useOportunidadesEmpresa(empresaId: number) {
   return useQuery({
     queryKey: ["oportunidades", { empresaId }],
-    queryFn: () => api.get<Paginated<Oportunidad>>("/api/v1/oportunidades", { empresaId, limit: 100 })
+    queryFn: () => api.get<Paginated<Oportunidad>>("/api/v1/oportunidades", { empresaId, limit: 100 }),
+    enabled: empresaId > 0
   });
 }

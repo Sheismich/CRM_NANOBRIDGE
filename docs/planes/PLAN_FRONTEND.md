@@ -234,13 +234,15 @@ Avance:
       - `bg-white` pasó a `bg-card` en todos los componentes. Los degradados con texto blanco usan `--marca-navy` y `--marca-violet`, que no cambian con el tema.
       - En el login el logo va sobre una placa clara, porque su letrero azul marino no se leía.
       - Se revisó en Edge contra el build con la API simulada: login, Inicio y Campañas en los dos modos, y el clic al botón.
-  - **Pendiente — publicar el front:**
-    - `frontend/firebase.json` ya existe: sirve `dist`, hace el rewrite de `/api/**` al servicio de Cloud Run `nanobridge-api` (`us-central1`) y manda todo lo demás a `index.html`.
-    - Falta lo siguiente:
-      1. Vincular el proyecto de Firebase al de GCP `crm-prospeccion-outbound` (`.firebaserc`).
-      2. Que backend ponga `SESSION_COOKIE_NAME=__session`, porque Firebase solo deja pasar esa cookie.
-      3. `npm run build` con `VITE_API_URL` vacío.
-      4. `firebase deploy --only hosting`.
+  - **Hecho en el front (6-oct-2026, lo hizo Fabián, avisar a Mich):**
+    - **Nueva cotización desde la lista general:** botón "+ Nueva cotización" en la pantalla Cotizaciones (`components/cotizaciones/NuevaCotizacionPanel.tsx`). Antes solo se cotizaba desde la ficha.
+      - El flujo es empresa → oportunidad abierta → partidas. Si la empresa no existe o no tiene oportunidad abierta, se crea ahí mismo y queda elegida.
+      - Reusa los formularios de la ficha. `EmpresaForm` y `NuevaOportunidadForm` aceptan `onCreada(id)` para devolver el id en vez de navegar o cerrarse, y `CotizacionForm` acepta `oportunidadId` para dejarla elegida.
+      - Al guardar, la lista cambia a "Borradores", porque la nueva nace en borrador.
+  - **✅ Front publicado (5-oct-2026, Mich):** https://crm-prospeccion-outbound.web.app.
+    - `frontend/firebase.json` sirve `dist`, hace el rewrite de `/api/**` al servicio de Cloud Run `nanobridge-api` (`us-central1`) y manda todo lo demás a `index.html`. `.firebaserc` apunta a `crm-prospeccion-outbound`.
+    - Cloud Run tiene `SESSION_COOKIE_NAME=__session`, porque Firebase solo deja pasar esa cookie. Login verificado el 6-oct-2026.
+    - Para volver a publicar: `npm run build` con `VITE_API_URL` vacío y `firebase deploy --only hosting`.
     - Si se publica en otro dominio sin rewrite, ese dominio va en `CORS_ORIGINS` o el login da 403.
     - La CSP no permite scripts ni conexiones a otros orígenes. Si algún día se agrega uno, hay que sumarlo ahí.
 

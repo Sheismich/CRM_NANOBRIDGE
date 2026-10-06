@@ -70,9 +70,11 @@ function valoresEmpresa(empresa?: EmpresaDetalle): EmpresaInput {
 }
 
 // Sin `empresa`: alta (POST /empresas, con su primer contacto) y al terminar
-// abre la ficha nueva. Con `empresa`: edición (PATCH /empresas/:id) de los
-// datos de la empresa; los contactos se editan aparte, en ContactoForm.
-export function EmpresaForm({ empresa, onDone }: { empresa?: EmpresaDetalle; onDone: () => void }) {
+// abre la ficha nueva -- o, con `onCreada`, le pasa el id a quien la pidió
+// ("Nueva cotización", que sigue en su pantalla). Con `empresa`: edición
+// (PATCH /empresas/:id) de los datos de la empresa; los contactos se editan
+// aparte, en ContactoForm.
+export function EmpresaForm({ empresa, onDone, onCreada }: { empresa?: EmpresaDetalle; onDone: () => void; onCreada?: (id: number) => void }) {
   const esAlta = !empresa;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -98,7 +100,8 @@ export function EmpresaForm({ empresa, onDone }: { empresa?: EmpresaDetalle; onD
           contactos: [sinVacios({ nombre: contactoNombre, puesto: contactoPuesto, correo: contactoCorreo, telefono: contactoTelefono, whatsapp: contactoWhatsapp })]
         });
         await queryClient.invalidateQueries({ queryKey: ["empresas"] });
-        navigate(`/empresas/${id}`);
+        if (onCreada) onCreada(id);
+        else navigate(`/empresas/${id}`);
         return;
       }
 

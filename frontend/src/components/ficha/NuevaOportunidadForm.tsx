@@ -24,7 +24,19 @@ const oportunidadSchema = z.object({
 });
 type OportunidadInput = z.infer<typeof oportunidadSchema>;
 
-export function NuevaOportunidadForm({ empresaId, contactos, onDone }: { empresaId: number; contactos: { id: number; nombre: string }[]; onDone: () => void }) {
+// `onCreada` (opcional) recibe el id de la oportunidad nueva en vez de solo
+// cerrar el formulario: "Nueva cotización" la deja ya elegida.
+export function NuevaOportunidadForm({
+  empresaId,
+  contactos,
+  onDone,
+  onCreada
+}: {
+  empresaId: number;
+  contactos: { id: number; nombre: string }[];
+  onDone: () => void;
+  onCreada?: (id: number) => void;
+}) {
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<string | null>(null);
   const {
@@ -39,7 +51,7 @@ export function NuevaOportunidadForm({ empresaId, contactos, onDone }: { empresa
   async function onSubmit(values: OportunidadInput) {
     setServerError(null);
     try {
-      await api.post("/api/v1/oportunidades", {
+      const creada = await api.post<{ id: number }>("/api/v1/oportunidades", {
         empresaId,
         titulo: values.titulo,
         contactoId: values.contactoId ? Number(values.contactoId) : undefined,
@@ -47,7 +59,8 @@ export function NuevaOportunidadForm({ empresaId, contactos, onDone }: { empresa
         fechaCierreEstimada: values.fechaCierreEstimada || undefined
       });
       await queryClient.invalidateQueries({ queryKey: ["oportunidades"] });
-      onDone();
+      if (onCreada) onCreada(creada.id);
+      else onDone();
     } catch (error) {
       setServerError(error instanceof ApiError ? error.message : "No se pudo conectar con el servidor");
     }
