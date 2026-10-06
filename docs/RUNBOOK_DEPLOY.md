@@ -202,10 +202,19 @@ Actualiza esta tabla en cada deploy.
 | 2-oct-2026 | `nanobridge-api-00012-nrx` | `7ddf33a` | `024_respuestas_remitente.sql` | Bloque A de fixes: el correo manda en la identidad, la baja es de la persona y no se deshace, el CRM respeta la lista de supresión, spam de respuestas ignorado, remitente guardado; además /campanas y pausa = espera |
 | 2-oct-2026 | `nanobridge-api-00013-kxh` | `270caf1` | `026_envios_indice_ventana.sql` | Bloque B de fixes: freno de login por cuenta (025), sesiones y reactivar usuario, errores 4xx en vez de 500, outbox que no se atora, trabajos diarios por endpoint (PT5), descargas con sesión, índice de ventanas (026), campañas sin fecha de fin pasada, días hábiles en hora de México, CSRF, Node 22 sin root |
 | 5-oct-2026 | `nanobridge-api-00014-2mh` | `69bed7f` | `027_metricas_montos_grandes.sql` | Bloques C y D de fixes: asignar = dar dueño, permisos de agentes en tareas/oportunidades/CSV/documentos, métricas con montos grandes (027), cotizaciones en centavos y con estados cerrados, día de México en reportes, fecha de actividades; más el code review de verificación (outbox sin duplicados, personas desactivadas, carrera baja/seguimiento, códigos de error) |
+| 5-oct-2026 | `nanobridge-api-00015-…` | `69bed7f` (misma imagen) | (sin migración) | No quedó anotada. Por lo que se ve después, solo configuración: `SESSION_COOKIE_NAME=__session` para publicar el front en Firebase |
+| 6-oct-2026 | `nanobridge-api-00016-vwc` | `74502d5` | (sin migración) | Antes de encender: la ventana se cierra por persona al responder y tope de 50 correos al día (`TOPE_DIARIO_CORREOS`, `en_espera` en verificación, `tope_diario_alcanzado` en `/vencidas`) |
+| 6-oct-2026 | `nanobridge-api-00017-cbm` | `74502d5` (misma imagen) | (sin migración) | Solo la contraseña nueva de `appuser` (versión 2 del secreto `DATABASE_URL`; la anterior estaba expuesta desde el 23-sep) |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
 - `TRUST_PROXY=true` — sin ella, el límite de login es uno solo para todos los usuarios.
+- `SESSION_COOKIE_NAME=__session` — el front publicado en Firebase
+  (https://crm-prospeccion-outbound.web.app) solo deja pasar esa cookie; sin ella
+  nadie puede iniciar sesión.
+- `TOPE_DIARIO_CORREOS` no está puesta: vale 50 por defecto. Al encender los
+  envíos reales se baja a 20 (calentamiento del dominio, PLAN_N8N_DEFINITIVO.md)
+  con `--update-env-vars TOPE_DIARIO_CORREOS=20`.
 
 ### Consultar la base desde Cloud Shell sin escribir la contraseña
 
