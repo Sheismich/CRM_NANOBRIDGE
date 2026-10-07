@@ -207,6 +207,7 @@ Actualiza esta tabla en cada deploy.
 | 6-oct-2026 | `nanobridge-api-00017-cbm` | `74502d5` (misma imagen) | (sin migración) | Solo la contraseña nueva de `appuser` (versión 2 del secreto `DATABASE_URL`; la anterior estaba expuesta desde el 23-sep) |
 | 7-oct-2026 | `nanobridge-api-00019-sh9` | `491f748` | (sin migración) | `GET /empresas` trae responsable, contactos activos y última actividad (para las pantallas nuevas de Mich). La `00018-4rw` es el mismo deploy corrido dos veces. Front publicado en Firebase desde el mismo commit |
 | 7-oct-2026 | `nanobridge-api-00020-4b7` | `05ea87b` | (sin migración) | La última actividad de Empresas cuenta correos y respuestas (`df25c65`); sin `N8N_WEBHOOK_URL` el outbox ya no despacha y los eventos esperan en `pendiente` en vez de llenar `procesos_fallidos` |
+| 7-oct-2026 | `nanobridge-api-00021-xq8` | `fd47e88` | (sin migración) | Un JSON que no viene en UTF-8 responde 400 `TEXTO_NO_UTF8` en vez de guardarse con "�"; el CSV de importación acepta el de Excel en español (Windows-1252). Verificado en producción con un login en Latin-1 |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
