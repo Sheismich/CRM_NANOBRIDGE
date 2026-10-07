@@ -8,7 +8,8 @@ import { ensureSeedAdmin } from "./support/seed.js";
 // Acentos y eñes de ida y vuelta (5-oct-2026): el nombre del primer admin
 // salió "Fabi�n" en producción. Fue el comando con que se creó (la terminal
 // mandó otra codificación), no la API; este test deja constancia de que la
-// API guarda y devuelve el texto tal cual.
+// API guarda y devuelve el texto tal cual. Desde el 7-oct-2026 un cuerpo que
+// no es UTF-8 se rechaza en vez de guardarse roto (356-codificacion).
 describe("acentos: lo que se guarda es lo que se lee", () => {
   let app: INestApplication;
   let adminCookie: string[];

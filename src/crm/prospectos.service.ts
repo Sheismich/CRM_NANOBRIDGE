@@ -8,6 +8,7 @@ import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { parseCsv } from "../shared/csv.js";
+import { decodificarArchivoTexto } from "../shared/texto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { personaEnBaja } from "../shared/baja-prospecto.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
@@ -65,7 +66,7 @@ export class ProspectosService {
       if (!campana) throw new HttpError(404, "Campaña no encontrada");
     }
 
-    const { encabezados, filas } = parseCsv(archivo.buffer.toString("utf-8"));
+    const { encabezados, filas } = parseCsv(decodificarArchivoTexto(archivo.buffer));
     this.validarEncabezados(encabezados);
     if (filas.length === 0) throw new HttpError(400, "El CSV no tiene filas de datos (¿le falta la fila de encabezados?)");
     if (filas.length > CSV_MAX_FILAS) throw new HttpError(400, `El CSV tiene ${filas.length} filas; el máximo por importación es ${CSV_MAX_FILAS}`);

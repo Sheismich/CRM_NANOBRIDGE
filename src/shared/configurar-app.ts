@@ -4,6 +4,8 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { HttpExceptionFilter } from "./http-exception.filter.js";
 import { revisarOrigen } from "./origen-csrf.js";
 import { env } from "../config/env.js";
+import { HttpError } from "./http-error.js";
+import { esUtf8Valido } from "./texto.js";
 
 // El armado de la app, compartido por src/main.ts y los tests
 // (test/support/create-app.ts). Antes eran dos copias "a mano" y se
@@ -20,8 +22,15 @@ export function configurarApp(app: NestExpressApplication) {
   // procesarla (ver origen-csrf.ts).
   app.use(revisarOrigen(env.CORS_ORIGINS));
   // bodyParser: false al crear la app (main.ts) porque el cuerpo se lee
-  // aquí, con límite de 1mb.
-  app.use(express.json({ limit: "1mb" }));
+  // aquí, con límite de 1mb. Un cuerpo que no es UTF-8 se rechaza: antes los
+  // bytes que no se entendían se guardaban como "�" sin avisar (así quedó el
+  // primer admin, "Fabi�n", creado desde una terminal; 7-oct-2026).
+  app.use(express.json({
+    limit: "1mb",
+    verify: (_req, _res, bytes) => {
+      if (!esUtf8Valido(bytes)) throw new HttpError(400, "El texto no viene en UTF-8 y los acentos llegarían rotos; mándalo como UTF-8", "TEXTO_NO_UTF8");
+    }
+  }));
   app.use(cookieParser());
   // CORS_ORIGINS vacío (default) => origin:false: ningún navegador puede
   // llamar la API desde otro origen, pero n8n (X-API-Key) y curl no son
