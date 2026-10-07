@@ -53,7 +53,7 @@ export function ContactosPage() {
           <EstadoVacio className="p-5" titulo="Todavía no hay contactos." texto="Los contactos se dan de alta dentro de su empresa." accion={<LigaAccion to="/empresas">Ir a Empresas</LigaAccion>} />
         )}
         {data && data.data.length > 0 && (
-          <div className="tabla-scroll"><table className="w-full border-collapse">
+          <div className="tabla-scroll tabla-tarjetas"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {["Contacto", "Empresa", "Medios de contacto"].map((h) => (
@@ -70,15 +70,15 @@ export function ContactosPage() {
                     <div className="text-[13px] font-semibold">{c.nombre}</div>
                     {(c.puesto || c.area) && <div className="text-xs text-ink-3">{[c.puesto, c.area].filter(Boolean).join(" · ")}</div>}
                   </td>
-                  <td className="px-5 py-3 text-[13px]">
+                  <td data-label="Empresa" className="px-5 py-3 text-[13px]">
                     <Link to={`/empresas/${c.empresa_id}`} className="hover:text-navy hover:underline">
                       {c.empresa_nombre}
                     </Link>
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 max-md:pt-2">
                     <div className="flex flex-wrap gap-1.5">
                       {c.medios.map((m) => (
-                        <span key={m.id} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${claseMedio(m.estado_contacto)}`} title={m.estado_contacto === "no_contactar" ? "Pidió que no lo contacten por este medio" : undefined}>
+                        <span key={m.id} className={`max-w-full break-all rounded-full px-2.5 py-1 text-[11px] font-semibold ${claseMedio(m.estado_contacto)}`} title={m.estado_contacto === "no_contactar" ? "Pidió que no lo contacten por este medio" : undefined}>
                           {ETIQUETA_MEDIO[m.tipo] ?? m.tipo}: {m.valor}
                         </span>
                       ))}

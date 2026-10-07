@@ -150,7 +150,7 @@ function Bandeja({ esAdminOSupervisor, usuarioId, onIrACola }: { esAdminOSupervi
 
       {data && data.data.length > 0 && (
         <div className="overflow-x-auto">
-          <div className="tabla-scroll"><table className="w-full border-collapse">
+          <div className="tabla-scroll tabla-tarjetas"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {COLUMNAS.filter((c) => esAdminOSupervisor || c !== "Responsable").map((h) => (
@@ -167,7 +167,7 @@ function Bandeja({ esAdminOSupervisor, usuarioId, onIrACola }: { esAdminOSupervi
                   <Fragment key={t.id}>
                     <tr className={`cursor-pointer border-t border-border hover:bg-bg ${abiertaId === t.id ? "bg-bg" : ""}`} onClick={() => setAbiertaId(abiertaId === t.id ? null : t.id)}>
                       <td className="px-4 py-3 text-[13px] font-semibold">{t.titulo}</td>
-                      <td className="px-4 py-3 text-[13px]">
+                      <td data-label="Empresa" className="px-4 py-3 text-[13px]">
                         {t.empresa_id ? (
                           <Link to={`/empresas/${t.empresa_id}`} className="hover:text-navy hover:underline" onClick={(e) => e.stopPropagation()}>
                             {t.empresa_nombre ?? `Empresa ${t.empresa_id}`}
@@ -176,19 +176,19 @@ function Bandeja({ esAdminOSupervisor, usuarioId, onIrACola }: { esAdminOSupervi
                           <span className="text-ink-3">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-[13px] text-ink-2">{ETIQUETA_TIPO_TAREA[t.tipo]}</td>
-                      <td className="px-4 py-3">
+                      <td data-label="Tipo" className="px-4 py-3 text-[13px] text-ink-2">{ETIQUETA_TIPO_TAREA[t.tipo]}</td>
+                      <td data-label="Prioridad" className="px-4 py-3">
                         <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${CLASE_PRIORIDAD[t.prioridad]}`}>{ETIQUETA_PRIORIDAD[t.prioridad]}</span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-[13px]">
+                      <td data-label="Fecha límite" className="whitespace-nowrap px-4 py-3 text-[13px]">
                         {t.fecha_limite ? <span className={vencida ? "font-semibold text-danger" : "text-ink-2"}>{formatoFechaHora.format(new Date(t.fecha_limite))}</span> : <span className="text-ink-3">—</span>}
                         {vencida && <span className="ml-2 rounded-full bg-danger-bg px-2 py-0.5 text-[10px] font-bold text-danger">Vencida</span>}
                       </td>
-                      {esAdminOSupervisor && <td className="px-4 py-3 text-[13px] text-ink-2">{nombreDe(t.responsable_id)}</td>}
-                      <td className="px-4 py-3 text-[13px] text-ink-2">{ETIQUETA_ESTADO_TAREA[t.estado]}</td>
+                      {esAdminOSupervisor && <td data-label="Responsable" className="px-4 py-3 text-[13px] text-ink-2">{nombreDe(t.responsable_id)}</td>}
+                      <td data-label="Estado" className="px-4 py-3 text-[13px] text-ink-2">{ETIQUETA_ESTADO_TAREA[t.estado]}</td>
                     </tr>
                     {abiertaId === t.id && (
-                      <tr>
+                      <tr className="fila-detalle">
                         <td colSpan={COLUMNAS.length} className="p-0">
                           <DetalleTarea tarea={t} esAdminOSupervisor={esAdminOSupervisor} usuarios={personas} onIrACola={onIrACola} />
                         </td>

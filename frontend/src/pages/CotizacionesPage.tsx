@@ -115,7 +115,7 @@ export function CotizacionesPage() {
           <div className="p-5 text-sm text-ink-3">No hay cotizaciones{estado ? ` en estado "${ETIQUETA_ESTADO_COTIZACION[estado as EstadoCotizacion].toLowerCase()}"` : ""}.</div>
         )}
         {data && data.data.length > 0 && (
-          <div className="tabla-scroll"><table className="w-full border-collapse">
+          <div className="tabla-scroll tabla-tarjetas"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {["Empresa", "Oportunidad", "Versión", "Total", "Estado", "Emitida", "Enviada", "Cierre esperado"].map((h) => (
@@ -134,15 +134,15 @@ export function CotizacionesPage() {
                   title="Abrir en la ficha de la empresa"
                 >
                   <td className="px-4 py-3 text-[13px] font-semibold">{c.empresa_nombre ?? `Empresa ${c.empresa_id}`}</td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">{c.oportunidad_titulo ?? "—"}</td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">v{c.version}</td>
-                  <td className="px-4 py-3 text-[13px] font-semibold tabular-nums">{formatoMoneda.format(Number(c.total))}</td>
-                  <td className="px-4 py-3">
+                  <td data-label="Oportunidad" className="px-4 py-3 text-[13px] text-ink-2">{c.oportunidad_titulo ?? "—"}</td>
+                  <td data-label="Versión" className="px-4 py-3 text-[13px] text-ink-2">v{c.version}</td>
+                  <td data-label="Total" className="px-4 py-3 text-[13px] font-semibold tabular-nums">{formatoMoneda.format(Number(c.total))}</td>
+                  <td data-label="Estado" className="px-4 py-3">
                     <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${claseEstadoCotizacion(c.estado)}`}>{ETIQUETA_ESTADO_COTIZACION[c.estado]}</span>
                   </td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">{formatoFecha.format(fechaLocal(c.fecha_emision))}</td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">{c.fecha_envio ? formatoFecha.format(fechaLocal(c.fecha_envio)) : "—"}</td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">{c.fecha_esperada_cierre ? formatoFecha.format(fechaLocal(c.fecha_esperada_cierre)) : "—"}</td>
+                  <td data-label="Emitida" className="px-4 py-3 text-[13px] text-ink-2">{formatoFecha.format(fechaLocal(c.fecha_emision))}</td>
+                  <td data-label="Enviada" className="px-4 py-3 text-[13px] text-ink-2">{c.fecha_envio ? formatoFecha.format(fechaLocal(c.fecha_envio)) : "—"}</td>
+                  <td data-label="Cierre esperado" className="px-4 py-3 text-[13px] text-ink-2">{c.fecha_esperada_cierre ? formatoFecha.format(fechaLocal(c.fecha_esperada_cierre)) : "—"}</td>
                 </tr>
               ))}
             </tbody>

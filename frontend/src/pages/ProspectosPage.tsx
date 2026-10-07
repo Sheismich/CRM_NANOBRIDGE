@@ -303,7 +303,7 @@ function Importaciones({ onNuevo }: { onNuevo: () => void }) {
 
             {cargandoFilas && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
             {filas && (
-              <div className="tabla-scroll"><table className="w-full border-collapse">
+              <div className="tabla-scroll tabla-tarjetas"><table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-bg">
                     {["Fila", "Empresa", "Contacto", "Canal", "Prioridad", "Estado", "Acciones"].map((h) => (
@@ -316,15 +316,15 @@ function Importaciones({ onNuevo }: { onNuevo: () => void }) {
                 <tbody>
                   {filasVisibles.map((f) => (
                     <tr key={f.id} className="border-t border-border align-top">
-                      <td className="px-4 py-3 text-[13px] text-ink-3">{f.fila_numero}</td>
-                      <td className="px-4 py-3 text-[13px] font-semibold">{f.empresa_nombre_legal ?? "—"}</td>
-                      <td className="px-4 py-3 text-[13px]">
+                      <td data-label="Fila" className="px-4 py-3 text-[13px] text-ink-3">{f.fila_numero}</td>
+                      <td data-label="Empresa" className="px-4 py-3 text-[13px] font-semibold">{f.empresa_nombre_legal ?? "—"}</td>
+                      <td data-label="Contacto" className="px-4 py-3 text-[13px]">
                         {f.contacto_nombre ?? "—"}
                         <div className="text-xs text-ink-3">{[f.correo, f.telefono].filter(Boolean).join(" · ")}</div>
                       </td>
-                      <td className="px-4 py-3 text-[13px] text-ink-2">{f.canal_inicial ? ETIQUETA_CANAL[f.canal_inicial] : "—"}</td>
-                      <td className="px-4 py-3 text-[13px] capitalize text-ink-2">{f.prioridad ?? "—"}</td>
-                      <td className="px-4 py-3">
+                      <td data-label="Canal" className="px-4 py-3 text-[13px] text-ink-2">{f.canal_inicial ? ETIQUETA_CANAL[f.canal_inicial] : "—"}</td>
+                      <td data-label="Prioridad" className="px-4 py-3 text-[13px] capitalize text-ink-2">{f.prioridad ?? "—"}</td>
+                      <td data-label="Estado" className="px-4 py-3">
                         <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${CLASE_ESTADO[f.estado]}`}>{ETIQUETA_ESTADO[f.estado]}</span>
                       </td>
                       <td className="px-4 py-3">
@@ -496,7 +496,7 @@ function ListaProspectos({ creando, setCreando, onImportar }: { creando: boolean
       )}
 
       {data && data.data.length > 0 && (
-        <div className="tabla-scroll"><table className="w-full border-collapse">
+        <div className="tabla-scroll tabla-tarjetas"><table className="w-full border-collapse">
           <thead>
             <tr className="bg-bg">
               {COLUMNAS_PROSPECTOS.map((h) => (
@@ -514,14 +514,14 @@ function ListaProspectos({ creando, setCreando, onImportar }: { creando: boolean
                   onClick={() => setAbiertoId(abiertoId === p.id ? null : p.id)}
                 >
                   <td className="px-5 py-3 text-[13px] font-semibold">{p.empresa_nombre_legal}</td>
-                  <td className="px-5 py-3 text-[13px]">{p.contacto_nombre}</td>
-                  <td className="px-5 py-3 text-[13px] text-ink-2">{p.estado.replace(/_/g, " ")}</td>
-                  <td className="px-5 py-3 text-[13px] capitalize text-ink-2">{p.prioridad ?? "—"}</td>
-                  <td className="px-5 py-3 text-[13px] text-ink-2">{p.score != null ? Number(p.score) : "—"}</td>
-                  <td className="px-5 py-3 text-[13px] text-ink-2">{formatoFecha.format(new Date(p.creado_en))}</td>
+                  <td data-label="Contacto" className="px-5 py-3 text-[13px]">{p.contacto_nombre}</td>
+                  <td data-label="Estado" className="px-5 py-3 text-[13px] text-ink-2">{p.estado.replace(/_/g, " ")}</td>
+                  <td data-label="Prioridad" className="px-5 py-3 text-[13px] capitalize text-ink-2">{p.prioridad ?? "—"}</td>
+                  <td data-label="Score" className="px-5 py-3 text-[13px] text-ink-2">{p.score != null ? Number(p.score) : "—"}</td>
+                  <td data-label="Alta" className="px-5 py-3 text-[13px] text-ink-2">{formatoFecha.format(new Date(p.creado_en))}</td>
                 </tr>
                 {abiertoId === p.id && (
-                  <tr>
+                  <tr className="fila-detalle">
                     <td colSpan={COLUMNAS_PROSPECTOS.length} className="p-0">
                       <ProspectoDetallePanel id={p.id} onClose={() => setAbiertoId(null)} />
                     </td>

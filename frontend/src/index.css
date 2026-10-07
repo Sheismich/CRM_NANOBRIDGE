@@ -115,3 +115,61 @@ body {
 .tabla-scroll.tabla-compacta > table {
   min-width: 18rem;
 }
+
+/* Listas principales en el celular: cada fila es una tarjeta. La primera
+   celda es el título; las demás llevan su encabezado en data-label y se
+   leen "etiqueta  valor". Una celda sin data-label (acciones, detalle
+   abierto) ocupa todo el ancho. Fuera de las capas de Tailwind, así que
+   gana sobre los px-/py-/text-right de las celdas sin !important. */
+@media (max-width: 767.98px) {
+  .tabla-tarjetas > table {
+    min-width: 0;
+  }
+  .tabla-tarjetas thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .tabla-tarjetas tbody,
+  .tabla-tarjetas tr,
+  .tabla-tarjetas td {
+    display: block;
+  }
+  .tabla-tarjetas tbody > tr {
+    padding: 14px 20px;
+  }
+  .tabla-tarjetas tbody > tr.fila-detalle {
+    padding: 0;
+  }
+  .tabla-tarjetas td {
+    padding: 3px 0;
+    min-width: 0;
+    text-align: left;
+  }
+  .tabla-tarjetas td:first-child {
+    padding-bottom: 6px;
+  }
+  .tabla-tarjetas td[data-label] {
+    position: relative;
+    padding-left: calc(8rem + 12px);
+    white-space: normal;
+  }
+  .tabla-tarjetas td[data-label]::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    top: 5px;
+    width: 8rem;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: var(--ink-3);
+  }
+  .tabla-tarjetas tr.fila-detalle > td {
+    padding: 0;
+  }
+}

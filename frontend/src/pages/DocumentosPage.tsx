@@ -110,7 +110,7 @@ export function DocumentosPage() {
           <div className="p-5 text-sm text-ink-3">{revisado === "false" ? "No hay documentos pendientes de revisión." : "No hay documentos con ese filtro."}</div>
         )}
         {data && data.data.length > 0 && (
-          <div className="tabla-scroll"><table className="mt-1 w-full border-collapse">
+          <div className="tabla-scroll tabla-tarjetas"><table className="mt-1 w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {["Documento", "Empresa", "Tipo", "Tamaño", "Subido", "Revisión", ""].map((h) => (
@@ -128,22 +128,22 @@ export function DocumentosPage() {
                     {d.version > 1 && <span className="ml-1.5 text-xs font-normal text-ink-3">v{d.version}</span>}
                     {d.estado === "archivado" && <span className="ml-1.5 rounded-full bg-bg px-2 py-0.5 text-[10px] font-bold text-ink-3">Archivado</span>}
                   </td>
-                  <td className="px-4 py-3 text-[13px]">
+                  <td data-label="Empresa" className="px-4 py-3 text-[13px]">
                     <Link to={`/empresas/${d.empresa_id}?tab=documentos`} className="hover:text-navy hover:underline">
                       {d.empresa_nombre ?? `Empresa ${d.empresa_id}`}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">{nombreTipo(d.tipo_documento_id)}</td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">{formatoTamano(d.tamano_bytes)}</td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">{formatoFecha.format(new Date(d.creado_en))}</td>
-                  <td className="px-4 py-3">
+                  <td data-label="Tipo" className="px-4 py-3 text-[13px] text-ink-2">{nombreTipo(d.tipo_documento_id)}</td>
+                  <td data-label="Tamaño" className="px-4 py-3 text-[13px] text-ink-2">{formatoTamano(d.tamano_bytes)}</td>
+                  <td data-label="Subido" className="px-4 py-3 text-[13px] text-ink-2">{formatoFecha.format(new Date(d.creado_en))}</td>
+                  <td data-label="Revisión" className="px-4 py-3">
                     {d.revisado_en ? (
                       <span className="rounded-full bg-ok-bg px-2.5 py-1 text-[11px] font-bold text-ok">Revisado {formatoFecha.format(new Date(d.revisado_en))}</span>
                     ) : (
                       <span className="rounded-full bg-warn-bg px-2.5 py-1 text-[11px] font-bold text-warn">Pendiente</span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                  <td className="whitespace-nowrap px-4 py-3 text-right max-md:pt-2.5">
                     <Button
                       variant="ghost"
                       className="px-3 py-1.5"

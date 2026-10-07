@@ -51,7 +51,7 @@ export function EmpresasListPage() {
         {data && data.data.length === 0 && page > 1 && <div className="p-6 text-sm text-ink-2">No hay más empresas.</div>}
 
         {data && data.data.length > 0 && (
-          <div className="tabla-scroll"><table className="w-full border-collapse">
+          <div className="tabla-scroll tabla-tarjetas"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
                 {["Nombre legal", "Giro", "Región / ciudad", "Responsable", "Contactos", "Última actividad"].map((h) => (
@@ -70,11 +70,11 @@ export function EmpresasListPage() {
                     </Link>
                     {empresa.nombre_comercial && <div className="text-xs font-normal text-ink-3">{empresa.nombre_comercial}</div>}
                   </td>
-                  <td className="px-5 py-3 text-[13px] text-ink-2">{empresa.giro ?? "—"}</td>
-                  <td className="px-5 py-3 text-[13px] text-ink-2">{[empresa.ciudad, empresa.region].filter(Boolean).join(", ") || "—"}</td>
-                  <td className="px-5 py-3 text-[13px] text-ink-2">{empresa.propietario_nombre ?? <span className="text-ink-3">Sin responsable</span>}</td>
-                  <td className="px-5 py-3 text-[13px] tabular-nums text-ink-2">{empresa.contactos_activos}</td>
-                  <td className="px-5 py-3 text-[13px] text-ink-2">{empresa.ultima_actividad ? formatoFecha.format(new Date(empresa.ultima_actividad)) : <span className="text-ink-3">Ninguna</span>}</td>
+                  <td data-label="Giro" className="px-5 py-3 text-[13px] text-ink-2">{empresa.giro ?? "—"}</td>
+                  <td data-label="Región / ciudad" className="px-5 py-3 text-[13px] text-ink-2">{[empresa.ciudad, empresa.region].filter(Boolean).join(", ") || "—"}</td>
+                  <td data-label="Responsable" className="px-5 py-3 text-[13px] text-ink-2">{empresa.propietario_nombre ?? <span className="text-ink-3">Sin responsable</span>}</td>
+                  <td data-label="Contactos" className="px-5 py-3 text-[13px] tabular-nums text-ink-2">{empresa.contactos_activos}</td>
+                  <td data-label="Última actividad" className="px-5 py-3 text-[13px] text-ink-2">{empresa.ultima_actividad ? formatoFecha.format(new Date(empresa.ultima_actividad)) : <span className="text-ink-3">Ninguna</span>}</td>
                 </tr>
               ))}
             </tbody>
