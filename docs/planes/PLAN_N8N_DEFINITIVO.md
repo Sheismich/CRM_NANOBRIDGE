@@ -4,20 +4,28 @@
 
 n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 
-## Pendientes en orden (6-oct-2026)
+## Pendientes en orden (6-oct-2026, actualizado el 7-oct)
 
-1. Hoy después de las 3 pm: prueba en vivo de PT4, sin tocar nada antes.
+1. ~~Prueba en vivo de PT4~~ **Pasó el 6-oct-2026** (envíos 17-19). Siguen: contacto 3 el 13-oct después de las 3 pm e inactivo el 20-oct.
 2. ~~Aviso por correo desde B4 (Error Workflow)~~ **Hecho 7-oct-2026** (ver B4, punto 4).
 3. ~~Outbox sin `N8N_WEBHOOK_URL`~~ **Hecho en código 7-oct-2026** (prueba
    `test/345-outbox-sin-destino.spec.ts`): sin URL el despachador no reclama nada y los eventos
    esperan en `pendiente`, sin gastar intentos ni crear `procesos_fallidos`; `POST
-   /eventos-pendientes/despachar` responde `sin_destino: true`. Falta: desplegar y luego cerrar
-   como resueltos los procesos fallidos que dejó el ruido. Al configurar la URL (B3), los eventos
+   /eventos-pendientes/despachar` responde `sin_destino: true`. Desplegado el 7-oct (revisión
+   `00020-4b7`); los procesos fallidos del ruido se cerraron como resueltos. Al configurar la URL (B3), los eventos
    acumulados salen de golpe: B3 debe ignorar alertas viejas (`tarea_sla_vencida`,
    `documento_pendiente_revision`).
 4. Aviso al supervisor cuando llega una respuesta (en PT2, justo después de registrarla).
-5. Completar la lista de encendido (RUNBOOK_DEPLOY.md §10).
-6. Cómo entran los prospectos a PT1. **Carlos ya contestó la fuente (6-oct-2026):** un Excel suyo
+5. Front, detalles de lanzamiento (revisados el 7-oct contra una lista de "antes de lanzar"; el
+   resto ya está o no aplica a una herramienta interna con login):
+   - **Que Google no lo indexe** (el más importante): `<meta name="robots" content="noindex">` en
+     `frontend/index.html` y un `frontend/public/robots.txt` con `Disallow: /`. Hoy la página de
+     login es pública y podría salir en buscadores.
+   - Un título por página ("Empresas · CRM NANOBRIDGE"); hoy todas las pestañas dicen lo mismo.
+   - Imagen de vista previa (`og:image` con el logo) para cuando el link se comparte por WhatsApp.
+   Es pantalla: lo hace Mich o nosotros, avisando en PLAN_FRONTEND.
+6. Completar la lista de encendido (RUNBOOK_DEPLOY.md §10).
+7. Cómo entran los prospectos a PT1. **Carlos ya contestó la fuente (6-oct-2026):** un Excel suyo
    con 30 prospectos (probablemente el de STEELSAFE de `S3_ESQUEMA_PROSPECTOS_Y_PLAN_PRUEBAS.md`
    §2.1: 29 de 30 importables) y el resto a mano desde LinkedIn, de gente que pide el servicio.
    - **Hueco:** confirmar una fila del importador CSV del CRM crea el prospecto en `capturado` y
@@ -30,7 +38,7 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
    - LinkedIn: sin correo, PT1 no puede escribirles. A quien pide el servicio quizá le conviene
      más que le escriba un vendedor que la secuencia automática; lo decide Carlos.
    - Sigue pendiente de Carlos lo legal (aviso de privacidad), que aplica a los dos orígenes.
-7. Con un mes de datos reales: revisar si la prioridad "alta" de verdad responde más. Si no,
+8. Con un mes de datos reales: revisar si la prioridad "alta" de verdad responde más. Si no,
    ajustar el peso de Gemini (hoy 60%).
 
 **Después, no bloquean encender:**
@@ -38,7 +46,11 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
   permiso de Carlos para mandar el texto a Gemini (B2).
 - B3, webhook único de reingreso, y luego poner `N8N_WEBHOOK_URL`. Primero decidir qué hace n8n con
   cada evento.
-- B4: marcar como resueltos los procesos fallidos 1 y 2 (de prueba).
+- ~~B4: marcar como resueltos los procesos fallidos 1 y 2~~ Hecho el 7-oct, junto con los del ruido del outbox.
+- Dependencias del backend que marca `npm audit` (7-oct): `proxy-addr` 2.0.7 "critical" no nos
+  afecta (`trust proxy` = 1, por saltos y no por subredes) y `uuid` 9.0.1 "moderate" va dentro de
+  `@google-cloud/storage` en una opción que no usamos. Subirlas igual, editando el lock a mano (el npm
+  local borra los campos `libc`), con suite y build.
 - Guardar la confirmación de SendGrid en `envios` (riesgo aceptado en "Flujo de recordatorios").
 - Backend: que el Historial muestre los documentos enviados y su revisión (PLAN_CRM_DEFINITIVO.md #4).
 - Backlog del code review y del plan de fixes: Gmail con puntos y `+`, teléfonos E.164, auditoría de
