@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
@@ -7,6 +7,11 @@ import { Topbar } from "./Topbar";
 // barra superior.
 export function AppShell({ titulo, children }: { titulo: string; children: ReactNode }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
+
+  // Título de la pestaña por pantalla, para no perderse entre varias abiertas.
+  useEffect(() => {
+    document.title = `${titulo} · CRM NANOBRIDGE`;
+  }, [titulo]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">

@@ -249,6 +249,11 @@ Avance:
     - Si se publica en otro dominio sin rewrite, ese dominio va en `CORS_ORIGINS` o el login da 403.
     - La CSP no permite scripts ni conexiones a otros orígenes. Si algún día se agrega uno, hay que sumarlo ahí.
 
+  - **Hecho en el front (7-oct-2026, lo hizo Fabián, avisar a Mich): detalles de lanzamiento.**
+    - **Que los buscadores no lo indexen:** `<meta name="robots" content="noindex, nofollow">` en `index.html` y el encabezado `X-Robots-Tag` en `firebase.json`. Sin `robots.txt` con `Disallow` a propósito: si el buscador no puede entrar, tampoco ve el `noindex`.
+    - **Título por pantalla:** `AppShell` pone `"<titulo> · CRM NANOBRIDGE"` en la pestaña; el login dice "Iniciar sesión · CRM NANOBRIDGE".
+    - **Vista previa al compartir el link** (`og:title`, `og:description`, `og:image` con `logo-nanobridge.png`).
+
 Relación con las fases de `PLAN_CRM_DEFINITIVO.md`: aquellas son las del backend y ya están construidas; estas son solo las de la interfaz.
 
 ## Pantallas menos genéricas

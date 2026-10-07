@@ -24,7 +24,7 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
    parte citada) y el link a la cola. Prueba real: respuesta a +prueba4 (prospecto 29) → aviso en
    Recibidos. Mejora posible: que diga nombre de contacto y empresa (la API hoy solo regresa
    `prospecto_id`).
-5. Front, detalles de lanzamiento (revisados el 7-oct contra una lista de "antes de lanzar"; el
+5. ~~Front, detalles de lanzamiento~~ **Hecho en código 7-oct-2026** (falta publicar en Firebase). Revisados el 7-oct contra una lista de "antes de lanzar"; el
    resto ya está o no aplica a una herramienta interna con login):
    - **Que Google no lo indexe** (el más importante): `<meta name="robots" content="noindex">` en
      `frontend/index.html` y un `frontend/public/robots.txt` con `Disallow: /`. Hoy la página de

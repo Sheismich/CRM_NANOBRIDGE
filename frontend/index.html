@@ -5,6 +5,15 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRM NANOBRIDGE</title>
+    <!-- Herramienta interna: que los buscadores no la muestren (firebase.json
+         manda además X-Robots-Tag). Sin robots.txt con Disallow a propósito:
+         si el buscador no puede entrar, tampoco ve este noindex. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <!-- Vista previa al compartir el link (WhatsApp, correo). -->
+    <meta property="og:title" content="CRM NANOBRIDGE" />
+    <meta property="og:description" content="CRM interno de prospección de NANOBRIDGE." />
+    <meta property="og:image" content="https://crm-prospeccion-outbound.web.app/logo-nanobridge.png" />
+    <meta property="og:type" content="website" />
   </head>
   <body>
     <div id="root"></div>
