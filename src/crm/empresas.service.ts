@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { actividades, auditoria, contactos, empresas, mediosContacto, usuarios } from "../database/schema.js";
+import { actividades, auditoria, contactos, empresas, envios, mediosContacto, prospectos, respuestas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { buildAntes } from "../shared/drizzle-utils.js";
 import { insertarMediosContacto, buildMedioCandidatos, estadoInicialDeMedio, CODIGO_MEDIO_SUPRIMIDO } from "../shared/medios-contacto.js";
@@ -14,6 +14,10 @@ import type { CompanyInput, ContactInput, UpdateCompanyInput, UpdateContactInput
 // propietario_id, medio_tipo, etc.) aunque las columnas de
 // src/database/schema.ts estén en camelCase: es el mismo contrato HTTP que
 // ya consumen n8n y el CRM, solo cambió cómo se arman las queries por dentro.
+
+// Piso para "sin fecha" en la última actividad de la lista (GREATEST con un
+// NULL da NULL); se vuelve NULL antes de responder.
+const PISO_FECHA = sql`CAST('1000-01-01 00:00:00' AS DATETIME)`;
 
 @Injectable()
 export class EmpresasService {
@@ -42,7 +46,15 @@ export class EmpresasService {
         propietario_id: empresas.propietarioId,
         propietario_nombre: usuarios.nombre,
         contactos_activos: sql<number>`(SELECT COUNT(*) FROM ${contactos} WHERE ${contactos.empresaId} = ${empresas.id} AND ${contactos.activo} = true)`.mapWith(Number),
-        ultima_actividad: sql<Date | null>`(SELECT MAX(${actividades.ocurridaEn}) FROM ${actividades} WHERE ${actividades.empresaId} = ${empresas.id})`.mapWith(actividades.ocurridaEn)
+        // Lo más reciente entre lo registrado a mano, los correos de la
+        // automatización y las respuestas (lo mismo que junta el Historial):
+        // una empresa a la que n8n le escribió ayer no es "Ninguna".
+        // GREATEST da NULL si algún argumento es NULL, de ahí el piso.
+        ultima_actividad: sql<Date | null>`NULLIF(GREATEST(
+          COALESCE((SELECT MAX(${actividades.ocurridaEn}) FROM ${actividades} WHERE ${actividades.empresaId} = ${empresas.id}), ${PISO_FECHA}),
+          COALESCE((SELECT MAX(${envios.enviadoEn}) FROM ${envios} INNER JOIN ${prospectos} ON ${prospectos.id} = ${envios.prospectoId} INNER JOIN ${contactos} ON ${contactos.id} = ${prospectos.contactoId} WHERE ${contactos.empresaId} = ${empresas.id}), ${PISO_FECHA}),
+          COALESCE((SELECT MAX(${respuestas.recibidoEn}) FROM ${respuestas} INNER JOIN ${prospectos} ON ${prospectos.id} = ${respuestas.prospectoId} INNER JOIN ${contactos} ON ${contactos.id} = ${prospectos.contactoId} WHERE ${contactos.empresaId} = ${empresas.id}), ${PISO_FECHA})
+        ), ${PISO_FECHA})`.mapWith(actividades.ocurridaEn)
       })
       .from(empresas)
       .leftJoin(usuarios, eq(usuarios.id, empresas.propietarioId))

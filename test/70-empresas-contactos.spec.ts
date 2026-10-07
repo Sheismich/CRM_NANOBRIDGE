@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { and, eq } from "drizzle-orm";
@@ -5,7 +6,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { contactos, mediosContacto } from "../src/database/schema.js";
+import { contactos, envios, mediosContacto } from "../src/database/schema.js";
 
 describe("empresas + contactos", () => {
   let app: INestApplication;
@@ -78,6 +79,41 @@ describe("empresas + contactos", () => {
     const despues = await buscar();
     expect(despues.ultima_actividad).not.toBeNull();
     expect(Math.abs(new Date(despues.ultima_actividad).getTime() - Date.now())).toBeLessThan(5 * 60_000);
+  });
+
+  it("la última actividad de la lista cuenta también los correos de la automatización y las respuestas", async () => {
+    const API_KEY = "test_crm_callback_api_key_0001";
+    const sufijo = randomUUID();
+    const registro = await request(app.getHttpServer())
+      .post("/api/v1/automatizacion/prospectos")
+      .set("X-API-Key", API_KEY)
+      // "000 " al inicio: la lista va por nombre y así cae en la primera página.
+      .send({ execution_id: randomUUID(), empresa: { nombreLegal: `000 Ultima Actividad ${sufijo}` }, contacto: { nombre: "Persona Ultima", correo: `ultima.${sufijo}@test.local` } });
+    expect(registro.status).toBe(201);
+    const { id: prospectoId, empresa_id: empresaId } = registro.body;
+
+    const buscar = async () => {
+      const lista = await request(app.getHttpServer()).get("/api/v1/empresas").query({ limit: 100 }).set("Cookie", adminCookie);
+      expect(lista.status).toBe(200);
+      return lista.body.data.find((e: { id: number }) => e.id === empresaId);
+    };
+    expect((await buscar()).ultima_actividad).toBeNull();
+
+    const envio = await request(app.getHttpServer())
+      .post("/api/v1/automatizacion/envios")
+      .set("X-API-Key", API_KEY)
+      .send({ execution_id: randomUUID(), prospecto_id: prospectoId, canal: "correo" });
+    expect(envio.status).toBe(201);
+    // Fecha fija y en el pasado: distingue el correo de la respuesta de abajo.
+    await db.update(envios).set({ enviadoEn: new Date("2026-01-15T12:00:00Z") }).where(eq(envios.id, envio.body.id));
+    expect(new Date((await buscar()).ultima_actividad).toISOString()).toBe("2026-01-15T12:00:00.000Z");
+
+    const respuesta = await request(app.getHttpServer())
+      .post("/api/v1/automatizacion/respuestas")
+      .set("X-API-Key", API_KEY)
+      .send({ execution_id: randomUUID(), prospecto_id: prospectoId, canal: "correo", contenido: "Sí me interesa" });
+    expect(respuesta.status).toBe(201);
+    expect(Math.abs(new Date((await buscar()).ultima_actividad).getTime() - Date.now())).toBeLessThan(5 * 60_000);
   });
 
   it("desactivar una empresa (solo administrador/supervisor) desactiva en cascada sus contactos y marca sus medios como obsoletos", async () => {
