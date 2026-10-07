@@ -374,8 +374,11 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       solo pone el encabezado `List-Unsubscribe` (con One-Click, verificado
       el 6-oct-2026), no texto en el cuerpo. Pasarle `text` y `html` con la
       marca `<% %>` que SendGrid convierte en el link.
-- [ ] Pruebas en vivo que faltan: respuesta automática (fuera de oficina),
-      correo sin firma y rebote.
+- [ ] Pruebas en vivo que faltan: baja completa con +prueba8 (correo 1 por
+      PT1, darse de baja con el link del encabezado `List-Unsubscribe`, revisar
+      que quede en baja y que PT4 no le escriba), respuesta automática (fuera de
+      oficina), correo sin firma y rebote. Además: el 13-oct después de las 3 pm
+      correr PT4 (contacto 3 a +prueba1..3) y el 20-oct (deben quedar inactivos).
 - [x] Respaldos automáticos de Cloud SQL activos (ya lo estaban; revisado el 7-oct-2026, §9).
 - [ ] Tope diario a 20 para calentar el dominio:
       `--update-env-vars TOPE_DIARIO_CORREOS=20`.
