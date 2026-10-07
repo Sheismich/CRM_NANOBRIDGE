@@ -205,6 +205,7 @@ Actualiza esta tabla en cada deploy.
 | 5-oct-2026 | `nanobridge-api-00015-…` | `69bed7f` (misma imagen) | (sin migración) | No quedó anotada. Por lo que se ve después, solo configuración: `SESSION_COOKIE_NAME=__session` para publicar el front en Firebase |
 | 6-oct-2026 | `nanobridge-api-00016-vwc` | `74502d5` | (sin migración) | Antes de encender: la ventana se cierra por persona al responder y tope de 50 correos al día (`TOPE_DIARIO_CORREOS`, `en_espera` en verificación, `tope_diario_alcanzado` en `/vencidas`) |
 | 6-oct-2026 | `nanobridge-api-00017-cbm` | `74502d5` (misma imagen) | (sin migración) | Solo la contraseña nueva de `appuser` (versión 2 del secreto `DATABASE_URL`; la anterior estaba expuesta desde el 23-sep) |
+| 7-oct-2026 | `nanobridge-api-00019-sh9` | `491f748` | (sin migración) | `GET /empresas` trae responsable, contactos activos y última actividad (para las pantallas nuevas de Mich). La `00018-4rw` es el mismo deploy corrido dos veces. Front publicado en Firebase desde el mismo commit |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
