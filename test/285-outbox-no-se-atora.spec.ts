@@ -6,6 +6,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { usarN8nQueRechaza } from "./support/n8n-que-rechaza.js";
 import { eventosPendientes } from "../src/database/schema.js";
 
 // Un evento del outbox no se queda atorado (B4 del plan de fixes,
@@ -15,7 +16,8 @@ import { eventosPendientes } from "../src/database/schema.js";
 // "reintentar" solo acepta 'fallido'). Ahora el reclamo caduca: un
 // 'procesando' cuyo proximo_intento_en ya pasó se vuelve a tomar.
 //
-// N8N_WEBHOOK_URL="" en pruebas: cada entrega falla de forma determinista
+// N8N_WEBHOOK_URL apunta a una dirección que rechaza la conexión
+// (test/support/n8n-que-rechaza.ts): cada entrega falla de forma determinista
 // (ver 50-outbox-dispatcher-retry), lo que basta para ver si el evento se
 // tomó o no.
 describe("outbox: un evento abandonado no se queda atorado", () => {
@@ -23,12 +25,16 @@ describe("outbox: un evento abandonado no se queda atorado", () => {
   let adminCookie: string[];
   const db = testDb();
 
+  let restaurarN8n: () => void;
+
   beforeAll(async () => {
+    restaurarN8n = usarN8nQueRechaza();
     app = await createTestApp();
     adminCookie = await ensureSeedAdmin(app);
   });
 
   afterAll(async () => {
+    restaurarN8n();
     await app.close();
     await closeTestDb();
   });
@@ -64,7 +70,7 @@ describe("outbox: un evento abandonado no se queda atorado", () => {
     const evento = await leer(id);
     expect(evento.estado).toBe("pendiente");
     expect(evento.intentos).toBe(1);
-    expect(evento.ultimoError).toMatch(/N8N_WEBHOOK_URL/);
+    expect(evento.ultimoError).toMatch(/fetch failed/);
   });
 
   it("un 'procesando' recién reclamado por otra instancia (reclamo vigente) no se toca", async () => {

@@ -6,6 +6,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { usarN8nQueRechaza } from "./support/n8n-que-rechaza.js";
 import { eventosPendientes, procesosFallidos } from "../src/database/schema.js";
 
 // Cubre OutboxDispatcherService.handleFailure() (outbox-dispatcher.service.ts):
@@ -13,10 +14,10 @@ import { eventosPendientes, procesosFallidos } from "../src/database/schema.js";
 // en total) y que el 4° fallo consecutivo agota reintentos, marca el evento
 // 'fallido' y crea la fila en procesos_fallidos.
 //
-// N8N_WEBHOOK_URL="" en el entorno de pruebas (ver test/setup/setup-env.ts)
-// -- deliver() SIEMPRE truena con "N8N_WEBHOOK_URL no está configurado", así
-// que cada corrida del despachador sobre el evento sembrado aquí falla de
-// forma determinista, sin necesitar un receptor HTTP de prueba.
+// N8N_WEBHOOK_URL apunta a una dirección local que rechaza la conexión
+// (test/support/n8n-que-rechaza.ts): deliver() SIEMPRE truena con "fetch
+// failed", así que cada corrida del despachador sobre el evento sembrado
+// aquí falla de forma determinista, sin necesitar un receptor HTTP de prueba.
 //
 // En vez de esperar los 5s/30s/120s reales (harían esta sola prueba más
 // lenta que TODA la suite junta), se siembra el evento y se "adelanta el
@@ -29,12 +30,16 @@ describe("OutboxDispatcherService: reintentos con backoff", () => {
   let adminCookie: string[];
   const db = testDb();
 
+  let restaurarN8n: () => void;
+
   beforeAll(async () => {
+    restaurarN8n = usarN8nQueRechaza();
     app = await createTestApp();
     adminCookie = await ensureSeedAdmin(app);
   });
 
   afterAll(async () => {
+    restaurarN8n();
     await app.close();
     await closeTestDb();
   });
@@ -86,7 +91,7 @@ describe("OutboxDispatcherService: reintentos con backoff", () => {
     let evento = await leerEvento(eventoId);
     expect(evento.estado).toBe("pendiente");
     expect(evento.intentos).toBe(1);
-    expect(evento.ultimoError).toMatch(/N8N_WEBHOOK_URL/);
+    expect(evento.ultimoError).toMatch(/fetch failed/);
     let proximo = new Date(evento.proximoIntentoEn!).getTime();
     let ahora = Date.now();
     expect(proximo).toBeGreaterThan(ahora + 3_000);
@@ -125,6 +130,6 @@ describe("OutboxDispatcherService: reintentos con backoff", () => {
     const [proceso] = await db.select().from(procesosFallidos).where(eq(procesosFallidos.eventoId, eventoId));
     expect(proceso).toBeDefined();
     expect(proceso.tipo).toBe("test_outbox_retry");
-    expect(proceso.mensaje).toMatch(/N8N_WEBHOOK_URL/);
+    expect(proceso.mensaje).toMatch(/fetch failed/);
   });
 });

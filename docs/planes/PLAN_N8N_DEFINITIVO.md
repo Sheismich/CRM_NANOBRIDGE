@@ -8,11 +8,13 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 
 1. Hoy después de las 3 pm: prueba en vivo de PT4, sin tocar nada antes.
 2. ~~Aviso por correo desde B4 (Error Workflow)~~ **Hecho 7-oct-2026** (ver B4, punto 4).
-3. Backend: sin `N8N_WEBHOOK_URL`, el despachador del outbox no intenta mandar. Los eventos se
-   quedan `pendiente`, sin gastar reintentos, y se entregan cuando exista B3. Hoy cada evento
-   (`prospecto_clasificado`, `tarea_cerrada`, alertas diarias) termina en `procesos_fallidos`
-   (`outbox-dispatcher.service.ts`, `deliver`) y ese ruido esconde los errores reales de B4.
-   Con TDD; después cerrar como resueltos los procesos fallidos que dejó ese ruido.
+3. ~~Outbox sin `N8N_WEBHOOK_URL`~~ **Hecho en código 7-oct-2026** (prueba
+   `test/345-outbox-sin-destino.spec.ts`): sin URL el despachador no reclama nada y los eventos
+   esperan en `pendiente`, sin gastar intentos ni crear `procesos_fallidos`; `POST
+   /eventos-pendientes/despachar` responde `sin_destino: true`. Falta: desplegar y luego cerrar
+   como resueltos los procesos fallidos que dejó el ruido. Al configurar la URL (B3), los eventos
+   acumulados salen de golpe: B3 debe ignorar alertas viejas (`tarea_sla_vencida`,
+   `documento_pendiente_revision`).
 4. Aviso al supervisor cuando llega una respuesta (en PT2, justo después de registrarla).
 5. Completar la lista de encendido (RUNBOOK_DEPLOY.md §10).
 6. Cómo entran los prospectos a PT1. **Carlos ya contestó la fuente (6-oct-2026):** un Excel suyo
@@ -537,7 +539,8 @@ solo muestra `WEBHOOK_ENTRADA_API_KEY`, nada de `N8N_WEBHOOK_URL`). Esto no es s
 construido en n8n" — significa que **cada evento que ya se está encolando en producción hoy**
 (`tarea_cerrada` al cerrar una tarea del CRM, `prospecto_clasificado` al clasificar,
 `tarea_sla_vencida`, `documento_pendiente_revision`) agota sus 3 reintentos y cae en
-`procesos_fallidos` sin que nada lo entregue a n8n. **Verificado 22-sep-2026:
+`procesos_fallidos` sin que nada lo entregue a n8n. **Cambiado el 7-oct-2026:** sin URL el
+despachador ya no intenta; los eventos esperan en `pendiente` hasta que exista B3 (pendiente #3). **Verificado 22-sep-2026:
 `procesos_fallidos` está vacía (`SELECT COUNT(*), tipo FROM procesos_fallidos GROUP BY tipo`
 → `Empty set`) — no hay tráfico real todavía, así que el hueco no ha perdido datos reales,
 pero sigue sin cerrarse. (Desde el 23-sep-2026 la tabla tiene 2 filas, ids 1 y 2, pero ambas

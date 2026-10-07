@@ -8,6 +8,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { listEventosQuerySchema } from "./dto/eventos.schema.js";
+import { env } from "../config/env.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -40,6 +41,7 @@ export class EventosPendientesController {
   @HttpCode(200)
   async dispatch() {
     const processed = await this.dispatcherService.dispatchPending();
-    return { procesados: processed ?? 0 };
+    // sin_destino: sin N8N_WEBHOOK_URL no se despacha nada y los eventos esperan.
+    return env.N8N_WEBHOOK_URL ? { procesados: processed ?? 0 } : { procesados: 0, sin_destino: true };
   }
 }

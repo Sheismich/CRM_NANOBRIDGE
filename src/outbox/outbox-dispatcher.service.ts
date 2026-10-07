@@ -36,11 +36,25 @@ const RECLAMO_SEGUNDOS = (BATCH_SIZE * ENVIO_TIMEOUT_MS) / 1000 + 60;
 export class OutboxDispatcherService {
   private readonly logger = new Logger(OutboxDispatcherService.name);
   private dispatching = false;
+  private avisoSinDestino = false;
 
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
 
   @Interval(env.OUTBOX_DISPATCH_INTERVAL_MS)
   async dispatchPending() {
+    // Sin N8N_WEBHOOK_URL (B3 aún no existe en n8n) no hay a quién entregar:
+    // no se reclama nada y los eventos esperan en 'pendiente' sin gastar
+    // intentos. Antes cada uno agotaba sus 4 intentos y caía en
+    // procesos_fallidos, y ese ruido escondía los errores reales de B4
+    // (pendiente #3 de PLAN_N8N_DEFINITIVO.md, 7-oct-2026).
+    if (!env.N8N_WEBHOOK_URL) {
+      if (!this.avisoSinDestino) {
+        this.avisoSinDestino = true;
+        this.logger.warn("N8N_WEBHOOK_URL no está configurado: los eventos se quedan en 'pendiente' hasta que exista");
+      }
+      return 0;
+    }
+
     // Evita que dos corridas se pisen si una tanda tarda más que el
     // intervalo -- pero esto solo protege a ESTE proceso contra sí mismo.
     if (this.dispatching) return;

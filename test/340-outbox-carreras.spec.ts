@@ -6,6 +6,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { usarN8nQueRechaza } from "./support/n8n-que-rechaza.js";
 import { eventosPendientes, procesosFallidos } from "../src/database/schema.js";
 import { OutboxDispatcherService } from "../src/outbox/outbox-dispatcher.service.js";
 
@@ -13,7 +14,8 @@ import { OutboxDispatcherService } from "../src/outbox/outbox-dispatcher.service
 // atrasada (otra instancia de Cloud Run, o una que volvió a tomar el evento
 // cuando su reclamo caducó) no puede pisar lo que otra corrida ya resolvió.
 //
-// N8N_WEBHOOK_URL="" en pruebas: dispatchOne() siempre falla, así que se usa
+// N8N_WEBHOOK_URL apunta a una dirección que rechaza la conexión
+// (test/support/n8n-que-rechaza.ts): dispatchOne() siempre falla, así que se usa
 // para simular "la corrida atrasada que falló" sobre un evento cuya fila ya
 // cambió en la base.
 describe("Outbox: una corrida atrasada no pisa a otra", () => {
@@ -22,13 +24,17 @@ describe("Outbox: una corrida atrasada no pisa a otra", () => {
   let dispatcher: OutboxDispatcherService;
   const db = testDb();
 
+  let restaurarN8n: () => void;
+
   beforeAll(async () => {
+    restaurarN8n = usarN8nQueRechaza();
     app = await createTestApp();
     adminCookie = await ensureSeedAdmin(app);
     dispatcher = app.get(OutboxDispatcherService);
   });
 
   afterAll(async () => {
+    restaurarN8n();
     await app.close();
     await closeTestDb();
   });
