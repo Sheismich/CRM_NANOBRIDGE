@@ -391,8 +391,8 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       con el correo de pasante). Al cambiar: rehacer la autenticación del
       dominio, dar de alta Inbound Parse y poner la API key nueva en n8n.
       Antes de que termine la pasantía de Fabián.
-- [ ] Corregir el nombre del admin "Fabi�n" (quedó mal guardado al crearlo):
-      Administración → Usuarios → editar.
+- [x] Nombre del admin corregido a "Fabián" (7-oct-2026). Desde la revisión `00021-xq8` un
+      JSON que no es UTF-8 se rechaza (400 `TEXTO_NO_UTF8`), así que no se repite.
 - [ ] Las 5 respuestas de Carlos, incluida: ¿"no interesado" bloquea para
       siempre o 6 meses?
 - [ ] Los 2 usuarios `root` de MySQL con contraseña desconocida: cambiarles
