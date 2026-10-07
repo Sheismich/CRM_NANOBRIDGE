@@ -342,8 +342,11 @@ parches hasta abril de 2027; antes de esa fecha hay que pasar a Node 24.
 
 ## 9. Pendientes de infraestructura (no urgentes, pero abiertos)
 
-- Activar respaldos automáticos en Cloud SQL — hoy no hay backup si algo le
-  pasa a la base.
+- ~~Activar respaldos automáticos en Cloud SQL~~ Ya estaban activos (revisado
+  el 7-oct-2026): respaldo diario a las 09:00 UTC (3 am de México), se
+  guardan 7, y con binary log se puede recuperar a cualquier minuto de los
+  últimos 7 días. `gcloud sql backups list --instance=nanobridge-db` mostró
+  respaldos SUCCESSFUL.
 - Forzar SSL en las conexiones a Cloud SQL.
 - Borrar la cuenta de servicio `n8n-invoker-sa` (quedó de un intento de
   autenticación anterior, ya no se usa, no representa un riesgo activo pero
@@ -372,7 +375,7 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       marca `<% %>` que SendGrid convierte en el link.
 - [ ] Pruebas en vivo que faltan: respuesta automática (fuera de oficina),
       correo sin firma y rebote.
-- [ ] Respaldos automáticos de Cloud SQL activados (§9).
+- [x] Respaldos automáticos de Cloud SQL activos (ya lo estaban; revisado el 7-oct-2026, §9).
 - [ ] Tope diario a 20 para calentar el dominio:
       `--update-env-vars TOPE_DIARIO_CORREOS=20`.
 - [ ] Cupo apartado para recordatorios y fila de espera de correos iniciales.
