@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { EstadoVacio } from "../components/ui/EstadoVacio";
 import { ServerError, inputBaseClass } from "../components/ui/Field";
 import { Paginacion } from "../components/ui/Paginacion";
 import { ApiError, api } from "../lib/api";
@@ -87,7 +88,25 @@ export function DocumentosPage() {
 
         {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
         {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los documentos.</div>}
-        {data && data.data.length === 0 && (
+        {data && data.data.length === 0 && revisado === "false" && estado === "vigente" && page === 1 && (
+          <EstadoVacio
+            className="p-5"
+            titulo="No hay documentos por revisar."
+            texto="Los documentos se suben desde la ficha de cada empresa."
+            accion={
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPage(1);
+                  setRevisado("true");
+                }}
+              >
+                Ver revisados
+              </Button>
+            }
+          />
+        )}
+        {data && data.data.length === 0 && !(revisado === "false" && estado === "vigente" && page === 1) && (
           <div className="p-5 text-sm text-ink-3">{revisado === "false" ? "No hay documentos pendientes de revisión." : "No hay documentos con ese filtro."}</div>
         )}
         {data && data.data.length > 0 && (

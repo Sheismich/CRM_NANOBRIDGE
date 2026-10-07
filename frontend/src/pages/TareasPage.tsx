@@ -6,6 +6,7 @@ import { ColaClasificacion } from "../components/tareas/ColaClasificacion";
 import { NuevaTareaForm } from "../components/tareas/NuevaTareaForm";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { EstadoVacio } from "../components/ui/EstadoVacio";
 import { ServerError, inputBaseClass, inputClass } from "../components/ui/Field";
 import { ApiError, api } from "../lib/api";
 import { useAuth } from "../lib/auth-context";
@@ -138,7 +139,14 @@ function Bandeja({ esAdminOSupervisor, usuarioId, onIrACola }: { esAdminOSupervi
 
       {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar las tareas.</div>}
-      {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">No hay tareas{estado || prioridad || tipo || responsableId ? " con ese filtro" : ""}.</div>}
+      {data && data.data.length === 0 && (estado !== "pendiente" || prioridad || tipo || responsableId || page > 1) && <div className="p-5 text-sm text-ink-3">No hay tareas{estado || prioridad || tipo || responsableId ? " con ese filtro" : ""}.</div>}
+      {data && data.data.length === 0 && estado === "pendiente" && !prioridad && !tipo && !responsableId && page === 1 && !creando && (
+        <EstadoVacio
+          className="p-5"
+          titulo="No hay tareas pendientes."
+          texto="Todo al día. Si quedaste en llamar o escribirle a alguien, anótalo con + Nueva tarea."
+        />
+      )}
 
       {data && data.data.length > 0 && (
         <div className="overflow-x-auto">

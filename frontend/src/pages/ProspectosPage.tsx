@@ -6,6 +6,7 @@ import { CampanasTab } from "../components/prospectos/CampanasTab";
 import { NuevoProspectoForm } from "../components/prospectos/NuevoProspectoForm";
 import { Button } from "../components/ui/Button";
 import { Card, SectionTitle } from "../components/ui/Card";
+import { EstadoVacio } from "../components/ui/EstadoVacio";
 import { ServerError, inputBaseClass, inputClass } from "../components/ui/Field";
 import { ApiError, api } from "../lib/api";
 import { useAuth } from "../lib/auth-context";
@@ -482,15 +483,16 @@ function ListaProspectos({ creando, setCreando, onImportar }: { creando: boolean
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los prospectos.</div>}
       {data && data.data.length === 0 && (busqueda || prioridad) && <div className="p-5 text-sm text-ink-3">No hay prospectos con ese filtro.</div>}
       {data && data.data.length === 0 && !busqueda && !prioridad && page === 1 && !creando && (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-5">
-          <div>
-            <div className="text-sm font-semibold">Todavía no hay prospectos confirmados.</div>
-            <div className="text-xs text-ink-3">Importa un CSV y confirma sus filas, o da de alta uno a mano.</div>
-          </div>
-          <Button type="button" variant="outline" onClick={onImportar}>
-            Importar CSV
-          </Button>
-        </div>
+        <EstadoVacio
+          className="p-5"
+          titulo="Todavía no hay prospectos confirmados."
+          texto="Importa un CSV y confirma sus filas, o da de alta uno a mano."
+          accion={
+            <Button type="button" variant="outline" onClick={onImportar}>
+              Importar CSV
+            </Button>
+          }
+        />
       )}
 
       {data && data.data.length > 0 && (

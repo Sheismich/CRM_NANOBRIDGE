@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
 import { Card, SectionTitle } from "../components/ui/Card";
+import { EstadoVacio, LigaAccion } from "../components/ui/EstadoVacio";
 import { GraficaForecast } from "../components/reportes/Graficas";
 import { useAuth } from "../lib/auth-context";
 import { api } from "../lib/api";
@@ -134,7 +135,7 @@ function ProspeccionDelMes() {
         {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
         {isError && <div className="text-sm text-danger">No se pudo cargar la prospección.</div>}
         {data && data.envios.personas_contactadas === 0 && (
-          <Vacio texto="Este mes todavía no sale ningún correo de la automatización." accion={<LigaAccion to="/prospectos?tab=campanas">Ver campañas</LigaAccion>} />
+          <EstadoVacio titulo="Este mes todavía no sale ningún correo de la automatización." accion={<LigaAccion to="/prospectos?tab=campanas">Ver campañas</LigaAccion>} />
         )}
         {data && data.envios.personas_contactadas > 0 && (
           <div className="grid grid-cols-3 gap-2">
@@ -161,15 +162,15 @@ function CampanasDelMes({ porCampana, cargando, error }: { porCampana?: ReporteP
       {cargando && <div className="text-sm text-ink-2">Cargando…</div>}
       {error && <div className="text-sm text-danger">No se pudieron cargar las campañas.</div>}
       {porCampana && porCampana.length === 0 && (
-        <Vacio texto="Ninguna campaña mandó correos este mes." accion={<LigaAccion to="/prospectos?tab=campanas">Revisar campañas</LigaAccion>} />
+        <EstadoVacio titulo="Ninguna campaña mandó correos este mes." />
       )}
       {porCampana && porCampana.length > 0 && (
         <ul className="flex flex-col divide-y divide-border">
           {porCampana.map((c) => (
             <li key={c.campana_id ?? "sin"}>
-              <Link to="/prospectos?tab=campanas" className="flex items-center justify-between gap-3 py-2.5 text-[13px] hover:text-navy">
+              <Link to="/prospectos?tab=campanas" className="flex flex-col gap-1 py-2.5 text-[13px] hover:text-navy sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                 <span className="font-semibold">{c.campana_nombre}</span>
-                <span className="flex gap-4 text-xs tabular-nums text-ink-2">
+                <span className="flex flex-wrap gap-x-4 gap-y-1 whitespace-nowrap text-xs tabular-nums text-ink-2">
                   <span>{plural(c.personas_contactadas, "contactada", "contactadas")}</span>
                   <span>{plural(c.personas_que_respondieron, "respondió", "respondieron")}</span>
                   <span className="font-semibold text-ink">{pct(c.tasa_respuesta_pct)}</span>
@@ -217,7 +218,7 @@ function ForecastProximo() {
       {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="text-sm text-danger">No se pudo cargar el forecast.</div>}
       {data && proximos.length === 0 && (
-        <Vacio texto="No hay oportunidades abiertas con cierre estimado de este mes en adelante." accion={<LigaAccion to="/oportunidades">Ver oportunidades</LigaAccion>} />
+        <EstadoVacio titulo="No hay oportunidades abiertas con cierre estimado de este mes en adelante." accion={<LigaAccion to="/oportunidades">Ver oportunidades</LigaAccion>} />
       )}
       {proximos.length > 0 && <GraficaForecast meses={proximos} />}
     </Card>
@@ -237,13 +238,13 @@ function ActividadDelMes() {
       <TituloConLiga titulo="Actividad por agente este mes" />
       {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="text-sm text-danger">No se pudo cargar la actividad.</div>}
-      {data && agentes.length === 0 && <Vacio texto="No hay agentes activos." />}
+      {data && agentes.length === 0 && <EstadoVacio titulo="No hay agentes activos." />}
       {agentes.length > 0 && (
         <ul className="flex flex-col divide-y divide-border">
           {agentes.map((a) => (
-            <li key={a.responsable_id} className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
+            <li key={a.responsable_id} className="flex flex-col gap-1 py-2.5 text-[13px] sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <span className="font-semibold">{a.responsable_nombre}</span>
-              <span className="flex gap-4 text-xs tabular-nums text-ink-2">
+              <span className="flex flex-wrap gap-x-4 gap-y-1 whitespace-nowrap text-xs tabular-nums text-ink-2">
                 <span>{plural(a.actividades.total, "actividad", "actividades")}</span>
                 <span>{plural(a.oportunidades.ganadas, "ganada", "ganadas")}</span>
                 {a.tareas.vencidas > 0 && <span className="font-semibold text-danger">{plural(a.tareas.vencidas, "vencida", "vencidas")}</span>}
@@ -291,7 +292,7 @@ function MisTareas() {
       {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="text-sm text-danger">No se pudieron cargar tus tareas.</div>}
       {data && tareas.length === 0 && (
-        <Vacio texto="No tienes tareas pendientes. Buen momento para registrar actividad con tus empresas." accion={<LigaAccion to="/empresas">Ver mis empresas</LigaAccion>} />
+        <EstadoVacio titulo="No tienes tareas pendientes. Buen momento para registrar actividad con tus empresas." accion={<LigaAccion to="/empresas">Ver mis empresas</LigaAccion>} />
       )}
       {tareas.length > 0 && <ListaTareas tareas={tareas} />}
     </Card>
@@ -352,23 +353,7 @@ function PasoEmbudo({ etiqueta, valor, sub, final }: { etiqueta: string; valor: 
   );
 }
 
-function Vacio({ texto, accion }: { texto: string; accion?: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="text-sm text-ink-3">{texto}</div>
-      {accion}
-    </div>
-  );
-}
 
-// Acción secundaria: azul de marca, el único lugar donde se usa en el Inicio.
-function LigaAccion({ to, children }: { to: string; children: ReactNode }) {
-  return (
-    <Link to={to} className="inline-block rounded-[9px] border-[1.5px] border-navy bg-card px-3.5 py-1.5 text-[13px] font-bold text-navy">
-      {children}
-    </Link>
-  );
-}
 
 function TituloConLiga({ titulo }: { titulo: string }) {
   return (

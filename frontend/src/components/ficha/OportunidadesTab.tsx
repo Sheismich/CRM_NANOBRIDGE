@@ -12,7 +12,7 @@ const COLUMNAS = ["Oportunidad", "Etapa", "Probabilidad", "Valor estimado", "Cie
 function claseEtapa(o: Oportunidad) {
   if (o.etapa_clave === "ganada") return "bg-ok-bg text-ok";
   if (o.etapa_clave === "perdida") return "bg-danger-bg text-danger";
-  return "bg-bg text-navy";
+  return "bg-bg text-ink-2";
 }
 
 export function OportunidadesTab({ empresaId, contactos }: { empresaId: number; contactos: { id: number; nombre: string }[] }) {

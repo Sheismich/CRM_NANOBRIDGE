@@ -71,7 +71,7 @@ function SugerenciaIa({ respuesta }: { respuesta: NonNullable<TareaClasificacion
     <div className="mt-3 rounded-[10px] border border-border px-4 py-3 text-[13px]">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-ink-2">Sugerencia de la IA:</span>
-        <span className="rounded-full bg-bg px-2.5 py-1 text-[11px] font-bold text-navy">{etiqueta}</span>
+        <span className="rounded-full bg-bg px-2.5 py-1 text-[11px] font-bold text-ink">{etiqueta}</span>
         {confianza != null && (
           <span className={`text-xs font-semibold ${confianza >= 80 ? "text-ok" : confianza >= 50 ? "text-warn" : "text-danger"}`} title="Qué tan segura está la IA de su sugerencia">
             {Math.round(confianza)}% de confianza

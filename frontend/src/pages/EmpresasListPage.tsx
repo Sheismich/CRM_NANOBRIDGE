@@ -5,6 +5,7 @@ import { AppShell } from "../components/layout/AppShell";
 import { EmpresaForm } from "../components/empresas/EmpresaForm";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { EstadoVacio } from "../components/ui/EstadoVacio";
 import { api } from "../lib/api";
 import { formatoFecha } from "../lib/formato";
 import type { EmpresaListado, Paginated } from "../types";
@@ -41,13 +42,11 @@ export function EmpresasListPage() {
         {isError && <div className="p-6 text-sm text-danger">No se pudo cargar el listado de empresas.</div>}
 
         {data && data.data.length === 0 && page === 1 && !creando && (
-          <div className="flex flex-wrap items-center justify-between gap-3 p-6">
-            <div>
-              <div className="text-sm font-semibold">Todavía no hay empresas.</div>
-              <div className="text-xs text-ink-3">Da de alta la primera con sus contactos para empezar a registrar actividades y oportunidades.</div>
-            </div>
-            <Button onClick={() => setCreando(true)}>+ Nueva empresa</Button>
-          </div>
+          <EstadoVacio
+            className="p-6"
+            titulo="Todavía no hay empresas."
+            texto="Da de alta la primera con + Nueva empresa, junto con sus contactos."
+          />
         )}
         {data && data.data.length === 0 && page > 1 && <div className="p-6 text-sm text-ink-2">No hay más empresas.</div>}
 
@@ -65,7 +64,7 @@ export function EmpresasListPage() {
             <tbody>
               {data.data.map((empresa) => (
                 <tr key={empresa.id} className="border-t border-border">
-                  <td className="px-5 py-3 text-[13px] font-semibold">
+                  <td className="min-w-56 px-5 py-3 text-[13px] font-semibold">
                     <Link to={`/empresas/${empresa.id}`} className="hover:text-navy hover:underline">
                       {empresa.nombre_legal}
                     </Link>

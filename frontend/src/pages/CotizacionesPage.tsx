@@ -5,6 +5,7 @@ import { AppShell } from "../components/layout/AppShell";
 import { NuevaCotizacionPanel } from "../components/cotizaciones/NuevaCotizacionPanel";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { EstadoVacio } from "../components/ui/EstadoVacio";
 import { inputBaseClass } from "../components/ui/Field";
 import { Paginacion } from "../components/ui/Paginacion";
 import { api } from "../lib/api";
@@ -85,7 +86,32 @@ export function CotizacionesPage() {
 
         {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
         {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar las cotizaciones.</div>}
-        {data && data.data.length === 0 && (
+        {data && data.data.length === 0 && estado === "enviada" && page === 1 && (
+          <EstadoVacio
+            className="p-5"
+            titulo="No hay cotizaciones enviadas esperando respuesta."
+            texto="Las que siguen sin enviar están en Borradores."
+            accion={
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPage(1);
+                  setEstado("borrador");
+                }}
+              >
+                Ver borradores
+              </Button>
+            }
+          />
+        )}
+        {data && data.data.length === 0 && estado === "" && page === 1 && !creando && (
+          <EstadoVacio
+            className="p-5"
+            titulo="Todavía no hay cotizaciones."
+            texto="Con + Nueva cotización se elige la empresa, su oportunidad y las partidas."
+          />
+        )}
+        {data && data.data.length === 0 && ((estado !== "enviada" && estado !== "") || page > 1) && (
           <div className="p-5 text-sm text-ink-3">No hay cotizaciones{estado ? ` en estado "${ETIQUETA_ESTADO_COTIZACION[estado as EstadoCotizacion].toLowerCase()}"` : ""}.</div>
         )}
         {data && data.data.length > 0 && (

@@ -4,6 +4,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
 import { OportunidadDetallePanel } from "../components/ficha/OportunidadDetallePanel";
 import { Card } from "../components/ui/Card";
+import { EstadoVacio, LigaAccion } from "../components/ui/EstadoVacio";
 import { inputBaseClass } from "../components/ui/Field";
 import { Paginacion } from "../components/ui/Paginacion";
 import { api } from "../lib/api";
@@ -124,6 +125,8 @@ function Tablero({ etapas, responsableId, coincide, abiertaId, onAbrir, nombreDe
   const valor = todas.reduce((acc, o) => acc + Number(o.valor_estimado ?? 0), 0);
   const ponderado = todas.reduce((acc, o) => acc + (Number(o.valor_estimado ?? 0) * o.probabilidad) / 100, 0);
   const abierta = todas.find((o) => o.id === abiertaId);
+  // Sin filtro de responsable y todas las columnas cargadas y vacías.
+  const sinNinguna = !responsableId && columnas.every((c) => c.isSuccess && c.data.data.length === 0);
   // El detalle va debajo del tablero: sin esto, al abrir una tarjeta de
   // una columna larga parecía que no pasaba nada.
   const detalleRef = useRef<HTMLDivElement>(null);
@@ -139,6 +142,16 @@ function Tablero({ etapas, responsableId, coincide, abiertaId, onAbrir, nombreDe
         {plural(todas.length, "oportunidad abierta", "oportunidades abiertas")} · pipeline <b className="text-ink">{formatoMonedaEntera.format(valor)}</b> · ponderado por probabilidad{" "}
         <b className="text-ink">{formatoMonedaEntera.format(ponderado)}</b>
       </div>
+
+      {sinNinguna && (
+        <Card className="p-5">
+          <EstadoVacio
+            titulo="Todavía no hay oportunidades abiertas."
+            texto="Se crean desde la ficha de cada empresa, o al armar una cotización nueva."
+            accion={<LigaAccion to="/empresas">Ir a Empresas</LigaAccion>}
+          />
+        </Card>
+      )}
 
       <div className="overflow-x-auto pb-2">
         <div className="grid min-w-[1100px] gap-3" style={{ gridTemplateColumns: `repeat(${etapas.length}, minmax(0, 1fr))` }}>
