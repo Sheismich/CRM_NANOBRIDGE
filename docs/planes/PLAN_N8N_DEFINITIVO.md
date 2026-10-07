@@ -7,7 +7,7 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 ## Pendientes en orden (6-oct-2026)
 
 1. Hoy después de las 3 pm: prueba en vivo de PT4, sin tocar nada antes.
-2. Aviso por correo desde B4 (Error Workflow), con la credencial de SendGrid que ya existe.
+2. ~~Aviso por correo desde B4 (Error Workflow)~~ **Hecho 7-oct-2026** (ver B4, punto 4).
 3. Backend: sin `N8N_WEBHOOK_URL`, el despachador del outbox no intenta mandar. Los eventos se
    quedan `pendiente`, sin gastar reintentos, y se entregan cuando exista B3. Hoy cada evento
    (`prospecto_clasificado`, `tarea_cerrada`, alertas diarias) termina en `procesos_fallidos`
@@ -584,9 +584,16 @@ Decisiones de diseño (`/grill-me`, 23-sep-2026):
    `pL9iXvgOB7cSgTNJ`, **publicado**; no despublicar, porque es la red de seguridad y no tiene
    ninguna entrada pública). Cada workflow nuevo solo necesita elegirlo en Settings → Error
    Workflow. "PT1. ingesta y scoring" ya lo tiene.
-4. **Sin aviso por ahora:** alguien revisa la bandeja `GET /api/v1/procesos-fallidos`
-   (solo administrador). Agregar aviso por correo al Error Workflow cuando SendGrid esté
-   conectado.
+4. **Aviso por correo (7-oct-2026, publicado y probado):** en paralelo al registro en la API,
+   Code `armar correo de error` → HTTP `avisar por correo` (`POST /v3/mail/send`, credencial
+   "SendGrid account", 3×5 s, On Error = Continue). Va a `DESTINOS` (hoy
+   `fabiandelirardz@gmail.com`; cambiarlo antes de que termine la pasantía), desde
+   `hola@contacto.nano-bridge-mex.com` como "NANOBRIDGE alertas", asunto
+   `[NANOBRIDGE] Falló <workflow> en <nodo>`, solo texto y sin rastreo ni link de baja.
+   "registrar error en API" también tiene On Error = Continue: n8n corre las dos ramas una tras
+   otra, y sin eso una API caída cortaba la ejecución antes del correo. Prueba real (ejecución
+   152): llegó, pero a Spam; en Gmail conviene un filtro "nunca enviar a Spam" por asunto
+   `[NANOBRIDGE] Falló`. La bandeja `GET /api/v1/procesos-fallidos` sigue siendo el registro.
 
 Estructura: `Error Trigger` → Code `armar reporte de error` (arma `execution_id`, `workflow`,
 `nodo`, `codigo_http`, `mensaje`, `critico: true` y `detalle` con el link de la ejecución)
