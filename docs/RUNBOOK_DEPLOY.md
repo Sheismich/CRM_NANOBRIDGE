@@ -384,7 +384,8 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - [ ] Borrar los datos de prueba.
 - [ ] Domicilio de la empresa en el remitente (hoy el remitente de pruebas
       tiene el de la casa de Fabián).
-- [ ] Cambiar `DESTINOS` del aviso de B4 (hoy el Gmail de Fabián) a quien vaya a atender los errores.
+- [ ] Cambiar `DESTINOS` de los avisos (hoy el Gmail de Fabián): en B4 ("armar correo de error") a
+      quien atienda los errores, y en PT2 ("armar aviso de respuesta") al supervisor que clasifica.
 - [ ] Cuenta definitiva de SendGrid (la de prueba vence el 24-nov-2026 y está
       con el correo de pasante). Al cambiar: rehacer la autenticación del
       dominio, dar de alta Inbound Parse y poner la API key nueva en n8n.

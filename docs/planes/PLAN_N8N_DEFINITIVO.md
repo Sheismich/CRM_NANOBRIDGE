@@ -15,7 +15,15 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
    `00020-4b7`); los procesos fallidos del ruido se cerraron como resueltos. Al configurar la URL (B3), los eventos
    acumulados salen de golpe: B3 debe ignorar alertas viejas (`tarea_sla_vencida`,
    `documento_pendiente_revision`).
-4. Aviso al supervisor cuando llega una respuesta (en PT2, justo después de registrarla).
+4. ~~Aviso al supervisor cuando llega una respuesta~~ **Hecho 7-oct-2026, publicado y probado.** En
+   PT2, después de "Registrar respuesta": IF "¿Avisar al supervisor?" (no automática, no
+   `ya_existia`, no `ignorada`) → Code "armar aviso de respuesta" → HTTP "avisar supervisor"
+   (SendGrid, 2×3 s, On Error = Continue) → "Responder 200". El registro va antes del aviso: si el
+   correo falla, la respuesta ya quedó guardada. Asunto `[NANOBRIDGE] Respondió <remitente>`, con
+   "(respuesta tardía)" o "(NO identificada)" si aplica; trae los primeros 500 caracteres (ya sin la
+   parte citada) y el link a la cola. Prueba real: respuesta a +prueba4 (prospecto 29) → aviso en
+   Recibidos. Mejora posible: que diga nombre de contacto y empresa (la API hoy solo regresa
+   `prospecto_id`).
 5. Front, detalles de lanzamiento (revisados el 7-oct contra una lista de "antes de lanzar"; el
    resto ya está o no aplica a una herramienta interna con login):
    - **Que Google no lo indexe** (el más importante): `<meta name="robots" content="noindex">` en
