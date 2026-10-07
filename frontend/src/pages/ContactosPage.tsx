@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
-import { RedesContacto } from "../components/ui/Enlaces";
 import { inputBaseClass } from "../components/ui/Field";
 import { Paginacion } from "../components/ui/Paginacion";
 import { api } from "../lib/api";
@@ -48,12 +47,23 @@ export function ContactosPage() {
 
         {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
         {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los contactos.</div>}
-        {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">No hay contactos{busqueda ? " con ese nombre" : ""}.</div>}
+        {data && data.data.length === 0 && busqueda && <div className="p-5 text-sm text-ink-3">No hay contactos con ese nombre.</div>}
+        {data && data.data.length === 0 && !busqueda && page === 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+            <div>
+              <div className="text-sm font-semibold">Todavía no hay contactos.</div>
+              <div className="text-xs text-ink-3">Los contactos se dan de alta dentro de su empresa.</div>
+            </div>
+            <Link to="/empresas" className="rounded-[9px] border-[1.5px] border-navy bg-card px-4 py-2 text-[13px] font-bold text-navy">
+              Ir a Empresas
+            </Link>
+          </div>
+        )}
         {data && data.data.length > 0 && (
           <div className="tabla-scroll"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
-                {["Contacto", "Empresa", "Medios de contacto", "Redes"].map((h) => (
+                {["Contacto", "Empresa", "Medios de contacto"].map((h) => (
                   <th key={h} className="px-5 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-ink-2">
                     {h}
                   </th>
@@ -81,10 +91,6 @@ export function ContactosPage() {
                       ))}
                       {c.medios.length === 0 && <span className="text-xs text-ink-3">—</span>}
                     </div>
-                  </td>
-                  <td className="px-5 py-3 text-xs">
-                    <RedesContacto linkedin={c.linkedin_url} facebook={c.facebook_url} instagram={c.instagram_url} />
-                    {!c.linkedin_url && !c.facebook_url && !c.instagram_url && <span className="text-ink-3">—</span>}
                   </td>
                 </tr>
               ))}

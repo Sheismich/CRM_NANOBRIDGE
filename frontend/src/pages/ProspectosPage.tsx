@@ -1,5 +1,5 @@
 import { Fragment, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
 import { CampanasTab } from "../components/prospectos/CampanasTab";
@@ -15,15 +15,19 @@ import { ETIQUETA_MEDIO, avisoMediosSuprimidos, claseMedio } from "../lib/medios
 import type { Borrador, EstadoBorrador, LoteImportacion, Paginated, ProspectoDetalle, ProspectoResumen } from "../types";
 
 const TABS = [
-  { id: "importaciones", label: "Importaciones" },
   { id: "prospectos", label: "Prospectos" },
+  { id: "importaciones", label: "Importaciones" },
   { id: "campanas", label: "Campañas" }
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
 export function ProspectosPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<TabId>("importaciones");
+  // Abre en la lista; ?tab=campanas (liga del Inicio) o ?tab=importaciones
+  // llevan directo a esas pestañas.
+  const [searchParams] = useSearchParams();
+  const tabInicial = TABS.find((t) => t.id === searchParams.get("tab"))?.id ?? "prospectos";
+  const [tab, setTab] = useState<TabId>(tabInicial);
   // El alta manual vive en la pestaña Prospectos, pero también se lanza
   // desde Importaciones (ahí es donde se llega a capturar).
   const [creando, setCreando] = useState(false);
@@ -49,7 +53,7 @@ export function ProspectosPage() {
           }}
         />
       )}
-      {tab === "prospectos" && <ListaProspectos creando={creando} setCreando={setCreando} />}
+      {tab === "prospectos" && <ListaProspectos creando={creando} setCreando={setCreando} onImportar={() => setTab("importaciones")} />}
       {tab === "campanas" && <CampanasTab puedeEditar={user?.rol === "administrador" || user?.rol === "supervisor"} />}
     </AppShell>
   );
@@ -398,7 +402,7 @@ function AccionesFila({ fila, ocupado, onConfirmar, onRechazar }: { fila: Borrad
 const LIMIT = 25;
 const COLUMNAS_PROSPECTOS = ["Empresa", "Contacto", "Estado", "Prioridad", "Score", "Alta"];
 
-function ListaProspectos({ creando, setCreando }: { creando: boolean; setCreando: (v: boolean) => void }) {
+function ListaProspectos({ creando, setCreando, onImportar }: { creando: boolean; setCreando: (v: boolean) => void; onImportar: () => void }) {
   // Recién creado a mano: su detalle se muestra arriba de la lista, porque
   // puede no caer en la página que se está viendo.
   const [nuevoId, setNuevoId] = useState<number | null>(null);
@@ -476,7 +480,18 @@ function ListaProspectos({ creando, setCreando }: { creando: boolean; setCreando
 
       {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los prospectos.</div>}
-      {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">No hay prospectos{busqueda || prioridad ? " con ese filtro" : " confirmados todavía"}.</div>}
+      {data && data.data.length === 0 && (busqueda || prioridad) && <div className="p-5 text-sm text-ink-3">No hay prospectos con ese filtro.</div>}
+      {data && data.data.length === 0 && !busqueda && !prioridad && page === 1 && !creando && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <div>
+            <div className="text-sm font-semibold">Todavía no hay prospectos confirmados.</div>
+            <div className="text-xs text-ink-3">Importa un CSV y confirma sus filas, o da de alta uno a mano.</div>
+          </div>
+          <Button type="button" variant="outline" onClick={onImportar}>
+            Importar CSV
+          </Button>
+        </div>
+      )}
 
       {data && data.data.length > 0 && (
         <div className="tabla-scroll"><table className="w-full border-collapse">

@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, contactos, empresas, mediosContacto } from "../database/schema.js";
+import { actividades, auditoria, contactos, empresas, mediosContacto, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { buildAntes } from "../shared/drizzle-utils.js";
 import { insertarMediosContacto, buildMedioCandidatos, estadoInicialDeMedio, CODIGO_MEDIO_SUPRIMIDO } from "../shared/medios-contacto.js";
@@ -35,9 +35,17 @@ export class EmpresasService {
         estado: empresas.estado,
         ciudad: empresas.ciudad,
         activo: empresas.activo,
-        creado_en: empresas.creadoEn
+        creado_en: empresas.creadoEn,
+        // Para la lista general (PLAN_FRONTEND.md, "Pantallas menos
+        // genéricas"): de quién es, cuántos contactos activos tiene y
+        // cuándo se le registró la última actividad, sin un GET por fila.
+        propietario_id: empresas.propietarioId,
+        propietario_nombre: usuarios.nombre,
+        contactos_activos: sql<number>`(SELECT COUNT(*) FROM ${contactos} WHERE ${contactos.empresaId} = ${empresas.id} AND ${contactos.activo} = true)`.mapWith(Number),
+        ultima_actividad: sql<Date | null>`(SELECT MAX(${actividades.ocurridaEn}) FROM ${actividades} WHERE ${actividades.empresaId} = ${empresas.id})`.mapWith(actividades.ocurridaEn)
       })
       .from(empresas)
+      .leftJoin(usuarios, eq(usuarios.id, empresas.propietarioId))
       .where(condition)
       .orderBy(empresas.nombreLegal)
       .limit(limit)

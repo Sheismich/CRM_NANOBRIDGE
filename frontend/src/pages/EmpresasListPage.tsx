@@ -6,7 +6,8 @@ import { EmpresaForm } from "../components/empresas/EmpresaForm";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { api } from "../lib/api";
-import type { Empresa, Paginated } from "../types";
+import { formatoFecha } from "../lib/formato";
+import type { EmpresaListado, Paginated } from "../types";
 
 const LIMIT = 25;
 
@@ -20,7 +21,7 @@ export function EmpresasListPage() {
   // todavía filtros de región/giro/tamaño del lado del servidor.
   const { data, isPending, isError } = useQuery({
     queryKey: ["empresas", page],
-    queryFn: () => api.get<Paginated<Empresa>>("/api/v1/empresas", { page, limit: LIMIT })
+    queryFn: () => api.get<Paginated<EmpresaListado>>("/api/v1/empresas", { page, limit: LIMIT })
   });
 
   return (
@@ -39,13 +40,22 @@ export function EmpresasListPage() {
         {isPending && <div className="p-6 text-sm text-ink-2">Cargando…</div>}
         {isError && <div className="p-6 text-sm text-danger">No se pudo cargar el listado de empresas.</div>}
 
-        {data && data.data.length === 0 && <div className="p-6 text-sm text-ink-2">No hay empresas todavía.</div>}
+        {data && data.data.length === 0 && page === 1 && !creando && (
+          <div className="flex flex-wrap items-center justify-between gap-3 p-6">
+            <div>
+              <div className="text-sm font-semibold">Todavía no hay empresas.</div>
+              <div className="text-xs text-ink-3">Da de alta la primera con sus contactos para empezar a registrar actividades y oportunidades.</div>
+            </div>
+            <Button onClick={() => setCreando(true)}>+ Nueva empresa</Button>
+          </div>
+        )}
+        {data && data.data.length === 0 && page > 1 && <div className="p-6 text-sm text-ink-2">No hay más empresas.</div>}
 
         {data && data.data.length > 0 && (
           <div className="tabla-scroll"><table className="w-full border-collapse">
             <thead>
               <tr className="bg-bg">
-                {["Nombre legal", "Giro", "Región / ciudad", "Estado"].map((h) => (
+                {["Nombre legal", "Giro", "Región / ciudad", "Responsable", "Contactos", "Última actividad"].map((h) => (
                   <th key={h} className="px-5 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-ink-2">
                     {h}
                   </th>
@@ -63,11 +73,9 @@ export function EmpresasListPage() {
                   </td>
                   <td className="px-5 py-3 text-[13px] text-ink-2">{empresa.giro ?? "—"}</td>
                   <td className="px-5 py-3 text-[13px] text-ink-2">{[empresa.ciudad, empresa.region].filter(Boolean).join(", ") || "—"}</td>
-                  <td className="px-5 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${empresa.activo ? "bg-ok-bg text-ok" : "bg-bg text-ink-3"}`}>
-                      {empresa.activo ? "Activa" : "Desactivada"}
-                    </span>
-                  </td>
+                  <td className="px-5 py-3 text-[13px] text-ink-2">{empresa.propietario_nombre ?? <span className="text-ink-3">Sin responsable</span>}</td>
+                  <td className="px-5 py-3 text-[13px] tabular-nums text-ink-2">{empresa.contactos_activos}</td>
+                  <td className="px-5 py-3 text-[13px] text-ink-2">{empresa.ultima_actividad ? formatoFecha.format(new Date(empresa.ultima_actividad)) : <span className="text-ink-3">Ninguna</span>}</td>
                 </tr>
               ))}
             </tbody>

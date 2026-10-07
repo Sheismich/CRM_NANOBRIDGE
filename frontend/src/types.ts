@@ -39,6 +39,15 @@ export type Empresa = {
   creado_en: string;
 };
 
+// Fila de GET /empresas (la lista general): lo de Empresa más el dueño,
+// los contactos activos y la fecha de la última actividad.
+export type EmpresaListado = Empresa & {
+  propietario_id: number | null;
+  propietario_nombre: string | null;
+  contactos_activos: number;
+  ultima_actividad: string | null;
+};
+
 export type EmpresaDetalle = Empresa & {
   tamano: "micro" | "pequena" | "mediana" | "grande" | null;
   pais: string;

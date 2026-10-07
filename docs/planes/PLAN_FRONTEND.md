@@ -251,7 +251,7 @@ Avance:
 
 Relación con las fases de `PLAN_CRM_DEFINITIVO.md`: aquellas son las del backend y ya están construidas; estas son solo las de la interfaz.
 
-## Propuesta en discusión: pantallas menos genéricas (NO construir todavía)
+## Pantallas menos genéricas
 
 - **Inicio de admin y supervisor**, de arriba abajo:
   1. Qué hacer hoy: respuestas por clasificar siempre visibles ("0" en verde), tareas vencidas y de hoy.
@@ -267,6 +267,13 @@ Relación con las fases de `PLAN_CRM_DEFINITIVO.md`: aquellas son las del backen
 - **Estados vacíos** con el siguiente paso y su botón.
 - **Color:** azul de marca solo para acciones; verde, ámbar y rojo para estados.
 - **Límite:** no hay aperturas de correo (el backend no las guarda), así que el embudo empieza en "contactadas". Todo sale de endpoints que ya existen, sin backend nuevo.
+- **Construido (7-oct-2026):**
+  - Inicio (`pages/DashboardPage.tsx`) en ese orden. "Qué hacer hoy" muestra siempre los tres números (verde en cero) y debajo hasta 5 tareas vencidas o de hoy. La prospección y las campañas son del mes en curso; cada campaña liga a `/prospectos?tab=campanas`.
+  - Agente: aviso ámbar con las tareas de seguimiento ligadas a una respuesta (`respuesta_id`, las que deja un "interesado"); sus tareas, vencidas primero y luego las de hoy.
+  - `lib/tareas.ts`: `useTareasAbiertas` (pendientes y en progreso, hasta 100 de cada una) y `venceHoy`.
+  - Empresas: se quitó la columna "Estado" (la lista solo trae activas, siempre decía "Activa"). Las tres columnas nuevas sí necesitaron backend: `GET /empresas` ahora regresa `propietario_id`, `propietario_nombre`, `contactos_activos` y `ultima_actividad` (`src/crm/empresas.service.ts`, prueba en `test/70-empresas-contactos.spec.ts`). Hasta que backend lo despliegue, esas columnas salen vacías en producción.
+  - Prospectos abre en la lista y la pestaña Importaciones pasó a segundo lugar; `?tab=` elige pestaña.
+  - Estados vacíos con siguiente paso en Inicio, Empresas, Contactos y Prospectos.
 - **Notas al revisarla contra el código (7-oct-2026):**
   - El embudo mezcla unidades. En `/reportes/prospeccion`, "contactadas" y "respondieron" son personas distintas, pero "interesados" sale de `respuestas.por_clasificacion`, que cuenta respuestas (alguien que contestó dos veces cuenta doble). Las que siguen en `pendientes_clasificar` todavía no aparecen como interesados.
   - `GET /tareas` no filtra por fecha y regresa máximo 100 por página: vencidas y de hoy se sacan en el cliente de las pendientes, y el conteo no es exacto si alguien tiene más de 100.

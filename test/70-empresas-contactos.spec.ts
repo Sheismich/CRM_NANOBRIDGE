@@ -43,6 +43,43 @@ describe("empresas + contactos", () => {
     expect(comoAdmin.status).toBe(200);
   });
 
+  it("la lista de empresas trae responsable, contactos activos y última actividad", async () => {
+    const agenteCookie = await crearAgente(app, adminCookie, `lista.${Date.now()}@test.local`);
+    const crear = await request(app.getHttpServer())
+      .post("/api/v1/empresas")
+      .set("Cookie", agenteCookie)
+      .send({
+        nombreLegal: `Empresa Lista ${Date.now()}`,
+        contactos: [
+          { nombre: "Contacto Lista 1", correo: `lista1.${Date.now()}@test.local` },
+          { nombre: "Contacto Lista 2", correo: `lista2.${Date.now()}@test.local` }
+        ]
+      });
+    expect(crear.status).toBe(201);
+    const empresaId = crear.body.id;
+
+    const buscar = async () => {
+      const lista = await request(app.getHttpServer()).get("/api/v1/empresas").query({ limit: 100 }).set("Cookie", agenteCookie);
+      expect(lista.status).toBe(200);
+      return lista.body.data.find((e: { id: number }) => e.id === empresaId);
+    };
+
+    const antes = await buscar();
+    expect(antes.propietario_nombre).toBe("Agente de prueba");
+    expect(antes.contactos_activos).toBe(2);
+    expect(antes.ultima_actividad).toBeNull();
+
+    const actividad = await request(app.getHttpServer())
+      .post("/api/v1/actividades")
+      .set("Cookie", agenteCookie)
+      .send({ empresaId, tipo: "llamada" });
+    expect(actividad.status).toBe(201);
+
+    const despues = await buscar();
+    expect(despues.ultima_actividad).not.toBeNull();
+    expect(Math.abs(new Date(despues.ultima_actividad).getTime() - Date.now())).toBeLessThan(5 * 60_000);
+  });
+
   it("desactivar una empresa (solo administrador/supervisor) desactiva en cascada sus contactos y marca sus medios como obsoletos", async () => {
     const crear = await request(app.getHttpServer())
       .post("/api/v1/empresas")
