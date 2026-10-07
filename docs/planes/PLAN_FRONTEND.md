@@ -239,6 +239,9 @@ Avance:
       - El flujo es empresa → oportunidad abierta → partidas. Si la empresa no existe o no tiene oportunidad abierta, se crea ahí mismo y queda elegida.
       - Reusa los formularios de la ficha. `EmpresaForm` y `NuevaOportunidadForm` aceptan `onCreada(id)` para devolver el id en vez de navegar o cerrarse, y `CotizacionForm` acepta `oportunidadId` para dejarla elegida.
       - Al guardar, la lista cambia a "Borradores", porque la nueva nace en borrador.
+  - **"Fabi�n" en Inicio, Tareas y Oportunidades (6-oct-2026): no es un bug del front, no hay nada que arreglar en el código.**
+    - El nombre del admin quedó mal guardado en la base al crearlo (la terminal mandó otra codificación). El front y la API lo muestran tal cual está guardado; `test/355-acentos.spec.ts` comprueba que el ida y vuelta con acentos funciona.
+    - Se corrige editando el usuario en Administración → Usuarios (lo hace Fabián). Si aparece otro "�" en un dato nuevo, avisar: ya sería un bug real.
   - **✅ Front publicado (5-oct-2026, Mich):** https://crm-prospeccion-outbound.web.app.
     - `frontend/firebase.json` sirve `dist`, hace el rewrite de `/api/**` al servicio de Cloud Run `nanobridge-api` (`us-central1`) y manda todo lo demás a `index.html`. `.firebaserc` apunta a `crm-prospeccion-outbound`.
     - Cloud Run tiene `SESSION_COOKIE_NAME=__session`, porque Firebase solo deja pasar esa cookie. Login verificado el 6-oct-2026.
@@ -247,6 +250,27 @@ Avance:
     - La CSP no permite scripts ni conexiones a otros orígenes. Si algún día se agrega uno, hay que sumarlo ahí.
 
 Relación con las fases de `PLAN_CRM_DEFINITIVO.md`: aquellas son las del backend y ya están construidas; estas son solo las de la interfaz.
+
+## Propuesta en discusión: pantallas menos genéricas (NO construir todavía)
+
+- **Inicio de admin y supervisor**, de arriba abajo:
+  1. Qué hacer hoy: respuestas por clasificar siempre visibles ("0" en verde), tareas vencidas y de hoy.
+  2. Prospección del mes: contactadas → respondieron → interesados, más la tasa, con `GET /reportes/prospeccion`.
+  3. Campañas: una fila por campaña (`por_campana`) con liga.
+  4. Pipeline y forecast más abajo y más chicos.
+  5. Actividad por agente, igual que hoy.
+- **Inicio del agente:** sus tareas arriba, más un aviso si tiene respuestas por contestar.
+- **Listas:**
+  - Empresas: columnas de responsable, número de contactos y última actividad.
+  - Contactos: quitar la columna "Redes" (casi siempre vacía).
+  - Prospectos: abrir en la lista, no en Importaciones.
+- **Estados vacíos** con el siguiente paso y su botón.
+- **Color:** azul de marca solo para acciones; verde, ámbar y rojo para estados.
+- **Límite:** no hay aperturas de correo (el backend no las guarda), así que el embudo empieza en "contactadas". Todo sale de endpoints que ya existen, sin backend nuevo.
+- **Notas al revisarla contra el código (7-oct-2026):**
+  - El embudo mezcla unidades. En `/reportes/prospeccion`, "contactadas" y "respondieron" son personas distintas, pero "interesados" sale de `respuestas.por_clasificacion`, que cuenta respuestas (alguien que contestó dos veces cuenta doble). Las que siguen en `pendientes_clasificar` todavía no aparecen como interesados.
+  - `GET /tareas` no filtra por fecha y regresa máximo 100 por página: vencidas y de hoy se sacan en el cliente de las pendientes, y el conteo no es exacto si alguien tiene más de 100.
+  - Inicio ya tiene parte de esto (`DashboardPage.tsx`): cola de clasificación, tareas pendientes, pipeline, forecast y actividad por agente. Lo nuevo es el orden, la prospección del mes y las campañas.
 
 ## 7. Fuera de alcance de este plan
 
