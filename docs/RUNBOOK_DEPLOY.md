@@ -208,6 +208,8 @@ Actualiza esta tabla en cada deploy.
 | 7-oct-2026 | `nanobridge-api-00019-sh9` | `491f748` | (sin migración) | `GET /empresas` trae responsable, contactos activos y última actividad (para las pantallas nuevas de Mich). La `00018-4rw` es el mismo deploy corrido dos veces. Front publicado en Firebase desde el mismo commit |
 | 7-oct-2026 | `nanobridge-api-00020-4b7` | `05ea87b` | (sin migración) | La última actividad de Empresas cuenta correos y respuestas (`df25c65`); sin `N8N_WEBHOOK_URL` el outbox ya no despacha y los eventos esperan en `pendiente` en vez de llenar `procesos_fallidos` |
 | 7-oct-2026 | `nanobridge-api-00021-xq8` | `fd47e88` | (sin migración) | Un JSON que no viene en UTF-8 responde 400 `TEXTO_NO_UTF8` en vez de guardarse con "�"; el CSV de importación acepta el de Excel en español (Windows-1252). Verificado en producción con un login en Latin-1 |
+| 8-oct-2026 | `nanobridge-api-00022-x2w` | `fd47e88` (misma imagen) | (sin migración) | Solo configuración: se quitó el secreto `STORAGE_LOCAL_SIGNING_SECRET` (`--remove-secrets`) |
+| 8-oct-2026 | `nanobridge-api-00023-2zk` | `fd47e88` (misma imagen) | (sin migración) | Idéntica a la 00022: el mismo comando corrido otra vez. `/health` ok |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
@@ -348,12 +350,22 @@ parches hasta abril de 2027; antes de esa fecha hay que pasar a Node 24.
   guardan 7, y con binary log se puede recuperar a cualquier minuto de los
   últimos 7 días. `gcloud sql backups list --instance=nanobridge-db` mostró
   respaldos SUCCESSFUL.
-- Forzar SSL en las conexiones a Cloud SQL.
-- Borrar la cuenta de servicio `n8n-invoker-sa` (quedó de un intento de
-  autenticación anterior, ya no se usa, no representa un riesgo activo pero
-  es basura que se puede limpiar).
-- Quitar el secreto `STORAGE_LOCAL_SIGNING_SECRET` del servicio de Cloud Run
-  (ya no se usa desde el 2-oct-2026, ver §7).
+- Forzar SSL en las conexiones a Cloud SQL (hoy `sslMode:
+  ALLOW_UNENCRYPTED_AND_ENCRYPTED`; la base no tiene IPs autorizadas, así
+  que el riesgo es bajo). Plan: `gcloud sql instances patch nanobridge-db
+  --ssl-mode=ENCRYPTED_ONLY` y revisar `/health` (si falla, regresar con
+  `--ssl-mode=ALLOW_UNENCRYPTED_AND_ENCRYPTED`). La API no se afecta (entra
+  por el socket del conector, ya cifrado). Lo que sí cambia: `npm run
+  migrate` desde Cloud Shell (mysql2 por IP pública no usa SSL por defecto);
+  hay que agregarle SSL al `DATABASE_URL` del §6 y probarlo, igual que el
+  cliente `mysql` de la consulta del §6.
+- ~~Borrar la cuenta de servicio `n8n-invoker-sa`~~ Borrada el 8-oct-2026
+  (no tenía llaves ni permisos en el proyecto; solo `run.invoker` en la API,
+  que sobraba porque la API es `allUsers`; se le quitó antes de borrarla).
+- ~~Quitar el secreto `STORAGE_LOCAL_SIGNING_SECRET`~~ Quitado de Cloud Run
+  (revisión `00022-x2w`) y borrado de Secret Manager el 8-oct-2026. Las
+  revisiones `00021` y anteriores lo referencian: si alguna vez se regresa a
+  una, arrancarla con `--remove-secrets=STORAGE_LOCAL_SIGNING_SECRET`.
 - DMARC: ya existe con `p=none` (solo vigilar; SPF, DKIM y DMARC pasan,
   verificado el 6-oct-2026). Cuando haya volumen real sin problemas, subirlo
   a `p=quarantine`.
@@ -414,6 +426,9 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       JSON que no es UTF-8 se rechaza (400 `TEXTO_NO_UTF8`), así que no se repite.
 - [ ] Las 5 respuestas de Carlos, incluida: ¿"no interesado" bloquea para
       siempre o 6 meses?
-- [ ] Los 2 usuarios `root` de MySQL con contraseña desconocida: cambiarles
-      la contraseña o borrarlos.
+- [x] Los 2 usuarios `root` de MySQL (host `%` y host vacío): contraseña
+      nueva al azar que nadie vio (`openssl rand`, 8-oct-2026). Si hace
+      falta entrar como `root`, el dueño del proyecto le pone otra con
+      `gcloud sql users set-password`. Pendiente confirmar que el de host
+      vacío sí cambió (`password_last_changed` en `mysql.user`) al probar el SSL.
 - [x] Contraseña de `appuser` rotada (6-oct-2026, revisión `00017-cbm`).
