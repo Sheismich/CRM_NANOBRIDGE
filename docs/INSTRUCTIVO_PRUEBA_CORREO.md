@@ -52,6 +52,13 @@ Anota la dirección en el registro **antes** de mandar.
 
 ## Paso 3. Mandar el correo (n8n)
 
+> **Desde el 6-oct-2026 PT1 está publicado con SANDBOX = false** (MODO_PRUEBAS
+> sigue en true). Ya no hay que tocar "Modo pruebas": basta pedirle a la IA de
+> n8n una ejecución real con un prospecto nuevo que traiga **correo, razón
+> social, contacto, giro y tamaño** (`micro`, `pequena`, `mediana` o
+> `grande`). Sin giro o sin tamaño la API lo deja `excluido` y no se manda
+> (pasó con +prueba8). El prompt de abajo es el de antes del 6-oct.
+
 Entra a n8n → workflow **"PT1. ingesta y scoring"** → abre el chat de la IA
 de n8n y pégale esto, cambiando `CORREO_NUEVO` en los dos lugares:
 
@@ -117,8 +124,8 @@ Abre el nodo **"Modo pruebas"** y confirma con tus ojos que dice
 
 ## Lo que NO hay que hacer
 
-- ❌ **No des clic en "cancelar suscripción"** del correo, salvo que
-  quieras enseñar las bajas a propósito. Esa dirección queda bloqueada para
+- ❌ **No des clic en "Darte de baja"** (pie del correo, desde el 8-oct-2026),
+  salvo que quieras enseñar las bajas a propósito. Esa dirección queda bloqueada para
   siempre, en el CRM y en SendGrid.
 - ❌ No reutilices direcciones (Paso 2).
 - ❌ No dejes SANDBOX en `false` al terminar.
@@ -154,4 +161,8 @@ la base de datos**: al final se limpian cerrando sus ventanas.
 | fabiandelirardz+prueba4@gmail.com | 29-sep-2026 | prospecto 29, envío 14; contestado y dado de baja (suprimido) |
 | (demo "Prospecto Nawal") | 30-sep-2026 | envío 15; contestado ("Me interesa") |
 | fabiandelirardz+prueba6@gmail.com | 1-oct-2026 | "Empresa Prueba Seis"; contestado, clasificado interesado → tarea "Contactar prospecto interesado" |
+| fabiandelirardz+prueba8@gmail.com | 8-oct-2026 | prospecto 32; sin giro ni tamaño → `excluido`, no se mandó |
+| fabiandelirardz+prueba9@gmail.com | 8-oct-2026 | "Empresa Prueba Nueve"; correo 1 enviado, sin baja (sigue activo) |
+| fabiandelirardz+prueba10@gmail.com | 8-oct-2026 | prospecto 34, envío 21; dado de baja con el link del pie |
+| fabiandelirardz+prueba11@gmail.com | 8-oct-2026 | prospecto 35, envío 22; dado de baja con el link del pie (prueba de baja) |
 | | | |

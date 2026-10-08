@@ -32,7 +32,8 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
    - Un título por página ("Empresas · CRM NANOBRIDGE"); hoy todas las pestañas dicen lo mismo.
    - Imagen de vista previa (`og:image` con el logo) para cuando el link se comparte por WhatsApp.
    Es pantalla: lo hace Mich o nosotros, avisando en PLAN_FRONTEND.
-6. Completar la lista de encendido (RUNBOOK_DEPLOY.md §10).
+6. Completar la lista de encendido (RUNBOOK_DEPLOY.md §10). **8-oct-2026:** link de baja visible
+   en el pie (PT1b, publicado) y prueba de baja en vivo pasada (+prueba10 y +prueba11).
 7. Cómo entran los prospectos a PT1. **Carlos ya contestó la fuente (6-oct-2026):** un Excel suyo
    con 30 prospectos (probablemente el de STEELSAFE de `S3_ESQUEMA_PROSPECTOS_Y_PLAN_PRUEBAS.md`
    §2.1: 29 de 30 importables) y el resto a mano desde LinkedIn, de gente que pide el servicio.

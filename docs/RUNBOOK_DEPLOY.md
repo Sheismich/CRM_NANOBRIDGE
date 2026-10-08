@@ -369,14 +369,26 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - [ ] Apagar `MODO_PRUEBAS` en PT1 y PT4.
 - [ ] Textos reales en los correos (quitar "correo de PRUEBA" en PT1b). Antes,
       elegir con Carlos la opción A (plantilla por giro) o B (Gemini en vivo
-      con candados), `PLAN_N8N_DEFINITIVO.md` ronda 1 #3. El pie debe llevar
-      el link de baja visible: hoy `subscription_tracking: { enable: true }`
-      solo pone el encabezado `List-Unsubscribe` (con One-Click, verificado
-      el 6-oct-2026), no texto en el cuerpo. Pasarle `text` y `html` con la
-      marca `<% %>` que SendGrid convierte en el link.
-- [ ] Pruebas en vivo que faltan: baja completa con +prueba8 (correo 1 por
-      PT1, darse de baja con el link del encabezado `List-Unsubscribe`, revisar
-      que quede en baja y que PT4 no le escriba), respuesta automática (fuera de
+      con candados), `PLAN_N8N_DEFINITIVO.md` ronda 1 #3. El link de baja
+      visible ya está (8-oct-2026, abajo); al pie solo le falta el domicilio.
+- [x] Link de baja visible en el pie (8-oct-2026). PT1b, nodo "Armar correo
+      SendGrid": `subscription_tracking` lleva `text` y `html` (línea
+      separadora, "NANOBRIDGE", "¿Ya no quieres recibir estos correos?
+      Darte de baja"). Antes solo existía el encabezado `List-Unsubscribe`,
+      que Gmail no muestra a un remitente nuevo. PT4 usa el mismo subflujo.
+- [ ] Domicilio de la empresa en ese pie (lo pasa Carlos; va en el renglón
+      de "NANOBRIDGE", en `text` y `html`).
+- [ ] Página de baja en español: hoy, al darse de baja, SendGrid muestra
+      "Unsubscribe successful" en inglés y sin diseño. Se cambia en SendGrid
+      → Settings → Tracking → Subscription Tracking (landing page propia).
+      Ojo: que no quede encendido el pie global de esa pantalla, o saldría
+      doble y también en los avisos de B4 y PT2.
+- [x] Prueba de baja en vivo (8-oct-2026): clic en el link del pie de
+      +prueba11 → PT3 (firma válida, evento `unsubscribe`, envío 22) → el
+      prospecto 35 quedó en `baja` y su correo en `no_contactar`. Igual con
+      +prueba10 (prospecto 34, envío 21). Falta ver que PT4 no les escriba
+      cuando les toque el contacto 2.
+- [ ] Pruebas en vivo que faltan: respuesta automática (fuera de
       oficina), correo sin firma y rebote. Además: el 13-oct después de las 3 pm
       correr PT4 (contacto 3 a +prueba1..3) y el 20-oct (deben quedar inactivos).
 - [x] Respaldos automáticos de Cloud SQL activos (ya lo estaban; revisado el 7-oct-2026, §9).
@@ -386,8 +398,8 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       Depende de Carlos: ¿los prospectos llegan en lotes o uno por uno?
 - [ ] Publicar PT4.
 - [ ] Borrar los datos de prueba.
-- [ ] Domicilio de la empresa en el remitente (hoy el remitente de pruebas
-      tiene el de la casa de Fabián).
+- [ ] Domicilio de la empresa en el remitente de SendGrid (hoy el remitente
+      de pruebas tiene el de la casa de Fabián).
 - [ ] Cambiar `DESTINOS` de los avisos (hoy el Gmail de Fabián): en B4 ("armar correo de error") a
       quien atienda los errores, y en PT2 ("armar aviso de respuesta") al supervisor que clasifica.
 - [ ] Cuenta definitiva de SendGrid (la de prueba vence el 24-nov-2026 y está
