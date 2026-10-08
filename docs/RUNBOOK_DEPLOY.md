@@ -379,10 +379,13 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - [ ] Domicilio de la empresa en ese pie (lo pasa Carlos; va en el renglón
       de "NANOBRIDGE", en `text` y `html`).
 - [ ] Página de baja en español: hoy, al darse de baja, SendGrid muestra
-      "Unsubscribe successful" en inglés y sin diseño. Se cambia en SendGrid
-      → Settings → Tracking → Subscription Tracking (landing page propia).
-      Ojo: que no quede encendido el pie global de esa pantalla, o saldría
-      doble y también en los avisos de B4 y PT2.
+      "Unsubscribe successful" en inglés y sin diseño. Se hace en la cuenta
+      DEFINITIVA de SendGrid (en la de prueba se perdería): Settings →
+      Tracking → Subscription Tracking → Landing Page con HTML propio, pegar
+      `docs/sendgrid/pagina-baja.html`. El Status de esa pantalla se queda
+      APAGADO, o SendGrid pondría su pie en todos los correos (doble en los
+      nuestros y también en los avisos de B4 y PT2). Probar volviendo a dar
+      clic al link de baja de un correo ya dado de baja.
 - [x] Prueba de baja en vivo (8-oct-2026): clic en el link del pie de
       +prueba11 → PT3 (firma válida, evento `unsubscribe`, envío 22) → el
       prospecto 35 quedó en `baja` y su correo en `no_contactar`. Igual con
@@ -404,7 +407,8 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       quien atienda los errores, y en PT2 ("armar aviso de respuesta") al supervisor que clasifica.
 - [ ] Cuenta definitiva de SendGrid (la de prueba vence el 24-nov-2026 y está
       con el correo de pasante). Al cambiar: rehacer la autenticación del
-      dominio, dar de alta Inbound Parse y poner la API key nueva en n8n.
+      dominio, dar de alta Inbound Parse, poner la API key nueva en n8n y la
+      página de baja en español (arriba).
       Antes de que termine la pasantía de Fabián.
 - [x] Nombre del admin corregido a "Fabián" (7-oct-2026). Desde la revisión `00021-xq8` un
       JSON que no es UTF-8 se rechaza (400 `TEXTO_NO_UTF8`), así que no se repite.

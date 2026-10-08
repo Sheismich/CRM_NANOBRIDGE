@@ -1,0 +1,29 @@
+<!doctype html>
+<!--
+  Página que ve el prospecto al darse de baja con el link del pie del correo.
+  Se pega en SendGrid → Settings → Tracking → Subscription Tracking →
+  Landing Page (HTML propio), en la cuenta DEFINITIVA de SendGrid
+  (RUNBOOK_DEPLOY.md §10). El Status de esa pantalla se queda APAGADO: si se
+  prende, SendGrid pega su pie a todos los correos (doble pie en los
+  nuestros y pie en los avisos de B4 y PT2). Nuestro pie se enciende correo
+  por correo desde PT1b.
+  Cuando Carlos pase un correo real de la empresa, agregarlo al último
+  párrafo (hola@contacto… no tiene bandeja).
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Baja confirmada · NANOBRIDGE</title>
+</head>
+<body style="margin:0;background:#f4f5f7;font-family:Arial,Helvetica,sans-serif;color:#1f2933">
+<div style="padding:72px 16px">
+<div style="max-width:440px;margin:0 auto;padding:40px 32px;background:#fff;border-radius:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08)">
+<img src="https://crm-prospeccion-outbound.web.app/logo-nanobridge.png" alt="NANOBRIDGE" style="height:40px;margin-bottom:24px">
+<h1 style="font-size:20px;margin:0 0 12px">Listo, te diste de baja</h1>
+<p style="font-size:15px;line-height:1.6;color:#52606d;margin:0">Ya no te enviaremos más correos de NANOBRIDGE.</p>
+<p style="font-size:13px;line-height:1.6;color:#7b8794;margin:24px 0 0">Si fue un error, contesta el último correo que te enviamos.</p>
+</div>
+</div>
+</body>
+</html>
