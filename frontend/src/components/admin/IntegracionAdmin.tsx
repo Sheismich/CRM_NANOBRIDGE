@@ -41,7 +41,7 @@ function EventosPendientes() {
   const [page, setPage] = useState(1);
   const [abiertoId, setAbiertoId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<{ texto: string; tono: "ok" | "warn" } | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
   const filtros = { estado: estado || undefined, page, limit: LIMIT };
@@ -50,13 +50,13 @@ function EventosPendientes() {
     queryFn: () => api.get<Paginated<EventoPendiente>>("/api/v1/eventos-pendientes", filtros)
   });
 
-  async function ejecutar(accion: () => Promise<string | void>) {
+  async function ejecutar(accion: () => Promise<{ texto: string; tono: "ok" | "warn" } | void>) {
     setError(null);
     setAviso(null);
     setOcupado(true);
     try {
-      const texto = await accion();
-      if (texto) setAviso(texto);
+      const resultado = await accion();
+      if (resultado) setAviso(resultado);
       await queryClient.invalidateQueries({ queryKey: ["eventos-pendientes"] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
@@ -90,8 +90,11 @@ function EventosPendientes() {
             title="Entrega ahora los pendientes sin esperar al siguiente ciclo automático"
             onClick={() =>
               void ejecutar(async () => {
-                const r = await api.post<{ procesados: number }>("/api/v1/eventos-pendientes/despachar");
-                return `Despacho manual: ${r.procesados} evento(s) procesado(s).`;
+                const r = await api.post<{ procesados: number; sin_destino?: true }>("/api/v1/eventos-pendientes/despachar");
+                // Sin N8N_WEBHOOK_URL el backend no despacha: los eventos
+                // esperan en "pendiente" y salen solos cuando exista (B3).
+                if (r.sin_destino) return { texto: "n8n todavía no tiene a dónde recibir avisos. Los eventos se quedan pendientes y se entregan cuando se configure.", tono: "warn" };
+                return { texto: `Despacho manual: ${r.procesados} evento(s) procesado(s).`, tono: "ok" };
               })
             }
           >
@@ -101,12 +104,12 @@ function EventosPendientes() {
       </div>
       <div className="flex flex-col gap-2 px-5 pt-3">
         <ServerError message={error} />
-        {aviso && <div className="rounded-[9px] bg-ok-bg px-3.5 py-2.5 text-[13px] text-ok">{aviso}</div>}
+        {aviso && <div className={`rounded-[9px] px-3.5 py-2.5 text-[13px] ${aviso.tono === "warn" ? "bg-warn-bg text-warn" : "bg-ok-bg text-ok"}`}>{aviso.texto}</div>}
       </div>
 
       {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los eventos.</div>}
-      {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">{estado === "fallido" ? "No hay eventos fallidos: n8n está recibiendo todo." : "No hay eventos con ese estado."}</div>}
+      {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">{estado === "fallido" ? (aviso?.tono === "warn" ? "No hay eventos fallidos." : "No hay eventos fallidos: n8n está recibiendo todo.") : "No hay eventos con ese estado."}</div>}
       {data && data.data.length > 0 && (
         <div className="tabla-scroll"><table className="mt-3 w-full border-collapse">
           <thead>
@@ -144,7 +147,7 @@ function EventosPendientes() {
                           e.stopPropagation();
                           void ejecutar(async () => {
                             await api.post(`/api/v1/eventos-pendientes/${ev.id}/reintentar`);
-                            return `Evento ${ev.id} regresó a pendiente; se entregará en el siguiente ciclo.`;
+                            return { texto: `Evento ${ev.id} regresó a pendiente; se entregará en el siguiente ciclo.`, tono: "ok" };
                           });
                         }}
                       >
