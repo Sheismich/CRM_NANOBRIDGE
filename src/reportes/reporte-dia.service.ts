@@ -6,6 +6,7 @@ import { auditoria, campanas, contactos, documentos, empresas, envios, eventosPe
 import { toCsv } from "../shared/csv.js";
 import { diaSiguiente, horaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
+import { TIPO_ERROR_WORKFLOW } from "../automatizacion/automatizacion.service.js";
 import type { ReporteDiaQuery, TipoBitacora } from "./dto/reporte.schema.js";
 
 // Un movimiento de la bitácora. usuario_id = quién lo hizo (null = la
@@ -127,7 +128,7 @@ export class ReporteDiaService {
         .innerJoin(documentos, eq(documentos.id, auditoria.entidadId))
         .leftJoin(empresas, eq(empresas.id, documentos.empresaId))
         .where(and(eq(auditoria.entidad, "documento"), inArray(auditoria.accion, ["subir", "nueva_version", "aprobar", "rechazar", "revisar"]), delDia(auditoria.creadoEn))),
-      this.db.select({ id: procesosFallidos.id, fecha: procesosFallidos.creadoEn, tipo: procesosFallidos.tipo, mensaje: procesosFallidos.mensaje }).from(procesosFallidos).where(delDia(procesosFallidos.creadoEn)),
+      this.db.select({ id: procesosFallidos.id, fecha: procesosFallidos.creadoEn, tipo: procesosFallidos.tipo, workflow: procesosFallidos.workflow, nodo: procesosFallidos.nodo, mensaje: procesosFallidos.mensaje }).from(procesosFallidos).where(delDia(procesosFallidos.creadoEn)),
       // Avisos que llegaron a n8n después de fallar: no queda cada intento,
       // solo cuántos llevó y cuándo salió.
       this.db.select({ id: eventosPendientes.id, fecha: eventosPendientes.actualizadoEn, tipo: eventosPendientes.tipo, intentos: eventosPendientes.intentos })
@@ -170,8 +171,14 @@ export class ReporteDiaService {
       }
     }
 
+    // procesos_fallidos junta dos cosas distintas: un workflow de n8n que
+    // falló (lo reporta el Error Workflow B4) y un aviso de la API a n8n
+    // que agotó sus reintentos (outbox).
     for (const f of filasFallos) {
-      movimientos.push({ tipo: "sistema", subtipo: "fallo", fecha: f.fecha, usuario_id: null, usuario_nombre: null, empresa_id: null, empresa_nombre: null, entidad: { tipo: "proceso_fallido", id: f.id }, texto: `falló un aviso a n8n: ${f.mensaje}` });
+      const texto = f.tipo === TIPO_ERROR_WORKFLOW
+        ? `falló ${f.workflow ? `el workflow ${f.workflow}` : "un workflow"} de n8n${f.nodo ? ` (nodo ${f.nodo})` : ""}`
+        : `falló un aviso a n8n: ${f.mensaje}`;
+      movimientos.push({ tipo: "sistema", subtipo: "fallo", fecha: f.fecha, usuario_id: null, usuario_nombre: null, empresa_id: null, empresa_nombre: null, entidad: { tipo: "proceso_fallido", id: f.id }, workflow: f.workflow, nodo: f.nodo, texto });
     }
     for (const f of filasReintentos) {
       movimientos.push({ tipo: "sistema", subtipo: "reintento_ok", fecha: f.fecha, usuario_id: null, usuario_nombre: null, empresa_id: null, empresa_nombre: null, entidad: { tipo: "evento", id: f.id }, texto: `un aviso a n8n (${f.tipo}) llegó bien al intento ${f.intentos}` });
@@ -235,11 +242,15 @@ export class ReporteDiaService {
     deLaPersona.sort((x, y) => y.fecha.getTime() - x.fecha.getTime());
 
     // Por persona: primera y última ACCIÓN (una tarea que se le venció no es
-    // algo que hizo), cerradas, tomadas y vencidas.
-    const personas = new Map<number, { usuario_id: number; nombre: string | null; primera_accion: Date | null; ultima_accion: Date | null; cerradas: number; tomadas: number; vencidas: number }>();
+    // algo que hizo), tareas que cerró, tomadas y vencidas.
+    // tareas_que_cerro cuenta QUIÉN CERRÓ (la auditoría), no de quién era la
+    // tarea: si el admin cierra una tarea de Ana, cuenta para el admin. Es
+    // otra cosa que resumen.tareas_cerradas.cerradas (ver abajo), y por eso
+    // se llama distinto.
+    const personas = new Map<number, { usuario_id: number; nombre: string | null; primera_accion: Date | null; ultima_accion: Date | null; tareas_que_cerro: number; tomadas: number; vencidas: number }>();
     const persona = (id: number, nombreUsuario: string | null) => {
       let p = personas.get(id);
-      if (!p) personas.set(id, (p = { usuario_id: id, nombre: nombreUsuario, primera_accion: null, ultima_accion: null, cerradas: 0, tomadas: 0, vencidas: 0 }));
+      if (!p) personas.set(id, (p = { usuario_id: id, nombre: nombreUsuario, primera_accion: null, ultima_accion: null, tareas_que_cerro: 0, tomadas: 0, vencidas: 0 }));
       return p;
     };
     for (const m of deLaPersona) {
@@ -251,7 +262,7 @@ export class ReporteDiaService {
       const p = persona(m.usuario_id, m.usuario_nombre);
       if (!p.primera_accion || m.fecha < p.primera_accion) p.primera_accion = m.fecha;
       if (!p.ultima_accion || m.fecha > p.ultima_accion) p.ultima_accion = m.fecha;
-      if (m.tipo === "tareas" && m.subtipo === "cerrada") p.cerradas++;
+      if (m.tipo === "tareas" && m.subtipo === "cerrada") p.tareas_que_cerro++;
       if (m.subtipo === "tomada") p.tomadas++;
     }
 
@@ -269,6 +280,10 @@ export class ReporteDiaService {
       resumen: {
         correos: usuarioId ? null : { enviados: filasEnvios.length, campanas: new Set(filasEnvios.map((e) => e.campanaId).filter((id) => id !== null)).size, ultimo_en: ultimoEnvio },
         respuestas: usuarioId ? null : { recibidas: filasRespuestas.length, interesados: filasRespuestas.filter((r) => r.clasificacion === "interesado").length },
+        // Cuenta por RESPONSABLE: tareas cerradas ese día; con persona, las
+        // que son de esa persona, las haya cerrado ella u otro. Junto a
+        // vencian_ese_dia da "7 de 9 que vencían hoy". Quién cerró cada una
+        // está en por_persona[].tareas_que_cerro.
         tareas_cerradas: { cerradas: Number(cerradas?.n ?? 0), vencian_ese_dia: filasVencian.length },
         tareas_creadas: { creadas: creadas.length, por_automatizacion: creadas.filter((t) => t.creadaPor === null).length },
         bajas: usuarioId ? null : { total: filasBajas.length, ultima: ultimaBaja ? { contacto_nombre: ultimaBaja.contactoNombre, fecha: ultimaBaja.fecha } : null }

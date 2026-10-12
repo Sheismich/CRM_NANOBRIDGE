@@ -24,7 +24,9 @@ import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresi
 // global de n8n (B4) — junto con execution_id es la pareja que usa el
 // UNIQUE uq_incidencias_execution_tipo (004_scoring_e_incidencias.sql)
 // para que registrarErrorWorkflow() sea idempotente.
-const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
+// Exportado: la bitácora del día (reportes/reporte-dia.service.ts) distingue
+// estas fallas (un workflow de n8n) de las de un aviso de la API.
+export const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
 
 // Política de contactos (PLAN_N8N_DEFINITIVO.md): máximo tres contactos
 // totales POR PERSONA (contacto), no por prospecto -- la misma persona

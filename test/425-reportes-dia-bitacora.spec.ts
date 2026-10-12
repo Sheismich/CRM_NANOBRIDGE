@@ -145,8 +145,8 @@ describe("reportes: el día (bitácora)", () => {
   it("por persona: primera y última acción, cerradas, tomadas y vencidas, más la automatización", async () => {
     const res = await dia(adminCookie);
     const de = (id: number) => res.body.por_persona.find((p: { usuario_id: number }) => p.usuario_id === id);
-    expect(de(agenteA)).toEqual(expect.objectContaining({ nombre: "Agente de prueba", primera_accion: a("12:30").toISOString(), ultima_accion: a("18:10").toISOString(), cerradas: 1, tomadas: 0, vencidas: 1 }));
-    expect(de(agenteB)).toEqual(expect.objectContaining({ primera_accion: a("16:20").toISOString(), ultima_accion: a("16:20").toISOString(), cerradas: 0, tomadas: 1, vencidas: 0 }));
+    expect(de(agenteA)).toEqual(expect.objectContaining({ nombre: "Agente de prueba", primera_accion: a("12:30").toISOString(), ultima_accion: a("18:10").toISOString(), tareas_que_cerro: 1, tomadas: 0, vencidas: 1 }));
+    expect(de(agenteB)).toEqual(expect.objectContaining({ primera_accion: a("16:20").toISOString(), ultima_accion: a("16:20").toISOString(), tareas_que_cerro: 0, tomadas: 1, vencidas: 0 }));
     expect(res.body.automatizacion).toEqual({ correos: 3, tareas_creadas: 1 });
     expect(res.body.quedo_pendiente).toEqual([expect.objectContaining({ tarea_id: t3, titulo: `NO SE ${marca}`, responsable_id: agenteA, fecha_limite: a("12:09").toISOString() })]);
   });
@@ -178,5 +178,44 @@ describe("reportes: el día (bitácora)", () => {
     expect(lineas).toHaveLength(14);
     expect(lineas[1]).toMatch(/^18:10,tareas,Agente de prueba,/);
     expect(csv.text).toContain("Automatización");
+  });
+
+  // Otro día fijo (12-mar-2025) para no mover los conteos de arriba.
+  describe("fallas de workflows de n8n y quién cerró qué", () => {
+    const FECHA2 = "2025-03-12";
+    const b = (hhmm: string) => new Date(`${FECHA2}T${hhmm}:00-06:00`);
+
+    beforeAll(async () => {
+      // B4 (Error Workflow): un workflow de n8n que falló, con y sin nodo.
+      // Y un aviso de la API (outbox) que falló, que sigue como antes.
+      await db.insert(procesosFallidos).values([
+        { executionId: randomUUID(), tipo: "error_workflow_n8n", workflow: "PT1 Prospección", nodo: "Armar correo SendGrid", payload: {}, mensaje: "timeout", creadoEn: b("09:00") },
+        { executionId: randomUUID(), tipo: "error_workflow_n8n", workflow: "PT2 Respuestas", nodo: null, payload: {}, mensaje: "x", creadoEn: b("10:00") },
+        { tipo: "outbox", payload: {}, mensaje: "n8n no respondió a tiempo", creadoEn: b("11:00") }
+      ]);
+      // Tarea de A que cerró el administrador: cuenta para A como responsable,
+      // pero la cerró el admin.
+      const [t] = await db.insert(tareas).values({ titulo: `Cerrada por otro ${marca}`, responsableId: agenteA, creadaPor: adminId, creadoEn: new Date(`${FECHA2}T07:00:00-06:00`), estado: "cerrada", resultado: "Listo", cerradaEn: b("12:00") });
+      await db.insert(auditoria).values({ usuarioId: adminId, entidad: "tarea", entidadId: t.insertId, accion: "cerrar", despues: { resultado: "Listo" }, creadoEn: b("12:00") });
+    });
+
+    it("una falla de B4 dice qué workflow de n8n falló y en qué nodo; un aviso de la API sigue igual", async () => {
+      const res = await api().get("/api/v1/reportes/dia").set("Cookie", adminCookie).query({ fecha: FECHA2, tipo: "sistema" });
+      expect(res.body.bitacora.data.map((e: { texto: string }) => e.texto)).toEqual([
+        "falló un aviso a n8n: n8n no respondió a tiempo",
+        "falló el workflow PT2 Respuestas de n8n",
+        "falló el workflow PT1 Prospección de n8n (nodo Armar correo SendGrid)"
+      ]);
+    });
+
+    it("con persona: el resumen cuenta las tareas cerradas DE esa persona; por persona, las que ELLA cerró", async () => {
+      const deA = await api().get("/api/v1/reportes/dia").set("Cookie", adminCookie).query({ fecha: FECHA2, usuarioId: agenteA });
+      expect(deA.body.resumen.tareas_cerradas.cerradas).toBe(1);
+      expect(deA.body.por_persona.find((p: { usuario_id: number }) => p.usuario_id === agenteA)?.tareas_que_cerro ?? 0).toBe(0);
+
+      const delAdmin = await api().get("/api/v1/reportes/dia").set("Cookie", adminCookie).query({ fecha: FECHA2, usuarioId: adminId });
+      expect(delAdmin.body.resumen.tareas_cerradas.cerradas).toBe(0);
+      expect(delAdmin.body.por_persona.find((p: { usuario_id: number }) => p.usuario_id === adminId).tareas_que_cerro).toBe(1);
+    });
   });
 });
