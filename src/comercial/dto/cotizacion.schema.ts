@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { aCentavos, calcularCotizacion, tieneMaxDosDecimales } from "../dinero.js";
+import { CLAVES_MOTIVO_RECHAZO } from "../../shared/motivos-rechazo-cotizacion.js";
 
 const PARTIDA_MAX = 50;
 // cotizacion_partidas.importe y cotizaciones.subtotal/descuento/impuestos/
@@ -18,6 +19,8 @@ const DOS_DECIMALES = "Máximo 2 decimales";
 
 export const partidaInputSchema = z.object({
   descripcion: z.string().trim().min(2).max(255),
+  // Segunda línea opcional en el documento (028_cotizaciones_rechazo_y_detalle.sql).
+  detalle: z.string().trim().min(1).max(255).optional(),
   cantidad: z.coerce.number().positive().max(1_000_000).refine(tieneMaxDosDecimales, DOS_DECIMALES),
   precioUnitario: z.coerce.number().min(0).max(100_000_000).refine(tieneMaxDosDecimales, DOS_DECIMALES)
 });
@@ -78,12 +81,35 @@ export const listCotizacionesQuerySchema = z.object({
   empresaId: z.coerce.number().int().positive().optional(),
   oportunidadId: z.coerce.number().int().positive().optional(),
   estado: z.enum(["borrador", "enviada", "aceptada", "rechazada", "vencida"]).optional(),
+  // Tablero (12-oct-2026): buscar por empresa, oportunidad o folio (= id),
+  // filtrar por responsable (un agente siempre ve solo lo suyo) y ordenar.
+  q: z.string().trim().min(1).max(120).optional(),
+  responsableId: z.coerce.number().int().positive().optional(),
+  orden: z.enum(["reciente", "envio", "total"]).default("reciente"),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25)
 });
 export type ListCotizacionesQuery = z.infer<typeof listCotizacionesQuerySchema>;
 
+// Motivo de rechazo (028): por ahora OPCIONAL -- el front publicado marca
+// "rechazada" sin mandarlo. Se vuelve obligatorio cuando el front nuevo
+// tenga el modal. "otro" sí pide la explicación, igual que el motivo de
+// pérdida de una oportunidad (oportunidad.schema.ts).
 export const cambiarEstadoCotizacionSchema = z.object({
-  estado: z.enum(["enviada", "aceptada", "rechazada", "vencida"])
+  estado: z.enum(["enviada", "aceptada", "rechazada", "vencida"]),
+  motivoRechazo: z.enum(CLAVES_MOTIVO_RECHAZO).optional(),
+  motivoRechazoDetalle: z.string().trim().min(2).max(500).optional()
+}).refine((input) => input.estado === "rechazada" || (!input.motivoRechazo && !input.motivoRechazoDetalle), {
+  message: "El motivo solo se manda al marcar la cotización como rechazada",
+  path: ["motivoRechazo"]
+}).refine((input) => input.motivoRechazo !== "otro" || input.motivoRechazoDetalle, {
+  message: "El motivo 'otro' requiere motivoRechazoDetalle",
+  path: ["motivoRechazoDetalle"]
 });
+
+// Tarjetas del tablero (GET /cotizaciones/conteos).
+export const conteosCotizacionesQuerySchema = z.object({
+  responsableId: z.coerce.number().int().positive().optional()
+});
+export type ConteosCotizacionesQuery = z.infer<typeof conteosCotizacionesQuerySchema>;
 export type CambiarEstadoCotizacionInput = z.infer<typeof cambiarEstadoCotizacionSchema>;

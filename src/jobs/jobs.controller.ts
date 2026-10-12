@@ -5,6 +5,7 @@ import { TareasService } from "../tareas/tareas.service.js";
 import { DocumentosService } from "../documentos/documentos.service.js";
 import { ReportesService } from "../reportes/reportes.service.js";
 import { ProspectosService } from "../crm/prospectos.service.js";
+import { CotizacionesService } from "../comercial/cotizaciones.service.js";
 import { HttpError } from "../shared/http-error.js";
 import { fechaMx } from "../shared/dia-habil.js";
 
@@ -25,7 +26,8 @@ export class JobsController {
     tareasService: TareasService,
     documentosService: DocumentosService,
     reportesService: ReportesService,
-    prospectosService: ProspectosService
+    prospectosService: ProspectosService,
+    cotizacionesService: CotizacionesService
   ) {
     this.trabajos = {
       // Tareas abiertas con su fecha límite vencida (p. ej. "Contactar
@@ -39,10 +41,16 @@ export class JobsController {
         await reportesService.calcularMetricasDelDia(fecha);
         return { procesados: 1, fecha };
       },
-      // Borradores de importación vencidos + contadores viejos de login.
-      "limpiar-borradores": async () => ({
-        procesados: await prospectosService.limpiarBorradoresVencidos() + await authService.limpiarLoginFallosViejos()
-      })
+      // Borradores de importación vencidos + contadores viejos de login +
+      // cotizaciones enviadas cuyo cierre ya pasó (12-oct-2026; va aquí y no
+      // en un trabajo propio para no tener que tocar PT5 en n8n).
+      "limpiar-borradores": async () => {
+        const cotizacionesVencidas = await cotizacionesService.vencerCotizacionesPasadas();
+        return {
+          procesados: await prospectosService.limpiarBorradoresVencidos() + await authService.limpiarLoginFallosViejos() + cotizacionesVencidas,
+          cotizaciones_vencidas: cotizacionesVencidas
+        };
+      }
     };
   }
 

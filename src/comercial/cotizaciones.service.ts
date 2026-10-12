@@ -1,13 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, ne, or } from "drizzle-orm";
+import { and, desc, eq, gte, like, lt, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, catalogoEtapaEmbudo, contactos, cotizacionPartidas, cotizaciones, empresas, oportunidades } from "../database/schema.js";
-import { compactConditions } from "../shared/drizzle-utils.js";
+import { auditoria, catalogoEtapaEmbudo, contactos, cotizacionPartidas, cotizaciones, empresas, oportunidades, usuarios } from "../database/schema.js";
+import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
-import { fechaMx } from "../shared/dia-habil.js";
+import { diasEntreFechas, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
+import { MOTIVOS_RECHAZO_COTIZACION } from "../shared/motivos-rechazo-cotizacion.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { aCentavos, calcularCotizacion, deCentavos } from "./dinero.js";
-import type { CambiarEstadoCotizacionInput, CrearCotizacionInput, DatosCotizacionInput, ListCotizacionesQuery, PartidaInput } from "./dto/cotizacion.schema.js";
+import type { CambiarEstadoCotizacionInput, ConteosCotizacionesQuery, CrearCotizacionInput, DatosCotizacionInput, ListCotizacionesQuery, PartidaInput } from "./dto/cotizacion.schema.js";
 
 // "Una edición crea una nueva versión; la versión anterior queda
 // obsoleta" (PLAN_CRM_DEFINITIVO.md #7) -- por eso 'obsoleta' no aparece
@@ -22,9 +23,15 @@ const TRANSICIONES: Record<string, string[]> = {
   enviada: ["aceptada", "rechazada", "vencida"],
   aceptada: [],
   rechazada: [],
-  vencida: [],
+  // Vencida = se pasó su fecha de cierre sin respuesta (el trabajo diario la
+  // marca sola, ver vencerCotizacionesPasadas). No queda bloqueada: si el
+  // cliente contesta tarde se acepta o se rechaza, o se saca una versión
+  // nueva con fecha nueva (Fabián, 12-oct-2026).
+  vencida: ["aceptada", "rechazada"],
   obsoleta: []
 };
+
+const ESTADOS_TABLERO = ["borrador", "enviada", "aceptada", "rechazada", "vencida"] as const;
 
 function toRow(row: typeof cotizaciones.$inferSelect) {
   return {
@@ -44,6 +51,8 @@ function toRow(row: typeof cotizaciones.$inferSelect) {
     fecha_esperada_cierre: row.fechaEsperadaCierre,
     probabilidad: row.probabilidad,
     estado: row.estado,
+    motivo_rechazo: row.motivoRechazo,
+    motivo_rechazo_detalle: row.motivoRechazoDetalle,
     creado_por: row.creadoPor,
     creado_en: row.creadoEn,
     actualizado_en: row.actualizadoEn
@@ -76,6 +85,7 @@ export class CotizacionesService {
       await tx.insert(cotizacionPartidas).values({
         cotizacionId,
         descripcion: p.descripcion,
+        detalle: p.detalle ?? null,
         cantidad: deCentavos(aCentavos(p.cantidad)),
         precioUnitario: deCentavos(aCentavos(p.precioUnitario)),
         importe: p.importe,
@@ -257,26 +267,153 @@ export class CotizacionesService {
       // explícitamente en GET /cotizaciones/:id (campo "versiones").
       ne(cotizaciones.estado, "obsoleta"),
       query.oportunidadId ? eq(cotizaciones.oportunidadId, query.oportunidadId) : undefined,
-      user.rol === "agente" ? eq(oportunidades.responsableId, user.id) : undefined
+      this.condicionResponsable(user, query.responsableId),
+      query.q ? this.condicionBusqueda(query.q) : undefined
     ]);
+    const orden = {
+      reciente: [desc(cotizaciones.actualizadoEn)],
+      envio: [desc(cotizaciones.fechaEnvio)],
+      total: [desc(cotizaciones.total)]
+    }[query.orden];
 
-    // empresa_nombre y oportunidad_titulo: para la lista general, donde cada
-    // fila tiene que decir de quién es sin una consulta extra por fila.
+    // empresa_nombre, oportunidad_titulo y responsable_nombre: para la lista
+    // general, donde cada fila tiene que decir de quién es sin una consulta
+    // extra por fila.
     const rows = await this.db
-      .select({ cotizacion: cotizaciones, empresaNombre: empresas.nombreLegal, oportunidadTitulo: oportunidades.titulo })
+      .select({
+        cotizacion: cotizaciones,
+        empresaNombre: sql<string | null>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
+        oportunidadTitulo: oportunidades.titulo,
+        responsableNombre: usuarios.nombre
+      })
       .from(cotizaciones)
       .innerJoin(oportunidades, eq(oportunidades.id, cotizaciones.oportunidadId))
       .leftJoin(empresas, eq(empresas.id, cotizaciones.empresaId))
+      .leftJoin(usuarios, eq(usuarios.id, oportunidades.responsableId))
       .where(and(...conditions))
-      .orderBy(desc(cotizaciones.actualizadoEn))
+      .orderBy(...orden, desc(cotizaciones.id))
       .limit(query.limit)
       .offset(offset);
 
+    // Para "Sin respuesta hace 5 días" / "Vence en 2 días" (tablero,
+    // 12-oct-2026), en días de calendario de México. dias_para_cierre es
+    // negativo si el cierre ya pasó; null si falta la fecha.
+    const hoy = fechaMx(new Date());
     return {
       page: query.page,
       limit: query.limit,
-      data: rows.map((r) => ({ ...toRow(r.cotizacion), empresa_nombre: r.empresaNombre, oportunidad_titulo: r.oportunidadTitulo }))
+      data: rows.map((r) => ({
+        ...toRow(r.cotizacion),
+        empresa_nombre: r.empresaNombre,
+        oportunidad_titulo: r.oportunidadTitulo,
+        responsable_nombre: r.responsableNombre,
+        dias_desde_envio: r.cotizacion.fechaEnvio ? diasEntreFechas(r.cotizacion.fechaEnvio, hoy) : null,
+        dias_para_cierre: r.cotizacion.fechaEsperadaCierre ? diasEntreFechas(hoy, r.cotizacion.fechaEsperadaCierre) : null
+      }))
     };
+  }
+
+  // Un agente solo ve lo de sus oportunidades, pida lo que pida; admin y
+  // supervisor pueden filtrar por responsable. (La consulta debe tener el
+  // join a oportunidades.)
+  private condicionResponsable(user: CurrentUser, responsableId?: number) {
+    if (user.rol === "agente") return eq(oportunidades.responsableId, user.id);
+    return responsableId ? eq(oportunidades.responsableId, responsableId) : undefined;
+  }
+
+  // Empresa, oportunidad o folio (el folio es el id: "#12").
+  private condicionBusqueda(q: string) {
+    const patron = patronLike(q);
+    const folio = /^#?\d+$/.test(q) ? Number(q.replace("#", "")) : undefined;
+    return or(
+      like(empresas.nombreLegal, patron),
+      like(empresas.nombreComercial, patron),
+      like(oportunidades.titulo, patron),
+      folio ? eq(cotizaciones.id, folio) : undefined
+    );
+  }
+
+  // Tarjetas del tablero (12-oct-2026). Sin obsoletas en los montos (son
+  // versiones viejas de otra cotización; solo se cuentan). "Aceptadas este
+  // mes" usa actualizado_en: tiene ON UPDATE y una aceptada ya no se toca
+  // (ni se versiona), así que es el día en que se aceptó. Tasa de
+  // aceptación = aceptadas / (aceptadas + rechazadas): las vencidas no
+  // cuentan porque nunca contestaron ("2 de 3 respondidas"). Los totales se
+  // suman tal cual porque hoy todo es MXN (el back no deja escoger moneda).
+  async conteos(user: CurrentUser, query: ConteosCotizacionesQuery) {
+    const responsable = this.condicionResponsable(user, query.responsableId);
+    const hoy = fechaMx(new Date());
+    const primeroDelMes = `${hoy.slice(0, 7)}-01`;
+    const [anio, mes] = hoy.split("-").map(Number);
+    const primeroDelSiguiente = new Date(Date.UTC(anio!, mes!, 1)).toISOString().slice(0, 10);
+
+    const [porEstado, [esteMes]] = await Promise.all([
+      this.db
+        .select({ estado: cotizaciones.estado, cantidad: sql<number>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${cotizaciones.total}), 0)` })
+        .from(cotizaciones)
+        .innerJoin(oportunidades, eq(oportunidades.id, cotizaciones.oportunidadId))
+        .where(and(...compactConditions([responsable])))
+        .groupBy(cotizaciones.estado),
+      this.db
+        .select({ cantidad: sql<number>`COUNT(*)`, total: sql<string>`COALESCE(SUM(${cotizaciones.total}), 0)` })
+        .from(cotizaciones)
+        .innerJoin(oportunidades, eq(oportunidades.id, cotizaciones.oportunidadId))
+        .where(and(...compactConditions([
+          responsable,
+          eq(cotizaciones.estado, "aceptada"),
+          gte(cotizaciones.actualizadoEn, sql`${inicioDelDiaMxSql(primeroDelMes)}`),
+          lt(cotizaciones.actualizadoEn, sql`${inicioDelDiaMxSql(primeroDelSiguiente)}`)
+        ])))
+    ]);
+
+    const de = (estado: string) => {
+      const fila = porEstado.find((f) => f.estado === estado);
+      return { cantidad: Number(fila?.cantidad ?? 0), total: fila ? fila.total : "0.00" };
+    };
+    const tablero = Object.fromEntries(ESTADOS_TABLERO.map((e) => [e, de(e)])) as Record<(typeof ESTADOS_TABLERO)[number], { cantidad: number; total: string }>;
+    const aceptadas = tablero.aceptada.cantidad;
+    const respondidas = aceptadas + tablero.rechazada.cantidad;
+    return {
+      ...tablero,
+      obsoleta: { cantidad: de("obsoleta").cantidad },
+      aceptadas_este_mes: { cantidad: Number(esteMes?.cantidad ?? 0), total: esteMes?.total ?? "0.00" },
+      tasa_aceptacion: { aceptadas, respondidas, pct: respondidas > 0 ? Number(((aceptadas / respondidas) * 100).toFixed(2)) : null }
+    };
+  }
+
+  motivosRechazo() {
+    return MOTIVOS_RECHAZO_COTIZACION;
+  }
+
+  // Trabajo diario (corre con limpiar-borradores, jobs.controller.ts): las
+  // enviadas cuya fecha de cierre ya pasó (día de México) pasan a vencida.
+  // Sin fecha de cierre nunca vence; la del día de hoy todavía no. Cada una
+  // con su UPDATE ... AND estado = 'enviada' (si alguien la aceptó en ese
+  // momento, gana la persona) y su fila de auditoría sin usuario.
+  // Idempotente: lo ya vencido no se vuelve a tocar.
+  async vencerCotizacionesPasadas() {
+    const hoy = fechaMx(new Date());
+    const candidatas = await this.db
+      .select({ id: cotizaciones.id, fechaEsperadaCierre: cotizaciones.fechaEsperadaCierre })
+      .from(cotizaciones)
+      .where(and(eq(cotizaciones.estado, "enviada"), lt(cotizaciones.fechaEsperadaCierre, hoy)));
+    let vencidas = 0;
+    for (const c of candidatas) {
+      await this.db.transaction(async (tx) => {
+        const [result] = await tx.update(cotizaciones).set({ estado: "vencida" }).where(and(eq(cotizaciones.id, c.id), eq(cotizaciones.estado, "enviada")));
+        if (result.affectedRows === 0) return;
+        await tx.insert(auditoria).values({
+          usuarioId: null,
+          entidad: "cotizacion",
+          entidadId: c.id,
+          accion: "vencer_automatico",
+          antes: { estado: "enviada" },
+          despues: { estado: "vencida", fecha_esperada_cierre: c.fechaEsperadaCierre }
+        });
+        vencidas++;
+      });
+    }
+    return vencidas;
   }
 
   async get(user: CurrentUser, id: number) {
@@ -291,9 +428,34 @@ export class CotizacionesService {
       .where(or(eq(cotizaciones.id, raizId), eq(cotizaciones.cotizacionRaizId, raizId)))
       .orderBy(cotizaciones.version);
 
+    // Lo que muestra el documento arriba (12-oct-2026): "Para: empresa,
+    // persona · puesto" y "Oportunidad: título · etapa".
+    const [contexto] = await this.db
+      .select({
+        empresaNombre: sql<string | null>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
+        empresaNombreLegal: empresas.nombreLegal,
+        contactoNombre: contactos.nombre,
+        contactoPuesto: contactos.puesto,
+        oportunidadTitulo: oportunidades.titulo,
+        etapaNombre: catalogoEtapaEmbudo.nombre
+      })
+      .from(cotizaciones)
+      .leftJoin(empresas, eq(empresas.id, cotizaciones.empresaId))
+      .leftJoin(contactos, eq(contactos.id, cotizaciones.contactoId))
+      .leftJoin(oportunidades, eq(oportunidades.id, cotizaciones.oportunidadId))
+      .leftJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
+      .where(eq(cotizaciones.id, id))
+      .limit(1);
+
     return {
       ...toRow(cotizacion),
-      partidas: partidasRows.map((p) => ({ id: p.id, descripcion: p.descripcion, cantidad: p.cantidad, precio_unitario: p.precioUnitario, importe: p.importe, orden: p.orden })),
+      empresa_nombre: contexto?.empresaNombre ?? null,
+      empresa_nombre_legal: contexto?.empresaNombreLegal ?? null,
+      contacto_nombre: contexto?.contactoNombre ?? null,
+      contacto_puesto: contexto?.contactoPuesto ?? null,
+      oportunidad_titulo: contexto?.oportunidadTitulo ?? null,
+      etapa_nombre: contexto?.etapaNombre ?? null,
+      partidas: partidasRows.map((p) => ({ id: p.id, descripcion: p.descripcion, detalle: p.detalle, cantidad: p.cantidad, precio_unitario: p.precioUnitario, importe: p.importe, orden: p.orden })),
       versiones: versiones.map((v) => ({ id: v.id, version: v.version, estado: v.estado, total: v.total, creado_en: v.creadoEn }))
     };
   }
@@ -327,7 +489,11 @@ export class CotizacionesService {
           .limit(1).for("update");
         if (otra) throw new HttpError(409, "Esta oportunidad ya tiene una cotización aceptada", CODIGO_YA_HAY_COTIZACION_ACEPTADA);
       }
-      const set = input.estado === "enviada" ? { estado: input.estado, fechaEnvio: fechaMx(new Date()) } : { estado: input.estado };
+      // El schema ya garantiza que el motivo solo llega con "rechazada".
+      const motivo = { motivoRechazo: input.motivoRechazo ?? null, motivoRechazoDetalle: input.motivoRechazoDetalle ?? null };
+      const set = input.estado === "enviada"
+        ? { estado: input.estado, fechaEnvio: fechaMx(new Date()) }
+        : input.estado === "rechazada" ? { estado: input.estado, ...motivo } : { estado: input.estado };
       const [result] = await tx.update(cotizaciones).set(set).where(and(eq(cotizaciones.id, id), eq(cotizaciones.estado, cotizacion.estado)));
       if (result.affectedRows === 0) {
         throw new HttpError(409, "El estado de la cotización cambió, vuelve a intentarlo");
@@ -339,7 +505,9 @@ export class CotizacionesService {
         entidadId: id,
         accion: "cambiar_estado",
         antes: { estado: cotizacion.estado },
-        despues: { estado: input.estado }
+        despues: input.estado === "rechazada"
+          ? { estado: input.estado, motivo_rechazo: motivo.motivoRechazo, motivo_rechazo_detalle: motivo.motivoRechazoDetalle }
+          : { estado: input.estado }
       });
     });
 

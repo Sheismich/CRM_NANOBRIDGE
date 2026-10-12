@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { bigint, boolean, char, date, datetime, int, json, mysqlEnum, mysqlTable, smallint, tinyint, uniqueIndex, varchar, decimal, index, text } from "drizzle-orm/mysql-core";
 import { CLASIFICACIONES_N8N, CLASIFICACIONES_RESPUESTA } from "../shared/clasificaciones.js";
+import { CLAVES_MOTIVO_RECHAZO } from "../shared/motivos-rechazo-cotizacion.js";
 
 /**
  * Espejo tipado de src/database/migrations/001_initial_schema.sql.
@@ -211,6 +212,9 @@ export const cotizaciones = mysqlTable("cotizaciones", {
   fechaEsperadaCierre: date("fecha_esperada_cierre", { mode: "string" }),
   probabilidad: int("probabilidad"),
   estado: mysqlEnum("estado", ["borrador", "enviada", "aceptada", "rechazada", "vencida", "obsoleta"]).notNull().default("borrador"),
+  // 028_cotizaciones_rechazo_y_detalle.sql: por qué la rechazó el cliente.
+  motivoRechazo: mysqlEnum("motivo_rechazo", CLAVES_MOTIVO_RECHAZO),
+  motivoRechazoDetalle: varchar("motivo_rechazo_detalle", { length: 500 }),
   creadoPor: bigint("creado_por", { mode: "number", unsigned: true }).notNull(),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
@@ -224,6 +228,8 @@ export const cotizacionPartidas = mysqlTable("cotizacion_partidas", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   cotizacionId: bigint("cotizacion_id", { mode: "number", unsigned: true }).notNull(),
   descripcion: varchar("descripcion", { length: 255 }).notNull(),
+  // 028: segunda línea opcional de la partida en el documento.
+  detalle: varchar("detalle", { length: 255 }),
   cantidad: decimal("cantidad", { precision: 10, scale: 2 }).notNull(),
   precioUnitario: decimal("precio_unitario", { precision: 12, scale: 2 }).notNull(),
   importe: decimal("importe", { precision: 12, scale: 2 }).notNull(),

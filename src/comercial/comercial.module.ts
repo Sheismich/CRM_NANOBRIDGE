@@ -8,6 +8,8 @@ import { AuthModule } from "../auth/auth.module.js";
 @Module({
   imports: [AuthModule],
   controllers: [OportunidadesController, CotizacionesController],
-  providers: [OportunidadesService, CotizacionesService]
+  providers: [OportunidadesService, CotizacionesService],
+  // JobsModule: vencer cotizaciones en el trabajo diario.
+  exports: [CotizacionesService]
 })
 export class ComercialModule {}

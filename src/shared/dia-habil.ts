@@ -29,6 +29,12 @@ export function diaSiguiente(fecha: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Días de calendario de `desde` a `hasta` (AAAA-MM-DD); negativo si `hasta`
+// es antes.
+export function diasEntreFechas(desde: string, hasta: string): number {
+  return Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000);
+}
+
 // El día anterior a `fecha` (AAAA-MM-DD), en calendario.
 export function diaAnterior(fecha: string): string {
   const d = new Date(`${fecha}T00:00:00Z`);

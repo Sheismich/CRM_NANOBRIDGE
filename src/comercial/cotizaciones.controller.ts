@@ -6,7 +6,7 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { cambiarEstadoCotizacionSchema, crearCotizacionSchema, datosCotizacionSchema, listCotizacionesQuerySchema } from "./dto/cotizacion.schema.js";
+import { cambiarEstadoCotizacionSchema, conteosCotizacionesQuerySchema, crearCotizacionSchema, datosCotizacionSchema, listCotizacionesQuerySchema } from "./dto/cotizacion.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -19,6 +19,17 @@ export class CotizacionesController {
   list(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
     const input = listCotizacionesQuerySchema.parse(query);
     return this.cotizacionesService.list(user, input);
+  }
+
+  // Tablero (12-oct-2026). Antes de ":id" para que no se lean como un id.
+  @Get("conteos")
+  conteos(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
+    return this.cotizacionesService.conteos(user, conteosCotizacionesQuerySchema.parse(query));
+  }
+
+  @Get("motivos-rechazo")
+  motivosRechazo() {
+    return this.cotizacionesService.motivosRechazo();
   }
 
   @Post()
