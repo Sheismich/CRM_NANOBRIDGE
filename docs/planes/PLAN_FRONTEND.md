@@ -117,6 +117,44 @@ Login
         para saber si n8n está recibiendo lo que el CRM le manda
 ```
 
+## Rediseño (desde el 12-oct-2026) — avance y día del cambio
+
+Las 11 pantallas de `docs/diseno/` (aprobadas por el jefe) se construyen en `frontend/` sobre las mismas rutas y archivos, reemplazando las de hoy. Las empieza Fabián; Mich toma las que sigan pendientes en esta tabla cuando regrese. El backend que usan ya está en producción desde el 12-oct-2026 (revisión `00024-r4f`).
+
+**Cómo se publica:** cada pantalla terminada se sube a la liga de vista previa (canal `nuevo-diseno`). La liga normal sigue con el front de hoy hasta que estén todas.
+```
+cd frontend && npm ci && VITE_API_URL= npm run build
+npx firebase-tools hosting:channel:deploy nuevo-diseno --expires 30d
+```
+Cada deploy al canal reinicia los 30 días.
+
+| # | Pantalla | Diseño | Hecha por | Commit | En vista previa |
+|---|---|---|---|---|---|
+| 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) + Login | `inicio-aprobado.html`, `login.html` | — | — | no |
+| 2 | Inicio | `inicio-aprobado.html` | — | — | no |
+| 3 | Tareas (Mi día + lista) | `tareas.html` | — | — | no |
+| 4 | Prospectos | `prospectos.html` | — | — | no |
+| 5 | Empresas + ficha | `empresas.html` | — | — | no |
+| 6 | Contactos | `contactos.html` | — | — | no |
+| 7 | Oportunidades | `oportunidades.html` | — | — | no |
+| 8 | Cotizaciones | `cotizaciones.html` | — | — | no |
+| 9 | Documentos | `documentos.html` | — | — | no |
+| 10 | Reportes (panel + Día) | `reportes.html` | — | — | no |
+| 11 | Administración | `administracion.html` | — | — | no |
+
+**Decisiones que ya están tomadas (no volver a preguntar):**
+- Por ahora no hay papeles obligatorios (Carlos, 12-oct-2026). `GET /documentos/expediente/:id` regresa `total: 0`, y el expediente de la ficha enseña los documentos de la empresa. La lista de papeles aparece sola el día que el administrador los marque en el catálogo (`PATCH /documentos/catalogos/tipos/:id`).
+- Los agentes no "toman" tareas: "Del equipo / Tomar" en Mi día solo se les enseña a administrador y supervisor (`PATCH /tareas/:id/asignar`). "Saltar" solo vive en la pantalla y no se guarda.
+- El motivo de rechazo de una cotización y el de un documento siempre se piden en el front.
+
+**Día del cambio** (en este orden; los pasos 2 y 3 romperían el front de hoy, por eso van después):
+1. Pasar la vista previa a la liga normal sin volver a compilar: `npx firebase-tools hosting:clone crm-prospeccion-outbound:nuevo-diseno crm-prospeccion-outbound:live`.
+2. Desplegar el backend que:
+   - deja `GET /auditoria` solo para el administrador (`src/usuarios/auditoria.controller.ts`, hoy también la ve el supervisor por la pestaña del front viejo);
+   - vuelve obligatorio el motivo de rechazo de cotizaciones (`src/comercial/dto/cotizacion.schema.ts`);
+   - limita `PATCH /documentos/:id/revisar` a administrador y supervisor, o lo quita (el front nuevo usa `aprobar`/`rechazar`).
+3. Revisar en la liga normal: login, una pantalla por rol y Administración como supervisor.
+
 ## 6. Fases de construcción
 
 Sin fechas fijas (ver §0). Orden sugerido por dependencia, no por semana:
@@ -190,7 +228,7 @@ Avance:
   - **Sin errores de red ni de consola**, salvo el 401 esperado de `/auth/me` antes de iniciar sesión.
 
 - **Cambios del backend del 12-oct-2026 (Administración) y lo que le toca al front.**
-  - **`GET /api/v1/auditoria` ahora es solo del administrador** (antes también supervisor): un supervisor recibe 403. Hay que esconder la pestaña **Auditoría** a los supervisores: `soloAdmin: true` en `TABS` de `frontend/src/pages/AdministracionPage.tsx`. Sin eso, al supervisor le sale la pestaña con un error.
+  - **`GET /api/v1/auditoria` sigue abierta para el supervisor** mientras esté publicado el front de hoy, que le enseña la pestaña Auditoría. Se cerró el 12-oct, pero al supervisor le salía un error, así que ese mismo día se regresó. Se vuelve solo del administrador el día del cambio (ver "Rediseño — avance y día del cambio"); el Administración nuevo ya no tiene esa pestaña.
 
 - **Cambios del backend del 2-oct-2026 (fixes del code review, revisión `00013-kxh`) y lo que le toca al front.**
   - **Ya hecho en el front (lo hizo backend, no hay que tocarlo):** las descargas. `GET /documentos/:id/descarga` ya no regresa una URL firmada; manda el archivo directo, con la sesión. Se agregó `api.descargar(path)` en `lib/api.ts` (fetch con la cookie, nombre real desde `Content-Disposition`) y lo usan `DocumentosTab` y `DocumentosPage`. Se quitó `resolverUrlApi`. Probado en producción el 2-oct.
