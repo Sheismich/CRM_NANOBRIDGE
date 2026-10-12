@@ -15,7 +15,17 @@
 //   atributos de Content-Disposition adicionales en la respuesta que GCS
 //   sirve a cada descarga posterior.
 export function contentDispositionAdjunto(nombreArchivo: string): string {
+  return conNombre("attachment", nombreArchivo);
+}
+
+// Lo mismo para la vista previa (documentos ?modo=ver, 12-oct-2026): el
+// navegador lo muestra en vez de guardarlo, con el mismo escapado del nombre.
+export function contentDispositionEnLinea(nombreArchivo: string): string {
+  return conNombre("inline", nombreArchivo);
+}
+
+function conNombre(tipo: "attachment" | "inline", nombreArchivo: string): string {
   const ascii = nombreArchivo.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
   const codificado = encodeURIComponent(nombreArchivo);
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${codificado}`;
+  return `${tipo}; filename="${ascii}"; filename*=UTF-8''${codificado}`;
 }

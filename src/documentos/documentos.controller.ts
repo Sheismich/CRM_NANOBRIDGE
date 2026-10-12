@@ -11,8 +11,10 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { env } from "../config/env.js";
-import { contentDispositionAdjunto } from "../shared/content-disposition.js";
-import { cambiarEstadoDocumentoSchema, listDocumentosQuerySchema, nuevaVersionDocumentoSchema, revisarDocumentoSchema, subirDocumentoSchema } from "./dto/documento.schema.js";
+import archiver from "archiver";
+import { contentDispositionAdjunto, contentDispositionEnLinea } from "../shared/content-disposition.js";
+import { fechaMx } from "../shared/dia-habil.js";
+import { cambiarEstadoDocumentoSchema, cambiarObligatorioSchema, listDocumentosQuerySchema, loteDocumentosQuerySchema, modoDescargaSchema, nuevaVersionDocumentoSchema, rechazarDocumentoSchema, revisarDocumentoSchema, subirDocumentoSchema } from "./dto/documento.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -72,6 +74,65 @@ export class DocumentosController {
     return this.documentosService.catalogos();
   }
 
+  // Qué papel es obligatorio en el expediente: solo administrador.
+  @Patch("catalogos/tipos/:id")
+  @HttpCode(200)
+  @Roles("administrador")
+  cambiarObligatorio(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    const id = idParamSchema.parse(idParam);
+    return this.documentosService.cambiarObligatorio(user, id, cambiarObligatorioSchema.parse(body));
+  }
+
+  // Contadores y expediente (12-oct-2026); también antes de ":id".
+  @Get("conteos")
+  conteos(@CurrentUser() user: CurrentUserType) {
+    return this.documentosService.conteos(user);
+  }
+
+  @Get("expediente/:empresaId")
+  expediente(@Param("empresaId") idParam: string, @CurrentUser() user: CurrentUserType) {
+    return this.documentosService.expediente(user, idParamSchema.parse(idParam));
+  }
+
+  // Descargar lote (punto 48): zip de lo filtrado, solo administrador y
+  // supervisor (bajar actas e INEs de golpe es delicado). Va en STREAMING:
+  // sin Content-Length, cada archivo se lee del storage y se escribe al zip
+  // mientras sale, uno a la vez -- nunca se arma el zip completo en memoria
+  // (Cloud Run corta las respuestas grandes que no van en flujo). store:
+  // los PDF y JPG ya vienen comprimidos; comprimir otra vez solo gasta CPU.
+  @Get("lote")
+  @Roles("administrador", "supervisor")
+  async lote(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType, @Res() response: Response) {
+    const archivos = await this.documentosService.prepararLote(user, loteDocumentosQuerySchema.parse(query));
+    response.status(200).set({
+      "Content-Type": "application/zip",
+      "Content-Disposition": contentDispositionAdjunto(`documentos-${fechaMx(new Date())}.zip`),
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store"
+    });
+    const zip = archiver("zip", { store: true });
+    zip.on("warning", (error) => console.warn("[documentos] lote:", error.message));
+    zip.pipe(response);
+    try {
+      for (const archivo of archivos) {
+        const { stream } = await this.documentosService.abrirArchivoDeLote(archivo.storageKey);
+        // Espera a que este archivo termine de entrar al zip antes de abrir el
+        // siguiente: un solo archivo abierto a la vez.
+        await new Promise<void>((resolve, reject) => {
+          stream.once("end", resolve).once("error", reject);
+          zip.append(stream, { name: archivo.ruta });
+        });
+      }
+      await zip.finalize();
+    } catch (error) {
+      // Las cabeceras ya salieron: igual que en la descarga suelta, solo se
+      // puede cortar (el zip queda incompleto y el navegador lo marca).
+      console.error("[documentos] lote interrumpido:", (error as Error).message);
+      zip.abort();
+      response.destroy();
+    }
+  }
+
   @Get(":id")
   get(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
     const id = idParamSchema.parse(idParam);
@@ -83,16 +144,21 @@ export class DocumentosController {
   // pasa por el scoping y queda auditada. nosniff evita que el navegador
   // "adivine" otro tipo (p. ej. HTML dentro de un supuesto PDF) y no-store
   // que quede copia en caché de un equipo compartido.
+  // ?modo=ver (vista previa, 12-oct-2026): inline, solo PDF e imágenes.
+  // CSP sandbox: si alguien lograra colar un archivo con script, el navegador
+  // lo abre sin permisos (sin scripts, sin la sesión del CRM).
   @Get(":id/descarga")
-  async descarga(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType, @Res() response: Response) {
+  async descarga(@Param("id") idParam: string, @Query("modo") modoParam: unknown, @CurrentUser() user: CurrentUserType, @Res() response: Response) {
     const id = idParamSchema.parse(idParam);
-    const { stream, tamanoBytes, nombreArchivo, mimeType } = await this.documentosService.abrirDescarga(user, id);
+    const modo = modoDescargaSchema.parse(modoParam);
+    const { stream, tamanoBytes, nombreArchivo, mimeType } = await this.documentosService.abrirDescarga(user, id, modo);
     response.status(200).set({
       "Content-Type": mimeType,
       "Content-Length": String(tamanoBytes),
-      "Content-Disposition": contentDispositionAdjunto(nombreArchivo),
+      "Content-Disposition": modo === "ver" ? contentDispositionEnLinea(nombreArchivo) : contentDispositionAdjunto(nombreArchivo),
       "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store",
+      ...(modo === "ver" ? { "Content-Security-Policy": "sandbox" } : {})
     });
     try {
       await pipeline(stream, response);
@@ -123,6 +189,9 @@ export class DocumentosController {
     return this.documentosService.cambiarEstado(user, id, input);
   }
 
+  // El botón viejo "Revisado" (front publicado): equivale a aprobar y lo
+  // siguen usando los agentes. PENDIENTE: limitarlo a admin/supervisor (o
+  // quitarlo) cuando salga el front nuevo.
   @Patch(":id/revisar")
   @HttpCode(200)
   @Roles("administrador", "supervisor", "agente")
@@ -130,6 +199,23 @@ export class DocumentosController {
     const id = idParamSchema.parse(idParam);
     const input = revisarDocumentoSchema.parse(body);
     return this.documentosService.revisar(user, id, input);
+  }
+
+  // Aprobar / rechazar (punto 47): solo administrador y supervisor, igual
+  // que clasificar respuestas.
+  @Patch(":id/aprobar")
+  @HttpCode(200)
+  @Roles("administrador", "supervisor")
+  aprobar(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
+    return this.documentosService.aprobar(user, idParamSchema.parse(idParam));
+  }
+
+  @Patch(":id/rechazar")
+  @HttpCode(200)
+  @Roles("administrador", "supervisor")
+  rechazar(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    const id = idParamSchema.parse(idParam);
+    return this.documentosService.rechazar(user, id, rechazarDocumentoSchema.parse(body));
   }
 
   // Solo administrador/supervisor (no agente): retirar un documento del

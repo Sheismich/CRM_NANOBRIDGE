@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { bigint, boolean, char, date, datetime, int, json, mysqlEnum, mysqlTable, smallint, tinyint, uniqueIndex, varchar, decimal, index, text } from "drizzle-orm/mysql-core";
 import { CLASIFICACIONES_N8N, CLASIFICACIONES_RESPUESTA } from "../shared/clasificaciones.js";
 import { CLAVES_MOTIVO_RECHAZO } from "../shared/motivos-rechazo-cotizacion.js";
+import { CLAVES_MOTIVO_RECHAZO_DOCUMENTO } from "../shared/motivos-rechazo-documento.js";
 
 /**
  * Espejo tipado de src/database/migrations/001_initial_schema.sql.
@@ -277,6 +278,9 @@ export const tareas = mysqlTable("tareas", {
   // 022_clasificacion_manual.sql: la respuesta que originó una tarea de
   // clasificación ("ambigua"); NULL en cualquier otra tarea.
   respuestaId: bigint("respuesta_id", { mode: "number", unsigned: true }),
+  // 029: el documento rechazado de una tarea "Corregir documento"; NULL en
+  // cualquier otra.
+  documentoId: bigint("documento_id", { mode: "number", unsigned: true }),
   executionId: varchar("execution_id", { length: 100 }),
   fechaLimite: datetime("fecha_limite"),
   alertadoEn: datetime("alertado_en"),
@@ -503,6 +507,8 @@ export const catalogoTipoDocumento = mysqlTable("catalogo_tipo_documento", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   clave: varchar("clave", { length: 40 }).notNull(),
   nombre: varchar("nombre", { length: 120 }).notNull(),
+  // 029: papel obligatorio del expediente de un cliente.
+  obligatorio: boolean("obligatorio").notNull().default(false),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
   uniqueIndex("uq_tipo_documento_clave").on(table.clave)
@@ -526,6 +532,11 @@ export const documentos = mysqlTable("documentos", {
   subidoPor: bigint("subido_por", { mode: "number", unsigned: true }).notNull(),
   revisadoPor: bigint("revisado_por", { mode: "number", unsigned: true }),
   revisadoEn: datetime("revisado_en"),
+  // 029_documentos_revision_y_expediente.sql: resultado de la revisión de
+  // ESTA versión; revisado_por/en dicen quién y cuándo.
+  revision: mysqlEnum("revision", ["por_revisar", "aprobado", "rechazado"]).notNull().default("por_revisar"),
+  motivoRechazo: mysqlEnum("motivo_rechazo", CLAVES_MOTIVO_RECHAZO_DOCUMENTO),
+  motivoRechazoDetalle: varchar("motivo_rechazo_detalle", { length: 500 }),
   alertadoEn: datetime("alertado_en"),
   activo: boolean("activo").notNull().default(true),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),

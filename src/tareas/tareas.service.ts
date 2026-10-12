@@ -63,6 +63,8 @@ function toRow(row: typeof tareas.$inferSelect) {
     contacto_id: row.contactoId,
     prospecto_id: row.prospectoId,
     respuesta_id: row.respuestaId,
+    // "Corregir documento" (029): el documento rechazado.
+    documento_id: row.documentoId,
     fecha_limite: row.fechaLimite,
     clasificacion: row.clasificacion,
     resultado: row.resultado,

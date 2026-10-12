@@ -1,23 +1,42 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
-import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, catalogoTipoDocumento, contactos, documentos, empresas, oportunidades } from "../database/schema.js";
-import { compactConditions } from "../shared/drizzle-utils.js";
+import { and, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
+import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
+import { auditoria, catalogoTipoDocumento, contactos, documentos, empresas, oportunidades, tareas, usuarios } from "../database/schema.js";
+import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { env } from "../config/env.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
+import { finSiguienteDiaHabilMx } from "../shared/dia-habil.js";
+import { MOTIVOS_RECHAZO_DOCUMENTO, NOMBRE_MOTIVO_RECHAZO_DOCUMENTO } from "../shared/motivos-rechazo-documento.js";
 import { STORAGE_SERVICE } from "./storage/storage.constants.js";
 import type { StorageService } from "./storage/storage.types.js";
 import { contenidoEsDelTipo, nombreDeDescarga } from "./tipo-de-archivo.js";
-import { EXTENSION_POR_MIME, TIPOS_MIME_PERMITIDOS, type CambiarEstadoDocumentoInput, type ListDocumentosQuery, type NuevaVersionDocumentoInput, type RevisarDocumentoInput, type SubirDocumentoInput } from "./dto/documento.schema.js";
+import { EXTENSION_POR_MIME, TIPOS_MIME_PERMITIDOS, type CambiarEstadoDocumentoInput, type CambiarObligatorioInput, type ListDocumentosQuery, type LoteDocumentosQuery, type ModoDescarga, type NuevaVersionDocumentoInput, type RechazarDocumentoInput, type RevisarDocumentoInput, type SubirDocumentoInput } from "./dto/documento.schema.js";
 
 /** Subconjunto de Express.Multer.File que de verdad usa el servicio (memoryStorage: sin destination/filename/path). */
 export type ArchivoSubido = { originalname: string; mimetype: string; size: number; buffer: Buffer };
 
 export const CODIGO_DOCUMENTO_NO_VIGENTE = "DOCUMENTO_NO_VIGENTE";
+export const CODIGO_VISTA_PREVIA_NO_DISPONIBLE = "VISTA_PREVIA_NO_DISPONIBLE";
+export const CODIGO_LOTE_DEMASIADO_GRANDE = "LOTE_DEMASIADO_GRANDE";
+
+// Vista previa (?modo=ver): solo lo que un navegador sabe mostrar. Word y
+// Excel se descargan.
+const MIME_CON_VISTA_PREVIA: readonly string[] = ["application/pdf", "image/png", "image/jpeg"];
+
+// Descargar lote (Fabián, 12-oct-2026): el zip pasa por Firebase y Cloud Run;
+// con más que esto se pide filtrar más.
+export const LOTE_MAX_ARCHIVOS = 100;
+export const LOTE_MAX_BYTES = 200 * 1024 * 1024;
+
+// "Mejor estado" de un papel del expediente cuando hay varios vigentes del
+// mismo tipo (Fabián, 12-oct-2026): uno aprobado no lo tumba un duplicado
+// rechazado.
+const RANGO_REVISION = { aprobado: 3, por_revisar: 2, rechazado: 1 } as const;
 
 // Estados (PLAN_CRM_DEFINITIVO.md #8 no detalla el criterio, se define
 // aquí): 'obsoleto' nunca es destino de un cambio de estado manual -- solo
@@ -33,6 +52,10 @@ const TRANSICIONES: Record<string, string[]> = {
 // internos"): días sin PATCH .../revisar antes de alertar -- confirmado con
 // Fabián (17-sep-2026), el plan no lo detalla.
 const DIAS_PENDIENTE_REVISION = 7;
+
+function compactIds(ids: (number | null | undefined)[]): number[] {
+  return ids.filter((id): id is number => id != null);
+}
 
 function toRow(row: typeof documentos.$inferSelect) {
   return {
@@ -51,6 +74,9 @@ function toRow(row: typeof documentos.$inferSelect) {
     subido_por: row.subidoPor,
     revisado_por: row.revisadoPor,
     revisado_en: row.revisadoEn,
+    revision: row.revision,
+    motivo_rechazo: row.motivoRechazo,
+    motivo_rechazo_detalle: row.motivoRechazoDetalle,
     creado_en: row.creadoEn,
     actualizado_en: row.actualizadoEn
   };
@@ -107,10 +133,30 @@ export class DocumentosService {
   // solo la clave, para poder enviarlo de vuelta.
   async catalogos() {
     const tiposDocumento = await this.db
-      .select({ id: catalogoTipoDocumento.id, clave: catalogoTipoDocumento.clave, nombre: catalogoTipoDocumento.nombre })
+      .select({ id: catalogoTipoDocumento.id, clave: catalogoTipoDocumento.clave, nombre: catalogoTipoDocumento.nombre, obligatorio: catalogoTipoDocumento.obligatorio })
       .from(catalogoTipoDocumento)
       .orderBy(catalogoTipoDocumento.nombre);
-    return { tipos_documento: tiposDocumento };
+    return { tipos_documento: tiposDocumento, motivos_rechazo: MOTIVOS_RECHAZO_DOCUMENTO };
+  }
+
+  // Qué papel es obligatorio en el expediente (Fabián, 12-oct-2026): se
+  // cambia desde el CRM, sin código, si Carlos pide otra lista. Solo
+  // administrador (DocumentosController); auditado como configuración.
+  async cambiarObligatorio(user: CurrentUser, tipoId: number, input: CambiarObligatorioInput) {
+    const [tipo] = await this.db.select().from(catalogoTipoDocumento).where(eq(catalogoTipoDocumento.id, tipoId)).limit(1);
+    if (!tipo) throw new HttpError(404, "Tipo de documento no encontrado");
+    await this.db.transaction(async (tx) => {
+      await tx.update(catalogoTipoDocumento).set({ obligatorio: input.obligatorio }).where(eq(catalogoTipoDocumento.id, tipoId));
+      await tx.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "catalogo_tipo_documento",
+        entidadId: tipoId,
+        accion: "cambiar_obligatorio",
+        antes: { obligatorio: tipo.obligatorio },
+        despues: { obligatorio: input.obligatorio }
+      });
+    });
+    return { id: tipo.id, clave: tipo.clave, nombre: tipo.nombre, obligatorio: input.obligatorio };
   }
 
   private async validarContacto(empresaId: number, contactoId: number) {
@@ -236,11 +282,10 @@ export class DocumentosService {
     });
   }
 
-  async list(user: CurrentUser, query: ListDocumentosQuery) {
-    if (query.empresaId) await this.validarEmpresaScoped(user, query.empresaId);
-    const offset = (query.page - 1) * query.limit;
-
-    const conditions = compactConditions([
+  // Filtros de la bandeja, compartidos por list() y el lote zip. La consulta
+  // debe tener el join a empresas.
+  private condicionesBandeja(user: CurrentUser, query: Omit<ListDocumentosQuery, "page" | "limit">) {
+    return compactConditions([
       query.empresaId ? eq(documentos.empresaId, query.empresaId) : undefined,
       // Sin empresaId, el mismo alcance que validarEmpresaScoped aplicado a
       // todas las filas: empresa activa y, para un agente, suya.
@@ -249,6 +294,9 @@ export class DocumentosService {
       eq(documentos.activo, true),
       query.estado ? eq(documentos.estado, query.estado) : undefined,
       query.revisado === true ? isNotNull(documentos.revisadoEn) : query.revisado === false ? isNull(documentos.revisadoEn) : undefined,
+      query.revision ? eq(documentos.revision, query.revision) : undefined,
+      query.tipoDocumentoId ? eq(documentos.tipoDocumentoId, query.tipoDocumentoId) : undefined,
+      query.q ? or(like(documentos.nombreOriginal, patronLike(query.q)), like(empresas.nombreLegal, patronLike(query.q)), like(empresas.nombreComercial, patronLike(query.q))) : undefined,
       // Solo la versión vigente de cada cadena por default, igual criterio
       // que cotizaciones: una versión obsoleta solo aparece explícitamente
       // en GET /documentos/:id/versiones.
@@ -256,17 +304,161 @@ export class DocumentosService {
       query.oportunidadId ? eq(documentos.oportunidadId, query.oportunidadId) : undefined,
       query.contactoId ? eq(documentos.contactoId, query.contactoId) : undefined
     ]);
+  }
 
+  async list(user: CurrentUser, query: ListDocumentosQuery) {
+    if (query.empresaId) await this.validarEmpresaScoped(user, query.empresaId);
+    const offset = (query.page - 1) * query.limit;
+    const revisor = alias(usuarios, "revisor");
+
+    // tipo_nombre y revisado_por_nombre: la bandeja dice "Acta constitutiva"
+    // y "Aprobado · Fabián, 3 oct" sin pedir el catálogo ni los usuarios.
     const rows = await this.db
-      .select({ documento: documentos, empresaNombre: empresas.nombreLegal })
+      .select({
+        documento: documentos,
+        empresaNombre: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
+        tipoNombre: catalogoTipoDocumento.nombre,
+        revisadoPorNombre: revisor.nombre
+      })
       .from(documentos)
       .innerJoin(empresas, eq(empresas.id, documentos.empresaId))
-      .where(and(...conditions))
-      .orderBy(desc(documentos.actualizadoEn))
+      .leftJoin(catalogoTipoDocumento, eq(catalogoTipoDocumento.id, documentos.tipoDocumentoId))
+      .leftJoin(revisor, eq(revisor.id, documentos.revisadoPor))
+      .where(and(...this.condicionesBandeja(user, query)))
+      .orderBy(desc(documentos.actualizadoEn), desc(documentos.id))
       .limit(query.limit)
       .offset(offset);
 
-    return { page: query.page, limit: query.limit, data: rows.map((r) => ({ ...toRow(r.documento), empresa_nombre: r.empresaNombre })) };
+    return {
+      page: query.page,
+      limit: query.limit,
+      data: rows.map((r) => ({ ...toRow(r.documento), empresa_nombre: r.empresaNombre, tipo_nombre: r.tipoNombre, revisado_por_nombre: r.revisadoPorNombre }))
+    };
+  }
+
+  // Contadores de la bandeja (12-oct-2026). Por revisar / aprobados /
+  // rechazados: versiones vigentes. Expedientes incompletos: clientes (empresa
+  // activa con una oportunidad ganada o con al menos un documento -- Fabián,
+  // 12-oct-2026) a los que les falta aprobar algún papel obligatorio. Mismo
+  // alcance que la lista: un agente, sus empresas.
+  async conteos(user: CurrentUser) {
+    const deAgente = user.rol === "agente" ? sql`AND e.propietario_id = ${user.id}` : sql``;
+    const [[revisiones], [incompletos]] = await Promise.all([
+      this.db.execute(sql`
+        SELECT
+          COALESCE(SUM(d.revision = 'por_revisar'), 0) AS por_revisar,
+          COALESCE(SUM(d.revision = 'aprobado'), 0) AS aprobados,
+          COALESCE(SUM(d.revision = 'rechazado'), 0) AS rechazados
+        FROM documentos d JOIN empresas e ON e.id = d.empresa_id
+        WHERE d.activo AND d.estado = 'vigente' AND e.activo ${deAgente}`),
+      this.db.execute(sql`
+        SELECT COUNT(*) AS n
+        FROM empresas e
+        WHERE e.activo ${deAgente}
+          AND (
+            EXISTS (SELECT 1 FROM oportunidades o JOIN catalogo_etapa_embudo c ON c.id = o.etapa_id
+                    WHERE o.empresa_id = e.id AND o.cerrada AND c.es_ganada)
+            OR EXISTS (SELECT 1 FROM documentos d WHERE d.empresa_id = e.id AND d.activo)
+          )
+          AND (SELECT COUNT(DISTINCT d.tipo_documento_id)
+               FROM documentos d JOIN catalogo_tipo_documento t ON t.id = d.tipo_documento_id
+               WHERE d.empresa_id = e.id AND d.activo AND d.estado = 'vigente' AND d.revision = 'aprobado' AND t.obligatorio)
+              < (SELECT COUNT(*) FROM catalogo_tipo_documento WHERE obligatorio)`)
+    ]);
+    const r = (revisiones as unknown as Record<string, unknown>[])[0] ?? {};
+    const i = (incompletos as unknown as Record<string, unknown>[])[0] ?? {};
+    return {
+      por_revisar: Number(r.por_revisar ?? 0),
+      aprobados: Number(r.aprobados ?? 0),
+      rechazados: Number(r.rechazados ?? 0),
+      expedientes_incompletos: Number(i.n ?? 0)
+    };
+  }
+
+  // Expediente de un cliente (punto 49): cada papel obligatorio con su
+  // estado -- falta, por revisar, aprobado o rechazado -- según su mejor
+  // versión vigente (RANGO_REVISION). "Incompleto" = algún papel sin aprobar.
+  async expediente(user: CurrentUser, empresaId: number) {
+    await this.validarEmpresaScoped(user, empresaId);
+    const [tipos, docs] = await Promise.all([
+      this.db.select({ id: catalogoTipoDocumento.id, clave: catalogoTipoDocumento.clave, nombre: catalogoTipoDocumento.nombre })
+        .from(catalogoTipoDocumento).where(eq(catalogoTipoDocumento.obligatorio, true)).orderBy(catalogoTipoDocumento.nombre),
+      this.db.select().from(documentos)
+        .where(and(eq(documentos.empresaId, empresaId), eq(documentos.activo, true), eq(documentos.estado, "vigente")))
+        .orderBy(desc(documentos.creadoEn), desc(documentos.id))
+    ]);
+
+    const papeles = tipos.map((tipo) => {
+      const delTipo = docs.filter((d) => d.tipoDocumentoId === tipo.id);
+      // sort es estable: a igual estado, queda el más reciente.
+      const mejor = [...delTipo].sort((a, b) => RANGO_REVISION[b.revision] - RANGO_REVISION[a.revision])[0];
+      return {
+        tipo_id: tipo.id,
+        clave: tipo.clave,
+        nombre: tipo.nombre,
+        estado: mejor ? mejor.revision : ("falta" as const),
+        documento: mejor
+          ? { id: mejor.id, nombre_original: mejor.nombreOriginal, version: mejor.version, creado_en: mejor.creadoEn, revisado_en: mejor.revisadoEn, motivo_rechazo: mejor.motivoRechazo, motivo_rechazo_detalle: mejor.motivoRechazoDetalle }
+          : null
+      };
+    });
+    const aprobados = papeles.filter((p) => p.estado === "aprobado").length;
+    return { empresa_id: empresaId, papeles, aprobados, total: papeles.length, completo: aprobados === papeles.length };
+  }
+
+  // Descargar lote (punto 48): qué entra en el zip, con los mismos filtros
+  // que la bandeja y solo versiones vigentes. Revisa el tope ANTES de abrir
+  // nada y deja UNA fila de auditoría antes de empezar a mandar (si la
+  // descarga se corta a medias, igual quedó registrado quién pidió qué).
+  async prepararLote(user: CurrentUser, query: LoteDocumentosQuery) {
+    if (query.empresaId) await this.validarEmpresaScoped(user, query.empresaId);
+    const condiciones = and(...this.condicionesBandeja(user, { ...query, estado: "vigente" }));
+    const [total] = await this.db
+      .select({ cantidad: sql<number>`COUNT(*)`, bytes: sql<number>`COALESCE(SUM(${documentos.tamanoBytes}), 0)` })
+      .from(documentos)
+      .innerJoin(empresas, eq(empresas.id, documentos.empresaId))
+      .where(condiciones);
+    const cantidad = Number(total?.cantidad ?? 0);
+    const bytes = Number(total?.bytes ?? 0);
+    if (cantidad === 0) throw new HttpError(404, "No hay documentos con esos filtros");
+    if (cantidad > LOTE_MAX_ARCHIVOS || bytes > LOTE_MAX_BYTES) {
+      throw new HttpError(413, `El lote tiene ${cantidad} documentos (${Math.ceil(bytes / 1024 / 1024)} MB); el máximo es ${LOTE_MAX_ARCHIVOS} documentos o ${LOTE_MAX_BYTES / 1024 / 1024} MB. Filtra más.`, CODIGO_LOTE_DEMASIADO_GRANDE);
+    }
+
+    const filas = await this.db
+      .select({ id: documentos.id, nombreOriginal: documentos.nombreOriginal, mimeType: documentos.mimeType, storageKey: documentos.storageKey, empresaNombre: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})` })
+      .from(documentos)
+      .innerJoin(empresas, eq(empresas.id, documentos.empresaId))
+      .where(condiciones)
+      .orderBy(empresas.nombreLegal, documentos.nombreOriginal, documentos.id);
+
+    await this.db.insert(auditoria).values({
+      usuarioId: user.id,
+      entidad: "documento",
+      entidadId: 0,
+      accion: "descargar_lote",
+      despues: { documento_ids: filas.map((f) => f.id), cantidad, bytes, filtros: query }
+    });
+
+    // Ruta dentro del zip: <empresa>/<archivo>, sin repetir nombres.
+    const usadas = new Set<string>();
+    const archivos = filas.map((f) => {
+      const carpeta = f.empresaNombre.replace(/[\\/:*?"<>|]/g, "_").trim() || `empresa-${f.id}`;
+      const nombre = nombreDeDescarga(f.nombreOriginal, f.mimeType).replace(/[\\/]/g, "_");
+      let ruta = `${carpeta}/${nombre}`;
+      for (let n = 2; usadas.has(ruta.toLowerCase()); n++) {
+        const punto = nombre.lastIndexOf(".");
+        ruta = punto > 0 ? `${carpeta}/${nombre.slice(0, punto)} (${n})${nombre.slice(punto)}` : `${carpeta}/${nombre} (${n})`;
+      }
+      usadas.add(ruta.toLowerCase());
+      return { ruta, storageKey: f.storageKey };
+    });
+    return archivos;
+  }
+
+  // Abre un archivo del storage para el zip (uno a la vez, en orden).
+  abrirArchivoDeLote(storageKey: string) {
+    return this.storageService.leer(storageKey);
   }
 
   async get(user: CurrentUser, id: number) {
@@ -290,8 +482,14 @@ export class DocumentosService {
   // (B6 del plan de fixes, 2-oct-2026). Se audita DESPUÉS de abrirlo: si el
   // archivo ya no está en storage, leer() lanza 404 y no queda registrada
   // una descarga que no hubo.
-  async abrirDescarga(user: CurrentUser, id: number) {
+  // modo "ver" (vista previa, 12-oct-2026): solo PDF e imágenes, y se audita
+  // como "ver" -- aparte de "descargar", para que el Registro de cambios no
+  // cuente cada vistazo como una descarga.
+  async abrirDescarga(user: CurrentUser, id: number, modo: ModoDescarga = "descargar") {
     const documento = await this.obtenerScoped(user, id);
+    if (modo === "ver" && !MIME_CON_VISTA_PREVIA.includes(documento.mimeType)) {
+      throw new HttpError(415, "Este tipo de archivo no tiene vista previa; descárgalo", CODIGO_VISTA_PREVIA_NO_DISPONIBLE);
+    }
     const archivo = await this.storageService.leer(documento.storageKey);
 
     try {
@@ -299,7 +497,7 @@ export class DocumentosService {
         usuarioId: user.id,
         entidad: "documento",
         entidadId: id,
-        accion: "descargar",
+        accion: modo === "ver" ? "ver" : "descargar",
         despues: { version: documento.version }
       });
     } catch (error) {
@@ -360,6 +558,10 @@ export class DocumentosService {
         despues: { version: nuevaVersionNum, nombre_original: archivo.originalname }
       });
 
+      // La versión nueva empieza en por_revisar (default de la columna); si la
+      // anterior estaba rechazada, su tarea de corrección ya se cumplió.
+      await this.terminarTareasDeCorreccion(tx, actual.id, "cerrada", `Se subió la versión ${nuevaVersionNum}`);
+
       return { id: result.insertId, version: nuevaVersionNum };
     });
   }
@@ -396,6 +598,8 @@ export class DocumentosService {
         antes: { estado: documento.estado },
         despues: { estado: input.estado }
       });
+
+      if (input.estado === "archivado") await this.terminarTareasDeCorreccion(tx, id, "cancelada", "El documento se archivó");
     });
 
     return this.get(user, id);
@@ -409,31 +613,122 @@ export class DocumentosService {
   // solo-lectura y no distinguiría "alguien listó la tabla" de "alguien
   // realmente revisó el contenido", que es lo que el plan pide poder
   // rastrear.
+  // El botón viejo "Revisado" del front publicado: desde 029 equivale a
+  // aprobar. Lo pueden usar los agentes, como antes, hasta que salga el front
+  // nuevo (entonces se limita a admin/supervisor o se quita).
   async revisar(user: CurrentUser, id: number, input: RevisarDocumentoInput) {
     await this.obtenerScoped(user, id);
+    await this.aplicarRevision(user, id, "revisar", { revision: "aprobado", motivoRechazo: null, motivoRechazoDetalle: null }, { comentario: input.comentario ?? null });
+    return this.get(user, id);
+  }
 
+  // Aprobar / rechazar (punto 47): solo administrador y supervisor
+  // (DocumentosController). Se puede cambiar de opinión: aprobar uno
+  // rechazado cancela su tarea de corrección.
+  async aprobar(user: CurrentUser, id: number) {
+    await this.obtenerScoped(user, id);
+    await this.aplicarRevision(user, id, "aprobar", { revision: "aprobado", motivoRechazo: null, motivoRechazoDetalle: null });
+    return this.get(user, id);
+  }
+
+  async rechazar(user: CurrentUser, id: number, input: RechazarDocumentoInput) {
+    await this.obtenerScoped(user, id);
+    await this.aplicarRevision(user, id, "rechazar", { revision: "rechazado", motivoRechazo: input.motivoRechazo, motivoRechazoDetalle: input.motivoRechazoDetalle });
+    return this.get(user, id);
+  }
+
+  private async aplicarRevision(
+    user: CurrentUser,
+    id: number,
+    accion: "revisar" | "aprobar" | "rechazar",
+    cambio: Pick<typeof documentos.$inferInsert, "revision" | "motivoRechazo" | "motivoRechazoDetalle">,
+    extraAuditoria: Record<string, unknown> = {}
+  ) {
     await this.db.transaction(async (tx) => {
-      // Solo la versión vigente (C5 del plan de fixes, 2-oct-2026): marcar
-      // revisada una obsoleta o archivada dejaba la vigente sin revisar y
-      // la alerta de pendientes seguía sonando. La condición va en el
-      // UPDATE para que un cambio de estado al mismo tiempo no se cuele.
-      // sql`CURRENT_TIMESTAMP` (hora del propio MySQL), no `new Date()` en
-      // Node -- mismo motivo que fechaEmision en CotizacionesService: evita
-      // el desfase de zona horaria de un valor calculado en el servidor de
-      // la API.
-      const [result] = await tx.update(documentos).set({ revisadoPor: user.id, revisadoEn: sql`CURRENT_TIMESTAMP` }).where(and(eq(documentos.id, id), eq(documentos.estado, "vigente")));
-      if (result.affectedRows === 0) throw new HttpError(409, "Solo se revisa la versión vigente del documento", CODIGO_DOCUMENTO_NO_VIGENTE);
+      // FOR UPDATE: el "antes" de la auditoría y la tarea salen de lo último
+      // confirmado.
+      const [antes] = await tx.select().from(documentos).where(eq(documentos.id, id)).limit(1).for("update");
+      // Solo la versión vigente (C5 del plan de fixes, 2-oct-2026): revisar
+      // una obsoleta o archivada dejaba la vigente sin revisar y la alerta de
+      // pendientes seguía sonando. La condición va en el UPDATE para que un
+      // cambio de estado al mismo tiempo no se cuele. sql`CURRENT_TIMESTAMP`
+      // (hora de MySQL), no `new Date()` en Node: evita el desfase de zona.
+      const [result] = await tx.update(documentos)
+        .set({ ...cambio, revisadoPor: user.id, revisadoEn: sql`CURRENT_TIMESTAMP` })
+        .where(and(eq(documentos.id, id), eq(documentos.estado, "vigente")));
+      if (!antes || result.affectedRows === 0) throw new HttpError(409, "Solo se revisa la versión vigente del documento", CODIGO_DOCUMENTO_NO_VIGENTE);
 
       await tx.insert(auditoria).values({
         usuarioId: user.id,
         entidad: "documento",
         entidadId: id,
-        accion: "revisar",
-        despues: { comentario: input.comentario ?? null }
+        accion,
+        antes: { revision: antes.revision, motivo_rechazo: antes.motivoRechazo, motivo_rechazo_detalle: antes.motivoRechazoDetalle },
+        despues: { revision: cambio.revision, motivo_rechazo: cambio.motivoRechazo ?? null, motivo_rechazo_detalle: cambio.motivoRechazoDetalle ?? null, ...extraAuditoria }
       });
-    });
 
-    return this.get(user, id);
+      if (cambio.revision === "rechazado") {
+        await this.tareaDeCorreccion(tx, user, antes, cambio.motivoRechazo!, cambio.motivoRechazoDetalle!);
+      } else {
+        await this.terminarTareasDeCorreccion(tx, id, "cancelada", "El documento se aprobó");
+      }
+    });
+  }
+
+  // "Corregir documento" (Fabián, 12-oct-2026): al rechazar, quien lo subió
+  // recibe una tarea con el motivo y la explicación, y le sale en Mi día. Si
+  // ya no está activo, va al dueño de la empresa; si tampoco hay, a la
+  // bandeja sin asignar. Rechazarlo otra vez no duplica la tarea: solo pone
+  // el motivo nuevo.
+  private async tareaDeCorreccion(tx: DrizzleTx, user: CurrentUser, documento: typeof documentos.$inferSelect, motivo: keyof typeof NOMBRE_MOTIVO_RECHAZO_DOCUMENTO, detalle: string) {
+    const [contexto] = await tx
+      .select({
+        empresaNombre: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
+        propietarioId: empresas.propietarioId,
+        tipoNombre: catalogoTipoDocumento.nombre
+      })
+      .from(empresas)
+      .leftJoin(catalogoTipoDocumento, eq(catalogoTipoDocumento.id, documento.tipoDocumentoId ?? 0))
+      .where(eq(empresas.id, documento.empresaId))
+      .limit(1);
+    const descripcion = [
+      `${contexto?.empresaNombre ?? "Empresa"} · ${contexto?.tipoNombre ?? "Documento sin tipo"} · versión ${documento.version}`,
+      `Motivo: ${NOMBRE_MOTIVO_RECHAZO_DOCUMENTO[motivo]}`,
+      detalle,
+      "Sube la versión corregida desde el documento; esta tarea se cierra sola."
+    ].join("\n");
+
+    const [abierta] = await tx.select({ id: tareas.id }).from(tareas)
+      .where(and(eq(tareas.documentoId, documento.id), inArray(tareas.estado, ["pendiente", "en_progreso"]))).limit(1);
+    if (abierta) {
+      await tx.update(tareas).set({ descripcion }).where(eq(tareas.id, abierta.id));
+      return;
+    }
+
+    const activos = await tx.select({ id: usuarios.id }).from(usuarios)
+      .where(and(inArray(usuarios.id, compactIds([documento.subidoPor, contexto?.propietarioId])), eq(usuarios.activo, true)));
+    const activo = (uid: number | null | undefined) => uid != null && activos.some((u) => u.id === uid);
+    const responsableId = activo(documento.subidoPor) ? documento.subidoPor : activo(contexto?.propietarioId) ? contexto!.propietarioId : null;
+
+    await tx.insert(tareas).values({
+      tipo: "revision_documento",
+      titulo: `Corregir documento: ${documento.nombreOriginal}`.slice(0, 255),
+      descripcion,
+      responsableId,
+      empresaId: documento.empresaId,
+      contactoId: documento.contactoId,
+      documentoId: documento.id,
+      fechaLimite: finSiguienteDiaHabilMx(new Date()),
+      creadaPor: user.id
+    });
+  }
+
+  // Cierra (versión nueva) o cancela (aprobado, archivado, borrado) la tarea
+  // "Corregir documento" que siga abierta.
+  private async terminarTareasDeCorreccion(tx: DrizzleTx, documentoId: number, estado: "cerrada" | "cancelada", resultado: string) {
+    await tx.update(tareas)
+      .set({ estado, resultado, cerradaEn: sql`CURRENT_TIMESTAMP` })
+      .where(and(eq(tareas.documentoId, documentoId), inArray(tareas.estado, ["pendiente", "en_progreso"])));
   }
 
   // "Revisión de documentos pendientes" (PLAN_API_DEFINITIVO.md, "Jobs
@@ -456,7 +751,9 @@ export class DocumentosService {
       .where(and(
         eq(documentos.estado, "vigente"),
         eq(documentos.activo, true),
-        isNull(documentos.revisadoEn),
+        // Desde 029: lo que sigue por revisar (un rechazado ya se revisó;
+        // queda en la tarea de corrección).
+        eq(documentos.revision, "por_revisar"),
         isNull(documentos.alertadoEn),
         sql`${documentos.creadoEn} < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ${DIAS_PENDIENTE_REVISION} DAY)`
       ))
@@ -506,6 +803,8 @@ export class DocumentosService {
         accion: "eliminar",
         antes: { estado: documento.estado }
       });
+
+      await this.terminarTareasDeCorreccion(tx, id, "cancelada", "El documento se borró");
     });
   }
 }

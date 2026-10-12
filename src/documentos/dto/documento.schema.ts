@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CLAVES_MOTIVO_RECHAZO_DOCUMENTO } from "../../shared/motivos-rechazo-documento.js";
 
 // "Tipos permitidos: PDF, DOCX, XLSX, PNG y JPG" (PLAN_CRM_DEFINITIVO.md
 // #8). Se valida el mime type declarado por el cliente (multipart), igual
@@ -63,10 +64,26 @@ export const listDocumentosQuerySchema = z.object({
   // Mismo mapeo explícito que `cerrada` en oportunidades: z.coerce.boolean()
   // trataría "false" como true.
   revisado: z.enum(["true", "false"]).optional().transform((v) => (v === undefined ? undefined : v === "true")),
+  // Bandeja nueva (12-oct-2026): por resultado de la revisión, por tipo y
+  // por texto (nombre del archivo o de la empresa). `revisado` se queda para
+  // el front publicado.
+  revision: z.enum(["por_revisar", "aprobado", "rechazado"]).optional(),
+  tipoDocumentoId: z.coerce.number().int().positive().optional(),
+  q: z.string().trim().min(1).max(120).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25)
 });
 export type ListDocumentosQuery = z.infer<typeof listDocumentosQuerySchema>;
+
+// Descargar lote (12-oct-2026): los mismos filtros que la lista, sin páginas
+// (el tope lo pone LOTE_MAX_* en el servicio).
+export const loteDocumentosQuerySchema = listDocumentosQuerySchema.omit({ page: true, limit: true, estado: true });
+export type LoteDocumentosQuery = z.infer<typeof loteDocumentosQuerySchema>;
+
+// ?modo=ver abre el archivo dentro de la página (vista previa); sin modo,
+// descarga como siempre.
+export const modoDescargaSchema = z.enum(["ver", "descargar"]).default("descargar");
+export type ModoDescarga = z.infer<typeof modoDescargaSchema>;
 
 // Estados (el plan no detalla el criterio, se define aquí -- ver comentario
 // de estado en 014_documentos.sql): 'obsoleto' nunca es destino de un
@@ -84,3 +101,17 @@ export const revisarDocumentoSchema = z.object({
   comentario: z.string().trim().max(500).optional()
 });
 export type RevisarDocumentoInput = z.infer<typeof revisarDocumentoSchema>;
+
+// Rechazar (12-oct-2026): motivo rápido y explicación, los dos obligatorios
+// (el diseño: "Explica el motivo · obligatorio"). Lo ve quien lo subió, en su
+// tarea "Corregir documento".
+export const rechazarDocumentoSchema = z.object({
+  motivoRechazo: z.enum(CLAVES_MOTIVO_RECHAZO_DOCUMENTO),
+  motivoRechazoDetalle: z.string().trim().min(2).max(500)
+});
+export type RechazarDocumentoInput = z.infer<typeof rechazarDocumentoSchema>;
+
+export const cambiarObligatorioSchema = z.object({
+  obligatorio: z.boolean()
+});
+export type CambiarObligatorioInput = z.infer<typeof cambiarObligatorioSchema>;
