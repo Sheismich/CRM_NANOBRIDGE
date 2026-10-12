@@ -8,6 +8,7 @@ import { diasEntreFechas, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil
 import { MOTIVOS_RECHAZO_COTIZACION } from "../shared/motivos-rechazo-cotizacion.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { aCentavos, calcularCotizacion, deCentavos } from "./dinero.js";
+import { cotizacionPdf, nombreArchivoCotizacion } from "./cotizacion-pdf.js";
 import type { CambiarEstadoCotizacionInput, ConteosCotizacionesQuery, CrearCotizacionInput, DatosCotizacionInput, ListCotizacionesQuery, PartidaInput } from "./dto/cotizacion.schema.js";
 
 // "Una edición crea una nueva versión; la versión anterior queda
@@ -458,6 +459,13 @@ export class CotizacionesService {
       partidas: partidasRows.map((p) => ({ id: p.id, descripcion: p.descripcion, detalle: p.detalle, cantidad: p.cantidad, precio_unitario: p.precioUnitario, importe: p.importe, orden: p.orden })),
       versiones: versiones.map((v) => ({ id: v.id, version: v.version, estado: v.estado, total: v.total, creado_en: v.creadoEn }))
     };
+  }
+
+  // PDF de la cotización (bloque 6, 12-oct-2026): mismo alcance que get()
+  // (un agente solo las de sus oportunidades; si no es suya, 404).
+  async pdf(user: CurrentUser, id: number) {
+    const cotizacion = await this.get(user, id);
+    return { nombreArchivo: nombreArchivoCotizacion(cotizacion), contenido: await cotizacionPdf(cotizacion) };
   }
 
   async cambiarEstado(user: CurrentUser, id: number, input: CambiarEstadoCotizacionInput) {

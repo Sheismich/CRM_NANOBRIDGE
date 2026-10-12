@@ -73,6 +73,15 @@ export const reporteDiaQuerySchema = z.object({
 });
 export type ReporteDiaQuery = z.infer<typeof reporteDiaQuerySchema>;
 
+// Informe ejecutivo (bloque 6, 12-oct-2026): un mes de calendario de México
+// (por omisión el actual) comparado contra el anterior, en PDF o CSV.
+export const informeEjecutivoQuerySchema = z.object({
+  formato: z.enum(["pdf", "csv"]).default("pdf"),
+  mes: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "El mes va como AAAA-MM").optional(),
+  responsableId: z.coerce.number().int().positive().optional()
+});
+export type InformeEjecutivoQuery = z.infer<typeof informeEjecutivoQuerySchema>;
+
 // Reportes disponibles para exportación CSV (GET /reportes/export/:reporte).
 // Mismo set que los endpoints de lectura -- ver ReportesController. "dia" es
 // la bitácora completa de un día (sin páginas).

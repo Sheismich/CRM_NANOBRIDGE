@@ -2,12 +2,14 @@ import { Controller, Get, HttpCode, Param, Post, Query, Res, UseGuards } from "@
 import type { Response } from "express";
 import { ReportesService } from "./reportes.service.js";
 import { ReporteDiaService } from "./reporte-dia.service.js";
+import { InformeEjecutivoService } from "./informe-ejecutivo.service.js";
+import { contentDispositionAdjunto } from "../shared/content-disposition.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { actividadRecienteQuerySchema, metricasDiariasQuerySchema, prospeccionPorDiaQuerySchema, prospeccionQuerySchema, reporteDiaQuerySchema, reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
+import { actividadRecienteQuerySchema, informeEjecutivoQuerySchema, metricasDiariasQuerySchema, prospeccionPorDiaQuerySchema, prospeccionQuerySchema, reporteDiaQuerySchema, reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). Criterio de acceso
 // (el plan no lo especifica para este módulo, así que se define aquí):
@@ -24,7 +26,8 @@ import { actividadRecienteQuerySchema, metricasDiariasQuerySchema, prospeccionPo
 export class ReportesController {
   constructor(
     private readonly reportesService: ReportesService,
-    private readonly reporteDiaService: ReporteDiaService
+    private readonly reporteDiaService: ReporteDiaService,
+    private readonly informeEjecutivoService: InformeEjecutivoService
   ) {}
 
   // Reportes · Día = bitácora (11-oct-2026). Única ruta de reportes abierta
@@ -125,6 +128,20 @@ export class ReportesController {
   // pone Nest por default -- distinto del @Res({ passthrough: true }) que
   // usa AuthController solo para poner una cookie y dejar que Nest siga
   // serializando la respuesta normal.
+  // Informe ejecutivo (bloque 6, 12-oct-2026): PDF de una hoja o CSV con los
+  // mismos números. Antes de "export/:reporte" para que esa no la atrape.
+  @Get("export/informe-ejecutivo")
+  async informeEjecutivo(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType, @Res() response: Response) {
+    const input = informeEjecutivoQuerySchema.parse(query);
+    const { nombreArchivo, contenido } = input.formato === "csv"
+      ? await this.informeEjecutivoService.csv(input)
+      : await this.informeEjecutivoService.pdf(input, user);
+    response.status(200).set({
+      "Content-Type": input.formato === "csv" ? "text/csv; charset=utf-8" : "application/pdf",
+      "Content-Disposition": contentDispositionAdjunto(nombreArchivo)
+    }).send(contenido);
+  }
+
   @Get("export/:reporte")
   async exportar(@Param("reporte") reporteParam: string, @Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType, @Res() response: Response) {
     const reporte = reporteExportableSchema.parse(reporteParam);

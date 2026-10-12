@@ -1,5 +1,7 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Res, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
 import { z } from "zod";
+import { contentDispositionAdjunto } from "../shared/content-disposition.js";
 import { CotizacionesService } from "./cotizaciones.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
@@ -44,6 +46,18 @@ export class CotizacionesController {
   get(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
     const id = idParamSchema.parse(idParam);
     return this.cotizacionesService.get(user, id);
+  }
+
+  // PDF del documento (bloque 6, 12-oct-2026). @Res() sin passthrough por
+  // lo mismo que /reportes/export: el cuerpo es el archivo, no JSON.
+  @Get(":id/pdf")
+  async pdf(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType, @Res() response: Response) {
+    const id = idParamSchema.parse(idParam);
+    const { nombreArchivo, contenido } = await this.cotizacionesService.pdf(user, id);
+    response.status(200).set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": contentDispositionAdjunto(nombreArchivo)
+    }).send(contenido);
   }
 
   @Post(":id/version")
