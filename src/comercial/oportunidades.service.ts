@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, catalogoEtapaEmbudo, catalogoMotivoPerdida, contactos, empresas, historialEtapaOportunidad, oportunidades, prospectos } from "../database/schema.js";
+import { auditoria, catalogoEtapaEmbudo, catalogoMotivoPerdida, contactos, empresas, historialEtapaOportunidad, oportunidades, prospectos, usuarios } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
@@ -78,20 +78,34 @@ export class OportunidadesService {
         probabilidad: catalogoEtapaEmbudo.probabilidad,
         // Para el tablero de Oportunidades: cada tarjeta dice de qué empresa
         // es sin pedir /empresas/:id por tarjeta.
-        empresaNombre: empresas.nombreLegal
+        empresaNombre: empresas.nombreLegal,
+        // Tablero + embudo (9-oct-2026): de quién es y desde cuándo está en
+        // la etapa en que está (la última vez que entró a ella, según el
+        // historial de etapas).
+        responsableNombre: usuarios.nombre,
+        etapaDesde: sql<Date | null>`(SELECT MAX(${historialEtapaOportunidad.creadoEn}) FROM ${historialEtapaOportunidad} WHERE ${historialEtapaOportunidad.oportunidadId} = ${oportunidades.id} AND ${historialEtapaOportunidad.etapaId} = ${oportunidades.etapaId})`.mapWith(historialEtapaOportunidad.creadoEn)
       })
       .from(oportunidades)
       .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
       .leftJoin(empresas, eq(empresas.id, oportunidades.empresaId))
+      .leftJoin(usuarios, eq(usuarios.id, oportunidades.responsableId))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(oportunidades.actualizadoEn))
       .limit(query.limit)
       .offset(offset);
 
+    const ahora = Date.now();
     return {
       page: query.page,
       limit: query.limit,
-      data: rows.map((row) => ({ ...toRow({ ...row.oportunidad, etapaClave: row.etapaClave, etapaNombre: row.etapaNombre, probabilidad: row.probabilidad }), empresa_nombre: row.empresaNombre }))
+      data: rows.map((row) => ({
+        ...toRow({ ...row.oportunidad, etapaClave: row.etapaClave, etapaNombre: row.etapaNombre, probabilidad: row.probabilidad }),
+        empresa_nombre: row.empresaNombre,
+        responsable_nombre: row.responsableNombre,
+        etapa_desde: row.etapaDesde,
+        // Días completos: entró hace 30 horas = 1 día.
+        dias_en_etapa: row.etapaDesde ? Math.max(0, Math.floor((ahora - row.etapaDesde.getTime()) / 86_400_000)) : null
+      }))
     };
   }
 

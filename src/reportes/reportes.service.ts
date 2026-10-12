@@ -1,12 +1,12 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, desc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lte, sql, type SQL } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { actividades, campanas, catalogoEtapaEmbudo, envios, historialEtapaOportunidad, metricasComercialesDiarias, oportunidades, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
+import { actividades, auditoria, campanas, catalogoEtapaEmbudo, contactos, empresas, envios, historialEtapaOportunidad, metricasComercialesDiarias, oportunidades, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { toCsv } from "../shared/csv.js";
 import { diaSiguiente, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
-import type { MetricasDiariasQuery, ProspeccionQuery, ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
+import type { ActividadRecienteQuery, MetricasDiariasQuery, ProspeccionPorDiaQuery, ProspeccionQuery, ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). A diferencia de los
 // demás módulos comerciales, aquí no hay "scoping por responsable" en el
@@ -225,16 +225,28 @@ export class ReportesService {
     // Las tres consultas son independientes entre sí (ninguna depende del
     // resultado de otra), así que se corren en paralelo en vez de
     // esperarlas una tras otra (hallazgo de code review, 11-sep-2026).
-    const [abiertas, ganadas, perdidas] = await Promise.all([
+    // Cierres del mes y vencidos (franja de Oportunidades, 9-oct-2026): son
+    // una foto de las abiertas de hoy, como "abiertas" -- no usan el rango.
+    // El mes y el "hoy" son de México; fecha_cierre_estimada ya es un DATE.
+    const hoy = fechaMx(new Date());
+    const primeroDelMes = `${hoy.slice(0, 7)}-01`;
+    const [anio, mes] = hoy.split("-").map(Number);
+    const ultimoDelMes = new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
+
+    const [abiertas, ganadas, perdidas, esteMes, vencidas] = await Promise.all([
       this.contarOportunidadesAbiertas(condicionResponsable),
       this.contarOportunidadesCerradas(true, condicionResponsable, ...condicionesFecha),
-      this.contarOportunidadesCerradas(false, condicionResponsable, ...condicionesFecha)
+      this.contarOportunidadesCerradas(false, condicionResponsable, ...condicionesFecha),
+      this.contarOportunidadesAbiertas(condicionResponsable, and(gte(oportunidades.fechaCierreEstimada, primeroDelMes), lte(oportunidades.fechaCierreEstimada, ultimoDelMes))),
+      this.contarOportunidadesAbiertas(condicionResponsable, sql`${oportunidades.fechaCierreEstimada} < ${hoy}`)
     ]);
 
     return {
       abiertas: { cantidad: abiertas.cantidad, valor_pipeline: abiertas.valor },
       ganadas: { cantidad: ganadas.cantidad, ingresos_cerrados: ganadas.valor },
-      perdidas: { cantidad: perdidas.cantidad, valor_perdido: perdidas.valor }
+      perdidas: { cantidad: perdidas.cantidad, valor_perdido: perdidas.valor },
+      cierre_este_mes: { cantidad: esteMes.cantidad, valor: esteMes.valor },
+      cierre_vencido: { cantidad: vencidas.cantidad, valor: vencidas.valor }
     };
   }
 
@@ -244,11 +256,11 @@ export class ReportesService {
   // verbatim en los dos métodos (hallazgo de code-review, 15-sep-2026): si
   // la definición de "abierta" cambia algún día, había que acordarse de
   // tocar los dos lados.
-  private async contarOportunidadesAbiertas(condicionResponsable: ReturnType<typeof eq> | undefined) {
+  private async contarOportunidadesAbiertas(condicionResponsable: ReturnType<typeof eq> | undefined, condicionExtra?: SQL) {
     const [row] = await this.db
       .select({ cantidad: sql<number>`COUNT(*)`, valor: sql<string>`COALESCE(SUM(${oportunidades.valorEstimado}), 0)` })
       .from(oportunidades)
-      .where(and(eq(oportunidades.cerrada, false), ...(condicionResponsable ? [condicionResponsable] : [])));
+      .where(and(eq(oportunidades.cerrada, false), ...compactConditions([condicionResponsable, condicionExtra])));
     return { cantidad: Number(row.cantidad), valor: row.valor };
   }
 
@@ -617,7 +629,7 @@ export class ReportesService {
       ...condicionRangoFecha(respuestas.recibidoEn, query.fechaInicio, query.fechaFin)
     ]);
 
-    const [enviosPorCampana, personasTotal, respondieronPorCampana, respondieronTotal, respuestasRecibidas] = await Promise.all([
+    const [enviosPorCampana, personasTotal, respondieronPorCampana, respondieronTotal, respuestasRecibidas, interesadosPorCampana] = await Promise.all([
       this.db
         .select({
           campanaId: prospectos.campanaId,
@@ -657,8 +669,19 @@ export class ReportesService {
         .from(respuestas)
         .innerJoin(prospectos, eq(prospectos.id, respuestas.prospectoId))
         .where(condicionesRespuesta.length > 0 ? and(...condicionesRespuesta) : undefined)
-        .groupBy(respuestas.estado, respuestas.clasificacion, respuestas.tardia)
+        .groupBy(respuestas.estado, respuestas.clasificacion, respuestas.tardia),
+      // Interesados por campaña (tarjetas de Campañas, diseño del 9-oct):
+      // personas contactadas en el rango cuya respuesta quedó "interesado",
+      // con el mismo criterio que personas_que_respondieron.
+      this.db
+        .select({ campanaId: prospectos.campanaId, personas: sql<number>`COUNT(DISTINCT ${prospectos.contactoId})` })
+        .from(respuestas)
+        .innerJoin(envios, eq(envios.id, respuestas.envioId))
+        .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+        .where(and(eq(respuestas.clasificacion, "interesado"), whereEnvio))
+        .groupBy(prospectos.campanaId)
     ]);
+    const interesados = new Map(interesadosPorCampana.map((fila) => [fila.campanaId, Number(fila.personas)]));
 
     const totalEnvios = { total: 0, inicial: 0, recordatorio_1: 0, recordatorio_2: 0, personas_contactadas: Number(personasTotal[0]?.personas ?? 0) };
     for (const fila of enviosPorCampana) {
@@ -696,6 +719,7 @@ export class ReportesService {
         envios: Number(fila.envios),
         personas_contactadas: personas,
         personas_que_respondieron: respondieronCampana,
+        interesados: interesados.get(fila.campanaId) ?? 0,
         tasa_respuesta_pct: porcentaje(respondieronCampana, personas)
       };
     });
@@ -713,6 +737,120 @@ export class ReportesService {
       tasa_respuesta_pct: porcentaje(personasQueRespondieron, totalEnvios.personas_contactadas),
       por_campana: porCampana
     };
+  }
+
+  // Gráfica "correos enviados por día" del Inicio (diseño del 9-oct-2026):
+  // un renglón por cada día del rango, con los días vacíos en cero para que
+  // la gráfica no salte días. El día es el de México: se agrupa restando 6
+  // horas al instante UTC (México no cambia de horario desde oct-2022; antes
+  // de eso, en verano, un envío entre las 23:00 y las 00:00 caería en el día
+  // siguiente -- aceptado, la gráfica es de los meses recientes).
+  // Respuestas = las de la persona (sin automáticas), por recibido_en.
+  async prospeccionPorDia(query: ProspeccionPorDiaQuery) {
+    const diaMx = (columna: unknown) => sql<string>`DATE_FORMAT(DATE_SUB(${columna}, INTERVAL 6 HOUR), '%Y-%m-%d')`;
+    const campana = query.campanaId ? eq(prospectos.campanaId, query.campanaId) : undefined;
+    const diaEnvio = diaMx(envios.enviadoEn);
+    const diaRespuesta = diaMx(respuestas.recibidoEn);
+
+    const [porDiaEnvios, porDiaRespuestas] = await Promise.all([
+      this.db
+        .select({ dia: diaEnvio, cantidad: sql<number>`COUNT(*)` })
+        .from(envios)
+        .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+        .where(and(...compactConditions([campana, ...condicionRangoFecha(envios.enviadoEn, query.fechaInicio, query.fechaFin)])))
+        .groupBy(diaEnvio),
+      this.db
+        .select({ dia: diaRespuesta, cantidad: sql<number>`COUNT(*)` })
+        .from(respuestas)
+        .innerJoin(prospectos, eq(prospectos.id, respuestas.prospectoId))
+        .where(and(...compactConditions([
+          campana,
+          sql`(${respuestas.clasificacion} IS NULL OR ${respuestas.clasificacion} <> 'automatica')`,
+          ...condicionRangoFecha(respuestas.recibidoEn, query.fechaInicio, query.fechaFin)
+        ])))
+        .groupBy(diaRespuesta)
+    ]);
+
+    const enviosPorDia = new Map(porDiaEnvios.map((f) => [f.dia, Number(f.cantidad)]));
+    const respuestasPorDia = new Map(porDiaRespuestas.map((f) => [f.dia, Number(f.cantidad)]));
+    const dias = [];
+    for (let dia = query.fechaInicio; dia <= query.fechaFin; dia = diaSiguiente(dia)) {
+      dias.push({ fecha: dia, envios: enviosPorDia.get(dia) ?? 0, respuestas: respuestasPorDia.get(dia) ?? 0 });
+    }
+    return dias;
+  }
+
+  // "Lo que acaba de pasar" del Inicio: lo más reciente de la prospección
+  // en una sola lista -- respuestas que llegaron, correos que salieron y
+  // prospectos que pidieron su baja --, lo más nuevo primero. Cada fuente
+  // trae a lo más `limit` filas y luego se mezclan y se recortan: así nunca
+  // se leen más de 3*limit filas. Los envíos van uno por uno; agruparlos
+  // ("se enviaron 12 recordatorios") lo hace la pantalla.
+  // Las bajas salen de la auditoría del prospecto (darDeBajaProspecto la
+  // escribe siempre que el prospecto cambia a baja, venga del link, de una
+  // queja o de la cola de clasificación).
+  async actividadReciente(query: ActividadRecienteQuery) {
+    const corte = query.hasta ? condicionRangoFecha : () => [];
+    const persona = {
+      prospectoId: prospectos.id,
+      contactoNombre: contactos.nombre,
+      empresaId: empresas.id,
+      empresaNombre: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
+      campanaId: prospectos.campanaId,
+      campanaNombre: campanas.nombre
+    };
+    const conPersona = <T extends { prospectoId: number; contactoNombre: string; empresaId: number; empresaNombre: string; campanaId: number | null; campanaNombre: string | null }>(f: T) => ({
+      prospecto_id: f.prospectoId,
+      contacto_nombre: f.contactoNombre,
+      empresa_id: f.empresaId,
+      empresa_nombre: f.empresaNombre,
+      campana_id: f.campanaId,
+      campana_nombre: f.campanaNombre
+    });
+
+    const [filasRespuestas, filasEnvios, filasBajas] = await Promise.all([
+      this.db
+        .select({ ...persona, fecha: respuestas.recibidoEn, clasificacion: respuestas.clasificacion, estado: respuestas.estado, tardia: respuestas.tardia })
+        .from(respuestas)
+        .innerJoin(prospectos, eq(prospectos.id, respuestas.prospectoId))
+        .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+        .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+        .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
+        .where(and(...compactConditions(corte(respuestas.recibidoEn, undefined, query.hasta))))
+        .orderBy(desc(respuestas.recibidoEn), desc(respuestas.id))
+        .limit(query.limit),
+      this.db
+        .select({ ...persona, fecha: envios.enviadoEn, numeroContacto: envios.numeroContacto, canal: envios.canal })
+        .from(envios)
+        .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+        .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+        .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+        .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
+        .where(and(...compactConditions(corte(envios.enviadoEn, undefined, query.hasta))))
+        .orderBy(desc(envios.enviadoEn), desc(envios.id))
+        .limit(query.limit),
+      this.db
+        .select({ ...persona, fecha: auditoria.creadoEn, motivo: sql<string | null>`JSON_UNQUOTE(JSON_EXTRACT(${auditoria.despues}, '$.motivo'))` })
+        .from(auditoria)
+        .innerJoin(prospectos, eq(prospectos.id, auditoria.entidadId))
+        .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+        .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+        .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
+        .where(and(...compactConditions([
+          eq(auditoria.entidad, "prospecto"),
+          sql`JSON_UNQUOTE(JSON_EXTRACT(${auditoria.despues}, '$.estado')) = 'baja'`,
+          ...corte(auditoria.creadoEn, undefined, query.hasta)
+        ])))
+        .orderBy(desc(auditoria.creadoEn), desc(auditoria.id))
+        .limit(query.limit)
+    ]);
+
+    const eventos = [
+      ...filasRespuestas.map((f) => ({ tipo: "respuesta" as const, fecha: f.fecha, ...conPersona(f), clasificacion: f.clasificacion, estado: f.estado, tardia: f.tardia })),
+      ...filasEnvios.map((f) => ({ tipo: "envio" as const, fecha: f.fecha, ...conPersona(f), numero_contacto: f.numeroContacto, canal: f.canal })),
+      ...filasBajas.map((f) => ({ tipo: "baja" as const, fecha: f.fecha, ...conPersona(f), motivo: f.motivo }))
+    ];
+    return eventos.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()).slice(0, query.limit);
   }
 
   async exportarProspeccionCsv(query: ProspeccionQuery) {

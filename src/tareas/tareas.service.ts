@@ -1,14 +1,14 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, like, lt, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, contactos, empresas, prospectos, respuestas, tareas } from "../database/schema.js";
+import { auditoria, contactos, empresas, envios, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { aplicarClasificacionAlProspecto, type ClasificacionRespuesta, type OrigenClasificacion } from "../shared/clasificacion-respuesta.js";
 import { recortarTexto } from "../shared/texto.js";
 import { finSiguienteDiaHabilMx } from "../shared/dia-habil.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
-import { compactConditions } from "../shared/drizzle-utils.js";
+import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { CODIGO_PERSONA_EN_BAJA, personaEnBajaBloqueando } from "../shared/baja-prospecto.js";
@@ -23,6 +23,7 @@ export type ListTareasFilters = {
   tipo?: "seguimiento" | "clasificacion" | "revision_documento" | "otro";
   responsableId?: number;
   sinAsignar?: boolean;
+  q?: string;
 };
 
 // Largo de respuestas.comentario (VARCHAR(500)).
@@ -103,7 +104,8 @@ export class TareasService {
       scoped.prioridad ? eq(tareas.prioridad, scoped.prioridad) : undefined,
       scoped.tipo ? eq(tareas.tipo, scoped.tipo) : undefined,
       scoped.responsableId ? eq(tareas.responsableId, scoped.responsableId) : undefined,
-      scoped.sinAsignar ? isNull(tareas.responsableId) : undefined
+      scoped.sinAsignar ? isNull(tareas.responsableId) : undefined,
+      scoped.q ? or(like(tareas.titulo, patronLike(scoped.q)), like(empresas.nombreLegal, patronLike(scoped.q)), like(empresas.nombreComercial, patronLike(scoped.q))) : undefined
     ]);
 
     // empresa_nombre: la bandeja lo necesita para decir de quién es cada
@@ -185,12 +187,80 @@ export class TareasService {
     return { empresaId, contactoId };
   }
 
+  // El detalle trae su contexto (panel de detalle de Tareas, 9-oct-2026):
+  // de qué empresa y persona es, quién la tiene y, si la originó una
+  // respuesta, qué contestó la persona -- sin pedir cada cosa aparte.
   async get(user: CurrentUser, id: number) {
-    const [row] = await this.db.select().from(tareas).where(eq(tareas.id, id)).limit(1);
-    if (!row || (user.rol === "agente" && row.responsableId !== user.id)) {
+    const [r] = await this.db
+      .select({
+        tarea: tareas,
+        empresaNombre: sql<string | null>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
+        contactoNombre: contactos.nombre,
+        contactoPuesto: contactos.puesto,
+        responsableNombre: usuarios.nombre,
+        respuestaContenido: respuestas.contenido,
+        respuestaRecibidoEn: respuestas.recibidoEn,
+        respuestaClasificacion: respuestas.clasificacion
+      })
+      .from(tareas)
+      .leftJoin(empresas, eq(empresas.id, tareas.empresaId))
+      .leftJoin(contactos, eq(contactos.id, tareas.contactoId))
+      .leftJoin(usuarios, eq(usuarios.id, tareas.responsableId))
+      .leftJoin(respuestas, eq(respuestas.id, tareas.respuestaId))
+      .where(eq(tareas.id, id))
+      .limit(1);
+    if (!r || (user.rol === "agente" && r.tarea.responsableId !== user.id)) {
       throw new HttpError(404, "Tarea no encontrada");
     }
-    return toRow(row);
+    return {
+      ...toRow(r.tarea),
+      empresa_nombre: r.empresaNombre,
+      contacto_nombre: r.contactoNombre,
+      contacto_puesto: r.contactoPuesto,
+      responsable_nombre: r.responsableNombre,
+      respuesta: r.tarea.respuestaId
+        ? { id: r.tarea.respuestaId, contenido: r.respuestaContenido, recibido_en: r.respuestaRecibidoEn, clasificacion: r.respuestaClasificacion }
+        : null
+    };
+  }
+
+  // Historial de una tarea (panel de detalle, 9-oct-2026): lo que le pasó a
+  // la tarea (creada, asignada, cerrada) junto con la prospección de su
+  // prospecto (correos que salieron y respuestas que llegaron), lo más
+  // nuevo primero. Mismo permiso que el detalle: un agente solo la suya.
+  // Con la misma fecha (DATETIME es al segundo) va primero lo de la tarea.
+  async historial(user: CurrentUser, id: number) {
+    const tarea = await this.get(user, id);
+    const orden = { cerrada: 0, asignada: 1, creada: 2, respuesta: 3, envio: 4 } as const;
+
+    const movimientos = await this.db
+      .select({ accion: auditoria.accion, fecha: auditoria.creadoEn, usuarioNombre: usuarios.nombre, despues: auditoria.despues })
+      .from(auditoria)
+      .leftJoin(usuarios, eq(usuarios.id, auditoria.usuarioId))
+      .where(and(eq(auditoria.entidad, "tarea"), eq(auditoria.entidadId, id), inArray(auditoria.accion, ["asignar", "cerrar"])));
+
+    const eventos: { tipo: keyof typeof orden; fecha: Date; [k: string]: unknown }[] = [
+      { tipo: "creada", fecha: tarea.creado_en },
+      ...movimientos.map((m) => ({
+        tipo: m.accion === "cerrar" ? ("cerrada" as const) : ("asignada" as const),
+        fecha: m.fecha,
+        usuario_nombre: m.usuarioNombre,
+        ...(m.accion === "asignar" ? { responsable_id: (m.despues as { responsable_id?: number } | null)?.responsable_id ?? null } : { resultado: (m.despues as { resultado?: string } | null)?.resultado ?? null })
+      }))
+    ];
+
+    if (tarea.prospecto_id) {
+      const [filasEnvios, filasRespuestas] = await Promise.all([
+        this.db.select({ fecha: envios.enviadoEn, numeroContacto: envios.numeroContacto, canal: envios.canal }).from(envios).where(eq(envios.prospectoId, tarea.prospecto_id)),
+        this.db.select({ fecha: respuestas.recibidoEn, clasificacion: respuestas.clasificacion, contenido: respuestas.contenido }).from(respuestas).where(eq(respuestas.prospectoId, tarea.prospecto_id))
+      ]);
+      eventos.push(
+        ...filasEnvios.map((e) => ({ tipo: "envio" as const, fecha: e.fecha, numero_contacto: e.numeroContacto, canal: e.canal })),
+        ...filasRespuestas.map((r) => ({ tipo: "respuesta" as const, fecha: r.fecha, clasificacion: r.clasificacion, contenido: r.contenido }))
+      );
+    }
+
+    return eventos.sort((a, b) => b.fecha.getTime() - a.fecha.getTime() || orden[a.tipo] - orden[b.tipo]);
   }
 
   // codigoSiCerrada: el `code` del 409 cuando la tarea ya está cerrada (la

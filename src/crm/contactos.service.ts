@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, like, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { contactos, empresas, mediosContacto } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
@@ -7,7 +7,7 @@ import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { EmpresasService } from "./empresas.service.js";
 import type { UpdateContactInput } from "./dto/empresa.schema.js";
-import type { CreateContactoInput, ListContactosQuery } from "./dto/contacto.schema.js";
+import type { ConteosContactosQuery, CreateContactoInput, ListContactosQuery } from "./dto/contacto.schema.js";
 
 // Vista plana de los contactos (/api/v1/contactos), sobre las mismas reglas
 // que ya aplica EmpresasService para /empresas/:id/contactos: las escrituras
@@ -20,6 +20,15 @@ import type { CreateContactoInput, ListContactosQuery } from "./dto/contacto.sch
 // A diferencia de las respuestas de /empresas/:id (una fila por medio de
 // contacto), aquí los medios van anidados en `medios`: un listado paginado
 // no puede contar filas-por-medio contra `limit`.
+// A quién se le puede escribir: solo cuentan los medios para escribir
+// (correo, teléfono, WhatsApp), no LinkedIn ni el sitio web.
+const MEDIO_PARA_ESCRIBIR = sql`${mediosContacto.tipo} IN ('correo', 'telefono', 'whatsapp')`;
+const tieneMedio = (estado: "activo" | "no_contactar") =>
+  sql`EXISTS (SELECT 1 FROM ${mediosContacto} WHERE ${mediosContacto.contactoId} = ${contactos.id} AND ${MEDIO_PARA_ESCRIBIR} AND ${mediosContacto.estadoContacto} = ${estado})`;
+const ESCRIBIBLE = tieneMedio("activo");
+const NO_CONTACTAR = sql`(NOT ${tieneMedio("activo")} AND ${tieneMedio("no_contactar")})`;
+const SIN_MEDIO = sql`(NOT ${tieneMedio("activo")} AND NOT ${tieneMedio("no_contactar")})`;
+
 @Injectable()
 export class ContactosService {
   constructor(
@@ -29,13 +38,17 @@ export class ContactosService {
 
   async list(user: CurrentUser, query: ListContactosQuery) {
     const offset = (query.page - 1) * query.limit;
+    const estado = { escribible: ESCRIBIBLE, no_contactar: NO_CONTACTAR, sin_medio: SIN_MEDIO };
     const condition = and(
       ...compactConditions([
-        eq(contactos.activo, true),
-        eq(empresas.activo, true),
-        user.rol === "agente" ? eq(empresas.propietarioId, user.id) : undefined,
-        query.empresaId ? eq(contactos.empresaId, query.empresaId) : undefined,
-        query.q ? like(contactos.nombre, patronLike(query.q)) : undefined
+        ...this.alcanceLista(user, query.empresaId),
+        query.q ? or(
+          like(contactos.nombre, patronLike(query.q)),
+          like(empresas.nombreLegal, patronLike(query.q)),
+          like(empresas.nombreComercial, patronLike(query.q)),
+          sql`EXISTS (SELECT 1 FROM ${mediosContacto} WHERE ${mediosContacto.contactoId} = ${contactos.id} AND (${mediosContacto.valor} LIKE ${patronLike(query.q)} OR ${mediosContacto.valorNormalizado} LIKE ${patronLike(query.q)}))`
+        ) : undefined,
+        query.estado ? estado[query.estado] : undefined
       ])
     );
 
@@ -48,7 +61,49 @@ export class ContactosService {
       .limit(query.limit)
       .offset(offset);
 
-    return { page: query.page, limit: query.limit, data: await this.conMedios(rows) };
+    const conMedios = await this.conMedios(rows);
+    const prospeccion = await this.prospeccionPorContacto(rows.map((r) => r.id));
+    return { page: query.page, limit: query.limit, data: conMedios.map((c) => ({ ...c, prospeccion: prospeccion.get(c.id) ?? null })) };
+  }
+
+  // Tarjetas de arriba de la lista de Contactos (9-oct-2026), con el mismo
+  // alcance que la lista.
+  async conteos(user: CurrentUser, query: ConteosContactosQuery) {
+    const [fila] = await this.db
+      .select({
+        total: sql<number>`COUNT(*)`.mapWith(Number),
+        escribibles: sql<number>`COALESCE(SUM(${ESCRIBIBLE}), 0)`.mapWith(Number),
+        noContactar: sql<number>`COALESCE(SUM(${NO_CONTACTAR}), 0)`.mapWith(Number),
+        sinMedio: sql<number>`COALESCE(SUM(${SIN_MEDIO}), 0)`.mapWith(Number)
+      })
+      .from(contactos)
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .where(and(...compactConditions(this.alcanceLista(user, query.empresaId))));
+    return { total: fila.total, escribibles: fila.escribibles, no_contactar: fila.noContactar, sin_medio: fila.sinMedio };
+  }
+
+  private alcanceLista(user: CurrentUser, empresaId?: number) {
+    return [
+      eq(contactos.activo, true),
+      eq(empresas.activo, true),
+      user.rol === "agente" ? eq(empresas.propietarioId, user.id) : undefined,
+      empresaId ? eq(contactos.empresaId, empresaId) : undefined
+    ];
+  }
+
+  // En qué va cada persona (lista de Contactos, 9-oct-2026): estado de su
+  // prospecto más reciente y cuántos correos lleva; null si nunca fue
+  // prospecto. Una consulta para toda la página.
+  private async prospeccionPorContacto(ids: number[]) {
+    const resultado = new Map<number, { estado: string; envios: number }>();
+    if (ids.length === 0) return resultado;
+    const lista = sql.join(ids.map((id) => sql`${id}`), sql`, `);
+    const [filas] = (await this.db.execute(sql`SELECT contacto_id, estado, envios FROM (
+        SELECT p.contacto_id, p.estado, (SELECT COUNT(*) FROM envios e WHERE e.prospecto_id = p.id) AS envios,
+               ROW_NUMBER() OVER (PARTITION BY p.contacto_id ORDER BY p.id DESC) AS n
+        FROM prospectos p WHERE p.contacto_id IN (${lista})) t WHERE n = 1`)) as unknown as [{ contacto_id: number; estado: string; envios: number }[]];
+    for (const f of filas) resultado.set(Number(f.contacto_id), { estado: f.estado, envios: Number(f.envios) });
+    return resultado;
   }
 
   async get(user: CurrentUser, id: number) {

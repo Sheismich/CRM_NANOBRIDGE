@@ -36,6 +36,12 @@ export class TareasController {
     return this.tareasService.get(user, id);
   }
 
+  @Get(":id/historial")
+  historial(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
+    const id = idParamSchema.parse(idParam);
+    return this.tareasService.historial(user, id);
+  }
+
   // Reasignar una tarea abierta (PLAN_FRONTEND.md, hueco de la bandeja):
   // las que crea n8n llegan sin responsable y ningún agente las veía.
   @Patch(":id/asignar")

@@ -1,14 +1,14 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, like, or, sql, type SQL } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { actividades, auditoria, contactos, empresas, envios, mediosContacto, prospectos, respuestas, usuarios } from "../database/schema.js";
+import { actividades, auditoria, contactos, empresas, envios, mediosContacto, oportunidades, prospectos, respuestas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
-import { buildAntes } from "../shared/drizzle-utils.js";
+import { buildAntes, compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { insertarMediosContacto, buildMedioCandidatos, estadoInicialDeMedio, CODIGO_MEDIO_SUPRIMIDO } from "../shared/medios-contacto.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
-import type { CompanyInput, ContactInput, UpdateCompanyInput, UpdateContactInput } from "./dto/empresa.schema.js";
+import type { CompanyInput, ContactInput, ListEmpresasQuery, UpdateCompanyInput, UpdateContactInput } from "./dto/empresa.schema.js";
 
 // Las respuestas siguen usando claves snake_case (nombre_legal,
 // propietario_id, medio_tipo, etc.) aunque las columnas de
@@ -19,15 +19,47 @@ import type { CompanyInput, ContactInput, UpdateCompanyInput, UpdateContactInput
 // NULL da NULL); se vuelve NULL antes de responder.
 const PISO_FECHA = sql`CAST('1000-01-01 00:00:00' AS DATETIME)`;
 
+// Última actividad de una empresa: lo más reciente entre actividades
+// registradas, correos enviados y respuestas. GREATEST da NULL si algún
+// argumento es NULL, de ahí el piso. La usan la lista (columna y orden) y
+// los conteos.
+function ultimaActividadSql() {
+  return sql<Date | null>`NULLIF(GREATEST(
+    COALESCE((SELECT MAX(${actividades.ocurridaEn}) FROM ${actividades} WHERE ${actividades.empresaId} = ${empresas.id}), ${PISO_FECHA}),
+    COALESCE((SELECT MAX(${envios.enviadoEn}) FROM ${envios} INNER JOIN ${prospectos} ON ${prospectos.id} = ${envios.prospectoId} INNER JOIN ${contactos} ON ${contactos.id} = ${prospectos.contactoId} WHERE ${contactos.empresaId} = ${empresas.id}), ${PISO_FECHA}),
+    COALESCE((SELECT MAX(${respuestas.recibidoEn}) FROM ${respuestas} INNER JOIN ${prospectos} ON ${prospectos.id} = ${respuestas.prospectoId} INNER JOIN ${contactos} ON ${contactos.id} = ${prospectos.contactoId} WHERE ${contactos.empresaId} = ${empresas.id}), ${PISO_FECHA})
+  ), ${PISO_FECHA})`;
+}
+
+export type FiltrosEmpresas = Omit<ListEmpresasQuery, "page" | "limit">;
+
 @Injectable()
 export class EmpresasService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
 
-  async list(user: CurrentUser, page: number, limit: number) {
+  async list(user: CurrentUser, page: number, limit: number, filtros: FiltrosEmpresas = { orden: "nombre", sinResponsable: undefined }) {
     const offset = (page - 1) * limit;
     const ownsOnly = user.rol === "agente";
-    const activeCondition = eq(empresas.activo, true);
-    const condition = ownsOnly ? and(activeCondition, eq(empresas.propietarioId, user.id)) : activeCondition;
+    const condition = and(...compactConditions([
+      eq(empresas.activo, true),
+      ownsOnly ? eq(empresas.propietarioId, user.id) : undefined,
+      filtros.q ? or(
+        like(empresas.nombreLegal, patronLike(filtros.q)),
+        like(empresas.nombreComercial, patronLike(filtros.q)),
+        like(empresas.giro, patronLike(filtros.q)),
+        like(empresas.ciudad, patronLike(filtros.q))
+      ) : undefined,
+      filtros.giro ? eq(empresas.giro, filtros.giro) : undefined,
+      filtros.region ? eq(empresas.region, filtros.region) : undefined,
+      // Un agente ya ve solo lo suyo: estos dos filtros solo cambian algo
+      // para administrador y supervisor.
+      !ownsOnly && filtros.responsableId ? eq(empresas.propietarioId, filtros.responsableId) : undefined,
+      !ownsOnly && filtros.sinResponsable ? isNull(empresas.propietarioId) : undefined
+    ]));
+    const ultimaActividad = ultimaActividadSql();
+    // Por actividad: la más reciente primero, las que nunca tuvieron nada al
+    // final (DESC ya deja los NULL al último en MySQL); el id desempata.
+    const orden = filtros.orden === "actividad" ? [desc(ultimaActividad), asc(empresas.id)] : [asc(empresas.nombreLegal), asc(empresas.id)];
 
     const rows = await this.db
       .select({
@@ -49,21 +81,100 @@ export class EmpresasService {
         // Lo más reciente entre lo registrado a mano, los correos de la
         // automatización y las respuestas (lo mismo que junta el Historial):
         // una empresa a la que n8n le escribió ayer no es "Ninguna".
-        // GREATEST da NULL si algún argumento es NULL, de ahí el piso.
-        ultima_actividad: sql<Date | null>`NULLIF(GREATEST(
-          COALESCE((SELECT MAX(${actividades.ocurridaEn}) FROM ${actividades} WHERE ${actividades.empresaId} = ${empresas.id}), ${PISO_FECHA}),
-          COALESCE((SELECT MAX(${envios.enviadoEn}) FROM ${envios} INNER JOIN ${prospectos} ON ${prospectos.id} = ${envios.prospectoId} INNER JOIN ${contactos} ON ${contactos.id} = ${prospectos.contactoId} WHERE ${contactos.empresaId} = ${empresas.id}), ${PISO_FECHA}),
-          COALESCE((SELECT MAX(${respuestas.recibidoEn}) FROM ${respuestas} INNER JOIN ${prospectos} ON ${prospectos.id} = ${respuestas.prospectoId} INNER JOIN ${contactos} ON ${contactos.id} = ${prospectos.contactoId} WHERE ${contactos.empresaId} = ${empresas.id}), ${PISO_FECHA})
-        ), ${PISO_FECHA})`.mapWith(actividades.ocurridaEn)
+        ultima_actividad: ultimaActividad.mapWith(actividades.ocurridaEn)
       })
       .from(empresas)
       .leftJoin(usuarios, eq(usuarios.id, empresas.propietarioId))
       .where(condition)
-      .orderBy(empresas.nombreLegal)
+      .orderBy(...orden)
       .limit(limit)
       .offset(offset);
 
-    return { page, limit, data: rows };
+    const detalle = await this.detalleDeLista(rows.map((r) => r.id));
+    return { page, limit, data: rows.map((r) => ({ ...r, ...(detalle.get(r.id) ?? { prospeccion: null, ultima_actividad_detalle: null }) })) };
+  }
+
+  // Lo que la lista de Empresas (9-oct-2026) dice además de la fecha:
+  //  - prospeccion: en qué va su prospecto más reciente y cuántos correos
+  //    lleva (null si la empresa nunca fue prospecto).
+  //  - ultima_actividad_detalle: qué fue lo último que pasó -- una actividad
+  //    registrada (con su tipo), un correo (con su número) o una respuesta
+  //    (con su clasificación); null si nunca pasó nada.
+  // Tres consultas para toda la página (no una por fila), con ROW_NUMBER
+  // para quedarse con la última de cada empresa.
+  private async detalleDeLista(ids: number[]) {
+    const resultado = new Map<number, { prospeccion: { estado: string; envios: number } | null; ultima_actividad_detalle: Record<string, unknown> | null }>();
+    if (ids.length === 0) return resultado;
+    const lista = sql.join(ids.map((id) => sql`${id}`), sql`, `);
+    type Fila = { empresa_id: number; fecha: Date; [k: string]: unknown };
+    const filas = async (consulta: SQL) => ((await this.db.execute(consulta)) as unknown as [Fila[]])[0];
+
+    const [prospeccion, ultimaManual, ultimoEnvio, ultimaRespuesta] = await Promise.all([
+      filas(sql`SELECT empresa_id, estado, envios FROM (
+          SELECT c.empresa_id, p.estado, (SELECT COUNT(*) FROM envios e WHERE e.prospecto_id = p.id) AS envios,
+                 ROW_NUMBER() OVER (PARTITION BY c.empresa_id ORDER BY p.id DESC) AS n
+          FROM prospectos p INNER JOIN contactos c ON c.id = p.contacto_id WHERE c.empresa_id IN (${lista})) t WHERE n = 1`),
+      filas(sql`SELECT empresa_id, fecha, tipo FROM (
+          SELECT a.empresa_id, a.ocurrida_en AS fecha, a.tipo, ROW_NUMBER() OVER (PARTITION BY a.empresa_id ORDER BY a.ocurrida_en DESC, a.id DESC) AS n
+          FROM actividades a WHERE a.empresa_id IN (${lista})) t WHERE n = 1`),
+      filas(sql`SELECT empresa_id, fecha, numero_contacto FROM (
+          SELECT c.empresa_id, e.enviado_en AS fecha, e.numero_contacto, ROW_NUMBER() OVER (PARTITION BY c.empresa_id ORDER BY e.enviado_en DESC, e.id DESC) AS n
+          FROM envios e INNER JOIN prospectos p ON p.id = e.prospecto_id INNER JOIN contactos c ON c.id = p.contacto_id WHERE c.empresa_id IN (${lista})) t WHERE n = 1`),
+      filas(sql`SELECT empresa_id, fecha, clasificacion FROM (
+          SELECT c.empresa_id, r.recibido_en AS fecha, r.clasificacion, ROW_NUMBER() OVER (PARTITION BY c.empresa_id ORDER BY r.recibido_en DESC, r.id DESC) AS n
+          FROM respuestas r INNER JOIN prospectos p ON p.id = r.prospecto_id INNER JOIN contactos c ON c.id = p.contacto_id WHERE c.empresa_id IN (${lista})) t WHERE n = 1`)
+    ]);
+
+    for (const id of ids) resultado.set(id, { prospeccion: null, ultima_actividad_detalle: null });
+    for (const f of prospeccion) resultado.get(Number(f.empresa_id))!.prospeccion = { estado: String(f.estado), envios: Number(f.envios) };
+
+    // La más reciente de las tres fuentes; con la misma fecha gana la
+    // respuesta (es lo que más le importa a quien lee la lista).
+    const candidatos = [
+      ...ultimaRespuesta.map((f) => ({ empresaId: Number(f.empresa_id), fecha: new Date(f.fecha), prioridad: 0, detalle: { tipo: "respuesta", clasificacion: f.clasificacion ?? null } })),
+      ...ultimoEnvio.map((f) => ({ empresaId: Number(f.empresa_id), fecha: new Date(f.fecha), prioridad: 1, detalle: { tipo: "envio", numero_contacto: Number(f.numero_contacto) } })),
+      ...ultimaManual.map((f) => ({ empresaId: Number(f.empresa_id), fecha: new Date(f.fecha), prioridad: 2, detalle: { tipo: "actividad", actividad_tipo: f.tipo } }))
+    ].sort((a, b) => b.fecha.getTime() - a.fecha.getTime() || a.prioridad - b.prioridad);
+    for (const c of candidatos) {
+      const fila = resultado.get(c.empresaId)!;
+      if (!fila.ultima_actividad_detalle) fila.ultima_actividad_detalle = c.detalle;
+    }
+    return resultado;
+  }
+
+  // Tarjetas de arriba de la lista de Empresas (9-oct-2026). Mismo alcance
+  // que la lista: un agente cuenta solo las suyas.
+  //  - sin_actividad_30_dias: ni actividad registrada, ni correo, ni
+  //    respuesta en los últimos 30 días (o nunca).
+  //  - con_oportunidad_abierta y su valor: oportunidades no cerradas.
+  async conteos(user: CurrentUser) {
+    const alcance = and(...compactConditions([eq(empresas.activo, true), user.rol === "agente" ? eq(empresas.propietarioId, user.id) : undefined]));
+    const hace30 = sql`DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY)`;
+    const [[fila], [opor]] = await Promise.all([
+      this.db
+        .select({
+          total: sql<number>`COUNT(*)`.mapWith(Number),
+          sinResponsable: sql<number>`COALESCE(SUM(${empresas.propietarioId} IS NULL), 0)`.mapWith(Number),
+          sinActividad: sql<number>`COALESCE(SUM(${ultimaActividadSql()} IS NULL OR ${ultimaActividadSql()} < ${hace30}), 0)`.mapWith(Number)
+        })
+        .from(empresas)
+        .where(alcance),
+      this.db
+        .select({
+          empresas: sql<number>`COUNT(DISTINCT ${oportunidades.empresaId})`.mapWith(Number),
+          valor: sql<string>`COALESCE(SUM(${oportunidades.valorEstimado}), 0)`
+        })
+        .from(oportunidades)
+        .innerJoin(empresas, eq(empresas.id, oportunidades.empresaId))
+        .where(and(alcance, eq(oportunidades.cerrada, false)))
+    ]);
+    return {
+      total: fila.total,
+      sin_responsable: fila.sinResponsable,
+      sin_actividad_30_dias: fila.sinActividad,
+      con_oportunidad_abierta: opor.empresas,
+      valor_oportunidades_abiertas: String(opor.valor)
+    };
   }
 
   async create(user: CurrentUser, input: CompanyInput) {
@@ -103,6 +214,15 @@ export class EmpresasService {
   async get(user: CurrentUser, id: number) {
     const company = await this.findEmpresaScoped(this.db, user, id);
     const contactRows = await this.contactosConMedios(and(eq(contactos.empresaId, id), eq(contactos.activo, true)));
+    // De dónde vino (ficha de Empresa, 9-oct-2026): la fuente del prospecto
+    // más reciente que tenga una (LinkedIn, el sitio de la empresa, etc.).
+    const [fuente] = await this.db
+      .select({ fuenteUrl: prospectos.fuenteUrl })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .where(and(eq(contactos.empresaId, id), sql`${prospectos.fuenteUrl} IS NOT NULL`))
+      .orderBy(desc(prospectos.id))
+      .limit(1);
 
     return {
       id: company.id,
@@ -122,6 +242,7 @@ export class EmpresasService {
       activo: true,
       creado_en: company.creadoEn,
       actualizado_en: company.actualizadoEn,
+      fuente_url: fuente?.fuenteUrl ?? null,
       contactos: contactRows
     };
   }

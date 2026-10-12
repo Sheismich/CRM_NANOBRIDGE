@@ -8,7 +8,7 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { importarCsvBodySchema, listBorradoresQuerySchema, listLotesQuerySchema, listProspectosQuerySchema, prospectoInputSchema } from "./dto/prospecto.schema.js";
+import { conteosProspectosQuerySchema, importarCsvBodySchema, listBorradoresQuerySchema, listLotesQuerySchema, listProspectosQuerySchema, prospectoInputSchema } from "./dto/prospecto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 const confirmarBodySchema = z.object({ usarContactoExistente: z.boolean().default(false) });
@@ -37,6 +37,13 @@ export class ProspectosController {
   list(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
     const input = listProspectosQuerySchema.parse(query);
     return this.prospectosService.listProspectos(user, input);
+  }
+
+  // Tarjetas del embudo (antes de @Get(":id"), igual que "importaciones").
+  @Get("conteos")
+  conteos(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
+    const input = conteosProspectosQuerySchema.parse(query);
+    return this.prospectosService.conteosProspectos(user, input);
   }
 
   // Declarado ANTES de @Get(":id") -- si no, Nest intentaría resolver

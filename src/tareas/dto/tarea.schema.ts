@@ -47,6 +47,8 @@ export const listTareasQuerySchema = z.object({
   prioridad: z.enum(["baja", "media", "alta", "urgente"]).optional(),
   tipo: z.enum(["seguimiento", "clasificacion", "revision_documento", "otro"]).optional(),
   responsableId: z.coerce.number().int().positive().optional(),
+  // Buscar por título o por nombre de la empresa (lista de Tareas, 9-oct).
+  q: z.string().trim().min(1).max(120).optional(),
   // Las tareas que crea n8n llegan sin responsable: un supervisor las
   // filtra así para repartirlas. Mismo mapeo explícito que `cerrada` en
   // oportunidades (z.coerce.boolean() tomaría "false" como true).

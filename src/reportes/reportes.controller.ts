@@ -4,7 +4,7 @@ import { ReportesService } from "./reportes.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
-import { metricasDiariasQuerySchema, prospeccionQuerySchema, reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
+import { actividadRecienteQuerySchema, metricasDiariasQuerySchema, prospeccionPorDiaQuerySchema, prospeccionQuerySchema, reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). Criterio de acceso
 // (el plan no lo especifica para este módulo, así que se define aquí):
@@ -68,6 +68,20 @@ export class ReportesController {
   prospeccion(@Query() query: Record<string, unknown>) {
     const input = prospeccionQuerySchema.parse(query);
     return this.reportesService.prospeccion(input);
+  }
+
+  // Gráfica del Inicio: envíos y respuestas por día de México.
+  @Get("prospeccion/por-dia")
+  prospeccionPorDia(@Query() query: Record<string, unknown>) {
+    const input = prospeccionPorDiaQuerySchema.parse(query);
+    return this.reportesService.prospeccionPorDia(input);
+  }
+
+  // "Lo que acaba de pasar" del Inicio: respuestas, envíos y bajas recientes.
+  @Get("actividad-reciente")
+  actividadReciente(@Query() query: Record<string, unknown>) {
+    const input = actividadRecienteQuerySchema.parse(query);
+    return this.reportesService.actividadReciente(input);
   }
 
   // Histórico del job diario de métricas comerciales -- a diferencia de los

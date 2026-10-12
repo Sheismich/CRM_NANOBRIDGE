@@ -42,6 +42,18 @@ export const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25)
 });
 
+// Lista de Empresas (9-oct-2026): buscar por nombre, giro o ciudad, filtrar
+// por giro, región o responsable, y ordenar por última actividad.
+export const listEmpresasQuerySchema = listQuerySchema.extend({
+  q: z.string().trim().min(1).max(120).optional(),
+  giro: z.string().trim().min(1).max(120).optional(),
+  region: z.string().trim().min(1).max(120).optional(),
+  responsableId: z.coerce.number().int().positive().optional(),
+  sinResponsable: z.enum(["true", "false"]).optional().transform((v) => (v === undefined ? undefined : v === "true")),
+  orden: z.enum(["nombre", "actividad"]).default("nombre")
+}).refine((q) => !(q.sinResponsable && q.responsableId), { path: ["sinResponsable"], message: "No se combina con responsableId" });
+export type ListEmpresasQuery = z.infer<typeof listEmpresasQuerySchema>;
+
 // --- Actualización de empresa ---------------------------------------------
 // Todos los campos opcionales (PATCH parcial): un campo ausente deja el
 // valor actual sin tocar. A diferencia de companyInputSchema, `pais` NO

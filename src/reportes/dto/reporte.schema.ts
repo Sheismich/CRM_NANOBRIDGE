@@ -38,6 +38,28 @@ export const prospeccionQuerySchema = z.object({
 }).refine(fechaInicioAntesDeFechaFin, ERROR_RANGO_FECHA);
 export type ProspeccionQuery = z.infer<typeof prospeccionQuerySchema>;
 
+// Gráfica "correos enviados por día" del Inicio: aquí las dos fechas son
+// obligatorias porque la respuesta trae un renglón por cada día del rango
+// (los días sin envíos van en cero) y un rango abierto no tiene fin. Tope de
+// 366 días: más que eso ya no se lee como gráfica por día.
+const MAX_DIAS_POR_DIA = 366;
+export const prospeccionPorDiaQuerySchema = z.object({
+  fechaInicio: z.string().date(),
+  fechaFin: z.string().date(),
+  campanaId: z.coerce.number().int().positive().optional()
+})
+  .refine(fechaInicioAntesDeFechaFin, ERROR_RANGO_FECHA)
+  .refine((q) => (Date.parse(q.fechaFin) - Date.parse(q.fechaInicio)) / 86_400_000 < MAX_DIAS_POR_DIA, { message: `El rango no puede pasar de ${MAX_DIAS_POR_DIA} días`, path: ["fechaFin"] });
+export type ProspeccionPorDiaQuery = z.infer<typeof prospeccionPorDiaQuerySchema>;
+
+// "Lo que acaba de pasar" del Inicio. `hasta` (día de México) corta el feed
+// en ese día; sin él, es hasta ahora.
+export const actividadRecienteQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  hasta: z.string().date().optional()
+});
+export type ActividadRecienteQuery = z.infer<typeof actividadRecienteQuerySchema>;
+
 // Reportes disponibles para exportación CSV (GET /reportes/export/:reporte).
 // Mismo set que los 7 endpoints de lectura -- ver ReportesController.
 export const REPORTES_EXPORTABLES = ["actividades", "tareas", "conversion-etapas", "pipeline", "forecast", "desempeno-por-agente", "prospeccion"] as const;

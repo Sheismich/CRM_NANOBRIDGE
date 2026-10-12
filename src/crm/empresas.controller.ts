@@ -6,7 +6,7 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { companyInputSchema, contactInputSchema, listQuerySchema, updateCompanySchema, updateContactSchema } from "./dto/empresa.schema.js";
+import { companyInputSchema, contactInputSchema, listEmpresasQuerySchema, updateCompanySchema, updateContactSchema } from "./dto/empresa.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -17,8 +17,14 @@ export class EmpresasController {
 
   @Get()
   list(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
-    const { page, limit } = listQuerySchema.parse(query);
-    return this.empresasService.list(user, page, limit);
+    const { page, limit, ...filtros } = listEmpresasQuerySchema.parse(query);
+    return this.empresasService.list(user, page, limit, filtros);
+  }
+
+  // Tarjetas de arriba de la lista (antes de @Get(":id")).
+  @Get("conteos")
+  conteos(@CurrentUser() user: CurrentUserType) {
+    return this.empresasService.conteos(user);
   }
 
   @Post()

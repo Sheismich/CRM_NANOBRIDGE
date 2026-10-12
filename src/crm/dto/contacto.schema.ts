@@ -11,8 +11,19 @@ export const listContactosQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   empresaId: z.coerce.number().int().positive().optional(),
-  q: z.string().trim().max(160).optional()
+  // Busca en el nombre, el correo o teléfono y el nombre de la empresa.
+  q: z.string().trim().max(160).optional(),
+  // A quién se le puede escribir (lista de Contactos, 9-oct-2026):
+  // escribible = algún correo/teléfono/WhatsApp activo; no_contactar = ninguno
+  // activo y alguno en no_contactar (pidió su baja); sin_medio = ni lo uno ni
+  // lo otro (sin medio o solo obsoletos).
+  estado: z.enum(["escribible", "no_contactar", "sin_medio"]).optional()
 });
+
+export const conteosContactosQuerySchema = z.object({
+  empresaId: z.coerce.number().int().positive().optional()
+});
+export type ConteosContactosQuery = z.infer<typeof conteosContactosQuerySchema>;
 
 export type CreateContactoInput = z.infer<typeof createContactoSchema>;
 export type ListContactosQuery = z.infer<typeof listContactosQuerySchema>;

@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, eq, inArray, like, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, lt, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, borradoresCaptura, campanas, contactos, empresas, mediosContacto, prospectos } from "../database/schema.js";
+import { auditoria, borradoresCaptura, campanas, contactos, empresas, envios, mediosContacto, prospectos } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
@@ -12,7 +12,7 @@ import { decodificarArchivoTexto } from "../shared/texto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { personaEnBaja } from "../shared/baja-prospecto.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
-import { COLUMNAS_CSV, filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ProspectoInput } from "./dto/prospecto.schema.js";
+import { COLUMNAS_CSV, filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ConteosProspectosQuery, type ProspectoInput } from "./dto/prospecto.schema.js";
 
 const BORRADORES_TTL_DIAS = 30;
 // Tope defensivo por importación: STEELSAFE (el primer caso de uso real)
@@ -510,9 +510,21 @@ export class ProspectosService {
       ownsOnly ? eq(empresas.propietarioId, user.id) : undefined,
       query.estado ? eq(prospectos.estado, query.estado) : undefined,
       query.prioridad ? eq(prospectos.prioridad, query.prioridad) : undefined,
-      query.q ? or(like(empresas.nombreLegal, patronLike(query.q)), like(contactos.nombre, patronLike(query.q))) : undefined
+      query.q ? or(like(empresas.nombreLegal, patronLike(query.q)), like(contactos.nombre, patronLike(query.q))) : undefined,
+      query.campanaId ? eq(prospectos.campanaId, query.campanaId) : undefined
     ]);
 
+    // Orden estable: con empates (mismo score, mismo segundo) el id decide.
+    const orden = {
+      creado: [asc(prospectos.creadoEn), asc(prospectos.id)],
+      recientes: [desc(prospectos.creadoEn), desc(prospectos.id)],
+      score: [sql`${prospectos.score} IS NULL`, desc(prospectos.score), asc(prospectos.id)]
+    }[query.orden];
+
+    // La fila trae lo que la lista de Prospectos (9-oct-2026) enseña sin
+    // pedir cada ficha: giro y estado de la empresa, puesto del contacto,
+    // campaña y cuántos correos lleva el prospecto (el "1/3"). Los conteos de
+    // envíos son subconsultas por fila: la página es de a lo más 100 filas.
     const rows = await this.db
       .select({
         id: prospectos.id,
@@ -522,19 +534,57 @@ export class ProspectosService {
         confianza: prospectos.confianza,
         contacto_id: contactos.id,
         contacto_nombre: contactos.nombre,
+        contacto_puesto: contactos.puesto,
         empresa_id: empresas.id,
         empresa_nombre_legal: empresas.nombreLegal,
+        empresa_giro: empresas.giro,
+        empresa_estado: empresas.estado,
+        campana_id: prospectos.campanaId,
+        campana_nombre: campanas.nombre,
+        envios: sql<number>`(SELECT COUNT(*) FROM ${envios} WHERE ${envios.prospectoId} = ${prospectos.id})`.mapWith(Number),
+        ultimo_envio_en: sql<Date | null>`(SELECT MAX(${envios.enviadoEn}) FROM ${envios} WHERE ${envios.prospectoId} = ${prospectos.id})`,
         creado_en: prospectos.creadoEn
       })
       .from(prospectos)
       .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
       .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
       .where(and(...condition))
-      .orderBy(prospectos.creadoEn)
+      .orderBy(...orden)
       .limit(query.limit)
       .offset(offset);
 
     return { page: query.page, limit: query.limit, data: rows };
+  }
+
+  // Tarjetas del embudo de Prospectos (9-oct-2026): cuántos hay en cada
+  // estado (la pantalla los agrupa en capturados / validados / en campaña /
+  // respondieron / excluidos / baja) y cuántos ya recibieron al menos un
+  // correo. Mismo alcance que la lista: un agente, solo sus empresas.
+  async conteosProspectos(user: CurrentUser, query: ConteosProspectosQuery) {
+    const condicion = and(...compactConditions([
+      user.rol === "agente" ? eq(empresas.propietarioId, user.id) : undefined,
+      query.campanaId ? eq(prospectos.campanaId, query.campanaId) : undefined
+    ]));
+    const base = () => this.db.select({ estado: prospectos.estado, cantidad: sql<number>`COUNT(*)`.mapWith(Number) })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId));
+
+    const [porEstado, [contactados]] = await Promise.all([
+      base().where(condicion).groupBy(prospectos.estado).orderBy(prospectos.estado),
+      this.db.select({ cantidad: sql<number>`COUNT(*)`.mapWith(Number) })
+        .from(prospectos)
+        .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+        .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+        .where(and(condicion, sql`EXISTS (SELECT 1 FROM ${envios} WHERE ${envios.prospectoId} = ${prospectos.id})`))
+    ]);
+
+    return {
+      total: porEstado.reduce((s, e) => s + e.cantidad, 0),
+      contactados: contactados.cantidad,
+      por_estado: porEstado
+    };
   }
 
   async getProspecto(user: CurrentUser, id: number) {

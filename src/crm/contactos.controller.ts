@@ -7,7 +7,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { updateContactSchema } from "./dto/empresa.schema.js";
-import { createContactoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
+import { conteosContactosQuerySchema, createContactoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -24,6 +24,12 @@ export class ContactosController {
   @Get()
   list(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
     return this.contactosService.list(user, listContactosQuerySchema.parse(query));
+  }
+
+  // Tarjetas de arriba de la lista (antes de @Get(":id")).
+  @Get("conteos")
+  conteos(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
+    return this.contactosService.conteos(user, conteosContactosQuerySchema.parse(query));
   }
 
   @Post()

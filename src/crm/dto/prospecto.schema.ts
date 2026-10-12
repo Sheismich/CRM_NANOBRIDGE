@@ -104,9 +104,19 @@ export const listProspectosQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   estado: z.string().trim().max(60).optional(),
   prioridad: z.enum(["alta", "media", "baja"]).optional(),
-  q: z.string().trim().max(255).optional()
+  q: z.string().trim().max(255).optional(),
+  campanaId: z.coerce.number().int().positive().optional(),
+  // "creado" = los más viejos primero (como siempre); "score" = el más
+  // prometedor primero (lista de Prospectos, 9-oct-2026).
+  orden: z.enum(["creado", "recientes", "score"]).default("creado")
 });
 export type ListProspectosQuery = z.infer<typeof listProspectosQuerySchema>;
+
+// Tarjetas del embudo de Prospectos: cuántos hay en cada estado.
+export const conteosProspectosQuerySchema = z.object({
+  campanaId: z.coerce.number().int().positive().optional()
+});
+export type ConteosProspectosQuery = z.infer<typeof conteosProspectosQuerySchema>;
 
 export const listLotesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20)
