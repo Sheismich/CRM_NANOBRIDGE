@@ -189,6 +189,31 @@ mysql -h "$DB_IP" -u appuser -p nanobridge_crm -e "INSERT INTO schema_migrations
 El segundo comando la registra como aplicada, igual que lo hace
 `apply-migrations.ts`. Una migración a la vez, en orden.
 
+**Si `npm run migrate` responde `Access denied for user 'appuser'`** (visto
+el 12-oct-2026, primera migración desde que se rotó la contraseña el 6-oct):
+el cliente `mysql` con la misma contraseña sí entra, así que se usa ese
+camino sin escribir la contraseña. Aplica y registra cada archivo, y se
+detiene en el primero que falle:
+
+```bash
+export MYSQL_PWD=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=$P | sed -E 's#^mysql://[^:]+:([^@]*)@.*#\1#')
+for f in <archivo1>.sql <archivo2>.sql; do
+  echo "== $f" &&
+  mysql -h "$DB_IP" -u appuser nanobridge_crm < src/database/migrations/$f &&
+  mysql -h "$DB_IP" -u appuser nanobridge_crm -e "INSERT INTO schema_migrations (version) VALUES ('$f');" &&
+  echo "ok $f" || { echo "FALLO $f"; break; }
+done
+unset MYSQL_PWD
+```
+
+Causa aún sin confirmar (sospecha: `mysql2` se conecta sin SSL y el
+cliente `mysql` sí lo usa; se revisa junto con el SSL de §9).
+
+**Cloud Shell nueva o reiniciada:** si `gcloud` dice que no hay cuenta activa
+o que falta `project`, corre `gcloud auth login` (o `gcloud config set
+account …`) y `gcloud config set project crm-prospeccion-outbound` antes de
+empezar.
+
 ### Qué está en producción
 
 Actualiza esta tabla en cada deploy.
@@ -210,6 +235,7 @@ Actualiza esta tabla en cada deploy.
 | 7-oct-2026 | `nanobridge-api-00021-xq8` | `fd47e88` | (sin migración) | Un JSON que no viene en UTF-8 responde 400 `TEXTO_NO_UTF8` en vez de guardarse con "�"; el CSV de importación acepta el de Excel en español (Windows-1252). Verificado en producción con un login en Latin-1 |
 | 8-oct-2026 | `nanobridge-api-00022-x2w` | `fd47e88` (misma imagen) | (sin migración) | Solo configuración: se quitó el secreto `STORAGE_LOCAL_SIGNING_SECRET` (`--remove-secrets`) |
 | 8-oct-2026 | `nanobridge-api-00023-2zk` | `fd47e88` (misma imagen) | (sin migración) | Idéntica a la 00022: el mismo comando corrido otra vez. `/health` ok |
+| 12-oct-2026 | `nanobridge-api-00024-r4f` | `a04e68e` | `030_ultimo_acceso_y_registro.sql` | Backend del rediseño: Inicio y Tareas (Mi día), Prospectos, Empresas, Oportunidades, Contactos, Cotizaciones (028: motivo de rechazo, vencidas solas en `limpiar-borradores`), Documentos (029: aprobar/rechazar, expediente sin papeles obligatorios, lote zip), Reportes (vista Día), PDFs (informe ejecutivo, cotización) y Administración (030: salud, último acceso, registro de cambios). Migraciones aplicadas con el cliente `mysql` (`npm run migrate` dio `Access denied`, ver abajo) |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
