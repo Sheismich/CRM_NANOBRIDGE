@@ -465,7 +465,10 @@ export class CotizacionesService {
   // (un agente solo las de sus oportunidades; si no es suya, 404).
   async pdf(user: CurrentUser, id: number) {
     const cotizacion = await this.get(user, id);
-    return { nombreArchivo: nombreArchivoCotizacion(cotizacion), contenido: await cotizacionPdf(cotizacion) };
+    const contenido = await cotizacionPdf(cotizacion);
+    // Queda en el Registro de cambios · Descargas (12-oct-2026).
+    await this.db.insert(auditoria).values({ usuarioId: user.id, entidad: "cotizacion", entidadId: id, accion: "descargar_pdf", despues: { version: cotizacion.version } });
+    return { nombreArchivo: nombreArchivoCotizacion(cotizacion), contenido };
   }
 
   async cambiarEstado(user: CurrentUser, id: number, input: CambiarEstadoCotizacionInput) {

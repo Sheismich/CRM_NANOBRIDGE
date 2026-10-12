@@ -78,22 +78,27 @@ export class OutboxService {
       const [event] = await tx.select().from(eventosPendientes).where(eq(eventosPendientes.id, id)).limit(1).for("update");
       if (!event) throw new HttpError(404, "Evento no encontrado");
       if (event.estado !== "fallido") throw new HttpError(409, "Solo se pueden reintentar eventos en estado fallido");
+      await this.reintentarEnTx(tx, actor, event);
+    });
+  }
 
-      await tx.update(eventosPendientes).set({
-        estado: "pendiente",
-        intentos: 0,
-        proximoIntentoEn: null,
-        ultimoError: null
-      }).where(eq(eventosPendientes.id, id));
+  // La mitad de retry() que también usa "Reintentar todos" de Administración
+  // (12-oct-2026): el evento ya viene bloqueado (FOR UPDATE) y en fallido.
+  async reintentarEnTx(tx: DrizzleTx, actor: CurrentUser, event: Pick<typeof eventosPendientes.$inferSelect, "id" | "estado" | "intentos" | "ultimoError">) {
+    await tx.update(eventosPendientes).set({
+      estado: "pendiente",
+      intentos: 0,
+      proximoIntentoEn: null,
+      ultimoError: null
+    }).where(eq(eventosPendientes.id, event.id));
 
-      await tx.insert(auditoria).values({
-        usuarioId: actor.id,
-        entidad: "evento_pendiente",
-        entidadId: id,
-        accion: "reintentar",
-        antes: { estado: event.estado, intentos: event.intentos, ultimo_error: event.ultimoError },
-        despues: { estado: "pendiente", intentos: 0 }
-      });
+    await tx.insert(auditoria).values({
+      usuarioId: actor.id,
+      entidad: "evento_pendiente",
+      entidadId: event.id,
+      accion: "reintentar",
+      antes: { estado: event.estado, intentos: event.intentos, ultimo_error: event.ultimoError },
+      despues: { estado: "pendiente", intentos: 0 }
     });
   }
 
@@ -150,16 +155,22 @@ export class OutboxService {
       const [proceso] = await tx.select({ id: procesosFallidos.id, estado: procesosFallidos.estado }).from(procesosFallidos).where(eq(procesosFallidos.id, id)).limit(1).for("update");
       if (!proceso) throw new HttpError(404, "Proceso fallido no encontrado");
 
-      await tx.update(procesosFallidos).set({ estado }).where(eq(procesosFallidos.id, id));
+      await this.cambiarEstadoProcesoEnTx(tx, actor, proceso, estado);
+    });
+  }
 
-      await tx.insert(auditoria).values({
-        usuarioId: actor.id,
-        entidad: "proceso_fallido",
-        entidadId: id,
-        accion: "cambiar_estado",
-        antes: { estado: proceso.estado },
-        despues: { estado }
-      });
+  // Igual que retry(): la mitad que también usa "Marcar resueltos" por grupo
+  // de Administración (12-oct-2026). El proceso ya viene bloqueado.
+  async cambiarEstadoProcesoEnTx(tx: DrizzleTx, actor: CurrentUser, proceso: { id: number; estado: string }, estado: "abierto" | "en_revision" | "resuelto") {
+    await tx.update(procesosFallidos).set({ estado }).where(eq(procesosFallidos.id, proceso.id));
+
+    await tx.insert(auditoria).values({
+      usuarioId: actor.id,
+      entidad: "proceso_fallido",
+      entidadId: proceso.id,
+      accion: "cambiar_estado",
+      antes: { estado: proceso.estado },
+      despues: { estado }
     });
   }
 }

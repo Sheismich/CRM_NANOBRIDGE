@@ -127,7 +127,9 @@ export class ReportesController {
   // Content-Disposition propios (text/csv, attachment) en vez del JSON que
   // pone Nest por default -- distinto del @Res({ passthrough: true }) que
   // usa AuthController solo para poner una cookie y dejar que Nest siga
-  // serializando la respuesta normal.
+  // serializando la respuesta normal. Cada exportación queda en la auditoría
+  // (Registro de cambios · Descargas, 12-oct-2026): son datos que salen.
+  //
   // Informe ejecutivo (bloque 6, 12-oct-2026): PDF de una hoja o CSV con los
   // mismos números. Antes de "export/:reporte" para que esa no la atrape.
   @Get("export/informe-ejecutivo")
@@ -136,6 +138,7 @@ export class ReportesController {
     const { nombreArchivo, contenido } = input.formato === "csv"
       ? await this.informeEjecutivoService.csv(input)
       : await this.informeEjecutivoService.pdf(input, user);
+    await this.reportesService.registrarExportacion(user, "informe-ejecutivo", input.formato, { mes: input.mes ?? null, responsableId: input.responsableId ?? null });
     response.status(200).set({
       "Content-Type": input.formato === "csv" ? "text/csv; charset=utf-8" : "application/pdf",
       "Content-Disposition": contentDispositionAdjunto(nombreArchivo)
@@ -150,6 +153,7 @@ export class ReportesController {
       : reporte === "dia"
         ? await this.reporteDiaService.exportarCsv(user, reporteDiaQuerySchema.parse(query))
         : await this.reportesService.exportarCsv(reporte, reporteQuerySchema.parse(query));
+    await this.reportesService.registrarExportacion(user, reporte, "csv", query);
     response.status(200).set({
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${nombreArchivo}"`

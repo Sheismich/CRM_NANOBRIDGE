@@ -6,6 +6,7 @@ import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { toCsv } from "../shared/csv.js";
 import { diaSiguiente, fechaMx, inicioDelDiaMxSql, lunesDeLaSemana } from "../shared/dia-habil.js";
+import type { CurrentUser } from "../auth/current-user.type.js";
 import type { ActividadRecienteQuery, MetricasDiariasQuery, ProspeccionPorDiaQuery, ProspeccionQuery, ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). A diferencia de los
@@ -63,6 +64,19 @@ export class ReportesService {
   private readonly logger = new Logger(ReportesService.name);
 
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
+
+  // Cada exportación queda en la auditoría (Registro de cambios ·
+  // Descargas, 12-oct-2026): son datos que salen del sistema. entidadId 0
+  // porque un reporte no es una fila (igual que "descargar_lote").
+  async registrarExportacion(user: CurrentUser, reporte: string, formato: "csv" | "pdf", filtros: Record<string, unknown>) {
+    await this.db.insert(auditoria).values({
+      usuarioId: user.id,
+      entidad: "reporte",
+      entidadId: 0,
+      accion: "exportar",
+      despues: { reporte, formato, filtros }
+    });
+  }
 
   // "Actividades por agente" (PLAN_CRM_DEFINITIVO.md #9) -- cuenta cada
   // llamada/whatsapp/comentario registrado en `actividades` (módulo 4),

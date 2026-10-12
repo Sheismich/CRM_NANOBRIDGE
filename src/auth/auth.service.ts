@@ -86,6 +86,8 @@ export class AuthService {
 
     await this.db.delete(loginFallos).where(eq(loginFallos.correo, input.correo));
     const session = await this.sessionService.createSession(user.id);
+    // "Último acceso" (12-oct-2026): entrar cuenta como usar el CRM.
+    await this.db.update(usuarios).set({ ultimoAccesoEn: sql`CURRENT_TIMESTAMP` }).where(eq(usuarios.id, user.id));
     const currentUser: CurrentUser = { id: user.id, nombre: user.nombre, correo: user.correo, rol: user.rol as CurrentUser["rol"] };
     return { user: currentUser, session };
   }

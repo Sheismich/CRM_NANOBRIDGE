@@ -189,6 +189,9 @@ Avance:
   - **Hallazgo corregido:** la tabla del forecast salía cortada aun en escritorio. Estaba en media tarjeta con el ancho mínimo de 44rem de `tabla-scroll`, y la columna "Ponderado" quedaba oculta tras un scroll lateral. Ahora usa `tabla-scroll tabla-compacta` (18rem) y cabe a 1400, 1024 y 390 px.
   - **Sin errores de red ni de consola**, salvo el 401 esperado de `/auth/me` antes de iniciar sesión.
 
+- **Cambios del backend del 12-oct-2026 (Administración) y lo que le toca al front.**
+  - **`GET /api/v1/auditoria` ahora es solo del administrador** (antes también supervisor): un supervisor recibe 403. Hay que esconder la pestaña **Auditoría** a los supervisores: `soloAdmin: true` en `TABS` de `frontend/src/pages/AdministracionPage.tsx`. Sin eso, al supervisor le sale la pestaña con un error.
+
 - **Cambios del backend del 2-oct-2026 (fixes del code review, revisión `00013-kxh`) y lo que le toca al front.**
   - **Ya hecho en el front (lo hizo backend, no hay que tocarlo):** las descargas. `GET /documentos/:id/descarga` ya no regresa una URL firmada; manda el archivo directo, con la sesión. Se agregó `api.descargar(path)` en `lib/api.ts` (fetch con la cookie, nombre real desde `Content-Disposition`) y lo usan `DocumentosTab` y `DocumentosPage`. Se quitó `resolverUrlApi`. Probado en producción el 2-oct.
   - **Hecho en el front (5-oct-2026):**

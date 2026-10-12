@@ -35,7 +35,9 @@ export const usuarios = mysqlTable("usuarios", {
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   activo: boolean("activo").notNull().default(true),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
-  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  // 030_ultimo_acceso_y_registro.sql: última vez que usó el CRM.
+  ultimoAccesoEn: datetime("ultimo_acceso_en")
 }, (table) => [
   uniqueIndex("uq_usuarios_correo").on(table.correo)
 ]);
@@ -559,7 +561,9 @@ export const auditoria = mysqlTable("auditoria", {
   despues: json("despues"),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
-  index("idx_auditoria_entidad").on(table.entidad, table.entidadId)
+  index("idx_auditoria_entidad").on(table.entidad, table.entidadId),
+  // 030: el Registro de cambios ordena y filtra por fecha.
+  index("idx_auditoria_creado").on(table.creadoEn)
 ]);
 
 // Job diario de métricas comerciales (017_metricas_comerciales_diarias.sql):

@@ -34,7 +34,8 @@ export class UsuariosService {
         rol: roles.clave,
         activo: usuarios.activo,
         creado_en: usuarios.creadoEn,
-        actualizado_en: usuarios.actualizadoEn
+        actualizado_en: usuarios.actualizadoEn,
+        ultimo_acceso_en: usuarios.ultimoAccesoEn
       })
       .from(usuarios)
       .innerJoin(roles, eq(roles.id, usuarios.rolId))
@@ -62,7 +63,8 @@ export class UsuariosService {
         rol: roles.clave,
         activo: usuarios.activo,
         creado_en: usuarios.creadoEn,
-        actualizado_en: usuarios.actualizadoEn
+        actualizado_en: usuarios.actualizadoEn,
+        ultimo_acceso_en: usuarios.ultimoAccesoEn
       })
       .from(usuarios)
       .innerJoin(roles, eq(roles.id, usuarios.rolId))

@@ -12,12 +12,13 @@ import { DocumentosModule } from "./documentos/documentos.module.js";
 import { UsuariosModule } from "./usuarios/usuarios.module.js";
 import { CampanasModule } from "./campanas/campanas.module.js";
 import { JobsModule } from "./jobs/jobs.module.js";
+import { AdminModule } from "./admin/admin.module.js";
 import { HealthController } from "./health/health.controller.js";
 
 @Module({
   // ScheduleModule.forRoot() habilita @Interval() en OutboxDispatcherService
   // (el despachador del patrón outbox corre solo, sin cron externo).
-  imports: [ScheduleModule.forRoot(), DatabaseModule, AuthModule, CrmModule, TareasModule, OutboxModule, AutomatizacionModule, ComercialModule, ReportesModule, DocumentosModule, UsuariosModule, CampanasModule, JobsModule],
+  imports: [ScheduleModule.forRoot(), DatabaseModule, AuthModule, CrmModule, TareasModule, OutboxModule, AutomatizacionModule, ComercialModule, ReportesModule, DocumentosModule, UsuariosModule, CampanasModule, JobsModule, AdminModule],
   controllers: [HealthController]
 })
 export class AppModule {}
