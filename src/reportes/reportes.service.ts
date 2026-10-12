@@ -5,7 +5,7 @@ import { actividades, auditoria, campanas, catalogoEtapaEmbudo, contactos, empre
 import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { toCsv } from "../shared/csv.js";
-import { diaSiguiente, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
+import { diaSiguiente, fechaMx, inicioDelDiaMxSql, lunesDeLaSemana } from "../shared/dia-habil.js";
 import type { ActividadRecienteQuery, MetricasDiariasQuery, ProspeccionPorDiaQuery, ProspeccionQuery, ReporteExportable, ReporteQuery } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). A diferencia de los
@@ -139,6 +139,37 @@ export class ReportesService {
 
     const totalizar = (filas: { tipo: string; cantidad: number }[]) => filas.reduce((acc, f) => acc + Number(f.cantidad), 0);
 
+    // Reportes nuevos (11-oct-2026; punto 50): "Se cierran a tiempo: 91% · 18
+    // tareas resueltas esta semana" y el reparto de tareas por tipo.
+    // - a_tiempo: de las cerradas en el rango CON fecha límite, cuántas se
+    //   cerraron antes de vencer (sin fecha límite no hay "a tiempo").
+    // - cerradas_esta_semana: lunes a hoy de México, sin importar el rango.
+    // - creadas: lo que se le pidió al equipo en el rango, por tipo.
+    const hoy = fechaMx(new Date());
+    const lunes = lunesDeLaSemana(hoy);
+    const responsable = query.responsableId ? eq(tareas.responsableId, query.responsableId) : undefined;
+    const [[aTiempo], [semana], creadasPorTipo] = await Promise.all([
+      this.db
+        .select({
+          conFecha: sql<number>`COUNT(${tareas.fechaLimite})`,
+          aTiempo: sql<number>`COALESCE(SUM(${tareas.cerradaEn} <= ${tareas.fechaLimite}), 0)`
+        })
+        .from(tareas)
+        .where(and(...condicionesCerradas)),
+      this.db
+        .select({ n: sql<number>`COUNT(*)` })
+        .from(tareas)
+        .where(and(...compactConditions([eq(tareas.estado, "cerrada"), responsable, ...condicionRangoFecha(tareas.cerradaEn, lunes, hoy)]))),
+      this.db
+        .select({ tipo: tareas.tipo, cantidad: sql<number>`COUNT(*)` })
+        .from(tareas)
+        .where(and(...compactConditions([responsable, ...condicionRangoFecha(tareas.creadoEn, query.fechaInicio, query.fechaFin)])))
+        .groupBy(tareas.tipo)
+        .orderBy(desc(sql`COUNT(*)`), tareas.tipo)
+    ]);
+    const conFecha = Number(aTiempo?.conFecha ?? 0);
+    const cerradasATiempo = Number(aTiempo?.aTiempo ?? 0);
+
     return {
       cerradas: {
         total: totalizar(cerradasPorTipo),
@@ -147,6 +178,12 @@ export class ReportesService {
       vencidas: {
         total: totalizar(vencidasPorTipo),
         por_tipo: vencidasPorTipo.map((f) => ({ tipo: f.tipo, cantidad: Number(f.cantidad) }))
+      },
+      a_tiempo: { a_tiempo: cerradasATiempo, con_fecha_limite: conFecha, pct: conFecha > 0 ? Number(((cerradasATiempo / conFecha) * 100).toFixed(2)) : null },
+      cerradas_esta_semana: Number(semana?.n ?? 0),
+      creadas: {
+        total: totalizar(creadasPorTipo),
+        por_tipo: creadasPorTipo.map((f) => ({ tipo: f.tipo, cantidad: Number(f.cantidad) }))
       }
     };
   }
@@ -202,8 +239,32 @@ export class ReportesService {
       perdidas: {
         oportunidades: Number(perdidaRow?.alcanzadas ?? 0),
         tasa_perdida_pct: base > 0 ? Number(((Number(perdidaRow?.alcanzadas ?? 0) / base) * 100).toFixed(2)) : null
-      }
+      },
+      ciclo_medio_venta: await this.cicloMedioVenta(query)
     };
+  }
+
+  // "Ciclo medio de venta: 28 días" (Reportes, 11-oct-2026; punto 45): días
+  // de calendario desde que se creó cada oportunidad hasta la PRIMERA vez que
+  // llegó a una etapa ganada (historial de etapas; si se reabrió y se volvió a
+  // ganar, cuenta la primera). Entran las que se ganaron dentro del rango.
+  private async cicloMedioVenta(query: ReporteQuery) {
+    const desde = query.fechaInicio ? sql`AND g.ganada_en >= ${inicioDelDiaMxSql(query.fechaInicio)}` : sql``;
+    const hasta = query.fechaFin ? sql`AND g.ganada_en < ${inicioDelDiaMxSql(diaSiguiente(query.fechaFin))}` : sql``;
+    const deResponsable = query.responsableId ? sql`AND o.responsable_id = ${query.responsableId}` : sql``;
+    const [filas] = await this.db.execute(sql`
+      SELECT COUNT(*) AS ganadas, AVG(TIMESTAMPDIFF(DAY, o.creado_en, g.ganada_en)) AS dias
+      FROM (
+        SELECT h.oportunidad_id, MIN(h.creado_en) AS ganada_en
+        FROM historial_etapa_oportunidad h JOIN catalogo_etapa_embudo c ON c.id = h.etapa_id
+        WHERE c.es_ganada
+        GROUP BY h.oportunidad_id
+      ) g
+      JOIN oportunidades o ON o.id = g.oportunidad_id
+      WHERE TRUE ${desde} ${hasta} ${deResponsable}`);
+    const fila = (filas as unknown as { ganadas: number; dias: string | null }[])[0];
+    const ganadas = Number(fila?.ganadas ?? 0);
+    return { dias: ganadas > 0 && fila?.dias != null ? Number(Number(fila.dias).toFixed(1)) : null, ganadas };
   }
 
   // "Oportunidades abiertas, ganadas y perdidas", "Ingresos cerrados" y
@@ -525,7 +586,7 @@ export class ReportesService {
   // métodos de arriba y aplana su resultado a filas para toCsv(). Cada
   // reporte tiene su propia forma (uno es lista plana, otros son objetos
   // con sub-secciones), así que el aplanado es específico por reporte.
-  async exportarCsv(reporte: Exclude<ReporteExportable, "prospeccion">, query: ReporteQuery): Promise<{ nombreArchivo: string; contenido: string }> {
+  async exportarCsv(reporte: Exclude<ReporteExportable, "prospeccion" | "dia">, query: ReporteQuery): Promise<{ nombreArchivo: string; contenido: string }> {
     switch (reporte) {
       case "actividades": {
         const datos = await this.actividadesPorAgente(query);

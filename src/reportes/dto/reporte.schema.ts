@@ -60,8 +60,22 @@ export const actividadRecienteQuerySchema = z.object({
 });
 export type ActividadRecienteQuery = z.infer<typeof actividadRecienteQuerySchema>;
 
+// Reportes · Día (bitácora, 11-oct-2026): un día de México, filtro por tipo
+// de movimiento y por persona, con páginas.
+export const TIPOS_BITACORA = ["tareas", "correos", "respuestas", "bajas", "documentos", "sistema"] as const;
+export type TipoBitacora = (typeof TIPOS_BITACORA)[number];
+export const reporteDiaQuerySchema = z.object({
+  fecha: z.string().date(),
+  tipo: z.enum(["todo", ...TIPOS_BITACORA]).default("todo"),
+  usuarioId: z.coerce.number().int().positive().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(50)
+});
+export type ReporteDiaQuery = z.infer<typeof reporteDiaQuerySchema>;
+
 // Reportes disponibles para exportación CSV (GET /reportes/export/:reporte).
-// Mismo set que los 7 endpoints de lectura -- ver ReportesController.
-export const REPORTES_EXPORTABLES = ["actividades", "tareas", "conversion-etapas", "pipeline", "forecast", "desempeno-por-agente", "prospeccion"] as const;
+// Mismo set que los endpoints de lectura -- ver ReportesController. "dia" es
+// la bitácora completa de un día (sin páginas).
+export const REPORTES_EXPORTABLES = ["actividades", "tareas", "conversion-etapas", "pipeline", "forecast", "desempeno-por-agente", "prospeccion", "dia"] as const;
 export const reporteExportableSchema = z.enum(REPORTES_EXPORTABLES);
 export type ReporteExportable = z.infer<typeof reporteExportableSchema>;

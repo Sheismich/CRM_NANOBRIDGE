@@ -29,6 +29,25 @@ export function diaSiguiente(fecha: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+const formatoHora = new Intl.DateTimeFormat("en-GB", { timeZone: ZONA_MX, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+// La hora (HH:MM, 24 h) que marca el reloj en México en ese instante.
+export function horaMx(instante: Date): string {
+  return formatoHora.format(instante);
+}
+
+// `fecha` (AAAA-MM-DD) más `dias` de calendario (negativo = hacia atrás).
+export function sumarDiasFecha(fecha: string, dias: number): string {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+// El lunes (AAAA-MM-DD) de la semana de `fecha`.
+export function lunesDeLaSemana(fecha: string): string {
+  return sumarDiasFecha(fecha, -((new Date(`${fecha}T00:00:00Z`).getUTCDay() + 6) % 7));
+}
+
 // Días de calendario de `desde` a `hasta` (AAAA-MM-DD); negativo si `hasta`
 // es antes.
 export function diasEntreFechas(desde: string, hasta: string): number {

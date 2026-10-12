@@ -1,10 +1,13 @@
 import { Controller, Get, HttpCode, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { ReportesService } from "./reportes.service.js";
+import { ReporteDiaService } from "./reporte-dia.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
-import { actividadRecienteQuerySchema, metricasDiariasQuerySchema, prospeccionPorDiaQuerySchema, prospeccionQuerySchema, reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
+import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
+import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
+import { actividadRecienteQuerySchema, metricasDiariasQuerySchema, prospeccionPorDiaQuerySchema, prospeccionQuerySchema, reporteDiaQuerySchema, reporteExportableSchema, reporteQuerySchema } from "./dto/reporte.schema.js";
 
 // Dashboards y reportes (PLAN_CRM_DEFINITIVO.md #9). Criterio de acceso
 // (el plan no lo especifica para este módulo, así que se define aquí):
@@ -19,7 +22,18 @@ import { actividadRecienteQuerySchema, metricasDiariasQuerySchema, prospeccionPo
 @UseGuards(SessionAuthGuard, RolesGuard)
 @Roles("administrador", "supervisor")
 export class ReportesController {
-  constructor(private readonly reportesService: ReportesService) {}
+  constructor(
+    private readonly reportesService: ReportesService,
+    private readonly reporteDiaService: ReporteDiaService
+  ) {}
+
+  // Reportes · Día = bitácora (11-oct-2026). Única ruta de reportes abierta
+  // también a agentes: un agente ve solo lo suyo (ReporteDiaService).
+  @Get("dia")
+  @Roles("administrador", "supervisor", "agente")
+  dia(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
+    return this.reporteDiaService.dia(user, reporteDiaQuerySchema.parse(query));
+  }
 
   @Get("actividades")
   actividadesPorAgente(@Query() query: Record<string, unknown>) {
@@ -112,11 +126,13 @@ export class ReportesController {
   // usa AuthController solo para poner una cookie y dejar que Nest siga
   // serializando la respuesta normal.
   @Get("export/:reporte")
-  async exportar(@Param("reporte") reporteParam: string, @Query() query: Record<string, unknown>, @Res() response: Response) {
+  async exportar(@Param("reporte") reporteParam: string, @Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType, @Res() response: Response) {
     const reporte = reporteExportableSchema.parse(reporteParam);
     const { nombreArchivo, contenido } = reporte === "prospeccion"
       ? await this.reportesService.exportarProspeccionCsv(prospeccionQuerySchema.parse(query))
-      : await this.reportesService.exportarCsv(reporte, reporteQuerySchema.parse(query));
+      : reporte === "dia"
+        ? await this.reporteDiaService.exportarCsv(user, reporteDiaQuerySchema.parse(query))
+        : await this.reportesService.exportarCsv(reporte, reporteQuerySchema.parse(query));
     response.status(200).set({
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${nombreArchivo}"`
