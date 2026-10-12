@@ -22,14 +22,10 @@ UPDATE documentos SET revision = 'aprobado' WHERE revisado_en IS NOT NULL;
 
 -- Papeles obligatorios del expediente: se marcan en el catálogo (Fabián,
 -- 12-oct-2026) para que si Carlos pide otra lista se cambie desde el CRM,
--- sin código ni migración. De inicio, los 5 del diseño.
+-- sin código ni migración. De inicio ninguno: Carlos (12-oct-2026) dijo que
+-- de momento no hay papeles obligatorios (el diseño dibuja 5 de ejemplo).
 ALTER TABLE catalogo_tipo_documento
   ADD COLUMN obligatorio BOOLEAN NOT NULL DEFAULT FALSE;
-
--- statement-break
-
-UPDATE catalogo_tipo_documento SET obligatorio = TRUE
-WHERE clave IN ('acta_constitutiva', 'comprobante_domicilio', 'identificacion_oficial', 'contrato', 'cotizacion_firmada');
 
 -- statement-break
 
