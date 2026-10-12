@@ -29,6 +29,13 @@ export function diaSiguiente(fecha: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+// El día anterior a `fecha` (AAAA-MM-DD), en calendario.
+export function diaAnterior(fecha: string): string {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // "GMT-06:00" -> "-06:00" (desfase de México en ese instante).
 function desfaseMx(instante: Date): string {
   const nombre = formatoDesfase.formatToParts(instante).find((p) => p.type === "timeZoneName")!.value;

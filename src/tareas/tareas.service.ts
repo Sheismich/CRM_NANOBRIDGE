@@ -1,12 +1,12 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, desc, eq, inArray, isNull, like, lt, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, contactos, empresas, envios, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
+import { auditoria, campanas, contactos, empresas, envios, mediosContacto, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { aplicarClasificacionAlProspecto, type ClasificacionRespuesta, type OrigenClasificacion } from "../shared/clasificacion-respuesta.js";
 import { recortarTexto } from "../shared/texto.js";
-import { finSiguienteDiaHabilMx } from "../shared/dia-habil.js";
+import { diaAnterior, diaSiguiente, fechaMx, finSiguienteDiaHabilMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { OutboxService } from "../outbox/outbox.service.js";
@@ -122,6 +122,33 @@ export class TareasService {
     return { page, limit, data: rows.map((r) => ({ ...toRow(r.tarea), empresa_nombre: r.empresaNombre })) };
   }
 
+  // Mi día (11-oct-2026): el anillo "1/3 HOY" = cerradas_hoy de
+  // (cerradas_hoy + pendientes_hoy), y "3 completadas ayer". Siempre de
+  // quien pregunta, sea del rol que sea; días en hora de México. Cancelar
+  // no cuenta como completar.
+  async conteosMiDia(user: CurrentUser) {
+    const hoy = fechaMx(new Date());
+    const inicioHoy = sql`${inicioDelDiaMxSql(hoy)}`;
+    const inicioManana = sql`${inicioDelDiaMxSql(diaSiguiente(hoy))}`;
+    const inicioAyer = sql`${inicioDelDiaMxSql(diaAnterior(hoy))}`;
+    const abierta = sql`${tareas.estado} IN ('pendiente', 'en_progreso')`;
+    const [fila] = await this.db
+      .select({
+        cerradasHoy: sql<number>`SUM(${tareas.estado} = 'cerrada' AND ${tareas.cerradaEn} >= ${inicioHoy} AND ${tareas.cerradaEn} < ${inicioManana})`,
+        cerradasAyer: sql<number>`SUM(${tareas.estado} = 'cerrada' AND ${tareas.cerradaEn} >= ${inicioAyer} AND ${tareas.cerradaEn} < ${inicioHoy})`,
+        pendientesHoy: sql<number>`SUM(${abierta} AND ${tareas.fechaLimite} >= ${inicioHoy} AND ${tareas.fechaLimite} < ${inicioManana})`,
+        vencidas: sql<number>`SUM(${abierta} AND ${tareas.fechaLimite} < ${inicioHoy})`
+      })
+      .from(tareas)
+      .where(eq(tareas.responsableId, user.id));
+    return {
+      cerradas_hoy: Number(fila?.cerradasHoy ?? 0),
+      cerradas_ayer: Number(fila?.cerradasAyer ?? 0),
+      pendientes_hoy: Number(fila?.pendientesHoy ?? 0),
+      vencidas: Number(fila?.vencidas ?? 0)
+    };
+  }
+
   // C2 del plan de fixes (2-oct-2026): antes no se revisaba nada de esto.
   // Un agente siempre se crea la tarea a sí mismo (igual que las
   // oportunidades) y solo sobre sus empresas.
@@ -190,6 +217,8 @@ export class TareasService {
   // El detalle trae su contexto (panel de detalle de Tareas, 9-oct-2026):
   // de qué empresa y persona es, quién la tiene y, si la originó una
   // respuesta, qué contestó la persona -- sin pedir cada cosa aparte.
+  // Mi día (11-oct-2026) agrega la campaña del prospecto y un teléfono
+  // para marcar (ver telefonoDeContacto).
   async get(user: CurrentUser, id: number) {
     const [r] = await this.db
       .select({
@@ -197,16 +226,22 @@ export class TareasService {
         empresaNombre: sql<string | null>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
         contactoNombre: contactos.nombre,
         contactoPuesto: contactos.puesto,
+        campanaNombre: campanas.nombre,
         responsableNombre: usuarios.nombre,
         respuestaContenido: respuestas.contenido,
         respuestaRecibidoEn: respuestas.recibidoEn,
-        respuestaClasificacion: respuestas.clasificacion
+        respuestaClasificacion: respuestas.clasificacion,
+        respuestaClasificacionSugerida: respuestas.clasificacionSugerida,
+        respuestaConfianzaSugerida: respuestas.confianzaSugerida,
+        respuestaMotivoSugerencia: respuestas.motivoSugerencia
       })
       .from(tareas)
       .leftJoin(empresas, eq(empresas.id, tareas.empresaId))
       .leftJoin(contactos, eq(contactos.id, tareas.contactoId))
       .leftJoin(usuarios, eq(usuarios.id, tareas.responsableId))
       .leftJoin(respuestas, eq(respuestas.id, tareas.respuestaId))
+      .leftJoin(prospectos, eq(prospectos.id, tareas.prospectoId))
+      .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
       .where(eq(tareas.id, id))
       .limit(1);
     if (!r || (user.rol === "agente" && r.tarea.responsableId !== user.id)) {
@@ -217,11 +252,36 @@ export class TareasService {
       empresa_nombre: r.empresaNombre,
       contacto_nombre: r.contactoNombre,
       contacto_puesto: r.contactoPuesto,
+      contacto_telefono: r.tarea.contactoId ? await this.telefonoDeContacto(r.tarea.contactoId) : null,
+      campana_nombre: r.campanaNombre,
       responsable_nombre: r.responsableNombre,
       respuesta: r.tarea.respuestaId
-        ? { id: r.tarea.respuestaId, contenido: r.respuestaContenido, recibido_en: r.respuestaRecibidoEn, clasificacion: r.respuestaClasificacion }
+        ? {
+            id: r.tarea.respuestaId,
+            contenido: r.respuestaContenido,
+            recibido_en: r.respuestaRecibidoEn,
+            clasificacion: r.respuestaClasificacion,
+            // Lo que propuso la IA de n8n y por qué (Mi día, 11-oct-2026);
+            // null si no la vio. La decisión sigue siendo `clasificacion`.
+            clasificacion_sugerida: r.respuestaClasificacionSugerida,
+            confianza_sugerida: r.respuestaConfianzaSugerida,
+            motivo_sugerencia: r.respuestaMotivoSugerencia
+          }
         : null
     };
+  }
+
+  // El teléfono que muestra Mi día junto a los botones: solo medios activos
+  // (un "no_contactar" no se ofrece para marcar); gana el principal, luego
+  // teléfono antes que WhatsApp, luego el más antiguo.
+  private async telefonoDeContacto(contactoId: number) {
+    const [m] = await this.db
+      .select({ tipo: mediosContacto.tipo, valor: mediosContacto.valor })
+      .from(mediosContacto)
+      .where(and(eq(mediosContacto.contactoId, contactoId), inArray(mediosContacto.tipo, ["telefono", "whatsapp"]), eq(mediosContacto.estadoContacto, "activo")))
+      .orderBy(desc(mediosContacto.esPrincipal), sql`${mediosContacto.tipo} = 'telefono' DESC`, mediosContacto.id)
+      .limit(1);
+    return m ?? null;
   }
 
   // Historial de una tarea (panel de detalle, 9-oct-2026): lo que le pasó a

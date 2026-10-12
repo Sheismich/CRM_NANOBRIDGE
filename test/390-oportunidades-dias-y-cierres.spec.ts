@@ -78,6 +78,27 @@ describe("oportunidades: días en etapa y cierres del mes / vencidos", () => {
     expect(res.body.cierre_vencido).toEqual({ cantidad: 1, valor: "1000.00" });
   });
 
+  // Inicio (ajuste del 11-oct): "ganadas y perdidas del mes" = el mismo
+  // resumen con el rango del mes; lo cerrado antes del día 1 no entra.
+  it("con el rango del mes, ganadas y perdidas cuentan solo lo cerrado este mes", async () => {
+    const delMes = { responsableId: agenteId, fechaInicio: `${hoy.slice(0, 7)}-01`, fechaFin: hoy };
+    const antes = (await api().get("/api/v1/reportes/pipeline/resumen").set("Cookie", adminCookie).query(delMes)).body;
+    const futura = sumarDias(hoy, 60);
+    const ganada = await crearOportunidad("Ganada", 3000, futura);
+    const perdida = await crearOportunidad("Perdida", 700, futura);
+    const ganadaViejita = await crearOportunidad("Ganada hace 40 días", 9000, futura);
+    expect((await api().patch(`/api/v1/oportunidades/${ganada}/etapa`).set("Cookie", adminCookie).send({ etapaClave: "ganada" })).status).toBe(200);
+    expect((await api().patch(`/api/v1/oportunidades/${perdida}/etapa`).set("Cookie", adminCookie).send({ etapaClave: "perdida", motivoPerdidaClave: "sin_presupuesto" })).status).toBe(200);
+    expect((await api().patch(`/api/v1/oportunidades/${ganadaViejita}/etapa`).set("Cookie", adminCookie).send({ etapaClave: "ganada" })).status).toBe(200);
+    await db.update(oportunidades).set({ actualizadoEn: new Date(Date.now() - 40 * 86_400_000) }).where(eq(oportunidades.id, ganadaViejita));
+
+    const despues = (await api().get("/api/v1/reportes/pipeline/resumen").set("Cookie", adminCookie).query(delMes)).body;
+    expect(despues.ganadas.cantidad - antes.ganadas.cantidad).toBe(1);
+    expect(Number(despues.ganadas.ingresos_cerrados) - Number(antes.ganadas.ingresos_cerrados)).toBeCloseTo(3000, 2);
+    expect(despues.perdidas.cantidad - antes.perdidas.cantidad).toBe(1);
+    expect(Number(despues.perdidas.valor_perdido) - Number(antes.perdidas.valor_perdido)).toBeCloseTo(700, 2);
+  });
+
   it("una oportunidad cerrada ya no cuenta como vencida", async () => {
     await db.update(oportunidades).set({ cerrada: true }).where(eq(oportunidades.id, opVencida));
     const res = await api().get("/api/v1/reportes/pipeline/resumen").set("Cookie", adminCookie).query({ responsableId: agenteId });

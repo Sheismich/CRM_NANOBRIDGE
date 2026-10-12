@@ -30,6 +30,12 @@ export class TareasController {
     return { id };
   }
 
+  // Antes de ":id" para que "conteos" no se lea como un id.
+  @Get("conteos")
+  conteos(@CurrentUser() user: CurrentUserType) {
+    return this.tareasService.conteosMiDia(user);
+  }
+
   @Get(":id")
   get(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
     const id = idParamSchema.parse(idParam);

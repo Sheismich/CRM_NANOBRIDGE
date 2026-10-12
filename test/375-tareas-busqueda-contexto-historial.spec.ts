@@ -5,7 +5,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { envios, respuestas, tareas } from "../src/database/schema.js";
+import { campanas, envios, mediosContacto, prospectos, respuestas, tareas } from "../src/database/schema.js";
 import { eq } from "drizzle-orm";
 
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -66,6 +66,39 @@ describe("tareas: búsqueda, contexto e historial", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual(expect.objectContaining({ empresa_nombre: `Moldes ${marca} SA`, contacto_nombre: "Ana Contexto", responsable_nombre: "Agente de prueba" }));
     expect(res.body.respuesta).toEqual(expect.objectContaining({ contenido: "Sí nos interesa, márquenme el jueves", clasificacion: "interesado" }));
+  });
+
+  // Mi día (ajuste del 11-oct): la caja "Lo que contestó" dice qué propuso
+  // la IA y por qué; null si la IA no la vio.
+  it("la respuesta del detalle trae lo que sugirió la IA y su porqué", async () => {
+    const antes = await api().get(`/api/v1/tareas/${tareaId}`).set("Cookie", agenteCookie);
+    expect(antes.body.respuesta).toEqual(expect.objectContaining({ clasificacion_sugerida: null, confianza_sugerida: null, motivo_sugerencia: null }));
+    await db.update(respuestas).set({ clasificacionSugerida: "interesado", confianzaSugerida: 92, motivoSugerencia: "Pide que le marquen el jueves" }).where(eq(respuestas.id, antes.body.respuesta.id));
+    const res = await api().get(`/api/v1/tareas/${tareaId}`).set("Cookie", agenteCookie);
+    expect(res.body.respuesta).toEqual(expect.objectContaining({ clasificacion_sugerida: "interesado", confianza_sugerida: 92, motivo_sugerencia: "Pide que le marquen el jueves" }));
+  });
+
+  // Mi día (ajuste del 11-oct): chip de la campaña y el teléfono junto a los
+  // botones. Un teléfono "no_contactar" no sale; si no hay principal, el
+  // teléfono va antes que el WhatsApp.
+  it("el detalle trae la campaña del prospecto y un teléfono activo del contacto", async () => {
+    const [p] = await db.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId));
+    const [c] = await db.insert(campanas).values({ nombre: `Manufactura ${marca}`, estado: "activa" });
+    await db.update(prospectos).set({ campanaId: c.insertId }).where(eq(prospectos.id, prospectoId));
+    await db.insert(mediosContacto).values([
+      { contactoId: p.contactoId, tipo: "telefono", valor: "477 111 1111", valorNormalizado: "4771111111", estadoContacto: "no_contactar" },
+      { contactoId: p.contactoId, tipo: "whatsapp", valor: "477 222 2222", valorNormalizado: "4772222222" },
+      { contactoId: p.contactoId, tipo: "telefono", valor: "477 333 3333", valorNormalizado: "4773333333" }
+    ]);
+
+    const res = await api().get(`/api/v1/tareas/${tareaId}`).set("Cookie", agenteCookie);
+    expect(res.body.campana_nombre).toBe(`Manufactura ${marca}`);
+    expect(res.body.contacto_telefono).toEqual({ tipo: "telefono", valor: "477 333 3333" });
+
+    const sinProspecto = await api().post("/api/v1/tareas").set("Cookie", adminCookie).send({ titulo: `Sin prospecto ${randomUUID()}`, responsableId: agenteId });
+    const otra = await api().get(`/api/v1/tareas/${sinProspecto.body.id}`).set("Cookie", agenteCookie);
+    expect(otra.body.campana_nombre).toBeNull();
+    expect(otra.body.contacto_telefono).toBeNull();
   });
 
   it("el historial junta lo de la tarea y lo de la prospección, lo más nuevo primero", async () => {
