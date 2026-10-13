@@ -135,12 +135,12 @@ Cada deploy al canal reinicia los 30 días.
 
 | # | Pantalla | Diseño | Le toca | Commit | En vista previa |
 |---|---|---|---|---|---|
-| 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) ✅ | `inicio-aprobado.html` | Fabián | (este commit) | no |
-| 2 | Inicio ✅ | `inicio-aprobado.html` | Fabián | (este commit) | no |
-| 3 | Tareas (Mi día + lista) ✅ | `tareas.html` | Fabián | (este commit) | no |
-| 4 | Documentos ✅ | `documentos.html` | Fabián | (este commit) | no |
-| 5 | Administración ✅ | `administracion.html` | Fabián | (este commit) | no |
-| 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) ✅ | `informe-ejecutivo.html` | Fabián | (este commit) | no |
+| 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) ✅ | `inicio-aprobado.html` | Fabián | 1febd14 | no |
+| 2 | Inicio ✅ | `inicio-aprobado.html` | Fabián | ad172eb | no |
+| 3 | Tareas (Mi día + lista) ✅ | `tareas.html` | Fabián | f8c34d8 | no |
+| 4 | Documentos ✅ | `documentos.html` | Fabián | d8e6c71 | no |
+| 5 | Administración ✅ | `administracion.html` | Fabián | 18bf143 | no |
+| 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) ✅ | `informe-ejecutivo.html` | Fabián | 6275e9f | no |
 | 7 | Login | `login.html` | Mich | — | no |
 | 8 | Prospectos | `prospectos.html` | Mich | — | no |
 | 9 | Empresas + ficha | `empresas.html` | Mich | — | no |
