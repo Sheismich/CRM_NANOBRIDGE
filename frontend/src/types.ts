@@ -619,3 +619,18 @@ export type ContactoFila = ContactoLista & { prospeccion: { estado: string; envi
 // activo; no_contactar = ninguno activo y alguno en no_contactar; sin_medio
 // = ni lo uno ni lo otro.
 export type ConteosContactos = { total: number; escribibles: number; no_contactar: number; sin_medio: number };
+
+// --- Oportunidades (rediseño, Mich; src/comercial/oportunidades.service.ts) ---
+
+// Fila de GET /oportunidades desde el 12-oct: con empresa, responsable y
+// cuántos días lleva en su etapa (null si no hay historial).
+export type OportunidadTablero = Oportunidad & {
+  empresa_nombre: string | null;
+  responsable_nombre: string | null;
+  etapa_desde: string | null;
+  dias_en_etapa: number | null;
+};
+
+// GET /reportes/pipeline/conversion-etapas desde el 12-oct: el ciclo medio de
+// venta (días de creada a ganada, promedio) de las ganadas en el rango.
+export type ConversionConCiclo = ConversionEtapas & { ciclo_medio_venta: { dias: number | null; ganadas: number } };

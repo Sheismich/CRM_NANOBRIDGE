@@ -32,7 +32,9 @@ const reabrirSchema = z.object({
 });
 type ReabrirInput = z.infer<typeof reabrirSchema>;
 
-export function OportunidadDetallePanel({ id, onClose }: { id: number; onClose: () => void }) {
+// `enPanel`: dentro de un PanelLateral (Oportunidades), que ya trae título y
+// botón de cerrar: sin la caja gris ni el encabezado propio.
+export function OportunidadDetallePanel({ id, onClose, enPanel = false }: { id: number; onClose: () => void; enPanel?: boolean }) {
   const { data: oportunidad, isPending, isError } = useQuery({
     queryKey: ["oportunidad", id],
     queryFn: () => api.get<OportunidadDetalle>(`/api/v1/oportunidades/${id}`)
@@ -44,10 +46,10 @@ export function OportunidadDetallePanel({ id, onClose }: { id: number; onClose: 
   });
 
   return (
-    <div className="border-t border-border bg-bg p-5">
-      <div className="mb-4 flex items-start justify-between">
+    <div className={enPanel ? "px-4 py-5 md:px-5" : "border-t border-border bg-bg p-5"}>
+      <div className={enPanel ? "mb-4 text-[13px] text-ink-2" : "mb-4 flex items-start justify-between"}>
         <div>
-          <div className="text-sm font-bold">{oportunidad?.titulo ?? "Oportunidad"}</div>
+          {!enPanel && <div className="text-sm font-bold">{oportunidad?.titulo ?? "Oportunidad"}</div>}
           {oportunidad && (
             <div className="text-xs text-ink-3">
               {oportunidad.etapa_nombre} · {oportunidad.cerrada ? "Cerrada" : "Abierta"}
@@ -55,9 +57,11 @@ export function OportunidadDetallePanel({ id, onClose }: { id: number; onClose: 
             </div>
           )}
         </div>
-        <Button variant="ghost" onClick={onClose}>
-          Cerrar detalle
-        </Button>
+        {!enPanel && (
+          <Button variant="ghost" onClick={onClose}>
+            Cerrar detalle
+          </Button>
+        )}
       </div>
 
       {isPending && <div className="text-sm text-ink-2">Cargando…</div>}

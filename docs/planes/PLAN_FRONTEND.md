@@ -145,7 +145,7 @@ Cada deploy al canal reinicia los 30 días.
 | 8 | Prospectos ✅ (local) | `prospectos.html` | Mich | sin subir | no |
 | 9 | Empresas + ficha ✅ (local) | `empresas.html` | Mich | sin subir | no |
 | 10 | Contactos ✅ (local) | `contactos.html` | Mich | sin subir | no |
-| 11 | Oportunidades | `oportunidades.html` | Mich | — | no |
+| 11 | Oportunidades ✅ (local) | `oportunidades.html` | Mich | sin subir | no |
 | 12 | Cotizaciones | `cotizaciones.html` | Mich | — | no |
 | 13 | Reportes (panel + Día) | `reportes.html` | Mich | — | no |
 
@@ -225,6 +225,13 @@ Antes de cada pantalla: `git fetch`, leer su sección en `docs/diseno/README.md`
 - Franja de abajo: tasa de conversión y tiempo promedio para cerrar (`ciclo_medio_venta`), de `GET /reportes/pipeline/conversion-etapas`.
 - En esa misma franja van los botones del **informe ejecutivo**: el componente ya existe (`components/reportes/InformeEjecutivo.tsx`, 13-oct) y por ahora está al final de la pantalla de hoy (`<InformeEjecutivo agentes={…agentes} />`, solo admin/supervisor). Al rehacer Oportunidades solo muévelo a la franja de abajo.
 - Se reusa `OportunidadDetallePanel`.
+
+- **Hecho en local (13-oct-2026, Mich):**
+  - Franja de números calculada con lo cargado en el tablero (pipeline, ponderado, cierra este mes, cierre vencido) y "Ganado en <mes>" con las cerradas más recientes: así sale igual para el agente (que no puede pedir `/reportes/pipeline/resumen`) y respeta el filtro de responsable.
+  - Tablero + embudo en `components/oportunidades/TableroOportunidades.tsx`: columna de dinero por etapa (altura = valor, parte clara = probabilidad), tarjetas con días en etapa, responsable y cierre (rojo vencido, ámbar este mes). Arrastre HTML5 con `PATCH /oportunidades/:id/etapa`; al arrastrar flota abajo la barra "Ganada | Perdida" (ganar pide confirmación; perder, el motivo del catálogo, y "otro" o los que lo requieren piden explicación). En el celular, "Mover a…" en cada tarjeta.
+  - Filtros: búsqueda, responsable (admin y supervisor), cierre (este mes / vencido / sin fecha) y orden (valor / cierre / días en etapa). Detalle en `PanelLateral` con `OportunidadDetallePanel enPanel` (prop nueva: sin su caja ni su encabezado). "+ Nueva oportunidad" con el `NuevaOportunidadPanel` de Fabián.
+  - Abajo: tasa de conversión y tiempo promedio para cerrar (`conversion-etapas`, solo admin y supervisor) y el `InformeEjecutivo` de Fabián donde lo dejó.
+  - Revisado en Edge con la API simulada a 375 y 1440 px, día y noche, como administrador y agente, incluidos el arrastre, ganar, perder con motivo y "Mover a…". Falta contra producción.
 
 **Cotizaciones** (`pages/CotizacionesPage.tsx`, `cotizaciones.html`)
 - Contadores y tasa de aceptación: `GET /cotizaciones/conteos`.
