@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { historialEtapaOportunidad, oportunidades } from "../src/database/schema.js";
+import { catalogoEtapaEmbudo, historialEtapaOportunidad, oportunidades } from "../src/database/schema.js";
 import { fechaMx } from "../src/shared/dia-habil.js";
 
 // Oportunidades nuevas (tablero + embudo, 9-oct-2026): cada tarjeta dice
@@ -76,6 +76,25 @@ describe("oportunidades: días en etapa y cierres del mes / vencidos", () => {
     expect(res.status).toBe(200);
     expect(res.body.cierre_este_mes).toEqual({ cantidad: 1, valor: "2500.00" });
     expect(res.body.cierre_vencido).toEqual({ cantidad: 1, valor: "1000.00" });
+  });
+
+  // Inicio (13-oct-2026): la tarjeta "Pipeline abierto" dice cuánto vale el
+  // pipeline ponderado (valor × probabilidad de su etapa). Cuenta TODAS las
+  // abiertas, también las que no tienen fecha de cierre (el forecast las
+  // deja fuera porque reparte por mes).
+  it("abiertas trae el valor ponderado, también de las que no tienen fecha de cierre", async () => {
+    const sinFecha = await api().post("/api/v1/oportunidades").set("Cookie", agenteCookie).send({ empresaId, titulo: "Sin fecha", valorEstimado: 400 });
+    expect(sinFecha.status).toBe(201);
+    const [{ probabilidad }] = await db
+      .select({ probabilidad: catalogoEtapaEmbudo.probabilidad })
+      .from(oportunidades)
+      .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
+      .where(eq(oportunidades.id, sinFecha.body.id));
+
+    const res = await api().get("/api/v1/reportes/pipeline/resumen").set("Cookie", adminCookie).query({ responsableId: agenteId });
+    expect(res.body.abiertas.cantidad).toBe(3);
+    expect(Number(res.body.abiertas.valor_ponderado)).toBeCloseTo(((1000 + 2500 + 400) * Number(probabilidad)) / 100, 2);
+    await db.update(oportunidades).set({ cerrada: true }).where(eq(oportunidades.id, sinFecha.body.id));
   });
 
   // Inicio (ajuste del 11-oct): "ganadas y perdidas del mes" = el mismo

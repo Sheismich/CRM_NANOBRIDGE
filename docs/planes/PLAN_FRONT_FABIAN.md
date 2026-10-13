@@ -11,7 +11,7 @@ El backend de todas estas pantallas ya está en producción desde el 12-oct-2026
 | # | Qué | Diseño | Estimado |
 |---|---|---|---|
 | 1 | Base común ✅ 13-oct | `inicio-aprobado.html` | 1-2 días |
-| 2 | Inicio | `inicio-aprobado.html` | ½-1 día |
+| 2 | Inicio ✅ 13-oct | `inicio-aprobado.html` | ½-1 día |
 | 3 | Tareas (Mi día + Ver todas) | `tareas.html` (opciones 3 y 6) | 1 día |
 | 4 | Documentos | `documentos.html` | 1 día |
 | 5 | Administración | `administracion.html` | 1 día |
@@ -42,7 +42,17 @@ Todo lo que comparten las 11 pantallas. Mich lo usa tal cual; si a ella le falta
 - **Primer deploy a la vista previa** (ver "Publicar").
 - **Al terminar:** anotar en `PLAN_FRONTEND.md` → "Rediseño" qué componentes hay y cómo se usan (una línea por componente), para que Mich no tenga que leer el código para saberlo.
 
-## 2. Inicio (`pages/DashboardPage.tsx`)
+## 2. Inicio (`pages/DashboardPage.tsx`) ✅ (13-oct-2026)
+
+Hecho. Piezas en `components/inicio/` y la lógica (fechas, agrupar el feed) en `lib/inicio.ts`. Decisiones:
+- **Backend nuevo:** `abiertas.valor_ponderado` en `GET /reportes/pipeline/resumen` (valor × probabilidad de todas las abiertas, también sin fecha de cierre; prueba en test/390). **Falta desplegarlo**; mientras, la tarjeta esconde el ponderado y la barra de probabilidad.
+- **Agente:** los reportes son solo de admin/supervisor, así que el agente ve la franja con SUS números de `/tareas/conteos` (vencen hoy, vencidas, cerró hoy, cerró ayer), el aviso de respuestas por contestar y sus tareas.
+- "Automatización activa" = alguna campaña con `activa_hoy`; si no, "Sin campañas activas" en gris.
+- La gráfica va del día 1 a hoy (mínimo 7 días). El feed junta los envíos seguidos de la misma campaña y número en un lote, y las respuestas sin clasificar en un renglón con liga a la cola.
+- "Crear nueva oportunidad" abre un panel: buscar empresa → el mismo formulario de la ficha → abre la ficha en Oportunidades.
+- Se quitaron del Inicio de admin "Qué hacer hoy", forecast y actividad por agente (no están en el diseño; viven en Tareas y Reportes).
+
+Lo que se pidió:
 
 - **Franja:** contactadas, respondieron, interesados y tasa, con "+N hoy". Sale de `GET /reportes/prospeccion` con el rango del mes y con el de hoy; la comparación ("septiembre: 8.2 %") es una tercera llamada con el mes anterior.
 - **Correos enviados por día:** `GET /reportes/prospeccion/por-dia`, gráfica en SVG (como `components/reportes/Graficas.tsx`).

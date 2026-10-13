@@ -308,8 +308,9 @@ export class ReportesService {
     const [anio, mes] = hoy.split("-").map(Number);
     const ultimoDelMes = new Date(Date.UTC(anio, mes, 0)).toISOString().slice(0, 10);
 
-    const [abiertas, ganadas, perdidas, esteMes, vencidas] = await Promise.all([
+    const [abiertas, ponderado, ganadas, perdidas, esteMes, vencidas] = await Promise.all([
       this.contarOportunidadesAbiertas(condicionResponsable),
+      this.ponderadoAbiertas(condicionResponsable),
       this.contarOportunidadesCerradas(true, condicionResponsable, ...condicionesFecha),
       this.contarOportunidadesCerradas(false, condicionResponsable, ...condicionesFecha),
       this.contarOportunidadesAbiertas(condicionResponsable, and(gte(oportunidades.fechaCierreEstimada, primeroDelMes), lte(oportunidades.fechaCierreEstimada, ultimoDelMes))),
@@ -317,12 +318,24 @@ export class ReportesService {
     ]);
 
     return {
-      abiertas: { cantidad: abiertas.cantidad, valor_pipeline: abiertas.valor },
+      abiertas: { cantidad: abiertas.cantidad, valor_pipeline: abiertas.valor, valor_ponderado: ponderado },
       ganadas: { cantidad: ganadas.cantidad, ingresos_cerrados: ganadas.valor },
       perdidas: { cantidad: perdidas.cantidad, valor_perdido: perdidas.valor },
       cierre_este_mes: { cantidad: esteMes.cantidad, valor: esteMes.valor },
       cierre_vencido: { cantidad: vencidas.cantidad, valor: vencidas.valor }
     };
+  }
+
+  // "Pipeline abierto" del Inicio (13-oct-2026): valor × probabilidad de la
+  // etapa de TODAS las abiertas, también las que no tienen fecha de cierre
+  // (forecastMensual sí las deja fuera porque reparte por mes).
+  private async ponderadoAbiertas(condicionResponsable: ReturnType<typeof eq> | undefined) {
+    const [row] = await this.db
+      .select({ valor: sql<string>`ROUND(COALESCE(SUM(${oportunidades.valorEstimado} * ${catalogoEtapaEmbudo.probabilidad} / 100), 0), 2)` })
+      .from(oportunidades)
+      .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
+      .where(and(eq(oportunidades.cerrada, false), ...compactConditions([condicionResponsable])));
+    return row.valor;
   }
 
   // Compartido por pipelineResumen() y calcularMetricasDelDia(): "abiertas"

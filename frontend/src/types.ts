@@ -298,9 +298,13 @@ export type Usuario = {
 };
 
 export type PipelineResumen = {
-  abiertas: { cantidad: number; valor_pipeline: string };
+  // valor_ponderado: desde el 13-oct-2026 (Inicio); opcional hasta que ese
+  // backend esté desplegado.
+  abiertas: { cantidad: number; valor_pipeline: string; valor_ponderado?: string };
   ganadas: { cantidad: number; ingresos_cerrados: string };
   perdidas: { cantidad: number; valor_perdido: string };
+  cierre_este_mes: { cantidad: number; valor: string };
+  cierre_vencido: { cantidad: number; valor: string };
 };
 
 export type ReporteTareas = {
@@ -344,9 +348,32 @@ export type ReporteProspeccion = {
     envios: number;
     personas_contactadas: number;
     personas_que_respondieron: number;
+    interesados: number;
     tasa_respuesta_pct: number | null;
   }[];
 };
+
+// --- Inicio (rediseño, 13-oct-2026) ---
+
+// GET /reportes/prospeccion/por-dia: un renglón por día de México del rango,
+// los días sin movimiento en cero.
+export type ProspeccionDia = { fecha: string; envios: number; respuestas: number };
+
+// GET /reportes/actividad-reciente ("Lo que acaba de pasar"), lo más nuevo
+// primero. Los envíos vienen uno por uno; la pantalla los agrupa.
+type PersonaEvento = {
+  fecha: string;
+  prospecto_id: number;
+  contacto_nombre: string;
+  empresa_id: number;
+  empresa_nombre: string;
+  campana_id: number | null;
+  campana_nombre: string | null;
+};
+export type EventoReciente =
+  | (PersonaEvento & { tipo: "respuesta"; clasificacion: string | null; estado: "pendiente_clasificacion" | "clasificada"; tardia: boolean })
+  | (PersonaEvento & { tipo: "envio"; numero_contacto: number; canal: string })
+  | (PersonaEvento & { tipo: "baja"; motivo: string | null });
 
 export type MetricaDiaria = {
   fecha: string;

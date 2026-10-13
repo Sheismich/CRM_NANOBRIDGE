@@ -15,7 +15,12 @@ export function useDialogo(abierto: boolean, onCerrar: () => void) {
   useEffect(() => {
     const dialogo = ref.current;
     if (!dialogo) return;
-    if (abierto && !dialogo.open) dialogo.showModal();
+    if (abierto && !dialogo.open) {
+      dialogo.showModal();
+      // showModal enfoca el primer botón (casi siempre "Cerrar"). Si el
+      // contenido marca un campo con data-autofocus, mejor ese.
+      dialogo.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    }
     if (!abierto && dialogo.open) dialogo.close();
   }, [abierto]);
 
