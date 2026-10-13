@@ -551,3 +551,32 @@ export type ContactoLista = {
   instagram_url: string | null;
   medios: { id: number; tipo: MedioContacto["tipo"]; valor: string; estado_contacto: MedioContacto["estado_contacto"] }[];
 };
+
+// --- Prospectos (rediseño, Mich; src/crm/prospectos.service.ts) ---
+
+// Fila de GET /prospectos: lo de ProspectoResumen más lo que la lista nueva
+// enseña sin pedir cada ficha. `envios` es el "1/3"; `ultimo_envio_en` sale
+// crudo de MySQL ("YYYY-MM-DD HH:MM:SS", UTC), leerlo con fechaUtc().
+export type ProspectoFila = ProspectoResumen & {
+  confianza: "alta" | "media" | "baja" | null;
+  contacto_id: number;
+  contacto_puesto: string | null;
+  empresa_giro: string | null;
+  empresa_estado: string | null;
+  campana_id: number | null;
+  campana_nombre: string | null;
+  envios: number;
+  ultimo_envio_en: string | null;
+};
+
+// GET /prospectos/conteos: cuántos hay en cada estado y cuántos ya
+// recibieron al menos un correo (de cualquier estado).
+export type ConteosProspectos = {
+  total: number;
+  contactados: number;
+  por_estado: { estado: string; cantidad: number }[];
+};
+
+// Una campaña de GET /reportes/prospeccion (por_campana), que desde el
+// 12-oct también trae cuántas personas resultaron interesadas.
+export type CampanaProspeccion = ReporteProspeccion["por_campana"][number] & { interesados: number };

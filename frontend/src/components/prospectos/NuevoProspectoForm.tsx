@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { Field, ServerError, inputClass } from "../ui/Field";
+import { Icono } from "../ui/Icono";
+import type { NombreIcono } from "../ui/iconos";
 import { ApiError, api } from "../../lib/api";
 import { campanasAsignables, useCampanas } from "../../lib/campanas";
 import { avisoMediosSuprimidos } from "../../lib/medios";
@@ -122,7 +124,7 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
   if (duplicado) {
     const medio = duplicado.match_motivo === "telefono" ? "teléfono" : "correo";
     return (
-      <div className="flex flex-col gap-3 border-b border-border bg-warn-bg p-5">
+      <div className="m-4 flex flex-col gap-3 rounded-[14px] bg-warn-bg p-5 md:m-5">
         <div className="text-[13px] font-bold text-warn">Posible duplicado</div>
         <div className="text-[13px] text-ink">
           {duplicado.match_contacto_id
@@ -145,12 +147,15 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="flex flex-col gap-4 border-b border-border bg-bg p-5">
-      <div className="text-xs font-bold uppercase tracking-wide text-ink-2">Empresa</div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Field label="Nombre legal" htmlFor="pr-empresa" error={errors.empresaNombreLegal?.message}>
-          <input id="pr-empresa" className={inputClass} {...register("empresaNombreLegal")} />
-        </Field>
+    <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="flex min-h-full flex-col">
+      <div className="flex flex-col gap-[22px] px-4 py-5 md:px-6">
+      <Seccion icono="empresa" titulo="Empresa">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="md:col-span-2">
+          <Field label="Nombre legal" htmlFor="pr-empresa" error={errors.empresaNombreLegal?.message}>
+            <input id="pr-empresa" className={inputClass} {...register("empresaNombreLegal")} />
+          </Field>
+        </div>
         <Field label="Giro (opcional)" htmlFor="pr-giro" error={errors.empresaGiro?.message}>
           <input id="pr-giro" className={inputClass} {...register("empresaGiro")} />
         </Field>
@@ -177,9 +182,14 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
           <input id="pr-web" placeholder="https://" className={inputClass} {...register("empresaSitioWeb")} />
         </Field>
       </div>
+      <div className="flex gap-2.5 rounded-[12px] bg-warn-bg px-3.5 py-3 text-[12px] font-semibold text-warn">
+        <Icono nombre="aviso" size={15} className="mt-px shrink-0" />
+        Sin giro ni tamaño la automatización lo marca como excluido y no le escribe.
+      </div>
+      </Seccion>
 
-      <div className="text-xs font-bold uppercase tracking-wide text-ink-2">Contacto</div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <Seccion icono="persona" titulo="Contacto">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <Field label="Nombre" htmlFor="pr-contacto" error={errors.contactoNombre?.message}>
           <input id="pr-contacto" className={inputClass} {...register("contactoNombre")} />
         </Field>
@@ -200,9 +210,10 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
           <input id="pr-telefono" inputMode="tel" className={inputClass} {...register("telefono")} />
         </Field>
       </div>
+      </Seccion>
 
-      <div className="text-xs font-bold uppercase tracking-wide text-ink-2">Calificación</div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <Seccion icono="tendencia" titulo="Calificación" opcional>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <Field label="Prioridad (opcional)" htmlFor="pr-prioridad">
           <select id="pr-prioridad" className={inputClass} {...register("prioridad")}>
             <option value="">— Sin dato —</option>
@@ -236,10 +247,12 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
       <Field label="Observaciones (opcional)" htmlFor="pr-obs" error={errors.observaciones?.message}>
         <textarea id="pr-obs" rows={2} className={inputClass} {...register("observaciones")} />
       </Field>
+      </Seccion>
 
       <ServerError message={serverError} />
+      </div>
 
-      <div className="flex justify-end gap-2">
+      <div className="sticky bottom-0 mt-auto flex justify-end gap-2.5 border-t border-border bg-card px-4 py-4 md:px-6">
         <Button type="button" variant="ghost" onClick={() => onDone(null)}>
           Cancelar
         </Button>
@@ -248,5 +261,21 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
         </Button>
       </div>
     </form>
+  );
+}
+
+// Sección del panel de alta: ícono en cuadrito, título y sus campos.
+function Seccion({ icono, titulo, opcional = false, children }: { icono: NombreIcono; titulo: string; opcional?: boolean; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="flex items-center gap-2.5 font-heading text-[13px] font-extrabold text-strong">
+        <span className="grid h-7 w-7 place-items-center rounded-[9px] bg-navy-bg text-navy">
+          <Icono nombre={icono} size={15} />
+        </span>
+        {titulo}
+        {opcional && <em className="font-sans text-[12px] font-semibold not-italic text-ink-3">opcional</em>}
+      </h3>
+      {children}
+    </section>
   );
 }

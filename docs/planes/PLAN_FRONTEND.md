@@ -141,8 +141,8 @@ Cada deploy al canal reinicia los 30 días.
 | 4 | Documentos ✅ | `documentos.html` | Fabián | d8e6c71 | no |
 | 5 | Administración ✅ | `administracion.html` | Fabián | 18bf143 | no |
 | 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) ✅ | `informe-ejecutivo.html` | Fabián | 6275e9f | no |
-| 7 | Login | `login.html` | Mich | — | no |
-| 8 | Prospectos | `prospectos.html` | Mich | — | no |
+| 7 | Login ✅ (local) | `login.html` | Mich | sin subir | no |
+| 8 | Prospectos ✅ (local) | `prospectos.html` | Mich | sin subir | no |
 | 9 | Empresas + ficha | `empresas.html` | Mich | — | no |
 | 10 | Contactos | `contactos.html` | Mich | — | no |
 | 11 | Oportunidades | `oportunidades.html` | Mich | — | no |
@@ -171,6 +171,7 @@ Para ver todos los componentes sin iniciar sesión: `cd frontend && npm run dev`
 - **`MarcaDeAgua`**: la N detrás del contenido. Cambia sola de día a noche. El padre necesita `relative overflow-hidden`, y el tamaño y la posición van en `className` (ej. `w-[340px] -right-10 -bottom-[70px]`).
 - **`Button`**: mismas variantes que antes, más `aprobar` (verde) y `rechazar` (rojo suave). `primary` ya es el degradado azul → morado.
 - **`Icono`**: `<Icono nombre="correo" />`, con los nombres de `ui/iconos.ts`, o `<Icono d="…" />` con un trazo propio.
+- **`Segmento`** (lo agregó Mich el 13-oct): las pestañas tipo píldora (Prospectos · Importaciones · Campañas) y el "Lista | Tarjetas". Props: `opciones` (`id`, `texto`, `cuenta` opcional), `valor`, `onCambiar` y `etiqueta` (para lectores de pantalla). En el celular ocupa todo el ancho.
 - El numerito de Tareas del menú sale de `GET /tareas/conteos` (lo que vence hoy más lo vencido) con `useConteosTareas()` de `lib/tareas.ts`.
 
 ### Pantallas de Mich
@@ -186,6 +187,13 @@ Antes de cada pantalla: `git fetch`, leer su sección en `docs/diseno/README.md`
 - Lista con giro, campaña, barrita 0/3 (`envios`), `ultimo_envio_en`, filtro `campanaId` y `orden=score|recientes`.
 - Alta en panel lateral (`PanelLateral` de la base común) con `NuevoProspectoForm`.
 - Pestaña Importaciones con barra de colores por lote (el resumen por lote ya viene en `GET /prospectos/importaciones`) y pestaña Campañas con `CampanasTab` restilizado.
+- **Hecho en local (13-oct-2026, Mich):**
+  - Embudo con `Contador`: Capturados, Validados, En campaña, Respondieron (interesado + no interesado + en revisión), y aparte Excluidos (excluido + descartado + inactivo) y Baja. Los de un solo estado filtran la lista al dar clic; el selector de Estado tiene todos. Etiquetas y tonos en `lib/prospectos.ts`.
+  - **Para Fabián:** "En campaña" usa `contactados` de `/prospectos/conteos`, que cuenta a todos los que ya recibieron correo (también a los que respondieron o se dieron de baja), así que se cruza con las otras tarjetas y no filtra. En la lista, un `validado` con `envios > 0` se pinta "En campaña". Si se quiere exacto: un conteo de `validado` con envíos y un filtro `enCampana=true` en `GET /prospectos`.
+  - Lista con `orden=score|recientes|creado`, filtros de estado, prioridad y campaña, anillo de score, barrita 0/3 (el último correo va en el `title`) y, en el celular, tarjeta compacta propia en vez de `.tabla-tarjetas`. `ultimo_envio_en` llega crudo de MySQL (UTC sin Z): se lee con `fechaUtc()` de `lib/formato.ts`.
+  - Detalle y alta en `PanelLateral`. `NuevoProspectoForm` se acomodó para el panel (secciones con ícono, dos columnas, aviso de giro/tamaño). Importaciones pasó a `components/prospectos/ImportacionesTab.tsx`, con zona para soltar el archivo y la lista de lotes.
+  - Campañas como tarjetas: contactadas / respondieron / interesados y tasa de `/reportes/prospeccion` (`por_campana`; solo admin y supervisor, el agente ve solo cuántos prospectos tiene). Alta, edición y "¿Finalizar?" en `Modal`. "Ver prospectos" regresa a la lista filtrada por esa campaña.
+  - Revisado en Edge con la API simulada a 375 y 1440 px, día y noche, como administrador y como agente. Falta probarla contra producción.
 
 **Empresas + ficha** (`pages/EmpresasListPage.tsx`, `pages/FichaClientePage.tsx`, `empresas.html`)
 - Contadores: `GET /empresas/conteos`.

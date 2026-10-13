@@ -11,6 +11,13 @@ export function fechaLocal(valor: string) {
   return new Date(valor.length === 10 ? `${valor}T00:00:00` : valor);
 }
 
+// DATETIME que el backend manda sin pasar por Drizzle (subconsultas con
+// MAX(), ej. ultimo_envio_en): llega "YYYY-MM-DD HH:MM:SS" en UTC, sin la Z.
+// Si ya viene en ISO se lee tal cual.
+export function fechaUtc(valor: string) {
+  return new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(valor) ? `${valor.replace(" ", "T")}Z` : valor);
+}
+
 // "2026-10" (mes de GET /reportes/forecast) → "oct 2026".
 const formatoMes = new Intl.DateTimeFormat("es-MX", { month: "short", year: "numeric" });
 export function etiquetaMes(mes: string) {
