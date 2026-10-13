@@ -22,7 +22,7 @@ type LoginInput = z.infer<typeof loginSchema>;
 // escritorio recortado.
 export function LoginPage() {
   const { user, status, login } = useAuth();
-  const { tema, alternar } = useTema();
+  const { tema, elegir } = useTema();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -56,13 +56,13 @@ export function LoginPage() {
   return (
     <div className="login">
       <div className="login-tema" role="group" aria-label="Modo de color">
-        <button type="button" aria-pressed={tema === "claro"} title="Día" aria-label="Modo día" onClick={() => tema !== "claro" && alternar()}>
+        <button type="button" aria-pressed={tema === "claro"} title="Día" aria-label="Modo día" onClick={() => elegir("claro")}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
             <circle cx="12" cy="12" r="4" />
             <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
           </svg>
         </button>
-        <button type="button" aria-pressed={tema === "oscuro"} title="Noche" aria-label="Modo noche" onClick={() => tema !== "oscuro" && alternar()}>
+        <button type="button" aria-pressed={tema === "oscuro"} title="Noche" aria-label="Modo noche" onClick={() => elegir("oscuro")}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
             <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
           </svg>
@@ -74,7 +74,7 @@ export function LoginPage() {
 
       <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="login-tarjeta" noValidate>
         <div className="flex items-center gap-3">
-          <img src={tema === "oscuro" ? "/logo-n-claro.svg" : "/logo-n-color.svg"} alt="" className="w-[42px]" />
+          <img src={tema === "oscuro" ? "/marca/n-claro.svg" : "/marca/n-color.svg"} alt="" className="w-[42px]" />
           <div>
             <b className="block font-display text-[19px] font-normal leading-none tracking-[1.5px] text-[var(--l-strong)]">NANOBRIDGE</b>
             <span className="font-heading text-[9px] font-bold uppercase tracking-[2px] text-[var(--l-tx3)]">CRM de prospección</span>
