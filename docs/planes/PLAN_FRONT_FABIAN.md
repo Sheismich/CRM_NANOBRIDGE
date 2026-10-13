@@ -13,7 +13,7 @@ El backend de todas estas pantallas ya está en producción desde el 12-oct-2026
 | 1 | Base común ✅ 13-oct | `inicio-aprobado.html` | 1-2 días |
 | 2 | Inicio ✅ 13-oct | `inicio-aprobado.html` | ½-1 día |
 | 3 | Tareas (Mi día + Ver todas) ✅ 13-oct | `tareas.html` (opciones 3 y 6) | 1 día |
-| 4 | Documentos | `documentos.html` | 1 día |
+| 4 | Documentos ✅ 13-oct | `documentos.html` | 1 día |
 | 5 | Administración | `administracion.html` | 1 día |
 | 6 | Informe ejecutivo | `informe-ejecutivo.html` | ½ día |
 
@@ -83,12 +83,20 @@ Lo que se pidió:
   - Panel morado de la automatización: `por-dia` + `actividad-reciente` (sin backend nuevo).
 - **Ver todas:** lista + detalle, con `GET /tareas?q=` y `GET /tareas/:id/historial`.
 
-## 4. Documentos (`pages/DocumentosPage.tsx` y `components/ficha/DocumentosTab.tsx`)
+## 4. Documentos (`pages/DocumentosPage.tsx` y `components/ficha/DocumentosTab.tsx`) ✅ (13-oct-2026)
+
+Hecho. Piezas en `components/documentos/` (`PanelDocumento`, `VistaPrevia`, `ModalRechazo`, `SubirDocumentoPanel`), consultas en `lib/documentos.ts`, buscador de empresa compartido en `components/empresas/BuscadorEmpresa.tsx`. Decisiones:
+- **Vista previa con `blob:`** (no `<iframe>` directo a la API): la pantalla pide el archivo con la sesión (`api.blob`, `?modo=ver`) y lo muestra en un iframe/img con un URL `blob:`. Para eso `firebase.json` ahora permite `frame-src 'self' blob:` en la CSP. Probado con una copia de los encabezados de Firebase (con la CSP vieja se bloquea; con la nueva el PDF se ve). **Falta probarlo en la vista previa de Firebase con un PDF real.**
+- Sin papeles obligatorios, el resumen del expediente del panel enseña los documentos vigentes de la empresa (hasta 5).
+- La pestaña de la ficha ya no usa `PATCH /revisar`: "Ver y revisar" abre el mismo panel. Así el día del cambio se puede cerrar `/revisar` sin romper nada.
+- Sin backend nuevo.
+
+Lo que se pidió:
 
 - Botones arriba: **Descargar lote** (`/documentos/lote`) y **Subir documento**.
 - Contadores: `GET /documentos/conteos` (por revisar, aprobados, expedientes incompletos, rechazados).
 - Lista filtrada por `revision`, tipo y `q`.
-- Panel con vista previa en `<iframe>` / `<img>` a `/api/v1/documentos/:id/descarga?modo=ver` (mismo origen por el rewrite de Firebase, la cookie viaja sola). **Ojo:** `firebase.json` manda `X-Frame-Options: DENY` y `frame-ancestors 'none'` a TODAS las rutas, también a `/api/**`, así que un `<iframe>` del PDF va a salir en blanco. Hay que cambiar a `SAMEORIGIN` / `frame-ancestors 'self'` (al menos para `/api/v1/documentos/**`) o mostrar el PDF de otra forma. Probarlo en la vista previa, no solo en local (en local Vite no manda esos encabezados).
+- Panel con vista previa en `<iframe>` / `<img>` a `/api/v1/documentos/:id/descarga?modo=ver` (mismo origen por el rewrite de Firebase, la cookie viaja sola). **(Resuelto 13-oct con blob:, ver arriba.)** `firebase.json` manda `X-Frame-Options: DENY` y `frame-ancestors 'none'` a TODAS las rutas, también a `/api/**`, así que un `<iframe>` del PDF va a salir en blanco. Hay que cambiar a `SAMEORIGIN` / `frame-ancestors 'self'` (al menos para `/api/v1/documentos/**`) o mostrar el PDF de otra forma. Probarlo en la vista previa, no solo en local (en local Vite no manda esos encabezados).
 - **Aprobar / Rechazar** (`PATCH :id/aprobar` y `:id/rechazar`), solo admin y supervisor. Rechazar abre un `Modal`: motivo rápido (ilegible, vencido, incompleto, no es de esta empresa, tipo equivocado, otro) + explicación obligatoria de hasta 500 caracteres. El front nuevo ya no usa `PATCH :id/revisar`.
 - **Expediente:** el resumen va en el panel del documento, y la sección de expediente de la ficha también es de Fabián: vive en `DocumentosTab.tsx`, que la ficha de Mich solo coloca. Hoy no hay papeles obligatorios (Carlos, 12-oct): `GET /documentos/expediente/:id` regresa `total: 0` y se enseñan los documentos de la empresa; la lista de papeles aparece sola el día que se marquen en el catálogo.
 - Clic en el nombre de la empresa → ficha con `?tab=documentos`, con un "← Documentos" para regresar. **Coordinar con Mich** la ruta exacta cuando ella rehaga la ficha.

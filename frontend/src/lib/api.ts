@@ -127,11 +127,25 @@ async function descargar(path: string) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+// Vista previa de documentos (rediseño, 13-oct-2026): el archivo como Blob,
+// pedido con la sesión, para mostrarlo con un URL blob: dentro de la página
+// (firebase.json permite frame-src blob:). Un <iframe> directo a la API no
+// sirve: Firebase manda X-Frame-Options DENY y el backend CSP sandbox.
+async function blob(path: string, signal?: AbortSignal) {
+  const response = await fetch(buildUrl(path), { credentials: "include", signal });
+  if (!response.ok) {
+    if (response.status === 401) alPerderSesion?.();
+    throw errorDeRespuesta(response.status, await leerPayload(response));
+  }
+  return response.blob();
+}
+
 export const api = {
   get: <T>(path: string, query?: RequestOptions["query"]) => request<T>(path, { method: "GET", query }),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
   postForm: <T>(path: string, formData: FormData) => request<T>(path, { method: "POST", formData }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
-  descargar
+  descargar,
+  blob
 };

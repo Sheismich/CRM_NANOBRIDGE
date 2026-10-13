@@ -138,7 +138,7 @@ Cada deploy al canal reinicia los 30 días.
 | 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) ✅ | `inicio-aprobado.html` | Fabián | (este commit) | no |
 | 2 | Inicio ✅ | `inicio-aprobado.html` | Fabián | (este commit) | no |
 | 3 | Tareas (Mi día + lista) ✅ | `tareas.html` | Fabián | (este commit) | no |
-| 4 | Documentos | `documentos.html` | Fabián | — | no |
+| 4 | Documentos ✅ | `documentos.html` | Fabián | (este commit) | no |
 | 5 | Administración | `administracion.html` | Fabián | — | no |
 | 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) | `informe-ejecutivo.html` | Fabián | — | no |
 | 7 | Login | `login.html` | Mich | — | no |
@@ -192,7 +192,7 @@ Antes de cada pantalla: `git fetch`, leer su sección en `docs/diseno/README.md`
 - Filtros de `GET /empresas`: `q`, giro, región, `responsableId`, `sinResponsable` y `orden=actividad`.
 - Selector Lista | Tarjetas, con `prospeccion` y `ultima_actividad_detalle` en cada empresa.
 - Ficha: encabezado con marca de agua, historial unificado (`GET /actividades`) y `fuente_url`.
-- **La sección de expediente/documentos de la ficha la hace Fabián** (es parte de Documentos, en `components/ficha/DocumentosTab.tsx`). La ficha solo la coloca y respeta `?tab=documentos`, porque desde Documentos se llega a la ficha con esa pestaña abierta y un "← Documentos" para regresar.
+- **La sección de expediente/documentos de la ficha la hace Fabián** (✅ 13-oct: `DocumentosTab` ya usa el panel nuevo con vista previa y Aprobar/Rechazar, y enseña el expediente cuando haya papeles obligatorios; si al rehacer la ficha le cambias el estilo, no le quites `PanelDocumento`) (es parte de Documentos, en `components/ficha/DocumentosTab.tsx`). La ficha solo la coloca y respeta `?tab=documentos`, porque desde Documentos se llega a la ficha con esa pestaña abierta y un "← Documentos" para regresar.
 
 **Contactos** (`pages/ContactosPage.tsx`, `contactos.html`)
 - Contadores: `GET /contactos/conteos`.

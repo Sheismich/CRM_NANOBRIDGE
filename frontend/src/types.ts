@@ -173,6 +173,41 @@ export type Documento = {
   revisado_por: number | null;
   revisado_en: string | null;
   creado_en: string;
+  // Aprobar / rechazar (migración 029, 12-oct-2026).
+  documento_raiz_id: number | null;
+  revision: "por_revisar" | "aprobado" | "rechazado";
+  motivo_rechazo: string | null;
+  motivo_rechazo_detalle: string | null;
+  actualizado_en: string;
+};
+
+// GET /documentos (bandeja): el documento con los nombres que pinta la lista.
+export type DocumentoBandeja = Documento & { empresa_nombre: string; tipo_nombre: string | null; revisado_por_nombre: string | null };
+
+// GET /documentos/:id: además, sus versiones.
+export type DocumentoDetalle = Documento & { versiones: { id: number; version: number; estado: Documento["estado"]; creado_en: string }[] };
+
+export type ConteosDocumentos = { por_revisar: number; aprobados: number; rechazados: number; expedientes_incompletos: number };
+
+export type CatalogosDocumentos = {
+  tipos_documento: { id: number; clave: string; nombre: string; obligatorio: boolean }[];
+  motivos_rechazo: { clave: string; nombre: string }[];
+};
+
+// GET /documentos/expediente/:empresaId. Mientras no haya papeles
+// obligatorios en el catálogo (Carlos, 12-oct-2026), papeles = [] y total 0.
+export type Expediente = {
+  empresa_id: number;
+  papeles: {
+    tipo_id: number;
+    clave: string;
+    nombre: string;
+    estado: "falta" | Documento["revision"];
+    documento: { id: number; nombre_original: string; version: number; creado_en: string; revisado_en: string | null; motivo_rechazo: string | null; motivo_rechazo_detalle: string | null } | null;
+  }[];
+  aprobados: number;
+  total: number;
+  completo: boolean;
 };
 
 export type EstadoBorrador = "pendiente_revision" | "duplicado" | "importado" | "rechazado" | "expirado";

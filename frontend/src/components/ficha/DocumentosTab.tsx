@@ -6,7 +6,10 @@ import { Field, ServerError, inputClass } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { formatoFecha, formatoFechaHora, formatoTamano } from "../../lib/formato";
-import type { Documento, Paginated } from "../../types";
+import type { Documento, DocumentoBandeja, Paginated } from "../../types";
+import { Pastilla } from "../ui/Pastilla";
+import { PanelDocumento } from "../documentos/PanelDocumento";
+import { ETIQUETA_REVISION, TONO_REVISION, useExpediente } from "../../lib/documentos";
 import { useOportunidadesEmpresa } from "./queries";
 
 // Mismos tipos que TIPOS_MIME_PERMITIDOS (documento.schema.ts) y el tope de
@@ -43,8 +46,10 @@ export function DocumentosTab({ empresaId, contactos }: { empresaId: number; con
   // (DocumentosService.validarEmpresaScoped): en una ajena, 404.
   const { data, isPending, isError } = useQuery({
     queryKey: ["documentos", { empresaId }],
-    queryFn: () => api.get<Paginated<Documento>>("/api/v1/documentos", { empresaId, limit: 100 })
+    queryFn: () => api.get<Paginated<DocumentoBandeja>>("/api/v1/documentos", { empresaId, limit: 100 })
   });
+  const [abierto, setAbierto] = useState<DocumentoBandeja | null>(null);
+  const { data: expediente } = useExpediente(empresaId);
   const { data: catalogos } = useQuery({
     queryKey: ["documentos-catalogos"],
     queryFn: () => api.get<{ tipos_documento: TipoDocumento[] }>("/api/v1/documentos/catalogos"),
@@ -65,6 +70,23 @@ export function DocumentosTab({ empresaId, contactos }: { empresaId: number; con
           </Button>
         )}
       </div>
+      {/* Expediente (punto 49): solo cuando el catálogo marca papeles
+          obligatorios; hoy no hay (Carlos, 12-oct-2026) y no se enseña. */}
+      {expediente && expediente.total > 0 && (
+        <div className="border-b border-border px-5 py-3.5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="text-[13px] font-bold">Expediente</span>
+            <Pastilla tono={expediente.completo ? "ok" : "warn"}>{`${expediente.aprobados} de ${expediente.total} aprobados`}</Pastilla>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {expediente.papeles.map((p) => (
+              <Pastilla key={p.tipo_id} tono={p.estado === "falta" ? "neutro" : TONO_REVISION[p.estado]} punto>
+                {`${p.nombre}: ${p.estado === "falta" ? "falta" : ETIQUETA_REVISION[p.estado].toLowerCase()}`}
+              </Pastilla>
+            ))}
+          </div>
+        </div>
+      )}
       {subiendo && (
         <SubirDocumentoForm empresaId={empresaId} tipos={tipos} oportunidades={oportunidades?.data ?? []} contactos={contactos} onDone={() => setSubiendo(false)} />
       )}
@@ -82,15 +104,18 @@ export function DocumentosTab({ empresaId, contactos }: { empresaId: number; con
               tipo={d.tipo_documento_id ? nombreTipo.get(d.tipo_documento_id) : undefined}
               oportunidad={d.oportunidad_id ? tituloOportunidad.get(d.oportunidad_id) : undefined}
               puedeEliminar={puedeEliminar}
+              onAbrir={() => setAbierto(d)}
             />
           ))}
         </ul>
       )}
+      <PanelDocumento fila={abierto} onCerrar={() => setAbierto(null)} puedeRevisar={puedeEliminar} />
     </Card>
   );
 }
 
-function SubirDocumentoForm({
+// También lo usa "Subir documento" de la bandeja (pages/DocumentosPage).
+export function SubirDocumentoForm({
   empresaId,
   tipos,
   oportunidades,
@@ -130,7 +155,7 @@ function SubirDocumentoForm({
     setEnviando(true);
     try {
       await api.postForm("/api/v1/documentos", form);
-      await queryClient.invalidateQueries({ queryKey: ["documentos", { empresaId }] });
+      await queryClient.invalidateQueries({ queryKey: ["documentos"] });
       onDone();
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
@@ -191,7 +216,7 @@ function SubirDocumentoForm({
   );
 }
 
-function DocumentoFila({ documento: d, tipo, oportunidad, puedeEliminar }: { documento: Documento; tipo?: string; oportunidad?: string; puedeEliminar: boolean }) {
+function DocumentoFila({ documento: d, tipo, oportunidad, puedeEliminar, onAbrir }: { documento: Documento; tipo?: string; oportunidad?: string; puedeEliminar: boolean; onAbrir: () => void }) {
   const queryClient = useQueryClient();
   const versionInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -202,7 +227,7 @@ function DocumentoFila({ documento: d, tipo, oportunidad, puedeEliminar }: { doc
     setOcupado(true);
     try {
       await accion();
-      await queryClient.invalidateQueries({ queryKey: ["documentos", { empresaId: d.empresa_id }] });
+      await queryClient.invalidateQueries({ queryKey: ["documentos"] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
     } finally {
@@ -242,27 +267,24 @@ function DocumentoFila({ documento: d, tipo, oportunidad, puedeEliminar }: { doc
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          {d.estado === "archivado" && <span className="rounded-full bg-bg px-2.5 py-1 text-[11px] font-bold text-ink-3">Archivado</span>}
-          {d.revisado_en ? (
-            <span className="rounded-full bg-ok-bg px-2.5 py-1 text-[11px] font-bold text-ok" title={formatoFechaHora.format(new Date(d.revisado_en))}>
-              Revisado
-            </span>
-          ) : (
-            <span className="rounded-full bg-warn-bg px-2.5 py-1 text-[11px] font-bold text-warn">Pendiente de revisión</span>
-          )}
+          {d.estado === "archivado" && <Pastilla tono="neutro">Archivado</Pastilla>}
+          <Pastilla tono={TONO_REVISION[d.revision]} punto>
+            <span title={d.revisado_en ? formatoFechaHora.format(new Date(d.revisado_en)) : undefined}>{ETIQUETA_REVISION[d.revision]}</span>
+          </Pastilla>
         </div>
       </div>
+      {d.revision === "rechazado" && d.motivo_rechazo_detalle && <div className="text-xs text-danger">Motivo: {d.motivo_rechazo_detalle}</div>}
 
       <div className="flex flex-wrap gap-1.5">
+        {/* Rediseño (13-oct-2026): ver, aprobar y rechazar van en el mismo
+            panel que la bandeja de Documentos; "Marcar revisado" (PATCH
+            /revisar) ya no se usa. */}
+        <Button variant="outline" onClick={onAbrir}>
+          {puedeEliminar ? "Ver y revisar" : "Ver"}
+        </Button>
         <Button variant="ghost" onClick={() => void descargar()}>
           Descargar
         </Button>
-        {/* Solo la versión vigente se revisa: en otra, 409 DOCUMENTO_NO_VIGENTE. */}
-        {!d.revisado_en && d.estado === "vigente" && (
-          <Button variant="ghost" disabled={ocupado} onClick={() => void ejecutar(() => api.patch(`/api/v1/documentos/${d.id}/revisar`, {}))}>
-            Marcar revisado
-          </Button>
-        )}
         <Button variant="ghost" disabled={ocupado} onClick={() => versionInput.current?.click()}>
           Nueva versión
         </Button>
