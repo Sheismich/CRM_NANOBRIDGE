@@ -343,3 +343,179 @@ body {
     padding: 0;
   }
 }
+
+/* --- Login (rediseño, docs/diseno/login.html "Circuito vivo") -----------
+   Colores propios del diseño en los dos modos (no los tokens generales,
+   que la Base común del rediseño va a cambiar). La animación es solo CSS
+   (cabe en la CSP de firebase.json) y se apaga con prefers-reduced-motion. */
+.login {
+  --l-bg: #eef1f9;
+  --l-trace: #d5dbea;
+  --l-node: #eef1f9;
+  --l-nodeb: #c3cbe0;
+  --l-card: #fff;
+  --l-bd: #e4e8f2;
+  --l-field: #f6f8fd;
+  --l-tx: #151c36;
+  --l-strong: #101733;
+  --l-tx3: #8992ad;
+  --l-link: #2a449b;
+  --l-sh: 0 1px 0 #e4e8f2, 0 30px 70px -25px rgba(16, 23, 51, 0.25);
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 40px 16px 64px;
+  background: var(--l-bg);
+}
+:root[data-theme="dark"] .login {
+  --l-bg: #0a0f1e;
+  --l-trace: #1a2340;
+  --l-node: #0a0f1e;
+  --l-nodeb: #2b3660;
+  --l-card: #121a32;
+  --l-bd: #222c4d;
+  --l-field: #0f1629;
+  --l-tx: #dfe5f7;
+  --l-strong: #fff;
+  --l-tx3: #7b84a5;
+  --l-link: #93a9ff;
+  --l-sh: 0 0 0 1px rgba(35, 186, 211, 0.06), 0 30px 80px -25px rgba(0, 0, 0, 0.8);
+}
+.login-fondo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.login-fondo.movil {
+  display: none;
+}
+.login-trazo {
+  fill: none;
+  stroke: var(--l-trace);
+  stroke-width: 2;
+}
+.login-pulso {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 60 1400;
+  animation: login-corre 6s linear infinite;
+}
+:root[data-theme="dark"] .login-pulso {
+  filter: drop-shadow(0 0 6px currentColor);
+}
+.login-pulso.b { animation-duration: 8s; animation-delay: -2s; }
+.login-pulso.c { animation-duration: 7s; animation-delay: -4s; }
+.login-pulso.d { animation-duration: 9s; animation-delay: -1s; }
+@keyframes login-corre {
+  from { stroke-dashoffset: 1460; }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-pulso { animation: none; opacity: 0; }
+}
+.login-nodo {
+  fill: var(--l-node);
+  stroke: var(--l-nodeb);
+  stroke-width: 2;
+}
+.login-tarjeta {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 400px;
+  border: 1px solid var(--l-bd);
+  border-radius: 20px;
+  background: var(--l-card);
+  padding: 36px 34px 28px;
+  box-shadow: var(--l-sh);
+  color: var(--l-tx);
+  /* El diseño usa el interlineado normal del navegador, no el 1.5 de Tailwind. */
+  line-height: normal;
+}
+.login-tarjeta::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 0;
+  height: 3px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, #41e198, #23bad3, #2a449b, #5b2d86);
+}
+.login-campo {
+  width: 100%;
+  height: 48px;
+  border: 1.5px solid var(--l-bd);
+  border-radius: 12px;
+  background: var(--l-field);
+  padding: 0 14px;
+  font: 500 15px Manrope, system-ui, sans-serif;
+  color: var(--l-strong);
+  outline: none;
+}
+.login-campo::placeholder { color: var(--l-tx3); }
+.login-campo:focus {
+  border-color: #23bad3;
+  background: var(--l-card);
+  box-shadow: 0 0 0 4px rgba(35, 186, 211, 0.14);
+}
+.login-boton {
+  width: 100%;
+  height: 50px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  font: 800 15px Manrope, system-ui, sans-serif;
+  background: linear-gradient(120deg, #2a449b, #5b2d86);
+  box-shadow: 0 10px 24px -10px rgba(42, 68, 155, 0.7);
+  cursor: pointer;
+}
+.login-boton:disabled { opacity: 0.6; cursor: not-allowed; }
+.login-tema {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  z-index: 3;
+  display: inline-flex;
+  gap: 2px;
+  border: 1px solid var(--l-bd);
+  border-radius: 99px;
+  background: var(--l-card);
+  padding: 3px;
+}
+.login-tema button {
+  display: grid;
+  width: 32px;
+  height: 28px;
+  place-items: center;
+  border-radius: 99px;
+  color: var(--l-tx3);
+  cursor: pointer;
+}
+.login-tema button[aria-pressed="true"] {
+  background: var(--l-field);
+  color: var(--l-strong);
+}
+.login-pie {
+  position: absolute;
+  bottom: 18px;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  text-align: center;
+  font: 700 10px Montserrat, system-ui, sans-serif;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--l-tx3);
+}
+@media (max-width: 760px) {
+  .login-fondo.escritorio { display: none; }
+  .login-fondo.movil { display: block; }
+  .login-tarjeta { padding: 30px 22px 24px; }
+}
