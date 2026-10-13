@@ -1,18 +1,22 @@
-/* Mismas fuentes que los mockups (artifact "CRM NANOBRIDGE — Mockups"):
-   Anton para el logotipo, Montserrat para títulos de sección, Manrope
-   para el resto. Va ANTES que @import "tailwindcss": las reglas @import
-   deben preceder a cualquier otra regla salvo @charset/@layer, o el CSS
-   generado las descarta en silencio. */
-@import url("https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap");
+/* Fuentes del diseño: Anton para números grandes y el logotipo,
+   Montserrat para títulos, Manrope para el resto. Va ANTES que
+   @import "tailwindcss": las reglas @import deben preceder a cualquier
+   otra regla salvo @charset/@layer, o el CSS generado las descarta en
+   silencio. */
+@import url("https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@600;700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 /* dark: aplica con <html data-theme="dark"> (lib/tema.ts), no con la
    preferencia del sistema: la elección de la persona manda. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Tokens calcados 1:1 de los .dc.html de los mockups (:root en cada
-   pantalla) -- mismo nombre y mismo valor, para que quien compare el
-   mockup contra la pantalla real no tenga que traducir nada. */
+/* Tokens del rediseño (docs/diseno/, aprobado el 12-oct-2026). Los
+   nombres son los de antes, para que las pantallas viejas sigan
+   funcionando mientras se reemplazan; los valores son los de los
+   prototipos (tareas.html, documentos.html, administracion.html...).
+   Equivalencias con los prototipos: --border = --bd, --ink = --tx,
+   --ink-2 = --tx2, --ink-3 = --tx3, --danger = --red, --warn = --amb,
+   --info = --teal, --navy-bg = --bluebg, --sombra-tarjeta = --sh. */
 :root {
   --navy: #2a449b;
   --navy-2: #1f3578;
@@ -21,49 +25,82 @@
   --cyan: #23bad3;
   --mint: #41e198;
   --violet: #4a3a7a;
-  --bg: #eef1f9;
+  --purple: #5b2d86;
+  --lila: #a796e6;
+  --bg: #f4f6fb;
+  --side: #ffffff;
   --card: #ffffff;
-  --border: #e4e8f2;
-  --ink: #151c36;
+  --soft: #f6f8fc;
+  --border: #e3e8f2;
+  --strong: #101733;
+  --ink: #1b2240;
   --ink-2: #5b6482;
-  --ink-3: #8992ad;
-  --warn: #9a6a16;
-  --warn-bg: #fbefd9;
-  --danger: #b23a45;
-  --danger-bg: #fbe4e7;
-  --ok: #177a55;
-  --ok-bg: #e4f6ec;
+  --ink-3: #8a93ad;
+  --warn: #c57a0a;
+  --warn-bg: #fdf1db;
+  --danger: #d63a4a;
+  --danger-bg: #fde8ea;
+  --ok: #158a5c;
+  --ok-bg: #e2f6ec;
+  --info: #0f8ea3;
+  --info-bg: #dff5f8;
+  --navy-bg: #e8edfb;
+  /* Relieve (tarjetas del Inicio aprobado, variante 6 "Mezcla"): fondo
+     liso y la tarjeta del mismo color, separada solo por sombras. */
+  --relieve: #e8ecf5;
+  --relieve-sombra: 10px 10px 24px rgba(160, 172, 196, 0.55), -10px -10px 24px rgba(255, 255, 255, 0.9);
+  --relieve-hundido: inset 3px 3px 7px rgba(160, 172, 196, 0.6), inset -3px -3px 7px #fff;
+  --relieve-linea: rgba(42, 68, 155, 0.14);
+  --relieve-borde: transparent;
+  --sombra-tarjeta: 0 1px 2px rgba(16, 23, 51, 0.05), 0 8px 24px -14px rgba(16, 23, 51, 0.18);
   /* Colores de marca que NO cambian con el tema: los degradados llevan
-     texto blanco encima (botón principal, avatar, login). */
+     texto blanco encima (botón principal, franja, login). */
   --marca-navy: #2a449b;
   --marca-violet: #4a3a7a;
+  --marca-purple: #5b2d86;
   --sombra: rgba(21, 28, 54, 0.12);
   --grad: linear-gradient(120deg, var(--mint) 0%, var(--cyan) 52%, var(--marca-navy) 100%);
+  --grad-boton: linear-gradient(120deg, #2a449b, #5b2d86);
+  --marca-agua-opacidad: 0.09;
   color-scheme: light;
 }
 
-/* Modo oscuro: el botón de sol/luna del menú lateral pone data-theme en
-   <html> (lib/tema.ts). Mismos nombres de token, otros valores: los
-   componentes no cambian. navy-ink se queda oscuro porque es el texto
-   sobre los botones menta. */
+/* Modo oscuro: el botón de sol/luna pone data-theme en <html>
+   (lib/tema.ts). Mismos nombres, otros valores: los componentes no
+   cambian. navy-ink se queda oscuro porque es el texto sobre los botones
+   menta. */
 :root[data-theme="dark"] {
   --navy: #93a9ff;
   --navy-2: #7f95ea;
   --navy-dark: #b3c2ff;
   --violet: #a796e6;
-  --bg: #0e1322;
-  --card: #171d33;
-  --border: #29324f;
-  --ink: #e7eaf6;
-  --ink-2: #a6aecb;
-  --ink-3: #7b84a5;
-  --warn: #f1bd62;
-  --warn-bg: #3a2c12;
-  --danger: #ff8d98;
-  --danger-bg: #3e1a22;
-  --ok: #62d9a2;
-  --ok-bg: #123528;
+  --purple: #c3b5f2;
+  --bg: #0b1020;
+  --side: #0c1224;
+  --card: #121a32;
+  --soft: #0f1629;
+  --border: #1f2847;
+  --strong: #ffffff;
+  --ink: #dfe5f7;
+  --ink-2: #9aa3c4;
+  --ink-3: #6f7aa3;
+  --warn: #f4c06a;
+  --warn-bg: rgba(244, 192, 106, 0.13);
+  --danger: #ff7f8c;
+  --danger-bg: rgba(255, 127, 140, 0.13);
+  --ok: #49e3a1;
+  --ok-bg: rgba(73, 227, 161, 0.12);
+  --info: #5fd6ea;
+  --info-bg: rgba(95, 214, 234, 0.12);
+  --navy-bg: rgba(147, 169, 255, 0.13);
+  --relieve: #0f1529;
+  --relieve-sombra: 10px 10px 26px rgba(0, 0, 0, 0.6), -8px -8px 22px rgba(120, 140, 220, 0.06);
+  --relieve-hundido: inset 3px 3px 7px rgba(0, 0, 0, 0.6), inset -3px -3px 7px rgba(255, 255, 255, 0.05);
+  --relieve-linea: rgba(255, 255, 255, 0.1);
+  --relieve-borde: rgba(255, 255, 255, 0.045);
+  --sombra-tarjeta: 0 12px 30px -16px rgba(0, 0, 0, 0.7);
   --sombra: rgba(0, 0, 0, 0.45);
+  --marca-agua-opacidad: 0.12;
   color-scheme: dark;
 }
 
@@ -75,12 +112,19 @@
   --color-navy-2: var(--navy-2);
   --color-navy-dark: var(--navy-dark);
   --color-navy-ink: var(--navy-ink);
+  --color-navy-bg: var(--navy-bg);
   --color-cyan: var(--cyan);
   --color-mint: var(--mint);
   --color-violet: var(--violet);
+  --color-purple: var(--purple);
+  --color-lila: var(--lila);
   --color-bg: var(--bg);
+  --color-side: var(--side);
   --color-card: var(--card);
+  --color-soft: var(--soft);
+  --color-relieve: var(--relieve);
   --color-border: var(--border);
+  --color-strong: var(--strong);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
@@ -90,6 +134,8 @@
   --color-danger-bg: var(--danger-bg);
   --color-ok: var(--ok);
   --color-ok-bg: var(--ok-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
   --font-display: "Anton", sans-serif;
   --font-heading: "Montserrat", sans-serif;
   --font-sans: "Manrope", system-ui, sans-serif;
@@ -100,6 +146,130 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Foco con teclado (y el que pone el navegador al abrir un panel o un
+   modal): aro cyan de la marca en vez del negro por omisión. */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* ---- Base común del rediseño (components/ui/) ----
+   Lo que Tailwind no dice bien en una clase (sombras dobles, degradados
+   por tema) vive aquí con nombre propio. */
+
+@layer components {
+  /* Tarjeta en relieve (Inicio): mismo color que el fondo .fondo-relieve. */
+  .tarjeta-relieve {
+    background: var(--relieve);
+    border: 1px solid var(--relieve-borde);
+    border-radius: 22px;
+    box-shadow: var(--relieve-sombra);
+  }
+  .fondo-relieve {
+    background: var(--relieve);
+  }
+  /* Tarjeta blanca (las demás pantallas). */
+  .tarjeta-blanca {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--sombra-tarjeta);
+  }
+  /* Encabezado de color de una tarjeta: franja suave de izquierda a
+     derecha. */
+  .encabezado-menta { background: linear-gradient(90deg, rgba(65, 225, 152, 0.16), rgba(35, 186, 211, 0.056)); }
+  .encabezado-cyan { background: linear-gradient(90deg, rgba(35, 186, 211, 0.16), rgba(42, 68, 155, 0.048)); }
+  .encabezado-lila { background: linear-gradient(90deg, rgba(91, 45, 134, 0.16), rgba(42, 68, 155, 0.056)); }
+  .encabezado-morado { background: linear-gradient(90deg, rgba(91, 45, 134, 0.128), transparent 40%); }
+  [data-theme="dark"] .encabezado-menta { background: linear-gradient(90deg, rgba(65, 225, 152, 0.13), rgba(35, 186, 211, 0.045)); }
+  [data-theme="dark"] .encabezado-cyan { background: linear-gradient(90deg, rgba(35, 186, 211, 0.13), rgba(42, 68, 155, 0.039)); }
+  [data-theme="dark"] .encabezado-lila { background: linear-gradient(90deg, rgba(91, 45, 134, 0.13), rgba(42, 68, 155, 0.045)); }
+  [data-theme="dark"] .encabezado-morado { background: linear-gradient(90deg, rgba(91, 45, 134, 0.104), transparent 40%); }
+  /* Ícono en un círculo hundido. */
+  .icono-hundido {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--relieve);
+    box-shadow: var(--relieve-hundido);
+  }
+  .tarjeta-blanca .icono-hundido {
+    background: var(--soft);
+  }
+
+  /* Franja azul de arriba (Inicio, Administración...): igual en los dos
+     modos, siempre con texto blanco. */
+  .franja {
+    position: relative;
+    overflow: hidden;
+    border-radius: 24px;
+    color: #fff;
+    background:
+      radial-gradient(1100px 420px at 85% -30%, rgba(35, 186, 211, 0.38), transparent 60%),
+      linear-gradient(135deg, #101733 0%, #2a449b 68%, #5b2d86 130%);
+    box-shadow: 10px 14px 30px rgba(42, 68, 155, 0.35), -8px -8px 22px rgba(255, 255, 255, 0.8);
+  }
+  [data-theme="dark"] .franja {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
+  }
+  .franja-numero-resaltado {
+    background: linear-gradient(90deg, var(--mint), var(--cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Marca de agua: la N de color de día y la clara de noche (cada
+     componente pone las dos y esto esconde la que no toca). */
+  .marca-agua {
+    position: absolute;
+    pointer-events: none;
+    user-select: none;
+    opacity: var(--marca-agua-opacidad);
+  }
+  .marca-agua-noche { display: none; }
+  [data-theme="dark"] .marca-agua-dia { display: none; }
+  [data-theme="dark"] .marca-agua-noche { display: block; }
+
+  /* Puntito "en vivo" que parpadea; quieto si el sistema pide menos
+     movimiento. */
+  .punto-vivo {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--mint);
+    box-shadow: 0 0 8px var(--mint);
+    animation: parpadeo 2s ease-in-out infinite;
+  }
+  @keyframes parpadeo {
+    50% { opacity: 0.35; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .punto-vivo { animation: none; }
+  }
+
+  /* Barra de navegación de abajo en el celular: el contenido deja espacio
+     para que no lo tape (64 px + la zona segura del iPhone). */
+  .espacio-barra-celular {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 768px) {
+    .espacio-barra-celular { padding-bottom: 40px; }
+  }
+  .barra-celular {
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
 }
 
 /* Tablas en pantallas angostas: en vez de aplastar las columnas, la tabla

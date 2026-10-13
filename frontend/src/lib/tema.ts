@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 
 // Modo claro/oscuro. Se guarda en este navegador (es una preferencia de la
 // persona, no un dato del CRM); sin elección guardada se sigue la del
@@ -30,13 +30,24 @@ export function aplicarTemaInicial() {
   aplicar(temaInicial());
 }
 
-export function useTema() {
-  const [tema, setTema] = useState<Tema>(() => (document.documentElement.dataset.theme === "dark" ? "oscuro" : "claro"));
+// La fuente de verdad es el atributo de <html>: así el selector del menú
+// de compu y el de la barra del celular (los dos montados a la vez) nunca
+// se contradicen.
+function suscribir(avisar: () => void) {
+  const observador = new MutationObserver(avisar);
+  observador.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => observador.disconnect();
+}
 
-  function alternar() {
-    const nuevo: Tema = tema === "oscuro" ? "claro" : "oscuro";
+function leer(): Tema {
+  return document.documentElement.dataset.theme === "dark" ? "oscuro" : "claro";
+}
+
+export function useTema() {
+  const tema = useSyncExternalStore(suscribir, leer);
+
+  function elegir(nuevo: Tema) {
     aplicar(nuevo);
-    setTema(nuevo);
     try {
       localStorage.setItem(CLAVE, nuevo);
     } catch {
@@ -44,5 +55,5 @@ export function useTema() {
     }
   }
 
-  return { tema, alternar };
+  return { tema, elegir, alternar: () => elegir(tema === "oscuro" ? "claro" : "oscuro") };
 }

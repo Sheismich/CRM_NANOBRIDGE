@@ -135,7 +135,7 @@ Cada deploy al canal reinicia los 30 días.
 
 | # | Pantalla | Diseño | Le toca | Commit | En vista previa |
 |---|---|---|---|---|---|
-| 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) | `inicio-aprobado.html` | Fabián | — | no |
+| 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) ✅ | `inicio-aprobado.html` | Fabián | (este commit) | no |
 | 2 | Inicio | `inicio-aprobado.html` | Fabián | — | no |
 | 3 | Tareas (Mi día + lista) | `tareas.html` | Fabián | — | no |
 | 4 | Documentos | `documentos.html` | Fabián | — | no |
@@ -148,6 +148,30 @@ Cada deploy al canal reinicia los 30 días.
 | 11 | Oportunidades | `oportunidades.html` | Mich | — | no |
 | 12 | Cotizaciones | `cotizaciones.html` | Mich | — | no |
 | 13 | Reportes (panel + Día) | `reportes.html` | Mich | — | no |
+
+### Base común — cómo se usa (hecha el 13-oct-2026)
+
+Para ver todos los componentes sin iniciar sesión: `cd frontend && npm run dev` y abrir `http://localhost:5173/base`. Sirve en día y noche (botón sol/luna) y en celular, y `?fondo=relieve` la pinta sobre el fondo del Inicio. Esa página solo existe en local y no se publica. El código de ejemplo está en `pages/MuestraBasePage.tsx`.
+
+- **Colores** (`index.css`): los tokens se llaman como antes (`bg`, `card`, `border`, `ink`, `ink-2`, `ink-3`, `navy`, `ok`, `warn`, `danger`, cada uno con su `-bg`), pero ya tienen los valores de los prototipos nuevos. Se agregaron `strong` (títulos), `soft` (fondos suavecitos), `side`, `info`/`info-bg` (el teal de los prototipos), `navy-bg`, `purple`, `lila` y `relieve`. En Tailwind se usan como `text-strong`, `bg-soft`, `bg-info-bg`, etc. Equivalencias con los prototipos: `--bd` = `border`, `--tx` = `ink`, `--tx2` = `ink-2`, `--red` = `danger`, `--amb` = `warn` y `--teal` = `info`.
+- **`AppShell`** (`components/layout/`): ya no hay barra de arriba en compu. Props:
+  - `titulo`: el nombre de la pestaña del navegador.
+  - `encabezado`: el encabezado de tu pantalla (`<EncabezadoPagina …/>`). Si no lo pasas, pone uno con el título; con `null` no pone ninguno.
+  - `fondo="relieve"`: solo para el Inicio.
+
+  En el celular salen solas la barra azul de arriba y la de navegación de abajo (Inicio, Prospectos, Tareas, Oportunidades y "Más"). Los módulos y cuáles van en la barra del celular están en `nav-items.ts`.
+- **`EncabezadoPagina`**: `ceja` (lo chiquito de arriba), `titulo`, `subtitulo` y `acciones` (botones a la derecha; en el celular bajan solos).
+- **`Tarjeta`**: con `titulo` + `icono` (nombre de `ui/iconos.ts` o un elemento) + `color` (`menta` | `cyan` | `lila` | `morado`) + `extra` lleva encabezado de color; sin `titulo` es solo la caja. `estilo="relieve"` solo va en el Inicio, el de omisión es la tarjeta blanca. `IconoHundido` es el ícono en círculo, para usarlo suelto.
+- **`Franja`** + **`Kpi`** + **`ChipVivo`**: la franja azul con números grandes (Inicio, Administración).
+- **`Contador`** dentro de **`FilaContadores`**: `etiqueta`, `valor`, `detalle`, `tono` (`ok` | `warn` | `danger` | `info` | `navy` | `neutro`). Con `onClick` + `seleccionado` funciona como filtro. Son 2 por renglón en el celular.
+- **`Pastilla`**: estado en color (`tono`, `punto`, `mayusculas`).
+- **`Ficha`**: chip con ícono. Con `to` es enlace, con `onClick` es botón y `activa` lo marca como filtro aplicado.
+- **`PanelLateral`**: el detalle que sale por la derecha (en el celular, pantalla completa). Props: `abierto`, `onCerrar`, `titulo` o `encabezado` (la parte fija de arriba) y `ancho` (560 por omisión). Esc y el clic afuera lo cierran. Su contenido solo existe mientras está abierto.
+- **`Modal`**: `abierto`, `onCerrar`, `titulo`, `descripcion`, `acciones` (botones de abajo). Se usa para los motivos de rechazo y pérdida, y para confirmar.
+- **`MarcaDeAgua`**: la N detrás del contenido. Cambia sola de día a noche. El padre necesita `relative overflow-hidden`, y el tamaño y la posición van en `className` (ej. `w-[340px] -right-10 -bottom-[70px]`).
+- **`Button`**: mismas variantes que antes, más `aprobar` (verde) y `rechazar` (rojo suave). `primary` ya es el degradado azul → morado.
+- **`Icono`**: `<Icono nombre="correo" />`, con los nombres de `ui/iconos.ts`, o `<Icono d="…" />` con un trazo propio.
+- El numerito de Tareas del menú sale de `GET /tareas/conteos` (lo que vence hoy más lo vencido) con `useConteosTareas()` de `lib/tareas.ts`.
 
 ### Pantallas de Mich
 

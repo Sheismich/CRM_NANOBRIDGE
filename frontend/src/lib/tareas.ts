@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import { plural } from "./formato";
-import type { Clasificacion, Paginated, Tarea, TareaClasificacion } from "../types";
+import type { Clasificacion, ConteosTareas, Paginated, Tarea, TareaClasificacion } from "../types";
 
 // Etiquetas de tareas compartidas por Tareas, Reportes e Inicio.
 
@@ -51,6 +51,22 @@ export function estaVencida(t: Pick<Tarea, "fecha_limite" | "estado">) {
 export function venceHoy(t: Pick<Tarea, "fecha_limite" | "estado">) {
   if (!t.fecha_limite || estaVencida(t) || t.estado === "cerrada" || t.estado === "cancelada") return false;
   return new Date(t.fecha_limite).toDateString() === new Date().toDateString();
+}
+
+// Conteos de Mi día de quien pregunta. Empieza con ["tareas"], así que
+// cerrar o crear una tarea (que invalida ["tareas"]) lo refresca.
+export function useConteosTareas() {
+  return useQuery({
+    queryKey: ["tareas", "conteos"],
+    queryFn: () => api.get<ConteosTareas>("/api/v1/tareas/conteos"),
+    staleTime: 60_000
+  });
+}
+
+// Lo que le toca hoy a la persona: lo que vence hoy más lo vencido. Es el
+// numerito de Tareas en el menú.
+export function tareasPorAtender(c: ConteosTareas | undefined) {
+  return c ? c.pendientes_hoy + c.vencidas : 0;
 }
 
 // Tareas abiertas (pendientes y en progreso) para el Inicio. GET /tareas no

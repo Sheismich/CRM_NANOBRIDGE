@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -13,10 +14,23 @@ import { ReportesPage } from "./pages/ReportesPage";
 import { TareasPage } from "./pages/TareasPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
+// Catálogo de la base común: solo en `npm run dev`, no entra al build.
+const MuestraBasePage = import.meta.env.DEV ? lazy(() => import("./pages/MuestraBasePage").then((m) => ({ default: m.MuestraBasePage }))) : null;
+
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {MuestraBasePage && (
+        <Route
+          path="/base"
+          element={
+            <Suspense fallback={null}>
+              <MuestraBasePage />
+            </Suspense>
+          }
+        />
+      )}
 
       <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
 

@@ -256,6 +256,15 @@ export type Tarea = {
   creado_en: string;
 };
 
+// GET /tareas/conteos (Mi día y el numerito de Tareas del menú): siempre
+// de quien pregunta, días en hora de México.
+export type ConteosTareas = {
+  cerradas_hoy: number;
+  cerradas_ayer: number;
+  pendientes_hoy: number; // abiertas que vencen hoy
+  vencidas: number; // abiertas con fecha límite antes de hoy
+};
+
 export type Clasificacion = "interesado" | "no_interesado" | "baja" | "invalido" | "reagendar";
 
 // GET /cola-clasificacion: la tarea más lo necesario para decidir.
