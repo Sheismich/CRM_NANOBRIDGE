@@ -21,7 +21,7 @@ y SANDBOX encendidos en PT1).
 En PowerShell, dentro de la carpeta del repo:
 
 ```powershell
-$env:VITE_API_URL="https://nanobridge-api-165032456965.us-central1.run.app"; npm --prefix frontend run dev
+$env:API_URL="https://nanobridge-api-165032456965.us-central1.run.app"; npm --prefix frontend run dev
 ```
 
 - Abre **http://localhost:5173** y entra con tu usuario de admin.
@@ -141,7 +141,7 @@ Abre el nodo **"Modo pruebas"** y confirma con tus ojos que dice
 
 | Síntoma | Qué revisar |
 |---|---|
-| El front no carga o no deja entrar | Que la ventana de PowerShell siga abierta y que hayas puesto `VITE_API_URL` en el mismo comando. |
+| El front no carga o no deja entrar | Que la ventana de PowerShell siga abierta y que hayas puesto `API_URL` (sin `VITE_`) en el mismo comando. |
 | El correo no llega | Spam/Promociones; luego el código de SendGrid en el resumen (¿200 en vez de 202?). |
 | Contesté y no aparece en el CRM | Executions de PT2 en n8n. Si hay una en rojo, abre el workflow de errores (B4) o mándale la captura a Claude. |
 | La respuesta aparece como "Respuesta no identificada" | Contestaste a otro correo o se perdió la dirección de respuesta. Contesta el correo original con "Responder", no reenviar. |

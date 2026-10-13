@@ -110,7 +110,7 @@ El PDF y el CSV ya los genera el backend: `GET /api/v1/reportes/export/informe-e
 ## Verificación (cada pantalla)
 
 1. `cd frontend && npm run lint && npm run build` sin errores.
-2. En local contra producción: `VITE_API_URL=https://nanobridge-api-165032456965.us-central1.run.app npm run dev` y entrar con un usuario de prueba.
+2. En local contra producción: en PowerShell `$env:API_URL="https://nanobridge-api-165032456965.us-central1.run.app"; npm run dev` y entrar con un usuario de prueba (`API_URL`, sin `VITE_`: ver el comentario de `vite.config.ts`).
 3. En el navegador: escritorio y celular (375 px), día y noche, contra las capturas; como administrador y como agente; estados vacíos; que las acciones guarden de verdad (aprobar, rechazar con motivo, reintentar, cerrar tarea).
 4. Deploy al canal de vista previa y abrir la liga en el celular.
 5. Anotar el avance en `PLAN_FRONTEND.md` → "Rediseño".
