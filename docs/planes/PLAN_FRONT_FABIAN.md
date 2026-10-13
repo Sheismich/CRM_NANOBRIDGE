@@ -14,7 +14,7 @@ El backend de todas estas pantallas ya está en producción desde el 12-oct-2026
 | 2 | Inicio ✅ 13-oct | `inicio-aprobado.html` | ½-1 día |
 | 3 | Tareas (Mi día + Ver todas) ✅ 13-oct | `tareas.html` (opciones 3 y 6) | 1 día |
 | 4 | Documentos ✅ 13-oct | `documentos.html` | 1 día |
-| 5 | Administración | `administracion.html` | 1 día |
+| 5 | Administración ✅ 13-oct | `administracion.html` | 1 día |
 | 6 | Informe ejecutivo | `informe-ejecutivo.html` | ½ día |
 
 Una pantalla por sesión de Claude. La Base común va primero porque Mich no puede empezar sus pantallas sin ella: en cuanto esté, se hace push y se le avisa.
@@ -101,7 +101,16 @@ Lo que se pidió:
 - **Expediente:** el resumen va en el panel del documento, y la sección de expediente de la ficha también es de Fabián: vive en `DocumentosTab.tsx`, que la ficha de Mich solo coloca. Hoy no hay papeles obligatorios (Carlos, 12-oct): `GET /documentos/expediente/:id` regresa `total: 0` y se enseñan los documentos de la empresa; la lista de papeles aparece sola el día que se marquen en el catálogo.
 - Clic en el nombre de la empresa → ficha con `?tab=documentos`, con un "← Documentos" para regresar. **Coordinar con Mich** la ruta exacta cuando ella rehaga la ficha.
 
-## 5. Administración (`pages/AdministracionPage.tsx`)
+## 5. Administración (`pages/AdministracionPage.tsx`) ✅ (13-oct-2026)
+
+Hecha. Piezas nuevas en `components/admin/` (`EstadoSistema`, `ProblemasAbiertos`, `RegistroCambios`, `EquipoRoles`); se borró `AuditoriaAdmin` (la reemplaza el Registro de cambios). Decisiones:
+- Todo lo de `/admin` es solo del administrador. El **supervisor** ve únicamente "Equipo y roles" (sin editar) y ya no tiene la pestaña Auditoría en el front nuevo.
+- "Nuevo usuario" y el botón de la tarjeta abren en un panel la administración de usuarios de siempre (`UsuariosAdmin`: alta, edición, desactivar, reactivar). Rehacerla con el estilo nuevo queda para después.
+- "Ver los N" de un problema abre `?tab=integracion` con el detalle técnico de siempre (`IntegracionAdmin`).
+- Exportar PDF/CSV usa los filtros del Registro de cambios (tipo y búsqueda).
+- Sin backend nuevo.
+
+Lo que se pidió:
 
 - **Franja** con los 4 servicios de `GET /admin/salud` (API, base de datos, avisos a n8n, correos), con su semáforo. "Responde en" lo mide la pantalla; "Revisado hace N s". No prometer uptime, entregabilidad ni réplica (no los tenemos).
 - **Problemas agrupados por causa** (`GET /admin/problemas`) con "Reintentar todos" (`POST /admin/problemas/reintentar`, solo avisos del outbox) y "Resolver" (`POST /admin/problemas/resolver`).

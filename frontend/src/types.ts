@@ -359,6 +359,50 @@ export type Usuario = {
   rol: Rol;
   activo: boolean;
   creado_en?: string;
+  // Migración 030 (12-oct-2026); null si nunca ha entrado desde entonces.
+  ultimo_acceso_en?: string | null;
+};
+
+// --- Administración (rediseño, 13-oct-2026; src/admin) ---
+
+// GET /admin/salud
+export type SaludSistema = {
+  revisado_en: string;
+  api: { estado: "ok"; revision: string | null };
+  base_datos: { estado: "ok" | "error"; responde_ms: number | null };
+  avisos_n8n: { estado: "ok" | "atencion"; configurado: boolean; en_espera: number; fallidos: number } | null;
+  correos: { enviados_hoy: number; ultimo_envio_en: string | null } | null;
+  por_configurar: { clave: string; texto: string }[];
+  resumen: { por_configurar: number; problemas_abiertos: number } | null;
+};
+
+// GET /admin/problemas → { grupos }
+export type GrupoProblemas = {
+  clave: string;
+  tipo: "aviso_api" | "workflow_n8n" | "otro";
+  cantidad: number;
+  mensaje: string;
+  workflow: string | null;
+  nodo: string | null;
+  tipos_evento: { tipo: string; cantidad: number }[];
+  desde: string;
+  hasta: string;
+  acciones: ("reintentar" | "resolver")[];
+};
+
+export type TipoRegistro = "usuarios_roles" | "ediciones" | "borrados" | "descargas" | "configuracion";
+
+// GET /admin/registro-cambios → { page, limit, total, data }
+export type FilaRegistro = {
+  id: number;
+  fecha: string;
+  usuario: { id: number; nombre: string };
+  tipo: TipoRegistro;
+  accion: string;
+  registro: { entidad: string; id: number; nombre: string | null };
+  texto: string;
+  cambios: { campo: string; etiqueta: string; antes: string; despues: string }[];
+  antes: Record<string, unknown> | null;
 };
 
 export type PipelineResumen = {

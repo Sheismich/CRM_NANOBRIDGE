@@ -139,7 +139,7 @@ Cada deploy al canal reinicia los 30 días.
 | 2 | Inicio ✅ | `inicio-aprobado.html` | Fabián | (este commit) | no |
 | 3 | Tareas (Mi día + lista) ✅ | `tareas.html` | Fabián | (este commit) | no |
 | 4 | Documentos ✅ | `documentos.html` | Fabián | (este commit) | no |
-| 5 | Administración | `administracion.html` | Fabián | — | no |
+| 5 | Administración ✅ | `administracion.html` | Fabián | (este commit) | no |
 | 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) | `informe-ejecutivo.html` | Fabián | — | no |
 | 7 | Login | `login.html` | Mich | — | no |
 | 8 | Prospectos | `prospectos.html` | Mich | — | no |
