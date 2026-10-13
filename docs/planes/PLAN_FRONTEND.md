@@ -144,7 +144,7 @@ Cada deploy al canal reinicia los 30 días.
 | 7 | Login ✅ (local) | `login.html` | Mich | sin subir | no |
 | 8 | Prospectos ✅ (local) | `prospectos.html` | Mich | sin subir | no |
 | 9 | Empresas + ficha ✅ (local) | `empresas.html` | Mich | sin subir | no |
-| 10 | Contactos | `contactos.html` | Mich | — | no |
+| 10 | Contactos ✅ (local) | `contactos.html` | Mich | sin subir | no |
 | 11 | Oportunidades | `oportunidades.html` | Mich | — | no |
 | 12 | Cotizaciones | `cotizaciones.html` | Mich | — | no |
 | 13 | Reportes (panel + Día) | `reportes.html` | Mich | — | no |
@@ -215,6 +215,8 @@ Antes de cada pantalla: `git fetch`, leer su sección en `docs/diseno/README.md`
 - Contadores: `GET /contactos/conteos`.
 - `q` busca por nombre, correo, teléfono o empresa. Filtro `estado=escribible|no_contactar|sin_medio`.
 - Medios como pastillas de color (verde activo, rojo no contactar, ámbar sin medio), columna de prospección (`prospeccion`) y selector Lista | Tarjetas. Se quita la columna "Redes".
+
+- **Hecho en local (13-oct-2026, Mich):** contadores de `/contactos/conteos` (los tres de estado filtran con `estado=`), búsqueda, selector de estado y "Lista | Tarjetas" (se recuerda en el navegador). Medios como pastillas: verde activo, rojo no contactar, gris tachado obsoleto, neutro para redes; ámbar si no hay correo, teléfono ni WhatsApp. Prospección con la misma pastilla que Empresas. Tarjetas de persona con "Escribir" (`mailto:` al correo activo) o "Agregar medio" (va a la ficha). "+ Nuevo contacto" en `PanelLateral`: primero `BuscadorEmpresa` (de Fabián) y luego `ContactoForm`. Se quitó la columna "Redes". Revisado en Edge con la API simulada a 375 y 1440 px, día y noche, como administrador y agente. Falta contra producción.
 
 **Oportunidades** (`pages/OportunidadesPage.tsx`, `oportunidades.html`)
 - Franja de números: pipeline, ponderado, cierra este mes, cierre vencido y ganado en el mes, de `GET /reportes/pipeline/resumen` (`cierre_este_mes`, `cierre_vencido`; ganado con el rango del mes).

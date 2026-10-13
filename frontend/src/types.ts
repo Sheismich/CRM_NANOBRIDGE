@@ -608,3 +608,14 @@ export type ConteosEmpresas = {
 
 // GET /empresas/:id desde el 12-oct: de dónde vino (fuente del prospecto más reciente).
 export type EmpresaFicha = EmpresaDetalle & { fuente_url: string | null };
+
+// --- Contactos (rediseño, Mich; src/crm/contactos.service.ts) ---
+
+// Fila de GET /contactos desde el 9-oct: con el prospecto más reciente de la
+// persona (estado y correos que lleva); null si nunca fue prospecto.
+export type ContactoFila = ContactoLista & { prospeccion: { estado: string; envios: number } | null };
+
+// GET /contactos/conteos. escribibles = algún correo, teléfono o WhatsApp
+// activo; no_contactar = ninguno activo y alguno en no_contactar; sin_medio
+// = ni lo uno ni lo otro.
+export type ConteosContactos = { total: number; escribibles: number; no_contactar: number; sin_medio: number };
