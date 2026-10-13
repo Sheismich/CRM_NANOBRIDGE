@@ -119,7 +119,12 @@ Login
 
 ## Rediseño (desde el 12-oct-2026) — avance y día del cambio
 
-Las 11 pantallas de `docs/diseno/` (aprobadas por el jefe) se construyen en `frontend/` sobre las mismas rutas y archivos, reemplazando las de hoy. Las empieza Fabián; Mich toma las que sigan pendientes en esta tabla cuando regrese. El backend que usan ya está en producción desde el 12-oct-2026 (revisión `00024-r4f`).
+Las 11 pantallas de `docs/diseno/` (aprobadas por el jefe) se construyen en `frontend/` sobre las mismas rutas y archivos, reemplazando las de hoy. El backend que usan ya está en producción desde el 12-oct-2026 (revisión `00024-r4f`).
+
+**Reparto (13-oct-2026):**
+- **Fabián:** Base común, Inicio, Tareas, Documentos, Administración y el Informe ejecutivo. Su plan está en `docs/planes/PLAN_FRONT_FABIAN.md`.
+- **Mich:** Login, Prospectos, Empresas + ficha, Contactos, Oportunidades, Cotizaciones y Reportes. El detalle de cada una está abajo, en "Pantallas de Mich".
+- La **Base común va primero** y la hace Fabián, porque todas las pantallas la usan. Mich empieza cuando esté en `main` (se avisa al hacer push). Si a Mich le falta un componente, lo agrega a `components/ui/` en lugar de hacer una copia en su pantalla.
 
 **Cómo se publica:** cada pantalla terminada se sube a la liga de vista previa (canal `nuevo-diseno`). La liga normal sigue con el front de hoy hasta que estén todas.
 ```
@@ -128,19 +133,72 @@ npx firebase-tools hosting:channel:deploy nuevo-diseno --expires 30d
 ```
 Cada deploy al canal reinicia los 30 días.
 
-| # | Pantalla | Diseño | Hecha por | Commit | En vista previa |
+| # | Pantalla | Diseño | Le toca | Commit | En vista previa |
 |---|---|---|---|---|---|
-| 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) + Login | `inicio-aprobado.html`, `login.html` | — | — | no |
-| 2 | Inicio | `inicio-aprobado.html` | — | — | no |
-| 3 | Tareas (Mi día + lista) | `tareas.html` | — | — | no |
-| 4 | Prospectos | `prospectos.html` | — | — | no |
-| 5 | Empresas + ficha | `empresas.html` | — | — | no |
-| 6 | Contactos | `contactos.html` | — | — | no |
-| 7 | Oportunidades | `oportunidades.html` | — | — | no |
-| 8 | Cotizaciones | `cotizaciones.html` | — | — | no |
-| 9 | Documentos | `documentos.html` | — | — | no |
-| 10 | Reportes (panel + Día) | `reportes.html` | — | — | no |
-| 11 | Administración | `administracion.html` | — | — | no |
+| 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) | `inicio-aprobado.html` | Fabián | — | no |
+| 2 | Inicio | `inicio-aprobado.html` | Fabián | — | no |
+| 3 | Tareas (Mi día + lista) | `tareas.html` | Fabián | — | no |
+| 4 | Documentos | `documentos.html` | Fabián | — | no |
+| 5 | Administración | `administracion.html` | Fabián | — | no |
+| 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) | `informe-ejecutivo.html` | Fabián | — | no |
+| 7 | Login | `login.html` | Mich | — | no |
+| 8 | Prospectos | `prospectos.html` | Mich | — | no |
+| 9 | Empresas + ficha | `empresas.html` | Mich | — | no |
+| 10 | Contactos | `contactos.html` | Mich | — | no |
+| 11 | Oportunidades | `oportunidades.html` | Mich | — | no |
+| 12 | Cotizaciones | `cotizaciones.html` | Mich | — | no |
+| 13 | Reportes (panel + Día) | `reportes.html` | Mich | — | no |
+
+### Pantallas de Mich
+
+Antes de cada pantalla: `git fetch`, leer su sección en `docs/diseno/README.md` y ver sus capturas en `docs/diseno/capturas/`. Los `.html` del diseño traen los logos en base64, así que conviene leer solo el `<style>` y el bloque de la parte que se va a hacer. Las pantallas se reemplazan en su mismo archivo y ruta, en `main`. Las respuestas nuevas del backend van a `src/types.ts` en un bloque con el nombre de la pantalla (Fabián hace lo mismo con las suyas, para no chocar), y la forma exacta del JSON se revisa contra el service del backend. Se reusan los formularios que ya existen y no se agregan librerías: las gráficas van en SVG y el arrastre con HTML5 nativo.
+
+**Login** (`pages/LoginPage.tsx`, `login.html`, "Circuito vivo")
+- Animación hecha solo con CSS, quieta con `prefers-reduced-motion`. Tiene que caber en la CSP de `firebase.json` (sin scripts ni estilos de fuera).
+- Tarjeta al centro, modo día y noche, y un circuito propio para celular.
+
+**Prospectos** (`pages/ProspectosPage.tsx`, `prospectos.html`)
+- Embudo de tarjetas por estado: `GET /prospectos/conteos`.
+- Lista con giro, campaña, barrita 0/3 (`envios`), `ultimo_envio_en`, filtro `campanaId` y `orden=score|recientes`.
+- Alta en panel lateral (`PanelLateral` de la base común) con `NuevoProspectoForm`.
+- Pestaña Importaciones con barra de colores por lote (el resumen por lote ya viene en `GET /prospectos/importaciones`) y pestaña Campañas con `CampanasTab` restilizado.
+
+**Empresas + ficha** (`pages/EmpresasListPage.tsx`, `pages/FichaClientePage.tsx`, `empresas.html`)
+- Contadores: `GET /empresas/conteos`.
+- Filtros de `GET /empresas`: `q`, giro, región, `responsableId`, `sinResponsable` y `orden=actividad`.
+- Selector Lista | Tarjetas, con `prospeccion` y `ultima_actividad_detalle` en cada empresa.
+- Ficha: encabezado con marca de agua, historial unificado (`GET /actividades`) y `fuente_url`.
+- **La sección de expediente/documentos de la ficha la hace Fabián** (es parte de Documentos, en `components/ficha/DocumentosTab.tsx`). La ficha solo la coloca y respeta `?tab=documentos`, porque desde Documentos se llega a la ficha con esa pestaña abierta y un "← Documentos" para regresar.
+
+**Contactos** (`pages/ContactosPage.tsx`, `contactos.html`)
+- Contadores: `GET /contactos/conteos`.
+- `q` busca por nombre, correo, teléfono o empresa. Filtro `estado=escribible|no_contactar|sin_medio`.
+- Medios como pastillas de color (verde activo, rojo no contactar, ámbar sin medio), columna de prospección (`prospeccion`) y selector Lista | Tarjetas. Se quita la columna "Redes".
+
+**Oportunidades** (`pages/OportunidadesPage.tsx`, `oportunidades.html`)
+- Franja de números: pipeline, ponderado, cierra este mes, cierre vencido y ganado en el mes, de `GET /reportes/pipeline/resumen` (`cierre_este_mes`, `cierre_vencido`; ganado con el rango del mes).
+- Tablero con barra de dinero por etapa y tarjetas con `dias_en_etapa` y `responsable_nombre`.
+- Arrastrar entre etapas con `PATCH /oportunidades/:id/etapa`. Perder pide el motivo del catálogo y ganar pide confirmación. En el celular, en lugar de arrastrar, un menú "Mover a…".
+- Franja de abajo: tasa de conversión y tiempo promedio para cerrar (`ciclo_medio_venta`), de `GET /reportes/pipeline/conversion-etapas`.
+- En esa misma franja van los botones del **informe ejecutivo**. El componente lo entrega Fabián (`components/reportes/InformeEjecutivo.tsx`) y aquí solo se coloca. Si todavía no existe cuando llegues a esta pantalla, deja el hueco y avísale.
+- Se reusa `OportunidadDetallePanel`.
+
+**Cotizaciones** (`pages/CotizacionesPage.tsx`, `cotizaciones.html`)
+- Contadores y tasa de aceptación: `GET /cotizaciones/conteos`.
+- Tablero por estado con avisos de "sin respuesta hace N días" y "vence en N días" (la lista ya trae los días; también busca y ordena).
+- Panel con la cotización como documento, incluido el `detalle` de cada partida.
+- Rechazar abre un modal con el motivo (`GET /cotizaciones/motivos-rechazo`). **El front lo pide siempre**, aunque hoy el backend todavía lo acepte sin motivo (se vuelve obligatorio el día del cambio).
+- PDF: `api.descargar('/api/v1/cotizaciones/:id/pdf')`.
+- Editor por pasos con `NuevaCotizacionPanel` y `CotizacionForm`.
+
+**Reportes** (`pages/ReportesPage.tsx`, `reportes.html`, opción A)
+- Periodo Día / Semana / Mes / Trimestre / Año. Los rangos los calcula el front: los reportes aceptan `fechaInicio`/`fechaFin`.
+- Indicadores con flecha ▲/▼ contra el periodo anterior (segunda llamada con el rango anterior).
+- Cada gráfica lleva una frase que la explica y dos datos al pie, armados en el front con plantillas: conversión y caída máxima entre etapas (`conversion-etapas`), ciclo medio de venta, `a_tiempo`, `cerradas_esta_semana` y `creadas` de `GET /reportes/tareas`, y el mejor día de respuestas (de `por-dia`).
+- Vista **Día** con `GET /reportes/dia?fecha=YYYY-MM-DD`: números del día, aviso de cosas para revisar, bitácora con filtro de tipo y de persona, por persona y "quedó pendiente". Exportar: `/reportes/export/dia`.
+- Ojo con los roles: los reportes son de admin y supervisor, pero `/reportes/dia` también acepta agentes (cada uno ve solo lo suyo).
+
+Al terminar cada pantalla: `cd frontend && npm run lint && npm run build`, probarla en local contra producción (escritorio y celular de 375 px, día y noche, como administrador y como agente), subirla al canal de vista previa (o pedírselo a Fabián si tu cuenta de Firebase no puede publicar) y llenar su renglón en la tabla de arriba.
 
 **Decisiones que ya están tomadas (no volver a preguntar):**
 - Por ahora no hay papeles obligatorios (Carlos, 12-oct-2026). `GET /documentos/expediente/:id` regresa `total: 0`, y el expediente de la ficha enseña los documentos de la empresa. La lista de papeles aparece sola el día que el administrador los marque en el catálogo (`PATCH /documentos/catalogos/tipos/:id`).
