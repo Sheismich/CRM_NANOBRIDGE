@@ -9,6 +9,7 @@ import { NuevaTareaForm } from "../components/tareas/NuevaTareaForm";
 import { Button } from "../components/ui/Button";
 import { EncabezadoPagina } from "../components/ui/EncabezadoPagina";
 import { Icono } from "../components/ui/Icono";
+import { MarcaDeAgua } from "../components/ui/MarcaDeAgua";
 import { PanelLateral } from "../components/ui/PanelLateral";
 import { Pastilla } from "../components/ui/Pastilla";
 import { api } from "../lib/api";
@@ -107,8 +108,20 @@ export function TareasPage() {
           <VerTodas usuarioId={user.id} esAdminOSupervisor={esAdminOSupervisor} usuarios={personas} alcance={alcance} onAlcance={(a) => irA({ vista: "todas", alcance: a })} />
         ))}
 
-      <PanelLateral abierto={creando} onCerrar={() => setCreando(false)} titulo="Nueva tarea" cuerpoClassName="!p-0">
-        {user && <NuevaTareaForm usuarioActualId={user.id} usuarios={esAdminOSupervisor ? personas : undefined} onDone={() => setCreando(false)} />}
+      <PanelLateral
+        abierto={creando}
+        onCerrar={() => setCreando(false)}
+        titulo="Nueva tarea"
+        encabezado={
+          <div className="relative pr-16">
+            <MarcaDeAgua girada={false} className="pointer-events-none absolute -right-4 -top-6 w-[96px]" />
+            <h2 className="font-heading text-[22px] font-black text-strong">Nueva tarea</h2>
+            <p className="mt-1 text-[13px] text-ink-2">Solo el título es obligatorio. Lo demás ayuda a que nadie la pierda de vista.</p>
+          </div>
+        }
+        cuerpoClassName="!p-0"
+      >
+        {user && <NuevaTareaForm usuarioActual={{ id: user.id, nombre: user.nombre }} usuarios={esAdminOSupervisor ? personas : undefined} onDone={() => setCreando(false)} />}
       </PanelLateral>
     </AppShell>
   );

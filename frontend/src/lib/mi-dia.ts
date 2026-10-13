@@ -109,6 +109,26 @@ export function atajosReprogramar(ahora: Date) {
   ];
 }
 
+// Atajos de la fecha límite en "Nueva tarea" (docs/diseno/tareas.html):
+// hoy a las 18:00 (solo si todavía no pasa esa hora), mañana, en 3 días y
+// el lunes que viene, los tres a las 10:00.
+export function atajosNuevaTarea(ahora: Date) {
+  const a = (dias: number, h: number) => {
+    const d = new Date(ahora);
+    d.setDate(d.getDate() + dias);
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+  const hastaLunes = ((8 - ahora.getDay()) % 7) || 7;
+  const hoy = a(0, 18);
+  return [
+    ...(hoy.getTime() > ahora.getTime() ? [{ etiqueta: "Hoy", fecha: hoy }] : []),
+    { etiqueta: "Mañana", fecha: a(1, 10) },
+    { etiqueta: "En 3 días", fecha: a(3, 10) },
+    { etiqueta: "La próxima semana", fecha: a(hastaLunes, 10) }
+  ];
+}
+
 // Valor para <input type="datetime-local"> (hora local, sin zona).
 export function valorDatetimeLocal(d: Date) {
   return `${isoDia(d)}T${hora(d)}`;
