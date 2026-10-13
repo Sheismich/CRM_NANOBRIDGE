@@ -580,3 +580,31 @@ export type ConteosProspectos = {
 // Una campaña de GET /reportes/prospeccion (por_campana), que desde el
 // 12-oct también trae cuántas personas resultaron interesadas.
 export type CampanaProspeccion = ReporteProspeccion["por_campana"][number] & { interesados: number };
+
+// --- Empresas + ficha (rediseño, Mich; src/crm/empresas.service.ts) ---
+
+// Qué fue lo último que pasó con la empresa (GET /empresas →
+// ultima_actividad_detalle): una actividad registrada, un correo de la
+// secuencia (con su número) o una respuesta (con su clasificación).
+export type UltimaActividadDetalle =
+  | { tipo: "actividad"; actividad_tipo: "llamada" | "whatsapp" | "comentario" }
+  | { tipo: "envio"; numero_contacto: number }
+  | { tipo: "respuesta"; clasificacion: string | null };
+
+export type EmpresaFila = EmpresaListado & {
+  // Su prospecto más reciente y cuántos correos lleva; null si nunca fue prospecto.
+  prospeccion: { estado: string; envios: number } | null;
+  ultima_actividad_detalle: UltimaActividadDetalle | null;
+};
+
+// GET /empresas/conteos (tarjetas de arriba de la lista).
+export type ConteosEmpresas = {
+  total: number;
+  sin_responsable: number;
+  sin_actividad_30_dias: number;
+  con_oportunidad_abierta: number;
+  valor_oportunidades_abiertas: string;
+};
+
+// GET /empresas/:id desde el 12-oct: de dónde vino (fuente del prospecto más reciente).
+export type EmpresaFicha = EmpresaDetalle & { fuente_url: string | null };

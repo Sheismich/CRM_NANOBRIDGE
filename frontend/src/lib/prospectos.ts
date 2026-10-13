@@ -61,17 +61,3 @@ export function tonoScore(score: number): Tono {
   if (score >= 60) return "warn";
   return "danger";
 }
-
-// Cuadrito de iniciales de la empresa: color fijo por empresa, de la paleta
-// del diseño.
-const COLORES_LOGO = ["#2a449b", "#23bad3", "#5b2d86", "#15905f", "#c57a0a", "#d63a4a", "#4f6bd6"];
-export function colorLogo(id: number) {
-  return COLORES_LOGO[id % COLORES_LOGO.length];
-}
-export function iniciales(nombre: string) {
-  const palabras = nombre
-    .replace(/\b(S\.?\s?A\.?|de|del|la|las|los|y|C\.?V\.?|R\.?L\.?)\b/gi, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-  return (palabras.length >= 2 ? palabras[0][0] + palabras[1][0] : (palabras[0] ?? nombre).slice(0, 2)).toUpperCase();
-}

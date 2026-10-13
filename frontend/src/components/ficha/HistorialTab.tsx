@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
-import { Card, SectionTitle } from "../ui/Card";
+import { Tarjeta } from "../ui/Tarjeta";
 import { NuevaActividadForm } from "./NuevaActividadForm";
 import { api } from "../../lib/api";
 import type { TimelineEvento } from "../../types";
@@ -32,7 +32,7 @@ const ETIQUETA_RESULTADO: Record<string, string> = {
   reagendar: "Reagendar"
 };
 
-const formatoFecha = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" });
+const formatoFecha = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 // El texto principal de cada evento vive en un campo distinto de `detalle`
 // según el tipo (ver *ToEvento() en actividades.service.ts).
@@ -66,9 +66,13 @@ function resultadoLibre(evento: TimelineEvento): string | null {
 function claseEtiqueta(clave: string) {
   if (clave === "interesado") return "bg-ok-bg text-ok";
   if (clave === "no_interesado" || clave === "baja" || clave === "invalido") return "bg-danger-bg text-danger";
-  return "bg-bg text-ink-2";
+  return "bg-soft text-ink-2";
 }
 
+// Historial unificado de la ficha (GET /actividades): lo registrado a mano,
+// los correos y respuestas de la automatización, tareas cerradas y cambios
+// de estado del prospecto, del más reciente al más viejo. Lo automático va
+// con un punto cyan; las respuestas, con el color de su clasificación.
 export function HistorialTab({ empresaId, contactos }: { empresaId: number; contactos: { id: number; nombre: string }[] }) {
   const [registrando, setRegistrando] = useState(false);
   const { data, isPending, isError } = useQuery({
@@ -77,19 +81,26 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
   });
 
   return (
-    <Card className="p-6">
-      <div className="flex items-start justify-between">
-        <SectionTitle>Historial de interacciones</SectionTitle>
-        {!registrando && (
-          <Button variant="outline" onClick={() => setRegistrando(true)}>
+    <Tarjeta
+      titulo="Historial"
+      icono="reloj"
+      color="cyan"
+      extra={
+        !registrando && (
+          <Button variant="outline" className="px-3 py-1.5 text-[12px]" onClick={() => setRegistrando(true)}>
             Registrar interacción
           </Button>
-        )}
-      </div>
-      {registrando && <NuevaActividadForm empresaId={empresaId} contactos={contactos} onDone={() => setRegistrando(false)} />}
+        )
+      }
+    >
+      {registrando && (
+        <div className="[&>form]:mb-4">
+          <NuevaActividadForm empresaId={empresaId} contactos={contactos} onDone={() => setRegistrando(false)} />
+        </div>
+      )}
       {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="text-sm text-danger">No se pudo cargar el historial.</div>}
-      {data && data.data.length === 0 && <div className="text-sm text-ink-3">Sin interacciones registradas todavía.</div>}
+      {data && data.data.length === 0 && <div className="text-sm text-ink-3">Todavía no ha pasado nada con esta empresa.</div>}
 
       {data && data.data.length > 0 && (
         <ol className="flex flex-col">
@@ -97,14 +108,16 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
             const texto = textoPrincipal(evento);
             const clave = claveEtiqueta(evento);
             const libre = resultadoLibre(evento);
+            const punto = clave === "interesado" ? "bg-ok" : clave === "baja" || clave === "no_interesado" ? "bg-danger" : AUTOMATICOS.has(evento.tipo) ? "bg-info" : "bg-navy";
             return (
-              <li key={i} className="flex gap-3.5 border-l-2 border-border pb-5 pl-4 last:pb-0">
-                <div className="flex-1">
+              <li key={i} className="relative grid grid-cols-[86px_minmax(0,1fr)] gap-3 pb-4 last:pb-0 md:grid-cols-[110px_minmax(0,1fr)]">
+                <span className="pt-0.5 text-[12px] font-bold text-strong">{formatoFecha.format(new Date(evento.fecha))}</span>
+                <div className="relative min-w-0 border-l-2 border-border pl-4">
+                  <span className={`absolute -left-[6px] top-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-card ${punto}`} />
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[13px] font-bold">{ETIQUETA_TIPO[evento.tipo] ?? evento.tipo}</span>
-                    {AUTOMATICOS.has(evento.tipo) && <span className="rounded-full bg-bg px-2 py-0.5 text-[10px] font-semibold text-ink-3">Automático</span>}
-                    {clave && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${claseEtiqueta(clave)}`}>{ETIQUETA_RESULTADO[clave] ?? clave}</span>}
-                    <span className="ml-auto text-xs text-ink-3">{formatoFecha.format(new Date(evento.fecha))}</span>
+                    <span className="text-[13px] font-bold text-strong">{ETIQUETA_TIPO[evento.tipo] ?? evento.tipo}</span>
+                    {AUTOMATICOS.has(evento.tipo) && <span className="rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-bold text-info">Automático</span>}
+                    {clave && <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${claseEtiqueta(clave)}`}>{ETIQUETA_RESULTADO[clave] ?? clave}</span>}
                   </div>
                   {texto && <p className="mt-1 whitespace-pre-line text-[13px] text-ink-2">{texto}</p>}
                   {libre && <p className="mt-1 text-xs text-ink-2">Resultado: {libre}</p>}
@@ -115,6 +128,6 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
           })}
         </ol>
       )}
-    </Card>
+    </Tarjeta>
   );
 }

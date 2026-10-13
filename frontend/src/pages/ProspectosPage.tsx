@@ -13,6 +13,7 @@ import { EstadoVacio } from "../components/ui/EstadoVacio";
 import { Ficha } from "../components/ui/Ficha";
 import { inputBaseClass } from "../components/ui/Field";
 import { Icono } from "../components/ui/Icono";
+import { LogoEmpresa } from "../components/ui/LogoEmpresa";
 import { Paginacion } from "../components/ui/Paginacion";
 import { PanelLateral } from "../components/ui/PanelLateral";
 import { Segmento } from "../components/ui/Segmento";
@@ -22,7 +23,7 @@ import { useAuth } from "../lib/auth-context";
 import { useCampanas } from "../lib/campanas";
 import { fechaUtc, formatoFecha, formatoFechaHora } from "../lib/formato";
 import { ETIQUETA_MEDIO, claseMedio } from "../lib/medios";
-import { GRUPOS_EMBUDO, TONO_ESTADO_PROSPECTO, colorLogo, etiquetaEstadoProspecto, iniciales, tonoScore, type GrupoEmbudo } from "../lib/prospectos";
+import { GRUPOS_EMBUDO, TONO_ESTADO_PROSPECTO, etiquetaEstadoProspecto, tonoScore, type GrupoEmbudo } from "../lib/prospectos";
 import type { ConteosProspectos, Paginated, ProspectoDetalle, ProspectoFila } from "../types";
 
 // Prospectos del rediseño (docs/diseno/prospectos.html): de dónde vienen,
@@ -328,9 +329,7 @@ function ListaCelular({ filas, onAbrir }: { filas: ProspectoFila[]; onAbrir: (id
         <li key={p.id}>
           <button type="button" onClick={() => onAbrir(p.id)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-3.5 py-3 text-left active:bg-soft">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px] font-heading text-[13px] font-extrabold text-white" style={{ background: colorLogo(p.empresa_id) }}>
-                {iniciales(p.empresa_nombre_legal)}
-              </span>
+              <LogoEmpresa id={p.empresa_id} nombre={p.empresa_nombre_legal} />
               <div className="min-w-0">
                 <b className="block truncate text-[14px] text-strong">{p.empresa_nombre_legal}</b>
                 <small className="block truncate text-[12px] text-ink-3">{[p.empresa_giro, p.empresa_estado].filter(Boolean).join(" · ") || "Sin giro"}</small>
@@ -369,9 +368,7 @@ function TablaEscritorio({ filas, onAbrir }: { filas: ProspectoFila[]; onAbrir: 
             <tr key={p.id} tabIndex={0} onClick={() => onAbrir(p.id)} onKeyDown={(e) => e.key === "Enter" && onAbrir(p.id)} className="cursor-pointer border-t border-border hover:bg-soft">
               <td className="px-4 py-3 pl-[18px]">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px] font-heading text-[13px] font-extrabold text-white" style={{ background: colorLogo(p.empresa_id) }}>
-                    {iniciales(p.empresa_nombre_legal)}
-                  </span>
+                  <LogoEmpresa id={p.empresa_id} nombre={p.empresa_nombre_legal} />
                   <div className="min-w-0">
                     <b className="block truncate text-[14px] text-strong">{p.empresa_nombre_legal}</b>
                     <small className="block truncate text-[12px] text-ink-3">{[p.empresa_giro, p.empresa_estado].filter(Boolean).join(" · ") || "Sin giro"}</small>
@@ -467,9 +464,7 @@ function DetalleProspecto({ id, aviso }: { id: number; aviso: string | null }) {
         </div>
       )}
       <div className="flex items-start gap-3">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[13px] font-heading text-[15px] font-extrabold text-white" style={{ background: colorLogo(p.empresa.id) }}>
-          {iniciales(p.empresa.nombre_legal)}
-        </span>
+        <LogoEmpresa id={p.empresa.id} nombre={p.empresa.nombre_legal} tamano="grande" />
         <div className="min-w-0">
           <h3 className="font-heading text-[18px] font-extrabold text-strong">{p.contacto.nombre}</h3>
           <p className="text-[13px] text-ink-2">{[p.contacto.puesto, p.empresa.nombre_legal].filter(Boolean).join(" · ")}</p>

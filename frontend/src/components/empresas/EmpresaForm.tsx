@@ -74,7 +74,9 @@ function valoresEmpresa(empresa?: EmpresaDetalle): EmpresaInput {
 // ("Nueva cotización", que sigue en su pantalla). Con `empresa`: edición
 // (PATCH /empresas/:id) de los datos de la empresa; los contactos se editan
 // aparte, en ContactoForm.
-export function EmpresaForm({ empresa, onDone, onCreada }: { empresa?: EmpresaDetalle; onDone: () => void; onCreada?: (id: number) => void }) {
+// `enPanel`: dentro de un PanelLateral (alta en Empresas, editar desde la
+// ficha): sin la caja gris, a dos columnas y con los botones fijos abajo.
+export function EmpresaForm({ empresa, onDone, onCreada, enPanel = false }: { empresa?: EmpresaDetalle; onDone: () => void; onCreada?: (id: number) => void; enPanel?: boolean }) {
   const esAlta = !empresa;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -119,9 +121,13 @@ export function EmpresaForm({ empresa, onDone, onCreada }: { empresa?: EmpresaDe
     }
   }
 
+  const columnas = enPanel ? "grid grid-cols-1 gap-3 md:grid-cols-2" : "grid grid-cols-1 gap-4 md:grid-cols-3";
+
   return (
-    <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="flex flex-col gap-4 border-b border-border bg-bg p-5">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className={enPanel ? "flex min-h-full flex-col" : "flex flex-col gap-4 border-b border-border bg-bg p-5"}>
+      <div className={enPanel ? "flex flex-col gap-4 px-4 py-5 md:px-6" : "contents"}>
+      {enPanel && <TituloSeccion>Empresa</TituloSeccion>}
+      <div className={columnas}>
         <Field label="Nombre legal" htmlFor="em-legal" error={errors.nombreLegal?.message}>
           <input id="em-legal" className={inputClass} {...register("nombreLegal")} />
         </Field>
@@ -169,8 +175,8 @@ export function EmpresaForm({ empresa, onDone, onCreada }: { empresa?: EmpresaDe
 
       {esAlta && (
         <>
-          <div className="text-xs font-bold uppercase tracking-wide text-ink-2">Contacto principal</div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {enPanel ? <TituloSeccion>Contacto principal</TituloSeccion> : <div className="text-xs font-bold uppercase tracking-wide text-ink-2">Contacto principal</div>}
+          <div className={columnas}>
             <Field label="Nombre" htmlFor="em-c-nombre" error={errors.contactoNombre?.message}>
               <input id="em-c-nombre" className={inputClass} {...register("contactoNombre")} />
             </Field>
@@ -192,8 +198,9 @@ export function EmpresaForm({ empresa, onDone, onCreada }: { empresa?: EmpresaDe
       )}
 
       <ServerError message={serverError} />
+      </div>
 
-      <div className="flex justify-end gap-2">
+      <div className={enPanel ? "sticky bottom-0 mt-auto flex justify-end gap-2.5 border-t border-border bg-card px-4 py-4 md:px-6" : "flex justify-end gap-2"}>
         <Button type="button" variant="ghost" onClick={onDone}>
           Cancelar
         </Button>
@@ -203,4 +210,8 @@ export function EmpresaForm({ empresa, onDone, onCreada }: { empresa?: EmpresaDe
       </div>
     </form>
   );
+}
+
+function TituloSeccion({ children }: { children: string }) {
+  return <h3 className="font-heading text-[13px] font-extrabold text-strong">{children}</h3>;
 }

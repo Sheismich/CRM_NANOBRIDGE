@@ -143,7 +143,7 @@ Cada deploy al canal reinicia los 30 días.
 | 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) ✅ | `informe-ejecutivo.html` | Fabián | 6275e9f | no |
 | 7 | Login ✅ (local) | `login.html` | Mich | sin subir | no |
 | 8 | Prospectos ✅ (local) | `prospectos.html` | Mich | sin subir | no |
-| 9 | Empresas + ficha | `empresas.html` | Mich | — | no |
+| 9 | Empresas + ficha ✅ (local) | `empresas.html` | Mich | sin subir | no |
 | 10 | Contactos | `contactos.html` | Mich | — | no |
 | 11 | Oportunidades | `oportunidades.html` | Mich | — | no |
 | 12 | Cotizaciones | `cotizaciones.html` | Mich | — | no |
@@ -171,6 +171,8 @@ Para ver todos los componentes sin iniciar sesión: `cd frontend && npm run dev`
 - **`MarcaDeAgua`**: la N detrás del contenido. Cambia sola de día a noche. El padre necesita `relative overflow-hidden`, y el tamaño y la posición van en `className` (ej. `w-[340px] -right-10 -bottom-[70px]`).
 - **`Button`**: mismas variantes que antes, más `aprobar` (verde) y `rechazar` (rojo suave). `primary` ya es el degradado azul → morado.
 - **`Icono`**: `<Icono nombre="correo" />`, con los nombres de `ui/iconos.ts`, o `<Icono d="…" />` con un trazo propio.
+- **`LogoEmpresa`** (Mich, 13-oct): el cuadrito de iniciales de la empresa con su color fijo. Props: `id`, `nombre`, `tamano` (`chico` | `normal` | `grande` | `ficha`).
+- **`Avatar`** (Mich, 13-oct): el círculo con las iniciales de una persona; sin `nombre` es el "?" punteado de "Sin responsable".
 - **`Segmento`** (lo agregó Mich el 13-oct): las pestañas tipo píldora (Prospectos · Importaciones · Campañas) y el "Lista | Tarjetas". Props: `opciones` (`id`, `texto`, `cuenta` opcional), `valor`, `onCambiar` y `etiqueta` (para lectores de pantalla). En el celular ocupa todo el ancho.
 - El numerito de Tareas del menú sale de `GET /tareas/conteos` (lo que vence hoy más lo vencido) con `useConteosTareas()` de `lib/tareas.ts`.
 
@@ -201,6 +203,13 @@ Antes de cada pantalla: `git fetch`, leer su sección en `docs/diseno/README.md`
 - Selector Lista | Tarjetas, con `prospeccion` y `ultima_actividad_detalle` en cada empresa.
 - Ficha: encabezado con marca de agua, historial unificado (`GET /actividades`) y `fuente_url`.
 - **La sección de expediente/documentos de la ficha la hace Fabián** (✅ 13-oct: `DocumentosTab` ya usa el panel nuevo con vista previa y Aprobar/Rechazar, y enseña el expediente cuando haya papeles obligatorios; si al rehacer la ficha le cambias el estilo, no le quites `PanelDocumento`) (es parte de Documentos, en `components/ficha/DocumentosTab.tsx`). La ficha solo la coloca y respeta `?tab=documentos`, porque desde Documentos se llega a la ficha con esa pestaña abierta y un "← Documentos" para regresar.
+
+- **Hecho en local (13-oct-2026, Mich):**
+  - Lista: contadores de `/empresas/conteos` (Total y Sin asignar filtran), búsqueda, giro, región, responsable (solo admin y supervisor; con "Sin responsable"), orden por última actividad o nombre, y "Lista | Tarjetas" (se recuerda en el navegador). Prospección y "qué fue lo último" con `lib/empresas.ts`. Giro y región no tienen catálogo: las opciones salen de las primeras 100 empresas.
+  - Alta en `PanelLateral` con `EmpresaForm enPanel` (la prop nueva lo acomoda a dos columnas con los botones fijos abajo; "Nueva cotización" lo sigue usando como antes).
+  - Ficha: migas ("← Documentos" con `?tab=documentos`), encabezado con marca de agua, redes y cuatro datos (responsable, contactos activos, pipeline de las oportunidades abiertas, última actividad del historial), y pestañas Resumen · Oportunidades · Cotizaciones · Documentos. `?tab=info` e `?tab=historial` de antes caen en Resumen. Resumen: contactos (agregar, editar, desactivar con `Modal`), historial unificado, oportunidades abiertas y datos con `fuente_url`. Editar en `PanelLateral`, "Registrar llamada" en `Modal`, desactivar con confirmación.
+  - **Para Fabián:** la ficha no lleva la tarjeta de Tareas del diseño porque `GET /tareas` no filtra por `empresaId`, ni la pastilla de prospección del encabezado porque `GET /empresas/:id` no trae `prospeccion` (la lista sí). El nombre del responsable sale de `/usuarios` para admin y supervisor; un agente solo abre las suyas.
+  - Revisado en Edge con la API simulada a 375 y 1440 px, día y noche, como administrador y como agente. Falta contra producción.
 
 **Contactos** (`pages/ContactosPage.tsx`, `contactos.html`)
 - Contadores: `GET /contactos/conteos`.
