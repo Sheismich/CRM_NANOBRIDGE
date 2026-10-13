@@ -140,7 +140,7 @@ Cada deploy al canal reinicia los 30 días.
 | 3 | Tareas (Mi día + lista) ✅ | `tareas.html` | Fabián | (este commit) | no |
 | 4 | Documentos ✅ | `documentos.html` | Fabián | (este commit) | no |
 | 5 | Administración ✅ | `administracion.html` | Fabián | (este commit) | no |
-| 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) | `informe-ejecutivo.html` | Fabián | — | no |
+| 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) ✅ | `informe-ejecutivo.html` | Fabián | (este commit) | no |
 | 7 | Login | `login.html` | Mich | — | no |
 | 8 | Prospectos | `prospectos.html` | Mich | — | no |
 | 9 | Empresas + ficha | `empresas.html` | Mich | — | no |
@@ -204,7 +204,7 @@ Antes de cada pantalla: `git fetch`, leer su sección en `docs/diseno/README.md`
 - Tablero con barra de dinero por etapa y tarjetas con `dias_en_etapa` y `responsable_nombre`.
 - Arrastrar entre etapas con `PATCH /oportunidades/:id/etapa`. Perder pide el motivo del catálogo y ganar pide confirmación. En el celular, en lugar de arrastrar, un menú "Mover a…".
 - Franja de abajo: tasa de conversión y tiempo promedio para cerrar (`ciclo_medio_venta`), de `GET /reportes/pipeline/conversion-etapas`.
-- En esa misma franja van los botones del **informe ejecutivo**. El componente lo entrega Fabián (`components/reportes/InformeEjecutivo.tsx`) y aquí solo se coloca. Si todavía no existe cuando llegues a esta pantalla, deja el hueco y avísale.
+- En esa misma franja van los botones del **informe ejecutivo**: el componente ya existe (`components/reportes/InformeEjecutivo.tsx`, 13-oct) y por ahora está al final de la pantalla de hoy (`<InformeEjecutivo agentes={…agentes} />`, solo admin/supervisor). Al rehacer Oportunidades solo muévelo a la franja de abajo.
 - Se reusa `OportunidadDetallePanel`.
 
 **Cotizaciones** (`pages/CotizacionesPage.tsx`, `cotizaciones.html`)

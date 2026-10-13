@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
+import { InformeEjecutivo } from "../components/reportes/InformeEjecutivo";
 import { OportunidadDetallePanel } from "../components/ficha/OportunidadDetallePanel";
 import { Card } from "../components/ui/Card";
 import { EstadoVacio, LigaAccion } from "../components/ui/EstadoVacio";
@@ -102,6 +103,9 @@ export function OportunidadesPage() {
       ) : (
         <Cerradas responsableId={responsableId} coincide={coincide} abiertaId={abiertaId} onAbrir={setAbiertaId} nombreDe={esAdminOSupervisor ? nombreDe : undefined} />
       )}
+      {/* Informe ejecutivo (Fabián, 13-oct-2026): en el rediseño va en la
+          franja de abajo; solo se coloca, el componente es de Fabián. */}
+      {esAdminOSupervisor && <InformeEjecutivo agentes={personas?.filter((u) => u.rol === "agente")} className="mt-5" />}
     </AppShell>
   );
 }

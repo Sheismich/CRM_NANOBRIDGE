@@ -15,7 +15,7 @@ El backend de todas estas pantallas ya está en producción desde el 12-oct-2026
 | 3 | Tareas (Mi día + Ver todas) ✅ 13-oct | `tareas.html` (opciones 3 y 6) | 1 día |
 | 4 | Documentos ✅ 13-oct | `documentos.html` | 1 día |
 | 5 | Administración ✅ 13-oct | `administracion.html` | 1 día |
-| 6 | Informe ejecutivo | `informe-ejecutivo.html` | ½ día |
+| 6 | Informe ejecutivo ✅ 13-oct | `informe-ejecutivo.html` | ½ día |
 
 Una pantalla por sesión de Claude. La Base común va primero porque Mich no puede empezar sus pantallas sin ella: en cuanto esté, se hace push y se le avisa.
 
@@ -118,7 +118,11 @@ Lo que se pidió:
 - **Equipo y roles** en una tarjeta: niveles de acceso con cuántos usuarios tiene cada uno, usuarios con correo, `ultimo_acceso_en` y rol, y "Nuevo usuario" (`UsuariosAdmin` restilizado).
 - La pestaña Auditoría cruda desaparece (la reemplaza el Registro de cambios). Mientras siga el front viejo, el backend deja `/auditoria` a admin y supervisor; se cierra el día del cambio.
 
-## 6. Informe ejecutivo
+## 6. Informe ejecutivo ✅ (13-oct-2026)
+
+Hecho. Se generó un PDF real con la base de pruebas y se comparó con `docs/diseno/capturas/informe-ejecutivo.png`: sale igual (encabezado, resumen, conversión, forecast, prospección, desempeño y marca de agua); no hizo falta tocar el backend. Componente `components/reportes/InformeEjecutivo.tsx` (mes de los últimos 12, agente opcional, PDF y CSV), colocado por ahora al final de Oportunidades para admin/supervisor; Mich lo mueve a la franja de abajo al rehacer esa pantalla.
+
+Lo que se pidió:
 
 El PDF y el CSV ya los genera el backend: `GET /api/v1/reportes/export/informe-ejecutivo?formato=pdf|csv&mes=YYYY-MM&responsableId=` (solo admin y supervisor; `mes` por omisión = el actual).
 
