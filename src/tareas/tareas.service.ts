@@ -293,22 +293,23 @@ export class TareasService {
   // Con la misma fecha (DATETIME es al segundo) va primero lo de la tarea.
   async historial(user: CurrentUser, id: number) {
     const tarea = await this.get(user, id);
-    const orden = { cerrada: 0, asignada: 1, creada: 2, respuesta: 3, envio: 4 } as const;
+    const orden = { cerrada: 0, reprogramada: 1, asignada: 2, creada: 3, respuesta: 4, envio: 5 } as const;
 
     const movimientos = await this.db
       .select({ accion: auditoria.accion, fecha: auditoria.creadoEn, usuarioNombre: usuarios.nombre, despues: auditoria.despues })
       .from(auditoria)
       .leftJoin(usuarios, eq(usuarios.id, auditoria.usuarioId))
-      .where(and(eq(auditoria.entidad, "tarea"), eq(auditoria.entidadId, id), inArray(auditoria.accion, ["asignar", "cerrar"])));
+      .where(and(eq(auditoria.entidad, "tarea"), eq(auditoria.entidadId, id), inArray(auditoria.accion, ["asignar", "cerrar", "reprogramar"])));
 
     const eventos: { tipo: keyof typeof orden; fecha: Date; [k: string]: unknown }[] = [
       { tipo: "creada", fecha: tarea.creado_en },
-      ...movimientos.map((m) => ({
-        tipo: m.accion === "cerrar" ? ("cerrada" as const) : ("asignada" as const),
-        fecha: m.fecha,
-        usuario_nombre: m.usuarioNombre,
-        ...(m.accion === "asignar" ? { responsable_id: (m.despues as { responsable_id?: number } | null)?.responsable_id ?? null } : { resultado: (m.despues as { resultado?: string } | null)?.resultado ?? null })
-      }))
+      ...movimientos.map((m) => {
+        const base = { fecha: m.fecha, usuario_nombre: m.usuarioNombre };
+        const despues = m.despues as { responsable_id?: number; resultado?: string; fecha_limite?: string } | null;
+        if (m.accion === "asignar") return { ...base, tipo: "asignada" as const, responsable_id: despues?.responsable_id ?? null };
+        if (m.accion === "reprogramar") return { ...base, tipo: "reprogramada" as const, fecha_limite: despues?.fecha_limite ?? null };
+        return { ...base, tipo: "cerrada" as const, resultado: despues?.resultado ?? null };
+      })
     ];
 
     if (tarea.prospecto_id) {
@@ -372,6 +373,30 @@ export class TareasService {
       });
       // Asignar = dar dueño: ver shared/empresa-de-agente.ts.
       if (row.empresaId) await darEmpresaAlAgente(tx, { empresaId: row.empresaId, responsable, actor: user, origen: { tarea_id: id } });
+    });
+  }
+
+  // "Reprogramar" de Mi día (13-oct-2026): nueva fecha límite para una
+  // tarea abierta. alertado_en vuelve a null para que, si la fecha nueva
+  // también se vence, el aviso de SLA salga otra vez. Misma revalidación
+  // dentro del UPDATE que cerrar(): abierta y, para un agente, suya.
+  async reprogramar(user: CurrentUser, id: number, fechaLimite: Date) {
+    const row = await this.findAssignable(user, id);
+    await this.db.transaction(async (tx) => {
+      const [result] = await tx.update(tareas).set({ fechaLimite, alertadoEn: null }).where(and(
+        eq(tareas.id, id),
+        sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`,
+        user.rol === "agente" ? eq(tareas.responsableId, user.id) : undefined
+      ));
+      if (result.affectedRows === 0) throw new HttpError(409, "La tarea ya está cerrada o ya no es tuya");
+      await tx.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "tarea",
+        entidadId: id,
+        accion: "reprogramar",
+        antes: { fecha_limite: row.fechaLimite },
+        despues: { fecha_limite: fechaLimite }
+      });
     });
   }
 

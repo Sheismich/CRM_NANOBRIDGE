@@ -137,7 +137,7 @@ Cada deploy al canal reinicia los 30 días.
 |---|---|---|---|---|---|
 | 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) ✅ | `inicio-aprobado.html` | Fabián | (este commit) | no |
 | 2 | Inicio ✅ | `inicio-aprobado.html` | Fabián | (este commit) | no |
-| 3 | Tareas (Mi día + lista) | `tareas.html` | Fabián | — | no |
+| 3 | Tareas (Mi día + lista) ✅ | `tareas.html` | Fabián | (este commit) | no |
 | 4 | Documentos | `documentos.html` | Fabián | — | no |
 | 5 | Administración | `administracion.html` | Fabián | — | no |
 | 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) | `informe-ejecutivo.html` | Fabián | — | no |

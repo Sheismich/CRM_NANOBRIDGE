@@ -12,7 +12,7 @@ El backend de todas estas pantallas ya está en producción desde el 12-oct-2026
 |---|---|---|---|
 | 1 | Base común ✅ 13-oct | `inicio-aprobado.html` | 1-2 días |
 | 2 | Inicio ✅ 13-oct | `inicio-aprobado.html` | ½-1 día |
-| 3 | Tareas (Mi día + Ver todas) | `tareas.html` (opciones 3 y 6) | 1 día |
+| 3 | Tareas (Mi día + Ver todas) ✅ 13-oct | `tareas.html` (opciones 3 y 6) | 1 día |
 | 4 | Documentos | `documentos.html` | 1 día |
 | 5 | Administración | `administracion.html` | 1 día |
 | 6 | Informe ejecutivo | `informe-ejecutivo.html` | ½ día |
@@ -61,7 +61,17 @@ Lo que se pidió:
 - **Pipeline abierto** (angosta): `GET /reportes/pipeline/resumen` con el rango del mes (trae ganadas y perdidas). Botón "Crear nueva oportunidad" con `NuevaOportunidadForm`.
 - Conservar la diferencia entre lo que ve un agente y lo que ven admin y supervisor (los reportes son solo de admin/supervisor).
 
-## 3. Tareas (`pages/TareasPage.tsx`)
+## 3. Tareas (`pages/TareasPage.tsx`) ✅ (13-oct-2026)
+
+Hecha. Piezas en `components/tareas/` (`MiDia`, `VerTodas`, `DetalleTarea`, `AccionesTarea` con las ventanas de Hecha y Reprogramar) y lógica en `lib/mi-dia.ts`. Decisiones:
+- **Backend nuevo:** `PATCH /tareas/:id/reprogramar {fechaLimite}` (futura; un agente solo las suyas; auditada; limpia `alertado_en` para que el aviso de vencida vuelva a salir; sale en el historial como "reprogramada"). Prueba en test/430; suite 555/555. **Falta desplegarlo: hasta entonces el botón Reprogramar da error.**
+- "Hecha" pide el resultado en una ventana (obligatorio, con respuestas rápidas). Reprogramar trae atajos (mañana 9:00, en 2 días, próximo lunes).
+- "Saltar" y elegir una tarea de "Después" solo viven en la pantalla.
+- URL: `?vista=todas`, `&alcance=todas|sin_asignar`, `?tab=cola` (la liga del Inicio sigue sirviendo).
+- Ver todas trae hasta 100 abiertas (dos llamadas: pendiente + en progreso) o las 100 cerradas más recientes; si hay más, lo avisa.
+- En el celular el detalle sale en un PanelLateral.
+
+Lo que se pidió:
 
 - **Mi día:**
   - Arriba la siguiente tarea con `GET /tareas/:id`: chips de empresa, contacto y campaña, teléfono junto a los botones, caja "Lo que contestó" con la sugerencia de la IA (`respuesta`), y botones Hecha / Reprogramar / Saltar.

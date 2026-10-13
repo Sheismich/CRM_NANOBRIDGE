@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { plural } from "./formato";
-import type { Clasificacion, ConteosTareas, Paginated, Tarea, TareaClasificacion } from "../types";
+import type { Clasificacion, ConteosTareas, EventoTarea, Paginated, Tarea, TareaClasificacion, TareaDetalle } from "../types";
 
 // Etiquetas de tareas compartidas por Tareas, Reportes e Inicio.
 
@@ -105,4 +105,65 @@ export function useColaClasificacion(page = 1, habilitada = true) {
 // que hay "25 o más".
 export function textoPendientesCola(n: number) {
   return n >= LIMITE_COLA ? `${n}+ respuestas por clasificar` : plural(n, "respuesta por clasificar", "respuestas por clasificar");
+}
+
+// "Tomar" (Del equipo) y "Reasignar": PATCH /tareas/:id/asignar, solo
+// administrador y supervisor (los agentes no toman tareas, decisión del
+// 12-oct-2026).
+export async function asignarTarea(queryClient: QueryClient, tareaId: number, responsableId: number, empresaId: number | null) {
+  await api.patch(`/api/v1/tareas/${tareaId}/asignar`, { responsableId });
+  await queryClient.invalidateQueries({ queryKey: ["tareas"] });
+  // Asignar = dar dueño: la empresa pudo cambiar de responsable.
+  if (empresaId) await queryClient.invalidateQueries({ queryKey: ["empresa", String(empresaId)] });
+}
+
+// --- Rediseño de Tareas (13-oct-2026) ---
+
+export function useTareaDetalle(id: number | null) {
+  return useQuery({
+    queryKey: ["tareas", "detalle", id],
+    queryFn: () => api.get<TareaDetalle>(`/api/v1/tareas/${id}`),
+    enabled: id !== null
+  });
+}
+
+export function useHistorialTarea(id: number | null) {
+  return useQuery({
+    queryKey: ["tareas", "historial", id],
+    queryFn: () => api.get<EventoTarea[]>(`/api/v1/tareas/${id}/historial`),
+    enabled: id !== null
+  });
+}
+
+export type FiltrosTareas = {
+  responsableId?: number;
+  sinAsignar?: boolean;
+  q?: string;
+  prioridad?: Tarea["prioridad"];
+  tipo?: Tarea["tipo"];
+  cerradas?: boolean;
+};
+
+// Lista de Ver todas y de Mi día. GET /tareas filtra por UN estado, así que
+// "abiertas" son dos llamadas (pendiente + en progreso) de hasta 100 cada
+// una; "cerradas" trae las 100 más recientes. `completo` es false si alguna
+// llenó la página (puede haber más de las que se ven).
+export function useListaTareas(filtros: FiltrosTareas, habilitada = true) {
+  const base = {
+    responsableId: filtros.responsableId,
+    sinAsignar: filtros.sinAsignar ? "true" : undefined,
+    q: filtros.q?.trim() || undefined,
+    prioridad: filtros.prioridad,
+    tipo: filtros.tipo,
+    limit: LIMITE_ABIERTAS
+  };
+  return useQuery({
+    queryKey: ["tareas", "lista", base, filtros.cerradas ?? false],
+    enabled: habilitada,
+    queryFn: async () => {
+      const estados = filtros.cerradas ? (["cerrada"] as const) : (["pendiente", "en_progreso"] as const);
+      const paginas = await Promise.all(estados.map((estado) => api.get<Paginated<Tarea>>("/api/v1/tareas", { ...base, estado })));
+      return { tareas: paginas.flatMap((p) => p.data), completo: paginas.every((p) => p.data.length < LIMITE_ABIERTAS) };
+    }
+  });
 }

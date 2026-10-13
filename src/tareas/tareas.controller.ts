@@ -6,7 +6,7 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { asignarTareaSchema, cerrarTareaSchema, crearTareaSchema, listTareasQuerySchema } from "./dto/tarea.schema.js";
+import { asignarTareaSchema, cerrarTareaSchema, crearTareaSchema, listTareasQuerySchema, reprogramarTareaSchema } from "./dto/tarea.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -57,6 +57,18 @@ export class TareasController {
     const id = idParamSchema.parse(idParam);
     const { responsableId } = asignarTareaSchema.parse(body);
     await this.tareasService.asignar(user, id, responsableId);
+    return this.tareasService.get(user, id);
+  }
+
+  // "Reprogramar" de Mi día (13-oct-2026): quien tiene la tarea mueve su
+  // fecha límite; un agente solo las suyas (mismo alcance que cerrar).
+  @Patch(":id/reprogramar")
+  @HttpCode(200)
+  @Roles("administrador", "supervisor", "agente")
+  async reprogramar(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    const id = idParamSchema.parse(idParam);
+    const { fechaLimite } = reprogramarTareaSchema.parse(body);
+    await this.tareasService.reprogramar(user, id, fechaLimite);
     return this.tareasService.get(user, id);
   }
 

@@ -256,6 +256,35 @@ export type Tarea = {
   creado_en: string;
 };
 
+// GET /tareas/:id: la tarea con lo necesario para trabajarla (Mi día y el
+// detalle de "Ver todas"). respuesta = la que la originó, si la hay.
+export type TareaDetalle = Tarea & {
+  empresa_nombre: string | null;
+  contacto_nombre: string | null;
+  contacto_puesto: string | null;
+  contacto_telefono: { tipo: "telefono" | "whatsapp"; valor: string } | null;
+  campana_nombre: string | null;
+  responsable_nombre: string | null;
+  respuesta: {
+    id: number;
+    contenido: string | null;
+    recibido_en: string | null;
+    clasificacion: string | null;
+    clasificacion_sugerida: string | null;
+    confianza_sugerida: number | null;
+    motivo_sugerencia: string | null;
+  } | null;
+};
+
+// GET /tareas/:id/historial, lo más nuevo primero.
+export type EventoTarea =
+  | { tipo: "creada"; fecha: string }
+  | { tipo: "asignada"; fecha: string; usuario_nombre: string | null; responsable_id: number | null }
+  | { tipo: "reprogramada"; fecha: string; usuario_nombre: string | null; fecha_limite: string | null }
+  | { tipo: "cerrada"; fecha: string; usuario_nombre: string | null; resultado: string | null }
+  | { tipo: "envio"; fecha: string; numero_contacto: number; canal: string }
+  | { tipo: "respuesta"; fecha: string; clasificacion: string | null; contenido: string | null };
+
 // GET /tareas/conteos (Mi día y el numerito de Tareas del menú): siempre
 // de quien pregunta, días en hora de México.
 export type ConteosTareas = {

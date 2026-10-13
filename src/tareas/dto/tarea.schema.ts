@@ -17,6 +17,11 @@ export const asignarTareaSchema = z.object({
   responsableId: z.coerce.number().int().positive()
 });
 
+// Mi día (13-oct-2026): mover la fecha límite de una tarea abierta.
+export const reprogramarTareaSchema = z.object({
+  fechaLimite: z.coerce.date().refine((d) => d.getTime() > Date.now(), { message: "Debe ser una fecha futura" })
+});
+
 export const cerrarTareaSchema = z.object({
   resultado: z.string().trim().min(2).max(4000)
 });
