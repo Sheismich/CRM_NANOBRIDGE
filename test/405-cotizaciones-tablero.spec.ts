@@ -87,11 +87,11 @@ describe("cotizaciones: tablero, motivo de rechazo y vencidas", () => {
       opId = await oportunidad(empresaId, agenteId);
     });
 
-    it("rechazar sin motivo sigue funcionando (el front publicado no lo manda)", async () => {
+    // Día del cambio (15-oct-2026): el front nuevo siempre pide el motivo.
+    it("rechazar sin motivo ya no se puede: 400", async () => {
       const id = await enviada(empresaId, opId, 100);
       const res = await estado(id, "rechazada");
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual(expect.objectContaining({ estado: "rechazada", motivo_rechazo: null, motivo_rechazo_detalle: null }));
+      expect(res.status).toBe(400);
     });
 
     it("con motivo lo guarda, lo audita y sale en el detalle; 'otro' pide explicación", async () => {

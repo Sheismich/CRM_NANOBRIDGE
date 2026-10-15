@@ -165,9 +165,11 @@ describe("documentos: revisión, expediente y contadores", () => {
       expect((await tareasDe(id2))[0]!.responsableId).toBeNull();
     });
 
-    it("el botón viejo 'Revisado' sigue funcionando para un agente y deja el documento aprobado", async () => {
+    // Día del cambio (15-oct-2026): el botón viejo ya no es de agentes.
+    it("el botón viejo 'Revisado' ya no lo usa un agente (403); un administrador sí y deja el documento aprobado", async () => {
       const id = await subir(agenteCookie, empresaId, "identificacion_oficial");
-      const res = await api().patch(`/api/v1/documentos/${id}/revisar`).set("Cookie", agenteCookie).send({});
+      expect((await api().patch(`/api/v1/documentos/${id}/revisar`).set("Cookie", agenteCookie).send({})).status).toBe(403);
+      const res = await api().patch(`/api/v1/documentos/${id}/revisar`).set("Cookie", adminCookie).send({});
       expect(res.status).toBe(200);
       expect(res.body.revision).toBe("aprobado");
     });

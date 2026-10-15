@@ -59,8 +59,9 @@ describe("cotizaciones: estados, versionado y scoping", () => {
     return res.body.id as number;
   }
 
+  // Desde el día del cambio (15-oct-2026) rechazar exige motivo.
   function cambiarEstado(cookie: string[], id: number, estado: string) {
-    return request(app.getHttpServer()).patch(`/api/v1/cotizaciones/${id}/estado`).set("Cookie", cookie).send({ estado });
+    return request(app.getHttpServer()).patch(`/api/v1/cotizaciones/${id}/estado`).set("Cookie", cookie).send(estado === "rechazada" ? { estado, motivoRechazo: "precio" } : { estado });
   }
 
   function nuevaVersion(cookie: string[], id: number, body: Record<string, unknown> = { partidas }) {

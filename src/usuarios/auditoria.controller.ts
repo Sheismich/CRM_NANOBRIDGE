@@ -9,13 +9,12 @@ import { listarAuditoriaQuerySchema } from "./dto/auditoria.schema.js";
 // aquí arriba en vez de repetirlo por ruta (a diferencia de
 // UsuariosController, que sí mezcla niveles de acceso entre sus rutas).
 // El Registro de cambios de Administración ("quién movió qué") es solo del
-// administrador, y esta es la misma información cruda, así que también va a
-// quedar solo para él. Pero el front publicado todavía le enseña la pestaña
-// Auditoría al supervisor: se cierra el día que el front nuevo pase a la liga
-// normal (PLAN_FRONTEND.md, lista del día del cambio).
+// administrador, y esta es la misma información cruda, así que también es
+// solo para él (día del cambio, 15-oct-2026: el front nuevo ya no tiene la
+// pestaña Auditoría del supervisor).
 @Controller("api/v1/auditoria")
 @UseGuards(SessionAuthGuard, RolesGuard)
-@Roles("administrador", "supervisor")
+@Roles("administrador")
 export class AuditoriaController {
   constructor(private readonly auditoriaService: AuditoriaService) {}
 

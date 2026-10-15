@@ -189,12 +189,12 @@ export class DocumentosController {
     return this.documentosService.cambiarEstado(user, id, input);
   }
 
-  // El botón viejo "Revisado" (front publicado): equivale a aprobar y lo
-  // siguen usando los agentes. PENDIENTE: limitarlo a admin/supervisor (o
-  // quitarlo) cuando salga el front nuevo.
+  // El botón viejo "Revisado": equivale a aprobar. El front nuevo usa
+  // aprobar/rechazar; desde el día del cambio (15-oct-2026) queda solo para
+  // administrador y supervisor, igual que aprobar.
   @Patch(":id/revisar")
   @HttpCode(200)
-  @Roles("administrador", "supervisor", "agente")
+  @Roles("administrador", "supervisor")
   revisar(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
     const id = idParamSchema.parse(idParam);
     const input = revisarDocumentoSchema.parse(body);

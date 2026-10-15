@@ -39,7 +39,9 @@ describe("cotizaciones: aceptada, una por oportunidad y oportunidad abierta", ()
     return res.body.id as number;
   }
 
-  const estado = (id: number, nuevo: string) => api().patch(`/api/v1/cotizaciones/${id}/estado`).set("Cookie", adminCookie).send({ estado: nuevo });
+  // Desde el día del cambio (15-oct-2026) rechazar exige motivo.
+  const estado = (id: number, nuevo: string) =>
+    api().patch(`/api/v1/cotizaciones/${id}/estado`).set("Cookie", adminCookie).send(nuevo === "rechazada" ? { estado: nuevo, motivoRechazo: "precio" } : { estado: nuevo });
   const version = (id: number) => api().post(`/api/v1/cotizaciones/${id}/version`).set("Cookie", adminCookie).send({ partidas });
 
   async function aceptada(oportunidadId: number) {

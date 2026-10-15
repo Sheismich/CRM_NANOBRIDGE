@@ -376,7 +376,10 @@ describe("documentos: archivos, estados, versionado y descarga", () => {
       expect((await get(agente2, "/descarga")).status).toBe(404);
       expect((await estado(agente2, id, "archivado")).status).toBe(404);
       expect((await version(agente2, id)).status).toBe(404);
-      expect((await request(app.getHttpServer()).patch(`/api/v1/documentos/${id}/revisar`).set("Cookie", agente2).send({})).status).toBe(404);
+      // Día del cambio (15-oct-2026): el botón viejo "Revisado" ya no es de
+      // agentes, ni siquiera sobre sus propios documentos.
+      expect((await request(app.getHttpServer()).patch(`/api/v1/documentos/${id}/revisar`).set("Cookie", agente2).send({})).status).toBe(403);
+      expect((await request(app.getHttpServer()).patch(`/api/v1/documentos/${id}/revisar`).set("Cookie", agente1).send({})).status).toBe(403);
       expect((await subir(agente2, { empresaId: empresaAgente1 })).status).toBe(404);
       expect((await request(app.getHttpServer()).get(`/api/v1/documentos?empresaId=${empresaAgente1}`).set("Cookie", agente2)).status).toBe(404);
 

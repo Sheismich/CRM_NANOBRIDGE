@@ -102,6 +102,10 @@ export const cambiarEstadoCotizacionSchema = z.object({
 }).refine((input) => input.estado === "rechazada" || (!input.motivoRechazo && !input.motivoRechazoDetalle), {
   message: "El motivo solo se manda al marcar la cotización como rechazada",
   path: ["motivoRechazo"]
+}).refine((input) => input.estado !== "rechazada" || input.motivoRechazo, {
+  // Día del cambio (15-oct-2026): el front nuevo siempre lo pide.
+  message: "Elige el motivo de rechazo",
+  path: ["motivoRechazo"]
 }).refine((input) => input.motivoRechazo !== "otro" || input.motivoRechazoDetalle, {
   message: "El motivo 'otro' requiere motivoRechazoDetalle",
   path: ["motivoRechazoDetalle"]

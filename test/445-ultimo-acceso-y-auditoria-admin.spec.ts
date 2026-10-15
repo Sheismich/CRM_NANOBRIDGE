@@ -83,16 +83,15 @@ describe("administración: último acceso y auditoría solo admin", () => {
     expect(ficha.body.ultimo_acceso_en).not.toBeNull();
   });
 
-  // Mientras siga publicado el front viejo (su pestaña Auditoría se le ve al
-  // supervisor), /auditoria sigue abierta para él. El día que el front nuevo
-  // pase a la liga normal se vuelve solo del administrador. El Registro de
-  // cambios nuevo ya es solo del administrador.
-  it("/auditoria la ven administrador y supervisor; el Registro de cambios, solo el administrador", async () => {
+  // Día del cambio (15-oct-2026): el front nuevo ya no tiene la pestaña
+  // Auditoría, así que /auditoria vuelve a ser solo del administrador, igual
+  // que el Registro de cambios.
+  it("/auditoria y el Registro de cambios son solo del administrador", async () => {
     const correo = `sup.auditoria.${randomUUID()}@test.local`;
     expect((await api().post("/api/v1/usuarios").set("Cookie", adminCookie).send({ nombre: "Supervisora", correo, password: "password_sup_1", rol: "supervisor" })).status).toBe(201);
     const supCookie = await loginAs(app, correo, "password_sup_1");
 
-    expect((await api().get("/api/v1/auditoria").set("Cookie", supCookie)).status).toBe(200);
+    expect((await api().get("/api/v1/auditoria").set("Cookie", supCookie)).status).toBe(403);
     expect((await api().get("/api/v1/auditoria").set("Cookie", adminCookie)).status).toBe(200);
     expect((await api().get("/api/v1/admin/registro-cambios").set("Cookie", supCookie)).status).toBe(403);
   });
