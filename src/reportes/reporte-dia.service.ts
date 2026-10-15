@@ -9,6 +9,9 @@ import type { CurrentUser } from "../auth/current-user.type.js";
 import { TIPO_ERROR_WORKFLOW } from "../automatizacion/automatizacion.service.js";
 import type { ReporteDiaQuery, TipoBitacora } from "./dto/reporte.schema.js";
 
+// "17 oct, 10:00" en hora de México (la fecha nueva de una tarea reprogramada).
+const FECHA_HORA_MX = new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
 // Un movimiento de la bitácora. usuario_id = quién lo hizo (null = la
 // automatización, un contacto o el sistema). texto va sin el nombre de quien
 // lo hizo: la pantalla lo antepone ("Fabián cerró ...").
@@ -114,7 +117,7 @@ export class ReporteDiaService {
         .from(auditoria)
         .innerJoin(tareas, eq(tareas.id, auditoria.entidadId))
         .leftJoin(empresas, eq(empresas.id, tareas.empresaId))
-        .where(and(eq(auditoria.entidad, "tarea"), inArray(auditoria.accion, ["cerrar", "clasificar", "asignar"]), delDia(auditoria.creadoEn))),
+        .where(and(eq(auditoria.entidad, "tarea"), inArray(auditoria.accion, ["cerrar", "clasificar", "asignar", "reprogramar"]), delDia(auditoria.creadoEn))),
       // Las que vencían ese día (fecha límite dentro del día), sin canceladas.
       this.db
         .select({ id: tareas.id, titulo: tareas.titulo, estado: tareas.estado, fechaLimite: tareas.fechaLimite, cerradaEn: tareas.cerradaEn, responsableId: tareas.responsableId, responsableNombre: responsable.nombre, empresaId: tareas.empresaId, empresaNombre })
@@ -164,6 +167,11 @@ export class ReporteDiaService {
           subtipo: tomada ? "tomada" : "asignada",
           texto: tomada ? `tomó “${f.titulo}”${antes === null ? " (estaba sin asignar)" : ""}` : `le asignó “${f.titulo}” a ${nombre(despues) ?? "otra persona"}`
         });
+      } else if (f.accion === "reprogramar") {
+        // Mi día (13-oct-2026): mover la fecha límite. La auditoría guarda
+        // la fecha nueva como texto ISO (JSON).
+        const nueva = (f.despues as { fecha_limite?: string | null } | null)?.fecha_limite;
+        movimientos.push({ ...base, subtipo: "reprogramada", texto: `movió “${f.titulo}” ${nueva ? `al ${FECHA_HORA_MX.format(new Date(nueva))}` : "de fecha"}` });
       } else {
         const d = (f.despues ?? {}) as { resultado?: string; clasificacion?: string };
         const detalle = f.accion === "clasificar" ? ` — la marcó como ${d.clasificacion ?? "clasificada"}` : d.resultado ? ` — resultado: ${d.resultado}` : "";

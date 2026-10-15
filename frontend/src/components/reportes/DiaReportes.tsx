@@ -39,6 +39,7 @@ function aspecto(m: MovimientoDia): Aspecto {
   if (m.tipo === "tareas") {
     if (m.subtipo === "cerrada") return { icono: "checkCirculo", color: "text-ok border-ok" };
     if (m.subtipo === "creada") return { icono: "mas", color: "text-navy border-navy" };
+    if (m.subtipo === "reprogramada") return { icono: "calendario", color: "text-warn border-warn" };
     return { icono: "persona", color: "text-navy border-navy" };
   }
   if (m.tipo === "correos") return { icono: "correo", color: "text-info border-info" };
