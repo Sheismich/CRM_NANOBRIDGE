@@ -55,7 +55,8 @@ describe("cotizaciones: aceptada, una por oportunidad y oportunidad abierta", ()
     expect(res.status).toBe(409);
     expect(res.body.code).toBe("COTIZACION_ACEPTADA");
 
-    const rechazada = await cotizacion(op);
+    // Otra oportunidad: aceptar gana la anterior y la cierra (15-oct-2026).
+    const rechazada = await cotizacion(await oportunidad());
     expect((await estado(rechazada, "enviada")).status).toBe(200);
     expect((await estado(rechazada, "rechazada")).status).toBe(200);
     expect((await version(rechazada)).status).toBe(201);
@@ -63,12 +64,14 @@ describe("cotizaciones: aceptada, una por oportunidad y oportunidad abierta", ()
 
   it("solo una aceptada por oportunidad, también si se aceptan dos al mismo tiempo", async () => {
     const op = await oportunidad();
-    await aceptada(op);
     const otra = await cotizacion(op);
     expect((await estado(otra, "enviada")).status).toBe(200);
+    await aceptada(op);
+    // Desde el 15-oct-2026 aceptar gana (y cierra) la oportunidad, así que
+    // la segunda choca primero con la oportunidad cerrada.
     const res = await estado(otra, "aceptada");
     expect(res.status).toBe(409);
-    expect(res.body.code).toBe("YA_HAY_COTIZACION_ACEPTADA");
+    expect(res.body.code).toBe("OPORTUNIDAD_CERRADA");
 
     const op2 = await oportunidad();
     const [a, b] = [await cotizacion(op2), await cotizacion(op2)];

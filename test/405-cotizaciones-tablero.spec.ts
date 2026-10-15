@@ -240,12 +240,13 @@ describe("cotizaciones: tablero, motivo de rechazo y vencidas", () => {
       expect((await correrTrabajo()).status).toBe(200);
       expect(await auditoriasVencer(pasada)).toHaveLength(1);
 
-      // El cliente contesta tarde: una vencida NO queda bloqueada.
-      expect((await estado(pasada, "aceptada")).status).toBe(200);
+      // El cliente contesta tarde: una vencida NO queda bloqueada. Primero
+      // se versiona (aceptar después gana la oportunidad y la cierra).
       const version = await api().post(`/api/v1/cotizaciones/${otraPasada}/version`).set("Cookie", adminCookie)
         .send({ fechaEsperadaCierre: sumarDias(hoy, 30), partidas: [{ descripcion: "Servicio", cantidad: 1, precioUnitario: 100 }] });
       expect(version.status).toBe(201);
       expect(await estadoDe(otraPasada)).toBe("obsoleta");
+      expect((await estado(pasada, "aceptada")).status).toBe(200);
     });
 
     it("una vencida también se puede marcar rechazada", async () => {

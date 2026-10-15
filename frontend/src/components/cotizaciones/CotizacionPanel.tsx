@@ -36,7 +36,14 @@ export function EncabezadoCotizacion({ id, onNuevaVersion }: { id: number; onNue
       // otra aceptada en la misma oportunidad. El mensaje del backend lo dice.
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
     } finally {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["cotizacion", id] }), queryClient.invalidateQueries({ queryKey: ["cotizaciones"] })]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["cotizacion", id] }),
+        queryClient.invalidateQueries({ queryKey: ["cotizaciones"] }),
+        // Aceptar gana la oportunidad (15-oct-2026): tablero, panel y reportes cambian.
+        ...(cuerpo.estado === "aceptada"
+          ? [queryClient.invalidateQueries({ queryKey: ["oportunidades"] }), queryClient.invalidateQueries({ queryKey: ["oportunidad"] }), queryClient.invalidateQueries({ queryKey: ["reportes"] })]
+          : [])
+      ]);
       setGuardando(false);
     }
   }
@@ -94,7 +101,7 @@ export function EncabezadoCotizacion({ id, onNuevaVersion }: { id: number; onNue
         abierto={porAceptar}
         onCerrar={() => setPorAceptar(false)}
         titulo="¿El cliente la aceptó?"
-        descripcion={`La #${c.id} v${c.version} por ${formatoMoneda.format(Number(c.total))} queda aceptada. Ya no se le pueden sacar versiones, y es la única aceptada de su oportunidad.`}
+        descripcion={`La #${c.id} v${c.version} por ${formatoMoneda.format(Number(c.total))} queda aceptada y ya no se le pueden sacar versiones. Su oportunidad pasa a Ganada con ese total como valor, y queda cerrada.`}
         acciones={
           <>
             <Button variant="ghost" onClick={() => setPorAceptar(false)}>

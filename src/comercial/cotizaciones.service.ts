@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, gte, like, lt, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, catalogoEtapaEmbudo, contactos, cotizacionPartidas, cotizaciones, empresas, oportunidades, usuarios } from "../database/schema.js";
+import { auditoria, catalogoEtapaEmbudo, contactos, cotizacionPartidas, cotizaciones, empresas, historialEtapaOportunidad, oportunidades, usuarios } from "../database/schema.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { diasEntreFechas, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
@@ -18,6 +18,9 @@ import type { CambiarEstadoCotizacionInput, ConteosCotizacionesQuery, CrearCotiz
 export const CODIGO_COTIZACION_ACEPTADA = "COTIZACION_ACEPTADA";
 export const CODIGO_YA_HAY_COTIZACION_ACEPTADA = "YA_HAY_COTIZACION_ACEPTADA";
 export const CODIGO_OPORTUNIDAD_CERRADA = "OPORTUNIDAD_CERRADA";
+
+// "$1,500.00" para el comentario del historial cuando una cotización gana.
+const PESOS = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
 const TRANSICIONES: Record<string, string[]> = {
   borrador: ["enviada"],
@@ -520,8 +523,46 @@ export class CotizacionesService {
           ? { estado: input.estado, motivo_rechazo: motivo.motivoRechazo, motivo_rechazo_detalle: motivo.motivoRechazoDetalle }
           : { estado: input.estado }
       });
+
+      if (input.estado === "aceptada") await this.ganarOportunidad(tx, user, cotizacion);
     });
 
     return this.get(user, id);
+  }
+
+  // Decisión de Fabián (15-oct-2026): aceptar la cotización gana su
+  // oportunidad, con el total aceptado como valor (lo que de verdad se
+  // vendió, para "Ganado en el mes" y el informe). El estimado anterior
+  // queda en el comentario del historial y en la auditoría. La oportunidad
+  // ya está bloqueada (FOR UPDATE de oportunidadAbierta) y abierta.
+  private async ganarOportunidad(tx: DrizzleTx, user: CurrentUser, cotizacion: typeof cotizaciones.$inferSelect) {
+    const [op] = await tx
+      .select({ valorEstimado: oportunidades.valorEstimado, etapaClave: catalogoEtapaEmbudo.clave })
+      .from(oportunidades)
+      .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
+      .where(eq(oportunidades.id, cotizacion.oportunidadId))
+      .limit(1);
+    const [ganada] = await tx.select({ id: catalogoEtapaEmbudo.id }).from(catalogoEtapaEmbudo).where(eq(catalogoEtapaEmbudo.clave, "ganada")).limit(1);
+
+    const [result] = await tx.update(oportunidades)
+      .set({ etapaId: ganada.id, cerrada: true, valorEstimado: cotizacion.total, motivoPerdidaId: null, motivoPerdidaDetalle: null })
+      .where(and(eq(oportunidades.id, cotizacion.oportunidadId), eq(oportunidades.cerrada, false)));
+    if (result.affectedRows === 0) throw new HttpError(409, "La oportunidad ya está cerrada", CODIGO_OPORTUNIDAD_CERRADA);
+
+    const estimado = op.valorEstimado == null ? "sin estimado" : `estimado anterior ${PESOS.format(Number(op.valorEstimado))}`;
+    await tx.insert(historialEtapaOportunidad).values({
+      oportunidadId: cotizacion.oportunidadId,
+      etapaId: ganada.id,
+      usuarioId: user.id,
+      comentario: `Cotización v${cotizacion.version} aceptada por ${PESOS.format(Number(cotizacion.total))} (${estimado})`
+    });
+    await tx.insert(auditoria).values({
+      usuarioId: user.id,
+      entidad: "oportunidad",
+      entidadId: cotizacion.oportunidadId,
+      accion: "cambiar_etapa",
+      antes: { etapa_clave: op.etapaClave, valor_estimado: op.valorEstimado },
+      despues: { etapa_clave: "ganada", valor_estimado: cotizacion.total, por_cotizacion_id: cotizacion.id }
+    });
   }
 }
