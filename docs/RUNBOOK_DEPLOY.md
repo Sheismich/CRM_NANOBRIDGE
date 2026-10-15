@@ -454,7 +454,18 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - [ ] Cupo apartado para recordatorios y fila de espera de correos iniciales.
       Depende de Carlos: ¿los prospectos llegan en lotes o uno por uno?
 - [ ] Publicar PT4.
-- [ ] Borrar los datos de prueba.
+- [ ] Botón "Mandar a automatización" en el CRM (entrada de prospectos a PT1,
+      opción B decidida el 15-oct-2026): sin él, un CSV importado se queda en
+      `capturado` y no le sale ningún correo.
+- [ ] Decidir `min-instances=1` en Cloud Run: sin él la API se apaga cuando
+      nadie la usa y la primera petición tarda 5-10 s en despertarla (visto el
+      15-oct-2026: Administración marcó 9,540 ms; las siguientes, 0.25 s).
+      Cuesta aunque nadie la use: revisarlo con la calculadora de Google
+      cuando el equipo lo use a diario. Se pone con
+      `gcloud run services update nanobridge-api --min-instances=1 --region=us-central1`.
+- [ ] Borrar los datos de prueba (incluye el PDF de pantallas subido a
+      "Empresa Prueba Envio 1" el 15-oct y las cotizaciones/oportunidades de
+      prueba "NO SE", "NO SE 2").
 - [ ] Domicilio de la empresa en el remitente de SendGrid (hoy el remitente
       de pruebas tiene el de la casa de Fabián).
 - [ ] Cambiar `DESTINOS` de los avisos (hoy el Gmail de Fabián): en B4 ("armar correo de error") a
