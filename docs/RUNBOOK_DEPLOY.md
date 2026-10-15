@@ -147,12 +147,17 @@ export CRM_CALLBACK_API_KEY=$(gcloud secrets versions access latest --secret=CRM
 export WEBHOOK_ENTRADA_API_KEY=$(gcloud secrets versions access latest --secret=WEBHOOK_ENTRADA_API_KEY --project=$P)
 export REPLY_TO_SIGNING_SECRET=$(gcloud secrets versions access latest --secret=REPLY_TO_SIGNING_SECRET --project=$P)
 DB_IP=$(gcloud sql instances describe nanobridge-db --project=$P --format="value(ipAddresses[0].ipAddress)")
-export DATABASE_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=$P | sed -e "s#@localhost/#@$DB_IP:3306/#" -e "s#?socketPath=.*##")
+export DATABASE_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=$P | sed -e "s#@localhost/#@$DB_IP:3306/#" -e "s#?socketPath=.*#?ssl={\"rejectUnauthorized\":false}#")
 # Revisar que quedó bien, con la contraseña tapada:
 echo "$DATABASE_URL" | sed -E "s#(://[^:]+:)[^@]*@#\1****@#"
 ```
 
-Debe verse `mysql://appuser:****@<ip>:3306/nanobridge_crm`. Luego:
+Debe verse `mysql://appuser:****@<ip>:3306/nanobridge_crm?ssl={"rejectUnauthorized":false}`.
+El `?ssl=...` es obligatorio desde el 15-oct-2026: la base solo acepta conexiones
+cifradas (`ENCRYPTED_ONLY`, §9) y `mysql2` no cifra si no se le pide. Va cifrada pero
+sin revisar el certificado de Cloud SQL (aceptable para una migración desde Cloud
+Shell a la IP de Google). Si no regresa nada después de `migrate.ts`, todo bien:
+solo imprime "Applied …" por cada migración que aplica. Luego:
 
 ```bash
 npm run migrate
@@ -206,8 +211,15 @@ done
 unset MYSQL_PWD
 ```
 
-Causa aún sin confirmar (sospecha: `mysql2` se conecta sin SSL y el
-cliente `mysql` sí lo usa; se revisa junto con el SSL de §9).
+Causa (resuelta el 15-oct-2026): `mysql2` se conectaba sin SSL y MySQL 8
+(`caching_sha2_password`) no deja validar una contraseña recién cambiada por una
+conexión sin cifrar; el cliente `mysql` sí cifra. Con el `?ssl=...` del paso 3,
+`npm run migrate` entró bien (probado sin migraciones pendientes). Este camino con
+el cliente `mysql` queda como respaldo.
+
+**Desde el 15-oct-2026 `npm ci` en Cloud Shell avisa** `install-scripts ... blocked`
+(el npm nuevo bloquea scripts de instalación de esbuild, argon2, etc.). No afecta a
+`npm run migrate`.
 
 **Cloud Shell nueva o reiniciada:** si `gcloud` dice que no hay cuenta activa
 o que falta `project`, corre `gcloud auth login` (o `gcloud config set
@@ -381,15 +393,14 @@ parches hasta abril de 2027; antes de esa fecha hay que pasar a Node 24.
   guardan 7, y con binary log se puede recuperar a cualquier minuto de los
   últimos 7 días. `gcloud sql backups list --instance=nanobridge-db` mostró
   respaldos SUCCESSFUL.
-- Forzar SSL en las conexiones a Cloud SQL (hoy `sslMode:
-  ALLOW_UNENCRYPTED_AND_ENCRYPTED`; la base no tiene IPs autorizadas, así
-  que el riesgo es bajo). Plan: `gcloud sql instances patch nanobridge-db
-  --ssl-mode=ENCRYPTED_ONLY` y revisar `/health` (si falla, regresar con
-  `--ssl-mode=ALLOW_UNENCRYPTED_AND_ENCRYPTED`). La API no se afecta (entra
-  por el socket del conector, ya cifrado). Lo que sí cambia: `npm run
-  migrate` desde Cloud Shell (mysql2 por IP pública no usa SSL por defecto);
-  hay que agregarle SSL al `DATABASE_URL` del §6 y probarlo, igual que el
-  cliente `mysql` de la consulta del §6.
+- ~~Forzar SSL en las conexiones a Cloud SQL~~ Hecho y verificado el
+  15-oct-2026: `sslMode: ENCRYPTED_ONLY` (ya estaba así al revisarlo; se
+  volvió a aplicar). La API no se afecta (entra por el socket del conector
+  de Cloud Run, ya cifrado; `/health` y Administración ok). Desde Cloud
+  Shell: el cliente `mysql` cifra solo (`Ssl_cipher:
+  ECDHE-RSA-AES128-GCM-SHA256`) y `npm run migrate` necesita el `?ssl=...`
+  del §6 (paso 3), que además arregló el `Access denied`. Si algún día hay
+  que regresarlo: `--ssl-mode=ALLOW_UNENCRYPTED_AND_ENCRYPTED`.
 - ~~Borrar la cuenta de servicio `n8n-invoker-sa`~~ Borrada el 8-oct-2026
   (no tenía llaves ni permisos en el proyecto; solo `run.invoker` en la API,
   que sobraba porque la API es `allUsers`; se le quitó antes de borrarla).
