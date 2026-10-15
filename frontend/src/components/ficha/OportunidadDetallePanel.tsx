@@ -1,13 +1,17 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { clsx } from "clsx";
 import { Button } from "../ui/Button";
 import { Field, ServerError, inputClass } from "../ui/Field";
+import { Pastilla } from "../ui/Pastilla";
 import { ApiError, api } from "../../lib/api";
-import { formatoFechaHora } from "../../lib/formato";
-import type { CatalogosOportunidad, OportunidadDetalle } from "../../types";
+import { ETIQUETA_ESTADO_COTIZACION, TONO_ESTADO_COTIZACION } from "../../lib/cotizaciones";
+import { fechaLocal, formatoDiaMes, formatoFecha, formatoFechaHora, formatoMonedaEntera, plural } from "../../lib/formato";
+import type { CatalogosOportunidad, CotizacionTablero, OportunidadDetalle, OportunidadTablero, Paginated } from "../../types";
 
 
 // Mismas reglas que cambiarEtapaSchema (src/comercial/dto/oportunidad.schema.ts):
@@ -34,7 +38,9 @@ type ReabrirInput = z.infer<typeof reabrirSchema>;
 
 // `enPanel`: dentro de un PanelLateral (Oportunidades), que ya trae título y
 // botón de cerrar: sin la caja gris ni el encabezado propio.
-export function OportunidadDetallePanel({ id, onClose, enPanel = false }: { id: number; onClose: () => void; enPanel?: boolean }) {
+// `tarjeta`: la fila del tablero que se abrió; de ahí sale el nombre del
+// responsable, que GET /oportunidades/:id no trae.
+export function OportunidadDetallePanel({ id, onClose, enPanel = false, tarjeta }: { id: number; onClose: () => void; enPanel?: boolean; tarjeta?: OportunidadTablero }) {
   const { data: oportunidad, isPending, isError } = useQuery({
     queryKey: ["oportunidad", id],
     queryFn: () => api.get<OportunidadDetalle>(`/api/v1/oportunidades/${id}`)
@@ -67,6 +73,9 @@ export function OportunidadDetallePanel({ id, onClose, enPanel = false }: { id: 
       {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="text-sm text-danger">No se pudo cargar la oportunidad.</div>}
 
+      {oportunidad && <ResumenOportunidad oportunidad={oportunidad} responsableNombre={tarjeta?.responsable_nombre} />}
+      {oportunidad && <CotizacionesDeOportunidad oportunidad={oportunidad} />}
+
       {oportunidad && catalogos && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <div>
@@ -90,6 +99,103 @@ export function OportunidadDetallePanel({ id, onClose, enPanel = false }: { id: 
             {oportunidad.etapa_clave === "ganada" && <div className="text-[13px] text-ink-2">Oportunidad ganada: queda cerrada y no se reabre.</div>}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Los datos del negocio arriba del historial (revisión del 15-oct: el panel
+// solo enseñaba la etapa). Los días en la etapa salen del historial del
+// detalle y no de la tarjeta, para que se reinicien en cuanto cambia.
+function ResumenOportunidad({ oportunidad: o, responsableNombre }: { oportunidad: OportunidadDetalle; responsableNombre?: string | null }) {
+  const valor = o.valor_estimado == null ? null : Number(o.valor_estimado);
+  const entro = [...o.historial].reverse().find((h) => h.etapa_clave === o.etapa_clave);
+  const dias = entro ? diasCompletosDesde(entro.creado_en) : null;
+  const c = textoCierre(o.fecha_cierre_estimada, o.cerrada);
+
+  return (
+    <div className="mb-5 grid grid-cols-2 gap-2.5">
+      <Dato etiqueta="Valor" valor={valor == null ? "Sin valor" : formatoMonedaEntera.format(valor)} />
+      <Dato
+        etiqueta="Ponderado"
+        valor={valor == null ? "—" : formatoMonedaEntera.format((valor * o.probabilidad) / 100)}
+        detalle={`${o.probabilidad}% por estar en ${o.etapa_nombre}`}
+      />
+      <Dato etiqueta="Cierre estimado" valor={c.fecha} detalle={c.detalle} claseDetalle={c.clase} />
+      <Dato
+        etiqueta="Responsable"
+        valor={responsableNombre ?? (o.responsable_id == null ? "Sin responsable" : "—")}
+        detalle={o.cerrada || dias == null ? undefined : `${plural(dias, "día", "días")} en la etapa`}
+      />
+    </div>
+  );
+}
+
+// Igual que dias_en_etapa del backend: días completos (entró hace 30 horas = 1).
+function diasCompletosDesde(fecha: string) {
+  return Math.max(0, Math.floor((Date.now() - new Date(fecha).getTime()) / 86_400_000));
+}
+
+function Dato({ etiqueta, valor, detalle, claseDetalle }: { etiqueta: string; valor: string; detalle?: string; claseDetalle?: string }) {
+  return (
+    <div className="rounded-[12px] border border-border bg-card px-3.5 py-3">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-3">{etiqueta}</div>
+      <div className="mt-1 font-heading text-[18px] font-black text-strong">{valor}</div>
+      {detalle && <div className={clsx("mt-0.5 text-[12px]", claseDetalle ?? "text-ink-3")}>{detalle}</div>}
+    </div>
+  );
+}
+
+// Mismo criterio que la tarjeta del tablero: vencida en rojo, este mes en ámbar.
+function textoCierre(fecha: string | null, cerrada: boolean) {
+  if (!fecha) return { fecha: "Sin fecha", detalle: undefined, clase: undefined };
+  const f = fechaLocal(fecha);
+  if (cerrada) return { fecha: formatoFecha.format(f), detalle: undefined, clase: undefined };
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const dias = Math.round((f.getTime() - hoy.getTime()) / 86_400_000);
+  if (dias < 0) return { fecha: formatoFecha.format(f), detalle: `⚠ venció hace ${plural(-dias, "día", "días")}`, clase: "text-danger" };
+  if (dias === 0) return { fecha: formatoFecha.format(f), detalle: "cierra hoy", clase: "text-warn" };
+  const esteMes = f.getMonth() === hoy.getMonth() && f.getFullYear() === hoy.getFullYear();
+  return { fecha: formatoFecha.format(f), detalle: `faltan ${plural(dias, "día", "días")}`, clase: esteMes ? "text-warn" : undefined };
+}
+
+// Las cotizaciones del negocio (GET /cotizaciones?oportunidadId=; las
+// obsoletas no salen, se ven en "Versiones" del documento). Se abren desde la
+// ficha de la empresa, que ya tiene el documento completo.
+function CotizacionesDeOportunidad({ oportunidad: o }: { oportunidad: OportunidadDetalle }) {
+  const { data, isPending } = useQuery({
+    queryKey: ["cotizaciones", { oportunidadId: o.id }],
+    queryFn: () => api.get<Paginated<CotizacionTablero>>("/api/v1/cotizaciones", { oportunidadId: o.id, limit: 100 })
+  });
+  const cotizaciones = data?.data ?? [];
+
+  return (
+    <div className="mb-5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-ink-2">Cotizaciones{cotizaciones.length > 0 && ` · ${cotizaciones.length}`}</span>
+        <Link to={`/empresas/${o.empresa_id}?tab=cotizaciones`} className="text-[12px] font-semibold text-navy hover:underline">
+          Ver en la ficha ›
+        </Link>
+      </div>
+      {isPending && <div className="text-[13px] text-ink-3">Cargando…</div>}
+      {!isPending && cotizaciones.length === 0 && <div className="rounded-[9px] border border-dashed border-border px-3 py-2.5 text-[13px] text-ink-3">Todavía no tiene cotizaciones.</div>}
+      {cotizaciones.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {cotizaciones.map((c) => (
+            <li key={c.id} className="flex items-center justify-between gap-3 rounded-[9px] border border-border bg-card px-3 py-2">
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-strong">
+                  Versión {c.version} · {formatoMonedaEntera.format(Number(c.total))}
+                </div>
+                <div className="text-[12px] text-ink-3">{formatoDiaMes.format(fechaLocal(c.fecha_emision))}</div>
+              </div>
+              <Pastilla tono={TONO_ESTADO_COTIZACION[c.estado]} punto>
+                {ETIQUETA_ESTADO_COTIZACION[c.estado]}
+              </Pastilla>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

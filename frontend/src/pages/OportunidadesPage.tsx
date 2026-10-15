@@ -205,7 +205,7 @@ export function OportunidadesPage() {
         }
         cuerpoClassName="!p-0"
       >
-        {abierta && <OportunidadDetallePanel enPanel id={abierta.id} onClose={() => setAbierta(null)} />}
+        {abierta && <OportunidadDetallePanel enPanel id={abierta.id} tarjeta={abierta} onClose={() => setAbierta(null)} />}
       </PanelLateral>
       <NuevaOportunidadPanel abierto={creando} onCerrar={() => setCreando(false)} />
     </AppShell>

@@ -112,7 +112,7 @@ export function OportunidadesTab({ empresaId, contactos }: { empresaId: number; 
         encabezado={abierta && <h2 className="pt-1 font-heading text-[18px] font-black text-strong">{abierta.titulo}</h2>}
         cuerpoClassName="!p-0"
       >
-        {abierta && <OportunidadDetallePanel enPanel id={abierta.id} onClose={() => setAbierta(null)} />}
+        {abierta && <OportunidadDetallePanel enPanel id={abierta.id} tarjeta={abierta} onClose={() => setAbierta(null)} />}
       </PanelLateral>
     </section>
   );
