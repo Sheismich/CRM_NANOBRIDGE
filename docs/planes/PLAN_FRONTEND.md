@@ -135,19 +135,19 @@ Cada deploy al canal reinicia los 30 días.
 
 | # | Pantalla | Diseño | Le toca | Commit | En vista previa |
 |---|---|---|---|---|---|
-| 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) ✅ | `inicio-aprobado.html` | Fabián | 1febd14 | no |
-| 2 | Inicio ✅ | `inicio-aprobado.html` | Fabián | ad172eb | no |
-| 3 | Tareas (Mi día + lista) ✅ | `tareas.html` | Fabián | f8c34d8 | no |
-| 4 | Documentos ✅ | `documentos.html` | Fabián | d8e6c71 | no |
-| 5 | Administración ✅ | `administracion.html` | Fabián | 18bf143 | no |
-| 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) ✅ | `informe-ejecutivo.html` | Fabián | 6275e9f | no |
-| 7 | Login ✅ (local) | `login.html` | Mich | sin subir | no |
-| 8 | Prospectos ✅ (local) | `prospectos.html` | Mich | sin subir | no |
-| 9 | Empresas + ficha ✅ (local) | `empresas.html` | Mich | sin subir | no |
-| 10 | Contactos ✅ (local) | `contactos.html` | Mich | sin subir | no |
-| 11 | Oportunidades ✅ (local) | `oportunidades.html` | Mich | sin subir | no |
-| 12 | Cotizaciones ✅ (local) | `cotizaciones.html` | Mich | sin subir | no |
-| 13 | Reportes (panel + Día) ✅ (local) | `reportes.html` | Mich | sin subir | no |
+| 1 | Base común (menú, barra del celular, tarjetas, franja, marca de agua) ✅ | `inicio-aprobado.html` | Fabián | 1febd14 | sí (15-oct) |
+| 2 | Inicio ✅ | `inicio-aprobado.html` | Fabián | ad172eb | sí (15-oct) |
+| 3 | Tareas (Mi día + lista) ✅ | `tareas.html` | Fabián | f8c34d8 | sí (15-oct) |
+| 4 | Documentos ✅ | `documentos.html` | Fabián | d8e6c71 | sí (15-oct) |
+| 5 | Administración ✅ | `administracion.html` | Fabián | 18bf143 | sí (15-oct) |
+| 6 | Informe ejecutivo (revisar el PDF + botones PDF/CSV) ✅ | `informe-ejecutivo.html` | Fabián | 6275e9f | sí (15-oct) |
+| 7 | Login ✅ | `login.html` | Mich | bd6f34d, 0e39198 | sí (15-oct) |
+| 8 | Prospectos ✅ | `prospectos.html` | Mich | 1a7935f | sí (15-oct) |
+| 9 | Empresas + ficha ✅ | `empresas.html` | Mich | 2c1a682 | sí (15-oct) |
+| 10 | Contactos ✅ | `contactos.html` | Mich | 63b289f | sí (15-oct) |
+| 11 | Oportunidades ✅ | `oportunidades.html` | Mich | 099c835 | sí (15-oct) |
+| 12 | Cotizaciones ✅ | `cotizaciones.html` | Mich | 3bafc48 | sí (15-oct) |
+| 13 | Reportes (panel + Día) ✅ | `reportes.html` | Mich | 0e7a62f | sí (15-oct) |
 
 ### Base común — cómo se usa (hecha el 13-oct-2026)
 
