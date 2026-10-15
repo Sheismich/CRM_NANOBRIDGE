@@ -289,7 +289,7 @@ Al terminar cada pantalla: `cd frontend && npm run lint && npm run build`, proba
 - Los agentes no "toman" tareas: "Del equipo / Tomar" en Mi día solo se les enseña a administrador y supervisor (`PATCH /tareas/:id/asignar`). "Saltar" solo vive en la pantalla y no se guarda.
 - El motivo de rechazo de una cotización y el de un documento siempre se piden en el front.
 
-**Día del cambio** (en este orden; los pasos 2 y 3 romperían el front de hoy, por eso van después):
+**Día del cambio** — **✅ HECHO el 15-oct-2026**: la liga oficial ya sirve el diseño nuevo (clonado del canal a las 14:47) y el backend `6bd5dad` (revisión `00029-hjq`) cerró los tres puntos del paso 2. De aquí en adelante, publicar el front es el deploy normal a `live` (RUNBOOK); el canal `nuevo-diseno` queda para probar cambios grandes antes. Pasos que se siguieron:
 1. Pasar la vista previa a la liga normal sin volver a compilar: `npx firebase-tools hosting:clone crm-prospeccion-outbound:nuevo-diseno crm-prospeccion-outbound:live`.
 2. Desplegar el backend que:
    - deja `GET /auditoria` solo para el administrador (`src/usuarios/auditoria.controller.ts`, hoy también la ve el supervisor por la pestaña del front viejo);
