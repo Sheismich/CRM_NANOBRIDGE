@@ -16,6 +16,7 @@ import { api } from "../lib/api";
 import { useCampanas } from "../lib/campanas";
 import { etiquetaRango, fechaFranja, pct, rangosInicio, saludo } from "../lib/inicio";
 import { formatoFechaHora } from "../lib/formato";
+import { useAhora } from "../lib/reloj";
 import { CLASE_PRIORIDAD, ETIQUETA_PRIORIDAD, ETIQUETA_TIPO_TAREA, estaVencida, useColaClasificacion, useConteosTareas, useTareasAbiertas, venceHoy } from "../lib/tareas";
 import type { EventoReciente, PipelineResumen, ProspeccionDia, ReporteProspeccion, Tarea } from "../types";
 
@@ -28,7 +29,10 @@ import type { EventoReciente, PipelineResumen, ProspeccionDia, ReporteProspeccio
 export function DashboardPage() {
   const { user } = useAuth();
   const esAdminOSupervisor = user?.rol === "administrador" || user?.rol === "supervisor";
-  const ahora = new Date();
+  // Cambia cada minuto: la hora de la franja, el saludo y el "hace N min"
+  // del feed siguen vivos. Las consultas no se repiten porque sus llaves
+  // son fechas "YYYY-MM-DD", que no cambian dentro del día.
+  const ahora = useAhora();
   const nombre = user?.nombre.split(" ")[0] ?? "";
 
   return (
