@@ -2,7 +2,12 @@
 
 export const formatoMonedaEntera = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 export const formatoMoneda = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+const formatoCompacto = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", maximumFractionDigits: 0 });
+// "$120K" / "$1M", como los prototipos (Intl pone "$120 k"). Oportunidades y Cotizaciones.
+export const compacto = { format: (n: number) => formatoCompacto.format(n).replace(/\s/g, "").replace(/k$/, "K") };
 export const formatoFecha = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" });
+// "3 oct": tarjetas de los tableros.
+export const formatoDiaMes = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short" });
 export const formatoFechaHora = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" });
 
 // Columna DATE: "2026-10-01" solo, new Date() lo toma como medianoche UTC

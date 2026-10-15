@@ -8,7 +8,7 @@ import { Icono } from "../ui/Icono";
 import { LogoEmpresa } from "../ui/LogoEmpresa";
 import { Modal } from "../ui/Modal";
 import { ApiError, api } from "../../lib/api";
-import { fechaLocal, formatoMonedaEntera } from "../../lib/formato";
+import { compacto, fechaLocal, formatoDiaMes, formatoMonedaEntera } from "../../lib/formato";
 import type { CatalogosOportunidad, OportunidadTablero } from "../../types";
 
 // Tablero + embudo de Oportunidades (docs/diseno/oportunidades.html):
@@ -23,11 +23,6 @@ type Etapa = CatalogosOportunidad["etapas"][number];
 const COLORES = ["#c57a0a", "#23bad3", "#2a449b", "#5b2d86", "#15905f", "#4f6bd6"];
 
 export type Columna = { etapa: Etapa; oportunidades: OportunidadTablero[]; cargando: boolean; error: boolean };
-
-const formatoCompacto = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", maximumFractionDigits: 0 });
-// "$120K" / "$1M", como el diseño (Intl pone "$120 k").
-const compacto = { format: (n: number) => formatoCompacto.format(n).replace(/\s/g, "").replace(/k$/, "K").replace(/M$/, "M") };
-const diaMes = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short" });
 
 export function TableroOportunidades({
   columnas,
@@ -240,9 +235,9 @@ function cierre(fecha: string | null) {
   const f = fechaLocal(fecha);
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
-  if (f < hoy) return { texto: `⚠ venció ${diaMes.format(f)}`, clase: "text-danger", vencida: true };
+  if (f < hoy) return { texto: `⚠ venció ${formatoDiaMes.format(f)}`, clase: "text-danger", vencida: true };
   const esteMes = f.getMonth() === hoy.getMonth() && f.getFullYear() === hoy.getFullYear();
-  return { texto: `cierra ${diaMes.format(f)}`, clase: esteMes ? "text-warn" : "text-ink-3", vencida: false };
+  return { texto: `cierra ${formatoDiaMes.format(f)}`, clase: esteMes ? "text-warn" : "text-ink-3", vencida: false };
 }
 
 function TarjetaOportunidad({

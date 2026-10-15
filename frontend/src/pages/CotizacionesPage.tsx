@@ -1,155 +1,235 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
-import { NuevaCotizacionPanel } from "../components/cotizaciones/NuevaCotizacionPanel";
+import { CuerpoCotizacion, EncabezadoCotizacion } from "../components/cotizaciones/CotizacionPanel";
+import { EditorCotizacion, type ModoEditor } from "../components/cotizaciones/EditorCotizacion";
+import { TableroCotizaciones, type ColumnaCotizaciones } from "../components/cotizaciones/TableroCotizaciones";
 import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
+import { Contador } from "../components/ui/Contador";
+import { EncabezadoPagina } from "../components/ui/EncabezadoPagina";
 import { EstadoVacio } from "../components/ui/EstadoVacio";
 import { inputBaseClass } from "../components/ui/Field";
-import { Paginacion } from "../components/ui/Paginacion";
+import { Icono } from "../components/ui/Icono";
+import { PanelLateral } from "../components/ui/PanelLateral";
 import { api } from "../lib/api";
-import { ETIQUETA_ESTADO_COTIZACION, claseEstadoCotizacion } from "../lib/cotizaciones";
-import { fechaLocal, formatoFecha, formatoMoneda } from "../lib/formato";
-import type { Cotizacion, EstadoCotizacion, Paginated } from "../types";
+import { useAuth } from "../lib/auth-context";
+import { TONO_ESTADO_COTIZACION, useMotivosRechazoCotizacion } from "../lib/cotizaciones";
+import { compacto } from "../lib/formato";
+import type { ConteosCotizaciones, CotizacionTablero, Paginated, Usuario } from "../types";
 
-// Cotizaciones de todas las empresas (GET /cotizaciones sin empresaId): un
-// agente ve las de sus oportunidades. El detalle, las versiones y los
-// cambios de estado siguen en la pestaña Cotizaciones de la ficha, a donde
-// lleva cada fila. Por defecto, las enviadas: las que esperan respuesta.
-// "Nueva cotización" (NuevaCotizacionPanel) cotiza sin entrar a la ficha;
-// la nueva nace en borrador, así que al guardarla la lista cambia a
-// Borradores para que se vea.
+// Cotizaciones del rediseño (docs/diseno/cotizaciones.html, opción B):
+// qué se ha propuesto, a quién, por cuánto y en qué quedó. Arriba los
+// contadores por estado con la tasa de aceptación (GET /cotizaciones/conteos;
+// cada uno filtra el tablero), luego el tablero por estado. Clic en una
+// tarjeta abre la cotización como documento en el panel lateral, con sus
+// acciones; "+ Nueva cotización" y "Nueva versión" abren el editor por
+// pasos en lugar del tablero. Un agente solo ve las de sus oportunidades
+// (lo filtra el backend).
 
-type CotizacionFila = Cotizacion & { empresa_nombre: string | null; oportunidad_titulo: string | null };
-const LIMIT = 25;
-const FILTROS: { valor: string; etiqueta: string }[] = [
-  { valor: "enviada", etiqueta: "Enviadas (esperan respuesta)" },
-  { valor: "borrador", etiqueta: "Borradores" },
-  { valor: "aceptada", etiqueta: "Aceptadas" },
-  { valor: "rechazada", etiqueta: "Rechazadas" },
-  { valor: "vencida", etiqueta: "Vencidas" },
-  { valor: "", etiqueta: "Todas" }
+type EstadoTablero = "borrador" | "enviada" | "aceptada" | "rechazada" | "vencida";
+type Orden = "reciente" | "envio" | "total";
+
+const ESTADOS: { estado: EstadoTablero; titulo: string }[] = [
+  { estado: "borrador", titulo: "Borradores" },
+  { estado: "enviada", titulo: "Enviadas" },
+  { estado: "aceptada", titulo: "Aceptadas" },
+  { estado: "rechazada", titulo: "Rechazadas" },
+  { estado: "vencida", titulo: "Vencidas" }
 ];
+// El backend permite hasta 100 por página: una consulta por estado.
+const LIMITE_COLUMNA = 100;
 
 export function CotizacionesPage() {
-  const navigate = useNavigate();
-  const [estado, setEstado] = useState("enviada");
-  const [page, setPage] = useState(1);
-  const [creando, setCreando] = useState(false);
+  const { user } = useAuth();
+  const esAdminOSupervisor = user?.rol === "administrador" || user?.rol === "supervisor";
+  const [estado, setEstado] = useState<EstadoTablero | "">("");
+  const [texto, setTexto] = useState("");
+  const [q, setQ] = useState("");
+  const [responsableId, setResponsableId] = useState("");
+  const [orden, setOrden] = useState<Orden>("reciente");
+  const [abiertaId, setAbiertaId] = useState<number | null>(null);
+  const [editor, setEditor] = useState<ModoEditor | null>(null);
 
-  const filtros = { estado: estado || undefined, page, limit: LIMIT };
-  const { data, isPending, isError } = useQuery({
-    queryKey: ["cotizaciones", "general", filtros],
-    queryFn: () => api.get<Paginated<CotizacionFila>>("/api/v1/cotizaciones", filtros)
+  // La búsqueda va al backend (empresa, oportunidad o folio "#12").
+  useEffect(() => {
+    const t = setTimeout(() => setQ(texto.trim()), 300);
+    return () => clearTimeout(t);
+  }, [texto]);
+
+  const { data: usuarios } = useQuery({
+    queryKey: ["usuarios", "activos"],
+    queryFn: () => api.get<Paginated<Usuario>>("/api/v1/usuarios", { activo: true, limit: 100 }),
+    enabled: esAdminOSupervisor,
+    staleTime: 5 * 60_000
   });
-  const total = (data?.data ?? []).reduce((acc, c) => acc + Number(c.total), 0);
+  const personas = usuarios?.data.filter((u) => u.rol !== "sistema");
+  const { data: conteos } = useQuery({
+    queryKey: ["cotizaciones", "conteos", { responsableId }],
+    queryFn: () => api.get<ConteosCotizaciones>("/api/v1/cotizaciones/conteos", { responsableId: responsableId || undefined })
+  });
+  const { data: motivos } = useMotivosRechazoCotizacion();
+  const nombreMotivo = (clave: string) => motivos?.find((m) => m.clave === clave)?.nombre ?? clave;
+
+  const visibles = estado ? ESTADOS.filter((e) => e.estado === estado) : ESTADOS;
+  const consultas = useQueries({
+    queries: visibles.map((e) => ({
+      queryKey: ["cotizaciones", "tablero", e.estado, { q, responsableId, orden }],
+      queryFn: () =>
+        api.get<Paginated<CotizacionTablero>>("/api/v1/cotizaciones", { estado: e.estado, q: q || undefined, responsableId: responsableId || undefined, orden, limit: LIMITE_COLUMNA })
+    }))
+  });
+  const columnas: ColumnaCotizaciones[] = visibles.map((e, i) => {
+    const lista = consultas[i]?.data?.data ?? [];
+    // Con búsqueda, la cuenta es de lo encontrado; sin ella, la de /conteos
+    // (cuenta todas, aunque la columna solo traiga las 100 más recientes).
+    const cuenta = q
+      ? consultas[i]?.data && { cantidad: lista.length, total: lista.reduce((s, c) => s + Number(c.total), 0) }
+      : conteos && { cantidad: conteos[e.estado].cantidad, total: Number(conteos[e.estado].total) };
+    return {
+      ...e,
+      cotizaciones: lista,
+      cuenta: cuenta || undefined,
+      cargando: Boolean(consultas[i]?.isPending),
+      error: Boolean(consultas[i]?.isError),
+      cortada: lista.length === LIMITE_COLUMNA
+    };
+  });
+  const sinNinguna = conteos && !responsableId && ESTADOS.every((e) => conteos[e.estado].cantidad === 0);
+
+  const nueva = () => {
+    setAbiertaId(null);
+    setEditor({ tipo: "crear" });
+  };
 
   return (
-    <AppShell titulo="Cotizaciones">
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
-          <select
-            aria-label="Estado"
-            className={`${inputBaseClass} w-auto`}
-            value={estado}
-            onChange={(e) => {
-              setPage(1);
-              setEstado(e.target.value);
-            }}
-          >
-            {FILTROS.map((f) => (
-              <option key={f.valor} value={f.valor}>
-                {f.etiqueta}
-              </option>
-            ))}
-          </select>
-          <div className="flex flex-wrap items-center gap-3">
-            {data && data.data.length > 0 && (
-              <div className="text-[13px] text-ink-2">
-                {data.data.length} en esta página · <b className="text-ink">{formatoMoneda.format(total)}</b>
-              </div>
-            )}
-            {!creando && <Button onClick={() => setCreando(true)}>+ Nueva cotización</Button>}
-          </div>
-        </div>
-
-        {creando && (
-          <NuevaCotizacionPanel
-            onCerrar={() => setCreando(false)}
-            onGuardada={() => {
-              setPage(1);
-              setEstado("borrador");
-            }}
-          />
-        )}
-
-        {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
-        {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar las cotizaciones.</div>}
-        {data && data.data.length === 0 && estado === "enviada" && page === 1 && (
-          <EstadoVacio
-            className="p-5"
-            titulo="No hay cotizaciones enviadas esperando respuesta."
-            texto="Las que siguen sin enviar están en Borradores."
-            accion={
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setPage(1);
-                  setEstado("borrador");
-                }}
-              >
-                Ver borradores
+    <AppShell
+      titulo="Cotizaciones"
+      encabezado={
+        <EncabezadoPagina
+          titulo="Cotizaciones"
+          subtitulo="Qué se ha propuesto, a quién, por cuánto y en qué quedó."
+          acciones={
+            !editor && (
+              <Button className="w-full md:w-auto" onClick={nueva}>
+                + Nueva cotización
               </Button>
-            }
-          />
-        )}
-        {data && data.data.length === 0 && estado === "" && page === 1 && !creando && (
-          <EstadoVacio
-            className="p-5"
-            titulo="Todavía no hay cotizaciones."
-            texto="Con + Nueva cotización se elige la empresa, su oportunidad y las partidas."
-          />
-        )}
-        {data && data.data.length === 0 && ((estado !== "enviada" && estado !== "") || page > 1) && (
-          <div className="p-5 text-sm text-ink-3">No hay cotizaciones{estado ? ` en estado "${ETIQUETA_ESTADO_COTIZACION[estado as EstadoCotizacion].toLowerCase()}"` : ""}.</div>
-        )}
-        {data && data.data.length > 0 && (
-          <div className="tabla-scroll tabla-tarjetas"><table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-bg">
-                {["Empresa", "Oportunidad", "Versión", "Total", "Estado", "Emitida", "Enviada", "Cierre esperado"].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-ink-2">
-                    {h}
-                  </th>
+            )
+          }
+        />
+      }
+    >
+      {editor ? (
+        <EditorCotizacion
+          key={editor.tipo === "version" ? `v-${editor.base.id}` : "nueva"}
+          modo={editor}
+          onCerrar={() => setEditor(null)}
+          onGuardada={(id) => {
+            // Se abre la que se acaba de guardar, con el tablero completo atrás.
+            setEstado("");
+            setAbiertaId(id);
+          }}
+        />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <Contadores conteos={conteos} estado={estado} onEstado={(e) => setEstado(estado === e ? "" : e)} />
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <label className="flex h-10 min-w-0 flex-[1_1_100%] items-center gap-2 rounded-[11px] border border-border bg-card px-3 text-ink-3 md:max-w-[420px] md:flex-[1_1_260px]">
+              <Icono nombre="buscar" size={15} />
+              <input aria-label="Buscar" placeholder="Buscar por empresa, oportunidad o folio…" className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-strong outline-none placeholder:text-ink-3" value={texto} onChange={(e) => setTexto(e.target.value)} />
+            </label>
+            {estado && (
+              <button type="button" onClick={() => setEstado("")} className="flex h-10 items-center gap-1.5 rounded-[11px] border border-border bg-card px-3 text-[13px] font-semibold text-ink-2 hover:text-strong">
+                Estado <b className="text-strong">{ESTADOS.find((e) => e.estado === estado)?.titulo}</b>
+                <Icono nombre="cerrar" size={13} />
+              </button>
+            )}
+            {esAdminOSupervisor && (
+              <select aria-label="Responsable" className={`${inputBaseClass} h-10 w-auto max-w-[220px]`} value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
+                <option value="">Responsable: Todos</option>
+                {personas?.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nombre}
+                  </option>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.data.map((c) => (
-                <tr
-                  key={c.id}
-                  className="cursor-pointer border-t border-border hover:bg-bg"
-                  onClick={() => navigate(`/empresas/${c.empresa_id}?tab=cotizaciones`)}
-                  title="Abrir en la ficha de la empresa"
-                >
-                  <td className="px-4 py-3 text-[13px] font-semibold">{c.empresa_nombre ?? `Empresa ${c.empresa_id}`}</td>
-                  <td data-label="Oportunidad" className="px-4 py-3 text-[13px] text-ink-2">{c.oportunidad_titulo ?? "—"}</td>
-                  <td data-label="Versión" className="px-4 py-3 text-[13px] text-ink-2">v{c.version}</td>
-                  <td data-label="Total" className="px-4 py-3 text-[13px] font-semibold tabular-nums">{formatoMoneda.format(Number(c.total))}</td>
-                  <td data-label="Estado" className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${claseEstadoCotizacion(c.estado)}`}>{ETIQUETA_ESTADO_COTIZACION[c.estado]}</span>
-                  </td>
-                  <td data-label="Emitida" className="px-4 py-3 text-[13px] text-ink-2">{formatoFecha.format(fechaLocal(c.fecha_emision))}</td>
-                  <td data-label="Enviada" className="px-4 py-3 text-[13px] text-ink-2">{c.fecha_envio ? formatoFecha.format(fechaLocal(c.fecha_envio)) : "—"}</td>
-                  <td data-label="Cierre esperado" className="px-4 py-3 text-[13px] text-ink-2">{c.fecha_esperada_cierre ? formatoFecha.format(fechaLocal(c.fecha_esperada_cierre)) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-        )}
-        {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
-      </Card>
+              </select>
+            )}
+            <select aria-label="Ordenar" className={`${inputBaseClass} h-10 w-auto md:ml-auto`} value={orden} onChange={(e) => setOrden(e.target.value as Orden)}>
+              <option value="reciente">Ordenar: Movidas hace poco</option>
+              <option value="envio">Ordenar: Enviada más reciente</option>
+              <option value="total">Ordenar: Total más alto</option>
+            </select>
+          </div>
+
+          {sinNinguna ? (
+            <EstadoVacio
+              className="tarjeta-blanca p-5"
+              titulo="Todavía no hay cotizaciones."
+              texto="Con + Nueva cotización se elige la empresa, su oportunidad y las partidas."
+              accion={<Button onClick={nueva}>+ Nueva cotización</Button>}
+            />
+          ) : (
+            <TableroCotizaciones columnas={columnas} verResponsable={esAdminOSupervisor} nombreMotivo={nombreMotivo} onAbrir={(c) => setAbiertaId(c.id)} onNueva={nueva} />
+          )}
+        </div>
+      )}
+
+      <PanelLateral
+        abierto={abiertaId !== null}
+        onCerrar={() => setAbiertaId(null)}
+        ancho={860}
+        encabezado={
+          abiertaId !== null && (
+            <EncabezadoCotizacion
+              id={abiertaId}
+              onNuevaVersion={(base) => {
+                setAbiertaId(null);
+                setEditor({ tipo: "version", base });
+              }}
+            />
+          )
+        }
+        cuerpoClassName="!p-0 bg-soft"
+      >
+        {abiertaId !== null && <CuerpoCotizacion id={abiertaId} onVerVersion={setAbiertaId} />}
+      </PanelLateral>
     </AppShell>
+  );
+}
+
+// Contadores por estado (filtran el tablero) y la tasa de aceptación.
+function Contadores({ conteos: c, estado, onEstado }: { conteos: ConteosCotizaciones | undefined; estado: EstadoTablero | ""; onEstado: (e: EstadoTablero) => void }) {
+  const $ = (total: string) => compacto.format(Number(total));
+  const detalle: Record<EstadoTablero, string> = c
+    ? {
+        borrador: `${$(c.borrador.total)} sin enviar`,
+        enviada: `${$(c.enviada.total)} esperan respuesta`,
+        aceptada: `${$(c.aceptadas_este_mes.total)} este mes`,
+        rechazada: $(c.rechazada.total),
+        vencida: "pasó su cierre"
+      }
+    : { borrador: "", enviada: "", aceptada: "", rechazada: "", vencida: "" };
+  const tasa = c?.tasa_aceptacion;
+  return (
+    <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-3 xl:grid-cols-6">
+      {ESTADOS.map((e) => (
+        <Contador
+          key={e.estado}
+          etiqueta={e.titulo}
+          valor={c ? c[e.estado].cantidad : "…"}
+          detalle={detalle[e.estado] || undefined}
+          tono={TONO_ESTADO_COTIZACION[e.estado]}
+          seleccionado={estado === e.estado}
+          onClick={() => onEstado(e.estado)}
+        />
+      ))}
+      <div className="relative overflow-hidden rounded-[18px] bg-[linear-gradient(135deg,#101733,#2a449b_80%,#5b2d86_140%)] px-4 pb-4 pt-3.5 text-white">
+        <div className="font-heading text-[11px] font-extrabold uppercase tracking-[1.5px] text-white/70">Tasa de aceptación</div>
+        <div className="mono mt-1.5 bg-[linear-gradient(90deg,var(--mint),var(--cyan))] bg-clip-text font-display text-[34px] leading-none text-transparent">
+          {!tasa ? "…" : tasa.pct == null ? "—" : `${Math.round(tasa.pct)}%`}
+        </div>
+        <div className="mt-2 truncate text-[12px] text-white/70">{!tasa ? "" : tasa.respondidas === 0 ? "nadie ha respondido todavía" : `${tasa.aceptadas} de ${tasa.respondidas} respondidas`}</div>
+      </div>
+    </div>
   );
 }

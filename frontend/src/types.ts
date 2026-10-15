@@ -154,7 +154,8 @@ export type Cotizacion = {
 };
 
 export type CotizacionDetalle = Cotizacion & {
-  partidas: { id: number; descripcion: string; cantidad: string; precio_unitario: string; importe: string; orden: number }[];
+  // detalle: segunda línea opcional de la partida (028, 12-oct-2026).
+  partidas: { id: number; descripcion: string; detalle: string | null; cantidad: string; precio_unitario: string; importe: string; orden: number }[];
   versiones: { id: number; version: number; estado: EstadoCotizacion; total: string; creado_en: string }[];
 };
 
@@ -634,3 +635,50 @@ export type OportunidadTablero = Oportunidad & {
 // GET /reportes/pipeline/conversion-etapas desde el 12-oct: el ciclo medio de
 // venta (días de creada a ganada, promedio) de las ganadas en el rango.
 export type ConversionConCiclo = ConversionEtapas & { ciclo_medio_venta: { dias: number | null; ganadas: number } };
+
+// --- Cotizaciones (rediseño, Mich; src/comercial/cotizaciones.service.ts) ---
+
+export type MotivoRechazoCotizacion = "precio" | "tiempo_entrega" | "otro_proveedor" | "sin_presupuesto" | "ya_no_lo_necesita" | "otro";
+
+// Fila de GET /cotizaciones desde el 12-oct: con empresa, oportunidad,
+// responsable, el motivo si se rechazó y los días para los avisos del
+// tablero (días de calendario de México; dias_para_cierre es negativo si
+// el cierre ya pasó y null sin fecha).
+export type CotizacionTablero = Cotizacion & {
+  motivo_rechazo: MotivoRechazoCotizacion | null;
+  motivo_rechazo_detalle: string | null;
+  actualizado_en: string;
+  empresa_nombre: string | null;
+  oportunidad_titulo: string | null;
+  responsable_nombre: string | null;
+  dias_desde_envio: number | null;
+  dias_para_cierre: number | null;
+};
+
+// GET /cotizaciones/:id desde el 12-oct: lo que dice el documento arriba
+// ("Para" y "Oportunidad").
+export type CotizacionDocumento = CotizacionDetalle & {
+  motivo_rechazo: MotivoRechazoCotizacion | null;
+  motivo_rechazo_detalle: string | null;
+  actualizado_en: string;
+  empresa_nombre: string | null;
+  empresa_nombre_legal: string | null;
+  contacto_nombre: string | null;
+  contacto_puesto: string | null;
+  oportunidad_titulo: string | null;
+  etapa_nombre: string | null;
+};
+
+// GET /cotizaciones/conteos. Montos DECIMAL como string. La tasa es
+// aceptadas / (aceptadas + rechazadas); pct null si nadie ha respondido.
+type ConteoEstado = { cantidad: number; total: string };
+export type ConteosCotizaciones = {
+  borrador: ConteoEstado;
+  enviada: ConteoEstado;
+  aceptada: ConteoEstado;
+  rechazada: ConteoEstado;
+  vencida: ConteoEstado;
+  obsoleta: { cantidad: number };
+  aceptadas_este_mes: ConteoEstado;
+  tasa_aceptacion: { aceptadas: number; respondidas: number; pct: number | null };
+};

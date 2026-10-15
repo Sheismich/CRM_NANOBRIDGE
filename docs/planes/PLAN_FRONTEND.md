@@ -146,7 +146,7 @@ Cada deploy al canal reinicia los 30 días.
 | 9 | Empresas + ficha ✅ (local) | `empresas.html` | Mich | sin subir | no |
 | 10 | Contactos ✅ (local) | `contactos.html` | Mich | sin subir | no |
 | 11 | Oportunidades ✅ (local) | `oportunidades.html` | Mich | sin subir | no |
-| 12 | Cotizaciones | `cotizaciones.html` | Mich | — | no |
+| 12 | Cotizaciones ✅ (local) | `cotizaciones.html` | Mich | sin subir | no |
 | 13 | Reportes (panel + Día) | `reportes.html` | Mich | — | no |
 
 ### Base común — cómo se usa (hecha el 13-oct-2026)
@@ -240,6 +240,14 @@ Antes de cada pantalla: `git fetch`, leer su sección en `docs/diseno/README.md`
 - Rechazar abre un modal con el motivo (`GET /cotizaciones/motivos-rechazo`). **El front lo pide siempre**, aunque hoy el backend todavía lo acepte sin motivo (se vuelve obligatorio el día del cambio).
 - PDF: `api.descargar('/api/v1/cotizaciones/:id/pdf')`.
 - Editor por pasos con `NuevaCotizacionPanel` y `CotizacionForm`.
+
+- **Hecho en local (15-oct-2026, Mich):**
+  - Contadores de `/cotizaciones/conteos` (cada estado filtra el tablero; "Aceptadas" dice lo aceptado en el mes) y la tarjeta azul de tasa de aceptación.
+  - Tablero de opción B en `components/cotizaciones/TableroCotizaciones.tsx`, con una consulta por estado y búsqueda, responsable y orden en el backend (`q`, `responsableId`, `orden`). Son 5 columnas y no 4: Vencidas va aparte porque todavía se acepta o se rechaza, y las obsoletas no salen en la lista (se ven en "Versiones" del documento). Avisos en `lib/cotizaciones.ts`: "Sin respuesta hace N días" desde 5 días y "Vence en N días" desde 3. No se arrastra: el estado se cambia desde el documento.
+  - Documento en `PanelLateral` (`CotizacionPanel.tsx` + `HojaCotizacion.tsx`): Marcar enviada, Aceptada (con confirmación), Rechazada (modal con el motivo de `/motivos-rechazo`; "otro" pide explicación), Nueva versión, PDF y las versiones anteriores. "Vencida" ya no se ofrece a mano: la marca el trabajo diario.
+  - Editor por pasos (`EditorCotizacion.tsx`, reemplaza a `NuevaCotizacionPanel`): empresa con `BuscadorEmpresa` (o empresa nueva), oportunidad abierta (o nueva), partidas y "Revisar y enviar" con la hoja antes de guardar, con "Guardar y marcar enviada" o "Guardar borrador". `CotizacionForm` tiene la prop nueva `enEditor`. Las partidas ya llevan `detalle`, también en la ficha, así una versión nueva ya no lo pierde. Moneda solo MXN (el backend no deja escoger).
+  - La pestaña Cotizaciones de la ficha abre el mismo documento, así que ahí el rechazo también pide el motivo y el paso 2 del día del cambio no la rompe.
+  - Revisado en Edge con la API simulada a 375 y 1440 px, día y noche, como administrador y agente, incluidos rechazar con motivo, aceptar, ver una versión obsoleta y crear una cotización hasta "Guardar y marcar enviada". Falta contra producción.
 
 **Reportes** (`pages/ReportesPage.tsx`, `reportes.html`, opción A)
 - Periodo Día / Semana / Mes / Trimestre / Año. Los rangos los calcula el front: los reportes aceptan `fechaInicio`/`fechaFin`.
