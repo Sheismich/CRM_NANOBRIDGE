@@ -156,10 +156,10 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
             <input id="pr-empresa" className={inputClass} {...register("empresaNombreLegal")} />
           </Field>
         </div>
-        <Field label="Giro (opcional)" htmlFor="pr-giro" error={errors.empresaGiro?.message}>
+        <Field label="Giro (recomendado)" htmlFor="pr-giro" error={errors.empresaGiro?.message}>
           <input id="pr-giro" className={inputClass} {...register("empresaGiro")} />
         </Field>
-        <Field label="Tamaño (opcional)" htmlFor="pr-tamano">
+        <Field label="Tamaño (recomendado)" htmlFor="pr-tamano">
           <select id="pr-tamano" className={inputClass} {...register("empresaTamano")}>
             <option value="">— Sin dato —</option>
             {TAMANOS.map((t) => (

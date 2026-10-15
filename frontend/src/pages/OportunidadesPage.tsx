@@ -9,6 +9,7 @@ import { TableroOportunidades, type Columna } from "../components/oportunidades/
 import { InformeEjecutivo } from "../components/reportes/InformeEjecutivo";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
+import { CajaBusqueda } from "../components/ui/CajaBusqueda";
 import { EncabezadoPagina } from "../components/ui/EncabezadoPagina";
 import { EstadoVacio, LigaAccion } from "../components/ui/EstadoVacio";
 import { inputBaseClass } from "../components/ui/Field";
@@ -141,10 +142,7 @@ export function OportunidadesPage() {
         {vista === "abiertas" && <Franja abiertas={todas} cerradas={cerradasRecientes?.data} cargado={cargado} hoy={hoy} />}
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <label className="flex h-10 min-w-0 flex-[1_1_100%] items-center gap-2 rounded-[11px] border border-border bg-card px-3 text-ink-3 md:max-w-[420px] md:flex-[1_1_260px]">
-            <Icono nombre="buscar" size={15} />
-            <input aria-label="Buscar" placeholder="Buscar oportunidad o empresa…" className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-strong outline-none placeholder:text-ink-3" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-          </label>
+          <CajaBusqueda placeholder="Buscar oportunidad o empresa…" valor={busqueda} onCambiar={setBusqueda} />
           {esAdminOSupervisor && (
             <select aria-label="Responsable" className={`${inputBaseClass} h-10 w-auto max-w-[220px]`} value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
               <option value="">Responsable: Todos</option>

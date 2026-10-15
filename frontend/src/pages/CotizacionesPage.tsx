@@ -5,6 +5,7 @@ import { CuerpoCotizacion, EncabezadoCotizacion } from "../components/cotizacion
 import { EditorCotizacion, type ModoEditor } from "../components/cotizaciones/EditorCotizacion";
 import { TableroCotizaciones, type ColumnaCotizaciones } from "../components/cotizaciones/TableroCotizaciones";
 import { Button } from "../components/ui/Button";
+import { CajaBusqueda } from "../components/ui/CajaBusqueda";
 import { Contador } from "../components/ui/Contador";
 import { EncabezadoPagina } from "../components/ui/EncabezadoPagina";
 import { EstadoVacio } from "../components/ui/EstadoVacio";
@@ -134,10 +135,7 @@ export function CotizacionesPage() {
           <Contadores conteos={conteos} estado={estado} onEstado={(e) => setEstado(estado === e ? "" : e)} />
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <label className="flex h-10 min-w-0 flex-[1_1_100%] items-center gap-2 rounded-[11px] border border-border bg-card px-3 text-ink-3 md:max-w-[420px] md:flex-[1_1_260px]">
-              <Icono nombre="buscar" size={15} />
-              <input aria-label="Buscar" placeholder="Buscar por empresa, oportunidad o folio…" className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-strong outline-none placeholder:text-ink-3" value={texto} onChange={(e) => setTexto(e.target.value)} />
-            </label>
+            <CajaBusqueda placeholder="Buscar por empresa, oportunidad o folio…" valor={texto} onCambiar={setTexto} />
             {estado && (
               <button type="button" onClick={() => setEstado("")} className="flex h-10 items-center gap-1.5 rounded-[11px] border border-border bg-card px-3 text-[13px] font-semibold text-ink-2 hover:text-strong">
                 Estado <b className="text-strong">{ESTADOS.find((e) => e.estado === estado)?.titulo}</b>

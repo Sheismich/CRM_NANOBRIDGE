@@ -5,6 +5,8 @@ import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/Button";
+import { Icono } from "../ui/Icono";
+import type { NombreIcono } from "../ui/iconos";
 import { Field, ServerError, inputClass } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
 import type { EmpresaDetalle } from "../../types";
@@ -126,7 +128,7 @@ export function EmpresaForm({ empresa, onDone, onCreada, enPanel = false }: { em
   return (
     <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className={enPanel ? "flex min-h-full flex-col" : "flex flex-col gap-4 border-b border-border bg-bg p-5"}>
       <div className={enPanel ? "flex flex-col gap-4 px-4 py-5 md:px-6" : "contents"}>
-      {enPanel && <TituloSeccion>Empresa</TituloSeccion>}
+      {enPanel && <TituloSeccion icono="empresa">Empresa</TituloSeccion>}
       <div className={columnas}>
         <Field label="Nombre legal" htmlFor="em-legal" error={errors.nombreLegal?.message}>
           <input id="em-legal" className={inputClass} {...register("nombreLegal")} />
@@ -175,7 +177,7 @@ export function EmpresaForm({ empresa, onDone, onCreada, enPanel = false }: { em
 
       {esAlta && (
         <>
-          {enPanel ? <TituloSeccion>Contacto principal</TituloSeccion> : <div className="text-xs font-bold uppercase tracking-wide text-ink-2">Contacto principal</div>}
+          {enPanel ? <TituloSeccion icono="persona">Contacto principal</TituloSeccion> : <div className="text-xs font-bold uppercase tracking-wide text-ink-2">Contacto principal</div>}
           <div className={columnas}>
             <Field label="Nombre" htmlFor="em-c-nombre" error={errors.contactoNombre?.message}>
               <input id="em-c-nombre" className={inputClass} {...register("contactoNombre")} />
@@ -212,6 +214,14 @@ export function EmpresaForm({ empresa, onDone, onCreada, enPanel = false }: { em
   );
 }
 
-function TituloSeccion({ children }: { children: string }) {
-  return <h3 className="font-heading text-[13px] font-extrabold text-strong">{children}</h3>;
+// Con ícono, igual que las secciones de Nuevo prospecto (revisión de Fabián, 15-oct-2026).
+function TituloSeccion({ icono, children }: { icono: NombreIcono; children: string }) {
+  return (
+    <h3 className="flex items-center gap-2.5 font-heading text-[13px] font-extrabold text-strong">
+      <span className="grid h-7 w-7 place-items-center rounded-[9px] bg-navy-bg text-navy">
+        <Icono nombre={icono} size={15} />
+      </span>
+      {children}
+    </h3>
+  );
 }

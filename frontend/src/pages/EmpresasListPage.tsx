@@ -6,11 +6,11 @@ import { AppShell } from "../components/layout/AppShell";
 import { EmpresaForm } from "../components/empresas/EmpresaForm";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
+import { CajaBusqueda } from "../components/ui/CajaBusqueda";
 import { Contador } from "../components/ui/Contador";
 import { EncabezadoPagina } from "../components/ui/EncabezadoPagina";
 import { EstadoVacio } from "../components/ui/EstadoVacio";
 import { inputBaseClass } from "../components/ui/Field";
-import { Icono } from "../components/ui/Icono";
 import { LogoEmpresa } from "../components/ui/LogoEmpresa";
 import { MarcaDeAgua } from "../components/ui/MarcaDeAgua";
 import { Paginacion } from "../components/ui/Paginacion";
@@ -153,16 +153,7 @@ export function EmpresasListPage() {
             cambiar(() => setBusqueda(q.trim()));
           }}
         >
-          <label className="flex h-10 min-w-0 flex-[1_1_100%] items-center gap-2 rounded-[11px] border border-border bg-card px-3 text-ink-3 md:max-w-[420px] md:flex-[1_1_260px]">
-            <Icono nombre="buscar" size={15} />
-            <input
-              aria-label="Buscar"
-              placeholder="Buscar por nombre, giro o ciudad…"
-              className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-strong outline-none placeholder:text-ink-3"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </label>
+          <CajaBusqueda placeholder="Buscar por nombre, giro o ciudad…" valor={q} onCambiar={setQ} />
           <select aria-label="Giro" className={`${inputBaseClass} h-10 w-auto max-w-[200px]`} value={giro} onChange={(e) => cambiar(() => setGiro(e.target.value))}>
             <option value="">Giro: Todos</option>
             {giros.map((g) => (

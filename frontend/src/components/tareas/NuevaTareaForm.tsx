@@ -44,7 +44,23 @@ const ELEGIDO_PRIORIDAD: Record<Tarea["prioridad"], string> = { baja: ELEGIDO, m
 
 // `usuarios` solo llega para admin/supervisor (GET /usuarios); un agente
 // se asigna la tarea a sí mismo.
-export function NuevaTareaForm({ usuarioActual, usuarios, onDone }: { usuarioActual: { id: number; nombre: string }; usuarios?: Usuario[]; onDone: () => void }) {
+// Empresa ya elegida en el buscador: la fila de GET /empresas o, si la tarea
+// se crea desde la ficha, solo id y nombre (`empresa`, Mich 15-oct-2026).
+type EmpresaElegida = Pick<EmpresaListado, "id" | "nombre_legal" | "nombre_comercial" | "giro" | "estado" | "propietario_nombre">;
+
+// `empresa`: la tarea nace ya ligada a esa empresa ("Nueva tarea" de la
+// ficha); se puede cambiar igual que si se hubiera buscado.
+export function NuevaTareaForm({
+  usuarioActual,
+  usuarios,
+  empresa: empresaInicial,
+  onDone
+}: {
+  usuarioActual: { id: number; nombre: string };
+  usuarios?: Usuario[];
+  empresa?: { id: number; nombre: string };
+  onDone: () => void;
+}) {
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<string | null>(null);
   const {
@@ -55,7 +71,7 @@ export function NuevaTareaForm({ usuarioActual, usuarios, onDone }: { usuarioAct
     formState: { errors, isSubmitting }
   } = useForm<TareaInput>({
     resolver: zodResolver(tareaSchema),
-    defaultValues: { titulo: "", tipo: "seguimiento", prioridad: "media", responsableId: String(usuarioActual.id), empresaId: "", contactoId: "", fechaLimite: "", descripcion: "" }
+    defaultValues: { titulo: "", tipo: "seguimiento", prioridad: "media", responsableId: String(usuarioActual.id), empresaId: empresaInicial ? String(empresaInicial.id) : "", contactoId: "", fechaLimite: "", descripcion: "" }
   });
   const [tipo, prioridad, responsableId, empresaId, contactoId, fechaLimite] = useWatch({ control, name: ["tipo", "prioridad", "responsableId", "empresaId", "contactoId", "fechaLimite"] });
   const validar = { shouldValidate: true } as const;
@@ -67,7 +83,9 @@ export function NuevaTareaForm({ usuarioActual, usuarios, onDone }: { usuarioAct
 
   // Empresa elegida: se guarda la fila del buscador para pintar la tarjeta
   // sin otra llamada. El detalle (GET /empresas/:id) solo es para los contactos.
-  const [empresa, setEmpresa] = useState<EmpresaListado | null>(null);
+  const [empresa, setEmpresa] = useState<EmpresaElegida | null>(
+    empresaInicial ? { id: empresaInicial.id, nombre_legal: empresaInicial.nombre, nombre_comercial: null, giro: null, estado: null, propietario_nombre: null } : null
+  );
   const { data: detalle } = useQuery({
     queryKey: ["empresa", empresaId],
     queryFn: () => api.get<EmpresaDetalle>(`/api/v1/empresas/${empresaId}`),
@@ -76,7 +94,7 @@ export function NuevaTareaForm({ usuarioActual, usuarios, onDone }: { usuarioAct
   // Una fila por medio en GET /empresas/:id: un contacto activo por id.
   const contactos = useMemo(() => [...new Map((detalle?.contactos ?? []).filter((c) => c.activo).map((c) => [c.id, c])).values()], [detalle]);
 
-  function elegirEmpresa(e: EmpresaListado | null) {
+  function elegirEmpresa(e: EmpresaElegida | null) {
     setEmpresa(e);
     setValue("empresaId", e ? String(e.id) : "");
     setValue("contactoId", "");

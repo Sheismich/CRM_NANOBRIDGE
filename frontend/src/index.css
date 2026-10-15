@@ -159,6 +159,17 @@ body {
   outline-offset: 2px;
 }
 
+/* Caja de búsqueda (components/ui/CajaBusqueda): el foco va en la caja,
+   no en el campo de adentro (si no, se ven dos cajas). Fuera de @layer
+   como la regla de arriba, para poder ganarle. */
+.caja-busqueda:focus-within {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--info-bg);
+}
+.caja-busqueda input:focus-visible {
+  outline: none;
+}
+
 /* ---- Base común del rediseño (components/ui/) ----
    Lo que Tailwind no dice bien en una clase (sombras dobles, degradados
    por tema) vive aquí con nombre propio. */

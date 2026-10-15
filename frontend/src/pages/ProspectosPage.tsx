@@ -7,10 +7,10 @@ import { CampanasTab } from "../components/prospectos/CampanasTab";
 import { ImportacionesTab } from "../components/prospectos/ImportacionesTab";
 import { NuevoProspectoForm } from "../components/prospectos/NuevoProspectoForm";
 import { Button } from "../components/ui/Button";
+import { CajaBusqueda } from "../components/ui/CajaBusqueda";
 import { Contador } from "../components/ui/Contador";
 import { EncabezadoPagina } from "../components/ui/EncabezadoPagina";
 import { EstadoVacio } from "../components/ui/EstadoVacio";
-import { Ficha } from "../components/ui/Ficha";
 import { inputBaseClass } from "../components/ui/Field";
 import { Icono } from "../components/ui/Icono";
 import { LogoEmpresa } from "../components/ui/LogoEmpresa";
@@ -197,21 +197,7 @@ function ListaProspectos({
           cambiar(() => setBusqueda(q.trim()));
         }}
       >
-        <label className="flex h-10 min-w-0 flex-[1_1_100%] items-center gap-2 rounded-[11px] border border-border bg-card px-3 text-ink-3 md:max-w-[420px] md:flex-[1_1_260px]">
-          <Icono nombre="buscar" size={15} />
-          <input
-            aria-label="Buscar"
-            placeholder="Buscar por empresa o contacto…"
-            className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-strong outline-none placeholder:text-ink-3"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </label>
-        {estado && (
-          <Ficha activa onClick={() => cambiar(() => setEstado(""))}>
-            Estado: {etiquetaEstadoProspecto(estado)} ✕
-          </Ficha>
-        )}
+        <CajaBusqueda placeholder="Buscar por empresa o contacto…" valor={q} onCambiar={setQ} />
         <select aria-label="Estado" className={`${inputBaseClass} h-10 w-auto`} value={estado} onChange={(e) => cambiar(() => setEstado(e.target.value))}>
           <option value="">Estado: Todos</option>
           {GRUPOS_EMBUDO.flatMap((g) => g.estados ?? []).map((e) => (

@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
+import { Icono } from "../ui/Icono";
 import { Modal } from "../ui/Modal";
 import { Pastilla } from "../ui/Pastilla";
 import type { Tono } from "../ui/tonos";
@@ -11,7 +12,7 @@ import { Field, ServerError, inputBaseClass, inputClass } from "../ui/Field";
 import { Paginacion } from "../ui/Paginacion";
 import { ApiError, api } from "../../lib/api";
 import { fechaLocal, formatoFecha } from "../../lib/formato";
-import { ACCIONES_CAMPANA, ETIQUETA_ESTADO_CAMPANA, ETIQUETA_MOTIVO_CAMPANA, type Campana, type EstadoCampana } from "../../lib/campanas";
+import { ACCIONES_CAMPANA, ETIQUETA_ESTADO_CAMPANA, ETIQUETA_MOTIVO_CAMPANA, useCampanas, type Campana, type EstadoCampana } from "../../lib/campanas";
 import type { CampanaProspeccion, Paginated, ReporteProspeccion } from "../../types";
 
 // Campañas (src/campanas/campanas.controller.ts): todos ven la lista; solo
@@ -45,6 +46,10 @@ export function CampanasTab({ puedeEditar, onVerProspectos }: { puedeEditar: boo
   const [error, setError] = useState<string | null>(null);
 
   const filtros = { page, limit: LIMIT, estado: estado || undefined };
+  // Todas, sin el filtro de estado ni la página: para saber si alguna
+  // manda correos hoy (activa_hoy, no solo "activa": también cuenta la vigencia).
+  const { data: todas } = useCampanas();
+  const ningunaActiva = todas !== undefined && !todas.data.some((c) => c.activa_hoy);
   const { data, isPending, isError } = useQuery({
     queryKey: ["campanas", filtros],
     queryFn: () => api.get<Paginated<Campana>>("/api/v1/campanas", filtros)
@@ -95,8 +100,13 @@ export function CampanasTab({ puedeEditar, onVerProspectos }: { puedeEditar: boo
             </option>
           ))}
         </select>
-        <span className="text-[12px] text-ink-3">Sin una campaña activa, la automatización no manda correos de prospección.</span>
       </div>
+      {ningunaActiva && (
+        <div className="flex items-center gap-2 rounded-[12px] border border-warn/40 bg-warn-bg px-3.5 py-2.5 text-[13px] font-semibold text-warn">
+          <Icono nombre="aviso" size={16} className="shrink-0" />
+          Ninguna campaña está activa hoy: la automatización no manda correos de prospección.
+        </div>
+      )}
 
       <ServerError message={error} />
       {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
@@ -201,7 +211,7 @@ function TarjetaCampana({
       {numeros !== undefined ? (
         <>
           <div className="grid grid-cols-3 gap-2 px-[18px] py-3.5">
-            <Numero valor={numeros?.personas_contactadas ?? 0} etiqueta="Contactadas" />
+            <Numero valor={numeros?.personas_contactadas ?? 0} etiqueta="Personas contactadas" title="Personas distintas que ya recibieron correo de esta campaña (una persona puede tener varios prospectos)" />
             <Numero valor={numeros?.personas_que_respondieron ?? 0} etiqueta="Respondieron" />
             <Numero valor={numeros?.interesados ?? 0} etiqueta="Interesados" />
           </div>
@@ -254,9 +264,9 @@ function TarjetaCampana({
   );
 }
 
-function Numero({ valor, etiqueta }: { valor: number; etiqueta: string }) {
+function Numero({ valor, etiqueta, title }: { valor: number; etiqueta: string; title?: string }) {
   return (
-    <div>
+    <div title={title}>
       <b className="mono block font-display text-[26px] font-normal leading-tight text-strong">{valor}</b>
       <span className="text-[11px] font-bold text-ink-3">{etiqueta}</span>
     </div>

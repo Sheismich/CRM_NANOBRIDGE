@@ -8,8 +8,8 @@ import { TAMANOS } from "../components/empresas/campos";
 import { CotizacionesTab } from "../components/ficha/CotizacionesTab";
 import { DocumentosTab } from "../components/ficha/DocumentosTab";
 import { HistorialTab } from "../components/ficha/HistorialTab";
-import { NuevaActividadForm } from "../components/ficha/NuevaActividadForm";
 import { OportunidadesTab } from "../components/ficha/OportunidadesTab";
+import { NuevaTareaForm } from "../components/tareas/NuevaTareaForm";
 import { useOportunidadesEmpresa } from "../components/ficha/queries";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
@@ -96,7 +96,7 @@ function FichaCliente({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [editandoEmpresa, setEditandoEmpresa] = useState(false);
-  const [registrando, setRegistrando] = useState(false);
+  const [creandoTarea, setCreandoTarea] = useState(false);
   const [confirmarBaja, setConfirmarBaja] = useState(false);
   const [accionError, setAccionError] = useState<string | null>(null);
 
@@ -153,8 +153,10 @@ function FichaCliente({ id }: { id: string }) {
             acciones={
               <>
                 <Button onClick={() => setTab("oportunidades")}>+ Oportunidad</Button>
-                <Button variant="outline" onClick={() => setRegistrando(true)}>
-                  Registrar llamada
+                {/* "Nueva tarea" (lo que hay que hacer); lo que ya pasó se anota en
+                    el Historial (revisión de Fabián, 15-oct-2026). */}
+                <Button variant="outline" onClick={() => setCreandoTarea(true)}>
+                  Nueva tarea
                 </Button>
                 <Button variant="outline" onClick={() => setEditandoEmpresa(true)}>
                   Editar
@@ -253,9 +255,16 @@ function FichaCliente({ id }: { id: string }) {
           >
             <EmpresaForm enPanel empresa={empresa} onDone={() => setEditandoEmpresa(false)} />
           </PanelLateral>
-          <Modal abierto={registrando} onCerrar={() => setRegistrando(false)} titulo="Registrar interacción" descripcion="Una llamada, un WhatsApp o un comentario. Queda en el Historial." ancho={640}>
-            <NuevaActividadForm empresaId={empresa.id} contactos={opcionesContacto} onDone={() => setRegistrando(false)} />
-          </Modal>
+          <PanelLateral abierto={creandoTarea} onCerrar={() => setCreandoTarea(false)} titulo="Nueva tarea" cuerpoClassName="!p-0">
+            {user && (
+              <NuevaTareaForm
+                usuarioActual={{ id: user.id, nombre: user.nombre }}
+                usuarios={esAdminOSupervisor ? usuarios?.data.filter((u) => u.rol !== "sistema") : undefined}
+                empresa={{ id: empresa.id, nombre: empresa.nombre_comercial ?? empresa.nombre_legal }}
+                onDone={() => setCreandoTarea(false)}
+              />
+            )}
+          </PanelLateral>
           <Modal
             abierto={confirmarBaja}
             onCerrar={() => setConfirmarBaja(false)}
