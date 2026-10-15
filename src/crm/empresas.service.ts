@@ -223,6 +223,9 @@ export class EmpresasService {
       .where(and(eq(contactos.empresaId, id), sql`${prospectos.fuenteUrl} IS NOT NULL`))
       .orderBy(desc(prospectos.id))
       .limit(1);
+    // En qué va su prospección (pastilla del encabezado de la ficha,
+    // 15-oct-2026): el mismo cálculo que la lista.
+    const { prospeccion } = (await this.detalleDeLista([id])).get(id)!;
 
     return {
       id: company.id,
@@ -243,6 +246,7 @@ export class EmpresasService {
       creado_en: company.creadoEn,
       actualizado_en: company.actualizadoEn,
       fuente_url: fuente?.fuenteUrl ?? null,
+      prospeccion,
       contactos: contactRows
     };
   }

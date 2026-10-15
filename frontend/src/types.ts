@@ -575,6 +575,8 @@ export type ProspectoFila = ProspectoResumen & {
 export type ConteosProspectos = {
   total: number;
   contactados: number;
+  // Validados con al menos un correo (15-oct-2026); undefined antes de ese deploy.
+  en_campana?: number;
   por_estado: { estado: string; cantidad: number }[];
 };
 
@@ -608,7 +610,7 @@ export type ConteosEmpresas = {
 };
 
 // GET /empresas/:id desde el 12-oct: de dónde vino (fuente del prospecto más reciente).
-export type EmpresaFicha = EmpresaDetalle & { fuente_url: string | null };
+export type EmpresaFicha = EmpresaDetalle & { fuente_url: string | null; prospeccion: EmpresaFila["prospeccion"] };
 
 // --- Contactos (rediseño, Mich; src/crm/contactos.service.ts) ---
 

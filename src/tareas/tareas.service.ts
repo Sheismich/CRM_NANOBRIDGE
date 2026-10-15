@@ -24,6 +24,7 @@ export type ListTareasFilters = {
   responsableId?: number;
   sinAsignar?: boolean;
   q?: string;
+  empresaId?: number;
 };
 
 // Largo de respuestas.comentario (VARCHAR(500)).
@@ -107,6 +108,7 @@ export class TareasService {
       scoped.tipo ? eq(tareas.tipo, scoped.tipo) : undefined,
       scoped.responsableId ? eq(tareas.responsableId, scoped.responsableId) : undefined,
       scoped.sinAsignar ? isNull(tareas.responsableId) : undefined,
+      scoped.empresaId ? eq(tareas.empresaId, scoped.empresaId) : undefined,
       scoped.q ? or(like(tareas.titulo, patronLike(scoped.q)), like(empresas.nombreLegal, patronLike(scoped.q)), like(empresas.nombreComercial, patronLike(scoped.q))) : undefined
     ]);
 

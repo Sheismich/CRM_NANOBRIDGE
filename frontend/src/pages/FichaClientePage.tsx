@@ -9,6 +9,7 @@ import { CotizacionesTab } from "../components/ficha/CotizacionesTab";
 import { DocumentosTab } from "../components/ficha/DocumentosTab";
 import { HistorialTab } from "../components/ficha/HistorialTab";
 import { OportunidadesTab } from "../components/ficha/OportunidadesTab";
+import { TareasEmpresa } from "../components/ficha/TareasEmpresa";
 import { NuevaTareaForm } from "../components/tareas/NuevaTareaForm";
 import { useOportunidadesEmpresa } from "../components/ficha/queries";
 import { Avatar } from "../components/ui/Avatar";
@@ -20,11 +21,12 @@ import { LogoEmpresa } from "../components/ui/LogoEmpresa";
 import { MarcaDeAgua } from "../components/ui/MarcaDeAgua";
 import { Modal } from "../components/ui/Modal";
 import { PanelLateral } from "../components/ui/PanelLateral";
+import { Pastilla } from "../components/ui/Pastilla";
 import { Segmento } from "../components/ui/Segmento";
 import { Tarjeta } from "../components/ui/Tarjeta";
 import { ApiError, api } from "../lib/api";
 import { useAuth } from "../lib/auth-context";
-import { fechaCorta } from "../lib/empresas";
+import { fechaCorta, prospeccionEmpresa } from "../lib/empresas";
 import { fechaLocal, formatoFecha, formatoMonedaEntera } from "../lib/formato";
 import { ETIQUETA_MEDIO, claseMedio } from "../lib/medios";
 import type { ContactoConMedio, EmpresaFicha, Paginated, TimelineEvento, Usuario } from "../types";
@@ -120,8 +122,8 @@ function FichaCliente({ id }: { id: string }) {
   const abiertas = (oportunidades?.data ?? []).filter((o) => !o.cerrada);
   const pipeline = abiertas.reduce((s, o) => s + Number(o.valor_estimado ?? 0), 0);
   const ultima = timeline?.data[0]?.fecha ?? null;
-  const responsable =
-    empresa?.propietario_id == null ? null : empresa.propietario_id === user?.id ? (user?.nombre ?? null) : (usuarios?.data.find((u) => u.id === empresa.propietario_id)?.nombre ?? null);
+  const nombreDe = (id: number | null) => (id == null ? null : id === user?.id ? (user?.nombre ?? null) : (usuarios?.data.find((u) => u.id === id)?.nombre ?? null));
+  const responsable = nombreDe(empresa?.propietario_id ?? null);
 
   return (
     <AppShell titulo={empresa?.nombre_legal ?? "Ficha de empresa"} encabezado={null}>
@@ -224,6 +226,7 @@ function FichaCliente({ id }: { id: string }) {
                     ))}
                   </ul>
                 </Tarjeta>
+                <TareasEmpresa empresaId={empresa.id} nombreDe={nombreDe} onNueva={() => setCreandoTarea(true)} />
                 <Tarjeta titulo="Datos" icono="info" color="lila">
                   <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 gap-y-2.5 text-[13px]">
                     <Campo etiqueta="Nombre legal">{empresa.nombre_legal}</Campo>
@@ -304,6 +307,9 @@ function Encabezado({
 }) {
   const tamano = empresa.tamano ? (TAMANOS.find((t) => t.valor === empresa.tamano)?.etiqueta ?? empresa.tamano).toLowerCase() : null;
   const lugar = [empresa.ciudad, empresa.estado].filter(Boolean).join(", ");
+  // En qué va su prospección, igual que en la lista (GET /empresas/:id la
+  // trae desde el 15-oct-2026); nada si nunca fue prospecto.
+  const pros = empresa.prospeccion ? prospeccionEmpresa(empresa.prospeccion) : null;
   const redes: [string, string | null][] = [
     ["in", empresa.linkedin_url],
     ["f", empresa.facebook_url],
@@ -327,7 +333,12 @@ function Encabezado({
               </>
             )}
           </div>
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {pros && (
+              <Pastilla tono={pros.tono} punto>
+                {pros.texto}
+              </Pastilla>
+            )}
             {redes
               .filter((r): r is [string, string] => Boolean(r[1]))
               .map(([etiqueta, url]) => (
