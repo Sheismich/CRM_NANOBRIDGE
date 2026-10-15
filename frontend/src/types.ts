@@ -682,3 +682,53 @@ export type ConteosCotizaciones = {
   aceptadas_este_mes: ConteoEstado;
   tasa_aceptacion: { aceptadas: number; respondidas: number; pct: number | null };
 };
+
+// --- Reportes (rediseño, Mich; src/reportes/reportes.service.ts y reporte-dia.service.ts) ---
+
+// GET /reportes/tareas desde el 11-oct: además de cerradas y vencidas, qué
+// tanto se cierra a tiempo, lo resuelto esta semana y lo creado por tipo.
+export type ReporteTareasPanel = ReporteTareas & {
+  a_tiempo: { a_tiempo: number; con_fecha_limite: number; pct: number | null };
+  cerradas_esta_semana: number;
+  creadas: { total: number; por_tipo: { tipo: Tarea["tipo"]; cantidad: number }[] };
+};
+
+// GET /reportes/actividades: una fila por persona con actividades en el rango.
+export type ActividadesPorAgente = { responsable_id: number; responsable_nombre: string; llamada: number; whatsapp: number; comentario: number; total: number }[];
+
+export type TipoBitacora = "tareas" | "correos" | "respuestas" | "bajas" | "documentos" | "sistema";
+
+// Un movimiento de la bitácora. usuario_id = quién lo hizo (null = la
+// automatización, un contacto o el sistema); texto va sin ese nombre.
+export type MovimientoDia = {
+  tipo: TipoBitacora;
+  subtipo: string;
+  fecha: string;
+  usuario_id: number | null;
+  usuario_nombre: string | null;
+  responsable_id?: number | null;
+  responsable_nombre?: string | null;
+  contacto_nombre?: string;
+  empresa_id: number | null;
+  empresa_nombre: string | null;
+  entidad: { tipo: string; id: number } | null;
+  texto: string;
+};
+
+// GET /reportes/dia. Con persona (usuarioId, y siempre para un agente), lo
+// que no es de una persona (correos, respuestas, bajas, avisos) llega null.
+export type ReporteDia = {
+  fecha: string;
+  resumen: {
+    correos: { enviados: number; campanas: number; ultimo_en: string | null } | null;
+    respuestas: { recibidas: number; interesados: number } | null;
+    tareas_cerradas: { cerradas: number; vencian_ese_dia: number };
+    tareas_creadas: { creadas: number; por_automatizacion: number };
+    bajas: { total: number; ultima: { contacto_nombre: string; fecha: string } | null } | null;
+  };
+  para_revisar: { vencidas_sin_cerrar: number; avisos_fallidos: number | null };
+  bitacora: { total: number; page: number; limit: number; data: MovimientoDia[] };
+  por_persona: { usuario_id: number; nombre: string | null; primera_accion: string | null; ultima_accion: string | null; tareas_que_cerro: number; tomadas: number; vencidas: number }[];
+  automatizacion: { correos: number; tareas_creadas: number } | null;
+  quedo_pendiente: { tarea_id: number; titulo: string; estado: string; fecha_limite: string; responsable_id: number | null; responsable_nombre: string | null; empresa_id: number | null; empresa_nombre: string | null }[];
+};

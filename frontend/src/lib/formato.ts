@@ -3,8 +3,11 @@
 export const formatoMonedaEntera = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 export const formatoMoneda = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 const formatoCompacto = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", maximumFractionDigits: 0 });
-// "$120K" / "$1M", como los prototipos (Intl pone "$120 k"). Oportunidades y Cotizaciones.
-export const compacto = { format: (n: number) => formatoCompacto.format(n).replace(/\s/g, "").replace(/k$/, "K") };
+const formatoMillones = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", maximumFractionDigits: 2 });
+// "$120K" / "$1.28M", como los prototipos (Intl pone "$120 k"). Los millones
+// llevan hasta dos decimales: "$1M" escondía casi 300 mil. Oportunidades,
+// Cotizaciones y Reportes.
+export const compacto = { format: (n: number) => (Math.abs(n) >= 1_000_000 ? formatoMillones : formatoCompacto).format(n).replace(/\s/g, "").replace(/k$/, "K") };
 export const formatoFecha = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" });
 // "3 oct": tarjetas de los tableros.
 export const formatoDiaMes = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short" });

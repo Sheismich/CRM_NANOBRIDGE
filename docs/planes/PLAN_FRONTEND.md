@@ -147,7 +147,7 @@ Cada deploy al canal reinicia los 30 días.
 | 10 | Contactos ✅ (local) | `contactos.html` | Mich | sin subir | no |
 | 11 | Oportunidades ✅ (local) | `oportunidades.html` | Mich | sin subir | no |
 | 12 | Cotizaciones ✅ (local) | `cotizaciones.html` | Mich | sin subir | no |
-| 13 | Reportes (panel + Día) | `reportes.html` | Mich | — | no |
+| 13 | Reportes (panel + Día) ✅ (local) | `reportes.html` | Mich | sin subir | no |
 
 ### Base común — cómo se usa (hecha el 13-oct-2026)
 
@@ -255,6 +255,14 @@ Antes de cada pantalla: `git fetch`, leer su sección en `docs/diseno/README.md`
 - Cada gráfica lleva una frase que la explica y dos datos al pie, armados en el front con plantillas: conversión y caída máxima entre etapas (`conversion-etapas`), ciclo medio de venta, `a_tiempo`, `cerradas_esta_semana` y `creadas` de `GET /reportes/tareas`, y el mejor día de respuestas (de `por-dia`).
 - Vista **Día** con `GET /reportes/dia?fecha=YYYY-MM-DD`: números del día, aviso de cosas para revisar, bitácora con filtro de tipo y de persona, por persona y "quedó pendiente". Exportar: `/reportes/export/dia`.
 - Ojo con los roles: los reportes son de admin y supervisor, pero `/reportes/dia` también acepta agentes (cada uno ve solo lo suyo).
+
+- **Hecho en local (15-oct-2026, Mich):**
+  - Periodo en la URL (`?periodo=dia|semana|trimestre|anio`; Mes por omisión). Cada periodo va de su inicio a hoy y se compara contra el mismo tramo del anterior (del 1 al 15 de septiembre contra del 1 al 15 de octubre), en `lib/reportes.ts`, igual que las frases.
+  - Panel (`components/reportes/PanelReportes.tsx`) con cinco indicadores. Pipeline y Ganado sacan su comparación y su línea de `metricas-diarias`, que es de todo el equipo, así que con un responsable elegido no se muestran. La tasa usa `prospeccion` y la línea, `por-dia`. Actividades y Tareas vencidas no tienen línea porque no hay histórico por día. Luego vienen las gráficas de Conversión, Forecast (próximos 5 meses), Prospección por día, Tareas por tipo (las creadas en el periodo) y Desempeño por agente, cada una con su frase, sus dos datos al pie y su CSV (`api.descargar`; el backend ya pone el BOM, el front viejo lo ponía doble). Gráficas en `GraficasReportes.tsx`, en SVG y CSS. Se borró `Graficas.tsx`. Se quitaron el histórico diario con "Recalcular hoy" y la tabla por campaña, que no están en el diseño (las campañas se ven en Prospectos · Campañas).
+  - Día (`DiaReportes.tsx`): ‹ fecha › con calendario y Hoy, los números del día, el aviso de "cosas para revisar" (con liga a Administración solo para el administrador), la bitácora con filtro por tipo y "Ver más" de 50 en 50 hasta 200 (lo demás, por CSV), y a la derecha Por persona con la Automatización y Quedó pendiente. La persona se elige con el selector de arriba (`usuarioId`).
+  - "Exportar" de arriba: en Día, la bitácora en CSV; en el panel, el informe ejecutivo en PDF del mes en que termina el periodo.
+  - **Para Fabián:** Reportes ya sale en el menú del agente (`nav-items.ts`, y se le quitó `soloRoles` a la ruta). Él solo ve el Día con lo suyo, sin selector de periodo. La liga "Reportes → Día" de `RegistroCambios.tsx` ahora abre `?periodo=dia`. `compacto` de `lib/formato.ts` lleva hasta dos decimales en millones ("$1.28M" en vez de "$1M"), y eso también cambia la franja de Oportunidades.
+  - Revisado en Edge con la API simulada a 375 y 1440 px, día y noche, como administrador (Mes, Año, con responsable, CSV, Día con filtro, día anterior y Exportar) y como agente (solo llama a `/reportes/dia`). Falta contra producción.
 
 Al terminar cada pantalla: `cd frontend && npm run lint && npm run build`, probarla en local contra producción (escritorio y celular de 375 px, día y noche, como administrador y como agente), subirla al canal de vista previa (o pedírselo a Fabián si tu cuenta de Firebase no puede publicar) y llenar su renglón en la tabla de arriba.
 

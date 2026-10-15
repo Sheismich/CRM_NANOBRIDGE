@@ -107,7 +107,7 @@ export function RegistroCambios({ filtros, onFiltros }: { filtros: FiltrosRegist
       {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
       <p className="m-4 rounded-[12px] bg-soft px-4 py-2.5 text-[12.5px] text-ink-2">
         El trabajo del día (tareas cerradas, correos, respuestas, bajas) no va aquí: está en{" "}
-        <Link to="/reportes" className="font-bold text-info hover:underline">
+        <Link to="/reportes?periodo=dia" className="font-bold text-info hover:underline">
           Reportes → Día
         </Link>
         .

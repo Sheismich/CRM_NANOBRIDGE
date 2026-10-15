@@ -1,9 +1,10 @@
 import { ICONOS } from "../ui/iconos";
 
 // Un solo lugar con los módulos del menú, en el orden del diseño
-// (docs/diseno/inicio-aprobado.html). Reportes y Administración solo se
-// muestran a administrador/supervisor (ReportesController y
-// UsuariosController; esto es solo UX, el backend aplica el permiso real).
+// (docs/diseno/inicio-aprobado.html). Administración solo se muestra a
+// administrador/supervisor (UsuariosController; esto es solo UX, el
+// backend aplica el permiso real). Reportes sí lo ve un agente, pero solo
+// la vista Día con lo suyo (15-oct-2026).
 // `celular`: los 4 que van en la barra de abajo del celular, antes del
 // botón "Más" (mismo orden que el diseño); los demás salen en "Más".
 export type NavItem = {
@@ -24,7 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/oportunidades", label: "Oportunidades", corto: "Oportun.", icon: "M12 12m-8.5 0a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0-17 0 M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0-10 0", celular: true },
   { to: "/cotizaciones", label: "Cotizaciones", icon: ICONOS.documento },
   { to: "/documentos", label: "Documentos", icon: ICONOS.carpeta },
-  { to: "/reportes", label: "Reportes", icon: "M4.5 20V11 M12 20V5 M19.5 20v-6.5 M2.5 20h19", soloAdminSupervisor: true },
+  { to: "/reportes", label: "Reportes", icon: "M4.5 20V11 M12 20V5 M19.5 20v-6.5 M2.5 20h19" },
   {
     to: "/administracion",
     label: "Administración",

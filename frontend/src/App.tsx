@@ -43,14 +43,8 @@ function App() {
       <Route path="/oportunidades" element={<ProtectedRoute><OportunidadesPage /></ProtectedRoute>} />
       <Route path="/cotizaciones" element={<ProtectedRoute><CotizacionesPage /></ProtectedRoute>} />
       <Route path="/documentos" element={<ProtectedRoute><DocumentosPage /></ProtectedRoute>} />
-      <Route
-        path="/reportes"
-        element={
-          <ProtectedRoute soloRoles={["administrador", "supervisor"]}>
-            <ReportesPage />
-          </ProtectedRoute>
-        }
-      />
+      {/* Un agente también entra: solo ve Reportes · Día, lo suyo (GET /reportes/dia). */}
+      <Route path="/reportes" element={<ProtectedRoute><ReportesPage /></ProtectedRoute>} />
       <Route
         path="/administracion"
         element={
