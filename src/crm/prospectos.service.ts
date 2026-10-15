@@ -36,6 +36,9 @@ type Candidato = {
   errores: ErrorFila[] | null;
 };
 
+// El prospecto ya recibió al menos un correo.
+const tieneEnvios = () => sql`EXISTS (SELECT 1 FROM ${envios} WHERE ${envios.prospectoId} = ${prospectos.id})`;
+
 @Injectable()
 export class ProspectosService {
   private readonly logger = new Logger(ProspectosService.name);
@@ -511,7 +514,9 @@ export class ProspectosService {
       query.estado ? eq(prospectos.estado, query.estado) : undefined,
       query.prioridad ? eq(prospectos.prioridad, query.prioridad) : undefined,
       query.q ? or(like(empresas.nombreLegal, patronLike(query.q)), like(contactos.nombre, patronLike(query.q))) : undefined,
-      query.campanaId ? eq(prospectos.campanaId, query.campanaId) : undefined
+      query.campanaId ? eq(prospectos.campanaId, query.campanaId) : undefined,
+      query.enCampana === true ? and(eq(prospectos.estado, "validado"), tieneEnvios()) : undefined,
+      query.enCampana === false ? sql`NOT ${tieneEnvios()}` : undefined
     ]);
 
     // Orden estable: con empates (mismo score, mismo segundo) el id decide.
@@ -571,18 +576,25 @@ export class ProspectosService {
       .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
       .innerJoin(empresas, eq(empresas.id, contactos.empresaId));
 
-    const [porEstado, [contactados]] = await Promise.all([
+    // contactados: todos los que recibieron al menos un correo, sea cual sea
+    // su estado hoy. en_campana (15-oct-2026): los validados con correos,
+    // que siguen esperando recordatorio o respuesta.
+    const [porEstado, [enviados]] = await Promise.all([
       base().where(condicion).groupBy(prospectos.estado).orderBy(prospectos.estado),
-      this.db.select({ cantidad: sql<number>`COUNT(*)`.mapWith(Number) })
+      this.db.select({
+        contactados: sql<number>`COUNT(*)`.mapWith(Number),
+        enCampana: sql<number>`COALESCE(SUM(${prospectos.estado} = 'validado'), 0)`.mapWith(Number)
+      })
         .from(prospectos)
         .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
         .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
-        .where(and(condicion, sql`EXISTS (SELECT 1 FROM ${envios} WHERE ${envios.prospectoId} = ${prospectos.id})`))
+        .where(and(condicion, tieneEnvios()))
     ]);
 
     return {
       total: porEstado.reduce((s, e) => s + e.cantidad, 0),
-      contactados: contactados.cantidad,
+      contactados: enviados.contactados,
+      en_campana: enviados.enCampana,
       por_estado: porEstado
     };
   }

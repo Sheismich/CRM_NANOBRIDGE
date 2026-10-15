@@ -23,7 +23,7 @@ import { useAuth } from "../lib/auth-context";
 import { useCampanas } from "../lib/campanas";
 import { fechaUtc, formatoFecha, formatoFechaHora } from "../lib/formato";
 import { ETIQUETA_MEDIO, claseMedio } from "../lib/medios";
-import { GRUPOS_EMBUDO, TONO_ESTADO_PROSPECTO, etiquetaEstadoProspecto, tonoScore, type GrupoEmbudo } from "../lib/prospectos";
+import { GRUPOS_EMBUDO, TONO_ESTADO_PROSPECTO, etiquetaEstadoProspecto, filtroEstado, tonoScore, type GrupoEmbudo } from "../lib/prospectos";
 import type { ConteosProspectos, Paginated, ProspectoDetalle, ProspectoFila } from "../types";
 
 // Prospectos del rediseño (docs/diseno/prospectos.html): de dónde vienen,
@@ -163,7 +163,7 @@ function ListaProspectos({
   const [page, setPage] = useState(1);
   const { data: campanas } = useCampanas();
 
-  const filtros = { q: busqueda || undefined, estado: estado || undefined, prioridad: prioridad || undefined, campanaId: campanaId || undefined, orden, page, limit: LIMIT };
+  const filtros = { q: busqueda || undefined, ...filtroEstado(estado), prioridad: prioridad || undefined, campanaId: campanaId || undefined, orden, page, limit: LIMIT };
   // Un agente solo ve prospectos de sus empresas (ProspectosService.listProspectos).
   const { data, isPending, isError } = useQuery({
     queryKey: ["prospectos", filtros],
@@ -268,7 +268,15 @@ function ListaProspectos({
 // Estado deja elegir los demás).
 function Embudo({ conteos, estado, onEstado }: { conteos: ConteosProspectos | undefined; estado: string; onEstado: (e: string) => void }) {
   const cuenta = (estados: string[]) => estados.reduce((s, e) => s + (conteos?.por_estado.find((p) => p.estado === e)?.cantidad ?? 0), 0);
-  const valor = (g: GrupoEmbudo) => (conteos ? (g.estados ? cuenta(g.estados) : conteos.contactados) : "…");
+  // Antes del backend del 15-oct no llega en_campana: se cae a contactados
+  // (y Validados incluye a los que ya están en campaña).
+  const enCampana = conteos?.en_campana;
+  const valor = (g: GrupoEmbudo) => {
+    if (!conteos) return "…";
+    if (g.id === "en_campana") return enCampana ?? conteos.contactados;
+    if (g.id === "validados") return cuenta(["validado"]) - (enCampana ?? 0);
+    return cuenta(g.estados ?? []);
+  };
   const detalle = (g: GrupoEmbudo) => {
     if (g.id === "respondieron") {
       const n = cuenta(["interesado"]);

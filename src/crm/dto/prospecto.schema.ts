@@ -106,6 +106,10 @@ export const listProspectosQuerySchema = z.object({
   prioridad: z.enum(["alta", "media", "baja"]).optional(),
   q: z.string().trim().max(255).optional(),
   campanaId: z.coerce.number().int().positive().optional(),
+  // true = validado que ya recibió correo (tarjeta "En campaña"); false =
+  // sin ningún correo (con estado=validado, "listos para campaña").
+  // 15-oct-2026. Mapeo explícito: z.coerce.boolean() tomaría "false" como true.
+  enCampana: z.enum(["true", "false"]).optional().transform((v) => (v === undefined ? undefined : v === "true")),
   // "creado" = los más viejos primero (como siempre); "score" = el más
   // prometedor primero (lista de Prospectos, 9-oct-2026).
   orden: z.enum(["creado", "recientes", "score"]).default("creado")
