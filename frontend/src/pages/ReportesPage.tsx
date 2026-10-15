@@ -99,13 +99,17 @@ export function ReportesPage() {
                   ))}
                 </select>
               )}
-              <Button
-                disabled={exportando}
-                onClick={() => void exportar()}
-                title={errorExportar ?? (periodo === "dia" ? "La bitácora del día en CSV" : `Informe ejecutivo de ${nombreMesLargo(rangos!.actual.fechaFin.slice(0, 7))} en PDF`)}
-              >
-                <Icono nombre="descargar" size={15} /> {exportando ? "Exportando…" : errorExportar ? "Reintentar" : "Exportar"}
-              </Button>
+              {/* Exportar es de administrador y supervisor: GET /reportes/export/*
+                  no está abierto a agentes (403), aunque /reportes/dia sí. */}
+              {esAdminOSupervisor && (
+                <Button
+                  disabled={exportando}
+                  onClick={() => void exportar()}
+                  title={errorExportar ?? (periodo === "dia" ? "La bitácora del día en CSV" : `Informe ejecutivo de ${nombreMesLargo(rangos!.actual.fechaFin.slice(0, 7))} en PDF`)}
+                >
+                  <Icono nombre="descargar" size={15} /> {exportando ? "Exportando…" : errorExportar ? "Reintentar" : "Exportar"}
+                </Button>
+              )}
             </>
           }
         />

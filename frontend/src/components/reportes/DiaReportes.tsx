@@ -179,7 +179,7 @@ export function DiaReportes({ fecha, onFecha, usuarioId, esAdmin, esAdminOSuperv
             <TarjetaReporte
               titulo="Bitácora del día"
               subtitulo={plural(data.bitacora.total, "movimiento", "movimientos")}
-              extra={<BotonCsv reporte="dia" filtros={{ fecha, tipo, usuarioId }} />}
+              extra={esAdminOSupervisor && <BotonCsv reporte="dia" filtros={{ fecha, tipo, usuarioId }} />}
             >
               <div className="-mt-1 mb-4 flex flex-wrap gap-1.5">
                 {TIPOS.map((t) => (
@@ -214,7 +214,9 @@ export function DiaReportes({ fecha, onFecha, usuarioId, esAdmin, esAdminOSuperv
                       Ver {plural(Math.min(POR_PAGINA, data.bitacora.total - data.bitacora.data.length), "movimiento anterior", "movimientos anteriores")}
                     </button>
                   ) : (
-                    <span className="font-semibold text-ink-3">Hay {data.bitacora.total - data.bitacora.data.length} más: descarga el CSV para verlos todos.</span>
+                    <span className="font-semibold text-ink-3">
+                      Hay {data.bitacora.total - data.bitacora.data.length} más{esAdminOSupervisor ? ": descarga el CSV para verlos todos." : "."}
+                    </span>
                   )}
                 </div>
               )}
@@ -257,7 +259,7 @@ export function DiaReportes({ fecha, onFecha, usuarioId, esAdmin, esAdminOSuperv
 
               <TarjetaReporte titulo="Quedó pendiente" subtitulo="vencía ese día y no se cerró">
                 {data.quedo_pendiente.length === 0 ? (
-                  <p className="text-[13px] text-ink-3">Nada: todo lo que vencía se cerró a tiempo.</p>
+                  <p className="text-[13px] text-ink-3">{esHoy ? "Nada vencido sin cerrar por ahora." : "Nada: todo lo que vencía se cerró a tiempo."}</p>
                 ) : (
                   <ul className="flex flex-col divide-y divide-border">
                     {data.quedo_pendiente.map((t) => (

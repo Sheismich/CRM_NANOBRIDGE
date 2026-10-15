@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
@@ -67,6 +67,15 @@ export function EmpresasListPage() {
     setPage(1);
     fn();
   }
+
+  // La búsqueda se aplica sola al dejar de escribir, como en Documentos,
+  // Tareas, Oportunidades y Cotizaciones (15-oct-2026); Enter la aplica de una vez.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (q.trim() !== busqueda) cambiar(() => setBusqueda(q.trim()));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q, busqueda]);
 
   const filtros = {
     page,
@@ -152,7 +161,6 @@ export function EmpresasListPage() {
               className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-strong outline-none placeholder:text-ink-3"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              onBlur={() => q.trim() !== busqueda && cambiar(() => setBusqueda(q.trim()))}
             />
           </label>
           <select aria-label="Giro" className={`${inputBaseClass} h-10 w-auto max-w-[200px]`} value={giro} onChange={(e) => cambiar(() => setGiro(e.target.value))}>

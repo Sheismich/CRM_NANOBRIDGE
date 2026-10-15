@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
@@ -177,6 +177,15 @@ function ListaProspectos({
     fn();
   }
 
+  // La búsqueda se aplica sola al dejar de escribir, como en Documentos,
+  // Tareas, Oportunidades y Cotizaciones (15-oct-2026); Enter la aplica de una vez.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (q.trim() !== busqueda) cambiar(() => setBusqueda(q.trim()));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q, busqueda]);
+
   return (
     <div className="flex flex-col gap-3.5">
       <Embudo conteos={conteos} estado={estado} onEstado={(e) => cambiar(() => setEstado(e === estado ? "" : e))} />
@@ -196,7 +205,6 @@ function ListaProspectos({
             className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-strong outline-none placeholder:text-ink-3"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onBlur={() => q.trim() !== busqueda && cambiar(() => setBusqueda(q.trim()))}
           />
         </label>
         {estado && (

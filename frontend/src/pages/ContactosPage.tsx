@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { clsx } from "clsx";
@@ -61,6 +61,15 @@ export function ContactosPage() {
     fn();
   }
 
+  // La búsqueda se aplica sola al dejar de escribir, como en Documentos,
+  // Tareas, Oportunidades y Cotizaciones (15-oct-2026); Enter la aplica de una vez.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (q.trim() !== busqueda) cambiar(() => setBusqueda(q.trim()));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q, busqueda]);
+
   const filtros = { q: busqueda || undefined, estado: estado || undefined, page, limit: LIMIT };
   const { data, isPending, isError } = useQuery({
     queryKey: ["contactos", filtros],
@@ -111,7 +120,6 @@ export function ContactosPage() {
               className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-strong outline-none placeholder:text-ink-3"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              onBlur={() => q.trim() !== busqueda && cambiar(() => setBusqueda(q.trim()))}
             />
           </label>
           <select aria-label="Estado" className={`${inputBaseClass} h-10 w-auto`} value={estado} onChange={(e) => cambiar(() => setEstado(e.target.value as Estado))}>
