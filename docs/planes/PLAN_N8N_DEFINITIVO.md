@@ -6,7 +6,7 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 
 ## Pendientes en orden (6-oct-2026, actualizado el 7-oct)
 
-1. ~~Prueba en vivo de PT4~~ **Pasó el 6-oct-2026** (envíos 17-19). Siguen: contacto 3 el 13-oct después de las 3 pm e inactivo el 20-oct.
+1. ~~Prueba en vivo de PT4~~ **Pasó el 6-oct-2026** (envíos 17-19). Contacto 3 corrido el 13-oct a las 3:05 pm: llegaron los 3 correos (+prueba1..3) con el link de baja en el pie, y nada a +prueba10/+prueba11 (prospectos 34/35, dados de baja el 8-oct). Sigue: el 20-oct PT4 otra vez → +prueba1..3 deben quedar inactivos sin correo.
 2. ~~Aviso por correo desde B4 (Error Workflow)~~ **Hecho 7-oct-2026** (ver B4, punto 4).
 3. ~~Outbox sin `N8N_WEBHOOK_URL`~~ **Hecho en código 7-oct-2026** (prueba
    `test/345-outbox-sin-destino.spec.ts`): sin URL el despachador no reclama nada y los eventos
