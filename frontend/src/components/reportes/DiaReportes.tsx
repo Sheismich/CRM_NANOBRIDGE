@@ -288,7 +288,7 @@ export function DiaReportes({ fecha, onFecha, usuarioId, esAdmin, esAdminOSuperv
 function Numero({ etiqueta, valor, tono, children }: { etiqueta: string; valor: number; tono?: "ok" | "danger"; children: ReactNode }) {
   return (
     <div className="tarjeta-blanca min-w-0 !rounded-[16px] px-4 py-3.5">
-      <small className="block truncate font-heading text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-3">{etiqueta}</small>
+      <small className="block font-heading text-[10.5px] font-extrabold uppercase leading-snug tracking-[0.8px] text-ink-3 md:text-[11px] md:tracking-[1.2px]">{etiqueta}</small>
       <b className="mono mt-1 block font-display text-[30px] font-normal leading-tight text-strong">{valor}</b>
       <span className={clsx("block truncate text-[12px]", tono === "ok" ? "font-bold text-ok" : tono === "danger" ? "font-bold text-danger" : "text-ink-2")}>{children}</span>
     </div>

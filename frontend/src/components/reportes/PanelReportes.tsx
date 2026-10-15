@@ -222,7 +222,7 @@ function Indicador({
 }) {
   return (
     <div className={clsx("tarjeta-blanca min-w-0 !rounded-[16px] px-4 pb-3 pt-3.5", className)}>
-      <small className="block truncate font-heading text-[11px] font-extrabold uppercase tracking-[1.2px] text-ink-3">{etiqueta}</small>
+      <small className="block font-heading text-[10.5px] font-extrabold uppercase leading-snug tracking-[0.8px] text-ink-3 md:text-[11px] md:tracking-[1.2px]">{etiqueta}</small>
       <b className={clsx("mono mt-1 block font-display text-[30px] font-normal leading-tight", tonoValor === "danger" ? "text-danger" : "text-strong")}>{valor}</b>
       <span className={clsx("block text-[12px] font-bold", !cambio ? "font-medium text-ink-3" : cambio.tono === "ok" ? "text-ok" : cambio.tono === "danger" ? "text-danger" : "text-ink-3")}>
         {cambio?.texto ?? (sinCambio || " ")}
