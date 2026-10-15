@@ -6,6 +6,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { validarParaEnvio } from "./support/prospectos.js";
 import { contactos, envios, mediosContacto } from "../src/database/schema.js";
 
 describe("empresas + contactos", () => {
@@ -99,6 +100,7 @@ describe("empresas + contactos", () => {
     };
     expect((await buscar()).ultima_actividad).toBeNull();
 
+    await validarParaEnvio(db, prospectoId);
     const envio = await request(app.getHttpServer())
       .post("/api/v1/automatizacion/envios")
       .set("X-API-Key", API_KEY)

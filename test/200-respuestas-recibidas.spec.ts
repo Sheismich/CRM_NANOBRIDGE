@@ -6,6 +6,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { validarParaEnvio } from "./support/prospectos.js";
 import { contactos, envios, prospectos, respuestas, tareas } from "../src/database/schema.js";
 
 // Mismo valor fijado en test/setup/setup-env.ts.
@@ -43,6 +44,7 @@ describe("respuestas recibidas: tarea de clasificación y respuestas automática
   }
 
   async function registrarEnvio(prospectoId: number) {
+    await validarParaEnvio(db, prospectoId);
     const res = await api()
       .post("/api/v1/automatizacion/envios")
       .set("X-API-Key", API_KEY)

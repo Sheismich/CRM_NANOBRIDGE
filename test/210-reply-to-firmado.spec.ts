@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { validarParaEnvio } from "./support/prospectos.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { respuestas, tareas } from "../src/database/schema.js";
 import { firmarReplyTo } from "../src/shared/reply-to.js";
@@ -41,7 +42,8 @@ describe("Reply-To firmado", () => {
     return res.body.id as number;
   }
 
-  function registrarEnvio(prospectoId: number, executionId: string = randomUUID()) {
+  async function registrarEnvio(prospectoId: number, executionId: string = randomUUID()) {
+    await validarParaEnvio(db, prospectoId);
     return api()
       .post("/api/v1/automatizacion/envios")
       .set("X-API-Key", API_KEY)

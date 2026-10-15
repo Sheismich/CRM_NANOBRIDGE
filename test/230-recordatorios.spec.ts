@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { validarParaEnvio } from "./support/prospectos.js";
 import { auditoria, campanas, envios, mediosContacto, prospectos } from "../src/database/schema.js";
 import { fechaMx } from "../src/shared/dia-habil.js";
 
@@ -273,7 +274,8 @@ describe("recordatorios: ventanas vencidas con los datos para el correo", () => 
   });
 
   describe("sin correos dobles", () => {
-    function registrarEnvio(prospectoId: number, executionId: string) {
+    async function registrarEnvio(prospectoId: number, executionId: string) {
+      await validarParaEnvio(db, prospectoId);
       return api().post("/api/v1/automatizacion/envios").set("X-API-Key", API_KEY).send({ execution_id: executionId, prospecto_id: prospectoId, canal: "correo" });
     }
 

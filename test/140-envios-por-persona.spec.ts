@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { validarParaEnvio } from "./support/prospectos.js";
 import { envios } from "../src/database/schema.js";
 
 // Mismo valor fijado en test/setup/setup-env.ts.
@@ -49,7 +50,8 @@ describe("Envíos: límite de contactos y ventana de espera por persona", () => 
     return api().get("/api/v1/automatizacion/envios/verificacion").set("X-API-Key", API_KEY).query({ prospecto_id: prospectoId, canal: "correo" });
   }
 
-  function registrarEnvio(prospectoId: number) {
+  async function registrarEnvio(prospectoId: number) {
+    await validarParaEnvio(db, prospectoId);
     return api().post("/api/v1/automatizacion/envios").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), prospecto_id: prospectoId, canal: "correo" });
   }
 

@@ -28,6 +28,9 @@ import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresi
 // estas fallas (un workflow de n8n) de las de un aviso de la API.
 export const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
 
+// POST /automatizacion/envios para un prospecto que no está validado.
+export const CODIGO_PROSPECTO_NO_VALIDADO = "PROSPECTO_NO_VALIDADO";
+
 // Política de contactos (PLAN_N8N_DEFINITIVO.md): máximo tres contactos
 // totales POR PERSONA (contacto), no por prospecto -- la misma persona
 // puede entrar varias veces al flujo de ingesta y cada entrada crea un
@@ -698,6 +701,8 @@ export class AutomatizacionService {
 
     const [prospecto] = await this.db.select({ id: prospectos.id, contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
+    // El estado se revisa dentro de la transacción (abajo, después de la
+    // supresión, para que una baja siga respondiendo "lista de supresión").
 
     // "Cinco días hábiles de espera" (PLAN_N8N_DEFINITIVO.md), en el
     // calendario de México.
@@ -740,6 +745,15 @@ export class AutomatizacionService {
               .where(and(eq(listaSupresion.tipo, input.canal), eq(listaSupresion.valorNormalizado, medio.valorNormalizado)))
               .limit(1);
             if (suprimido) throw new HttpError(409, "El contacto está en la lista de supresión");
+          }
+
+          // Solo un prospecto validado recibe correos (revisión del
+          // 15-oct-2026: había "Capturados" con envíos). n8n registra el
+          // envío ANTES de mandar el correo (necesita el reply_to firmado),
+          // así que este 409 detiene el correo.
+          const [actual] = await tx.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
+          if (actual?.estado !== "validado") {
+            throw new HttpError(409, `El prospecto no está validado (estado: ${actual?.estado ?? "desconocido"})`, CODIGO_PROSPECTO_NO_VALIDADO);
           }
 
           // Va DESPUÉS del FOR UPDATE de arriba a propósito: todos los

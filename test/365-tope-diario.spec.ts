@@ -5,6 +5,7 @@ import { and, eq, gte, inArray, lt, lte, notInArray, sql } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
+import { validarParaEnvio } from "./support/prospectos.js";
 import { envios } from "../src/database/schema.js";
 import { env } from "../src/config/env.js";
 import { diaSiguiente, fechaMx, inicioDelDiaMxSql } from "../src/shared/dia-habil.js";
@@ -56,6 +57,7 @@ describe("tope diario de correos", () => {
       .post("/api/v1/automatizacion/prospectos")
       .set("X-API-Key", API_KEY)
       .send({ execution_id: randomUUID(), empresa: { nombreLegal: `Empresa Tope ${randomUUID()}` }, contacto: { nombre: "Persona Tope", correo: `tope.${randomUUID()}@tope.test` } });
+    await validarParaEnvio(db, prospecto.body.id);
     const envio = await api()
       .post("/api/v1/automatizacion/envios")
       .set("X-API-Key", API_KEY)
