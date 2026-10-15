@@ -13,20 +13,30 @@ import type { Usuario } from "../../types";
 // números en renglones. Se elige el mes (los últimos 12) y, si se quiere,
 // un agente. Va en la franja de abajo de Oportunidades (pantalla de Mich:
 // solo se coloca, ver PLAN_FRONTEND.md).
+//
+// `enFranja` (Mich, 15-oct-2026): la versión compacta del diseño
+// (capturas/oportunidades-franja.png), a la derecha de la tasa de
+// conversión: etiqueta, mes, PDF y CSV. El agente es el que esté elegido en
+// el filtro "Responsable" de la pantalla (`responsableId`), sin otro selector.
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
 function ultimosMeses(ahora: Date) {
   return Array.from({ length: 12 }, (_, i) => {
     const d = new Date(ahora.getFullYear(), ahora.getMonth() - i, 1);
-    return { valor: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, etiqueta: `${MESES[d.getMonth()]} ${d.getFullYear()}${i === 0 ? " (este mes)" : ""}` };
+    return {
+      valor: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      etiqueta: `${MESES[d.getMonth()]} ${d.getFullYear()}${i === 0 ? " (este mes)" : ""}`,
+      corta: `${MESES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`
+    };
   });
 }
 
-export function InformeEjecutivo({ agentes, className }: { agentes?: Usuario[]; className?: string }) {
+export function InformeEjecutivo({ agentes, className, enFranja = false, responsableId }: { agentes?: Usuario[]; className?: string; enFranja?: boolean; responsableId?: string }) {
   const meses = ultimosMeses(new Date());
   const [mes, setMes] = useState(meses[0].valor);
-  const [agente, setAgente] = useState("");
+  const [elegido, setAgente] = useState("");
+  const agente = enFranja ? (responsableId ?? "") : elegido;
   const [bajando, setBajando] = useState<"pdf" | "csv" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +51,28 @@ export function InformeEjecutivo({ agentes, className }: { agentes?: Usuario[]; 
     } finally {
       setBajando(null);
     }
+  }
+
+  if (enFranja) {
+    return (
+      <div className={clsx("flex flex-wrap items-center gap-2", className)}>
+        <span className="font-heading text-[11px] font-extrabold uppercase tracking-[1.5px] text-ink-3">Informe ejecutivo</span>
+        <select aria-label="Mes del informe" className={`${inputBaseClass} h-9 flex-[1_1_100%] py-1 text-[12.5px] md:w-auto md:flex-none`} value={mes} onChange={(e) => setMes(e.target.value)}>
+          {meses.map((m) => (
+            <option key={m.valor} value={m.valor}>
+              {m.corta}
+            </option>
+          ))}
+        </select>
+        <Button className="!px-3.5 !py-2" disabled={bajando !== null} onClick={() => void descargar("pdf")}>
+          <Icono nombre="documento" size={15} /> {bajando === "pdf" ? "Generando…" : "PDF"}
+        </Button>
+        <Button variant="outline" className="!px-3.5 !py-2" disabled={bajando !== null} onClick={() => void descargar("csv")}>
+          <Icono nombre="descargar" size={15} /> {bajando === "csv" ? "…" : "CSV"}
+        </Button>
+        {error && <p className="w-full text-[12.5px] text-danger">{error}</p>}
+      </div>
+    );
   }
 
   return (

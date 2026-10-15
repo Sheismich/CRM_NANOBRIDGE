@@ -184,10 +184,9 @@ export function OportunidadesPage() {
               />
             )}
             {catalogos && etapas.length > 0 && <TableroOportunidades columnas={columnas} catalogos={catalogos} verResponsable={esAdminOSupervisor} onAbrir={setAbierta} />}
-            {esAdminOSupervisor && <Conversion datos={conversion} />}
-            {/* Informe ejecutivo (Fabián, 13-oct-2026): va en la franja de
-                abajo; solo se coloca, el componente es de Fabián. */}
-            {esAdminOSupervisor && <InformeEjecutivo agentes={personas?.filter((u) => u.rol === "agente")} />}
+            {/* Informe ejecutivo (Fabián, 13-oct-2026) dentro de la franja de
+                conversión, como el diseño; el componente es de Fabián. */}
+            {esAdminOSupervisor && <Conversion datos={conversion} extra={<InformeEjecutivo enFranja responsableId={responsableId || undefined} className="md:ml-auto" />} />}
           </>
         )}
         {vista === "cerradas" && <Cerradas responsableId={responsableId} busqueda={busqueda} verResponsable={esAdminOSupervisor} onAbrir={setAbierta} />}
@@ -270,7 +269,7 @@ function Numero({ etiqueta, valor, detalle, grande, tono, className }: { etiquet
 }
 
 // Tasa de conversión y tiempo promedio para cerrar (conversion-etapas).
-function Conversion({ datos }: { datos: ConversionConCiclo | undefined }) {
+function Conversion({ datos, extra }: { datos: ConversionConCiclo | undefined; extra?: ReactNode }) {
   const ganada = datos?.etapas.find((e) => e.etapa_clave === "ganada");
   const tasa = ganada?.conversion_desde_calificada_pct ?? null;
   const dias = datos?.ciclo_medio_venta?.dias ?? null;
@@ -287,6 +286,7 @@ function Conversion({ datos }: { datos: ConversionConCiclo | undefined }) {
           {" · "}tiempo promedio para cerrar: <b className="text-strong">{dias == null ? "—" : `${Math.round(dias)} días`}</b>
         </span>
       </div>
+      {extra}
     </section>
   );
 }
