@@ -155,7 +155,7 @@ export function DocumentosPage() {
         {isError && <p className="p-5 text-[13px] text-danger">No se pudieron cargar los documentos.</p>}
         {data && data.data.length === 0 && (
           <p className="p-5 text-[13px] text-ink-2">
-            {hayFiltro ? "No hay documentos con esos filtros." : revision === "por_revisar" ? "No hay nada por revisar. Todo al día. 👌" : "No hay documentos aquí todavía."}
+            {hayFiltro ? "No hay documentos con esos filtros." : revision === "por_revisar" ? "No hay nada por revisar. Todo al día." : "No hay documentos aquí todavía."}
           </p>
         )}
         <ul>

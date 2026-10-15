@@ -64,7 +64,7 @@ export function MiDia({ usuarioId, esAdminOSupervisor, onIrACola }: { usuarioId:
           <Tarjeta className="min-h-[200px]">
             <MarcaDeAgua className="-bottom-[70px] -right-10 w-[300px]" />
             <div className="relative">
-              <h2 className="font-heading text-[24px] font-black text-strong">Nada pendiente 🎉</h2>
+              <h2 className="font-heading text-[24px] font-black text-strong">Nada pendiente</h2>
               <p className="mt-2 max-w-md text-[14px] text-ink-2">No tienes tareas abiertas. Si quedaste en llamar o escribirle a alguien, anótalo con «Nueva tarea» para que no se te pase.</p>
             </div>
           </Tarjeta>
@@ -388,7 +388,7 @@ function DelEquipo({ usuarioId, ahora }: { usuarioId: number; ahora: Date }) {
 
   return (
     <Tarjeta titulo="Del equipo" icono="equipo" extra={sinAsignar.length > 0 && <Pastilla tono="navy" mayusculas>{`${sinAsignar.length}${data?.completo ? "" : "+"} sin asignar`}</Pastilla>} cuerpoClassName="!pt-3">
-      {data && sinAsignar.length === 0 && <p className="text-[13px] text-ink-2">Nada sin asignar. 👌</p>}
+      {data && sinAsignar.length === 0 && <p className="text-[13px] text-ink-2">Nada sin asignar.</p>}
       <ul className="flex flex-col gap-2">
         {sinAsignar.slice(0, 4).map((t) => (
           <li key={t.id} className="flex items-center gap-3 rounded-[12px] bg-soft px-3 py-2.5">

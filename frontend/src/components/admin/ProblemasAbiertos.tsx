@@ -75,7 +75,7 @@ export function ProblemasAbiertos({ onVerDetalle }: { onVerDetalle: () => void }
       )}
       {isPending && <p className="p-5 text-[13px] text-ink-3">Cargando…</p>}
       {isError && <p className="p-5 text-[13px] text-danger">No se pudieron cargar los problemas.</p>}
-      {data && grupos.length === 0 && <p className="p-5 text-[13px] text-ink-2">{estado ? "Todavía no hay problemas resueltos." : "No hay problemas abiertos. 👌"}</p>}
+      {data && grupos.length === 0 && <p className="p-5 text-[13px] text-ink-2">{estado ? "Todavía no hay problemas resueltos." : "No hay problemas abiertos."}</p>}
       <ul>
         {grupos.map((g) => (
           <li key={g.clave} className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-border px-4 py-4 first:border-t-0 md:flex-nowrap md:px-5">
