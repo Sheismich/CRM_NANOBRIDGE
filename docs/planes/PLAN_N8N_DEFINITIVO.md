@@ -57,14 +57,29 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
        orden de llegada, solo de campañas activas, hasta `NUEVOS_POR_DIA` (10) al día sin pasar
        de `TOPE_DIARIO_CORREOS`, que cuenta los recordatorios ya enviados. Misma `execution_id`
        = mismos prospectos. Si uno tomado no avanzó en 24 h, se puede volver a tomar. Cada uno
-       trae `prospecto_id, campana_id, correo, contacto_nombre, empresa_nombre, giro` y entra
+       trae `prospecto_id, campana_id, correo, contacto_nombre, empresa_nombre, giro, tamano, region,
+       telefono` (los tres últimos, para el score) y entra
        directo a Validaciones; lo que cambió mientras esperaba, Validaciones y `verificarEnvio`
        lo vuelven a revisar.
      - Horario el día de encender: PT4 a las 9:00 y PT1 a las 10:00, de lunes a viernes. Mientras
        sigan las pruebas, a mano. Feriados: apagarlo a mano (16-nov-2026). Ritmo real esperado:
        unos 6-7 nuevos al día. El primer recordatorio sale al 6.º día hábil.
-     - API hecha el 16-oct-2026 (migración 031, `test/485-fila-automatizacion.spec.ts`).
-       Faltan la pantalla (Prospectos), el arranque nuevo de PT1 (por prompts) y la prueba en vivo.
+     - **Hecho y probado en vivo el 16-oct-2026.** API (migración 031,
+       `test/485-fila-automatizacion.spec.ts`, revisiones 00030-gq4 y 00031-rww), pantalla de
+       Prospectos y n8n:
+       - Flujo nuevo **"PT1a. tomar de la fila"** (`mYFI6MsAUcuvsDte`): Manual Trigger → POST
+         `fila/tomar` (`limite: 10`, Retry On Fail) → Split Out de `data` → Execute Workflow de PT1
+         una vez por prospecto (On Error = Continue; error workflow B4). Fila vacía = termina sin error.
+       - **PT1** arranca con "When Executed by Another Workflow" → Code "Datos del prospecto" (arma
+         el mismo `prospecto` que antes armaba "validacion de Formato", con el giro normalizado) →
+         Validaciones. "preparar solicitud" lee de "Datos del prospecto". El Webhook se borró: PT1
+         maneja un prospecto por ejecución (todos sus nodos usan `.first()`), por eso el reparto va
+         en PT1a. PT1 tiene que estar publicado para que PT1a lo llame.
+       - Prueba en vivo: Daniel (La Casa del Chilaquil) salió de la fila, quedó validado con score 47
+         y el correo llegó a Gmail.
+       - Falta: borrar de PT1 los nodos viejos que quedaron sueltos ("validacion de Formato", "If",
+         "HTTP Request1", "cuenta intentos y normalizacion", "If1", "Tareas") y, el día de encender,
+         cambiar el Manual Trigger de PT1a por el horario de las 10:00.
    - LinkedIn: sin correo, PT1 no puede escribirles. A quien pide el servicio quizá le conviene
      más que le escriba un vendedor que la secuencia automática; lo decide Carlos.
    - Sigue pendiente de Carlos lo legal (aviso de privacidad), que aplica a los dos orígenes.

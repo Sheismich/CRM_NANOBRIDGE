@@ -267,6 +267,7 @@ Actualiza esta tabla en cada deploy.
 | 15-oct-2026 | `nanobridge-api-00028-cs9` | `3824942` | (sin migración) | Pendientes de la revisión de la vista previa: `GET /tareas?empresaId=` y `prospeccion` en `GET /empresas/:id` (ficha), `en_campana` en `/prospectos/conteos` y filtro `enCampana`, tareas reprogramadas en Reportes · Día, **aceptar una cotización gana su oportunidad** (valor = total aceptado) y **`POST /automatizacion/envios` responde 409 `PROSPECTO_NO_VALIDADO`** si el prospecto no está validado (vigilar el siguiente PT1/PT4: un 409 ahí lo avisa B4). `/health` ok |
 | 15-oct-2026 | `nanobridge-api-00029-hjq` | `6bd5dad` | (sin migración) | **Día del cambio**: el front nuevo pasó a la liga oficial (`hosting:clone` del canal `nuevo-diseno` a `live`, 14:47) y luego este backend: `/auditoria` solo del administrador, motivo de rechazo de cotización obligatorio y `PATCH /documentos/:id/revisar` solo administrador y supervisor. `/health` ok; Administración en la liga oficial enseña "revisión 00029-hjq" (`/admin/salud` con sesión, revisado) |
 | 16-oct-2026 | `nanobridge-api-00030-gq4` | `ef5e06c` | `031_fila_automatizacion.sql` | API del botón "Mandar a automatización": fila de PT1 (`POST /prospectos/automatizacion`, `POST /prospectos/:id/sacar-de-fila`, `POST /automatizacion/prospectos/fila/tomar`), `NUEVOS_POR_DIA` = 10 por defecto (sin poner). **Se desplegó antes de migrar y Prospectos dejó de cargar** (el código lee las columnas `fila_*`, y las altas de prospectos también fallaban): se regresó el tráfico a 00029-hjq, se aplicó la 031 y se volvió con `--to-latest`. Prospectos carga; las rutas nuevas responden 401 sin llave o sesión |
+| 16-oct-2026 | `nanobridge-api-00031-rww` | `6544339` | (sin migración) | `fila/tomar` también regresa `tamano`, `region` y `telefono` (los usa el score de PT1, que ahora arranca desde la fila con el flujo nuevo "PT1a. tomar de la fila"). El mismo commit trae el front del botón en Prospectos (casillas, tarjeta "En fila", modal, sacar de la fila). `/health` ok |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
@@ -470,21 +471,21 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       van primero (PT4 corre antes) y los nuevos solo usan lo que sobra del
       tope, hasta `NUEVOS_POR_DIA`.
 - [ ] Publicar PT4 con horario de lunes a viernes a las **9:00** (hora de México).
-- [ ] Botón "Mandar a automatización" en el CRM (entrada de prospectos a PT1,
-      opción B decidida el 15-oct-2026): sin él, un CSV importado se queda en
-      `capturado` y no le sale ningún correo. **API hecha el 16-oct-2026**
-      (migración 031, `POST /prospectos/automatizacion`,
-      `POST /prospectos/:id/sacar-de-fila`,
-      `POST /automatizacion/prospectos/fila/tomar`); faltan la pantalla, el
-      arranque nuevo de PT1 y la prueba en vivo con +prueba12.
-      Decisiones en `PLAN_N8N_DEFINITIVO.md` punto 7.
+- [x] Botón "Mandar a automatización" en el CRM (entrada de prospectos a PT1,
+      opción B decidida el 15-oct-2026). **Hecho y probado en vivo el 16-oct-2026**:
+      API (migración 031, revisiones 00030-gq4 y 00031-rww), pantalla de
+      Prospectos y PT1 arrancando desde la fila con el flujo nuevo "PT1a. tomar
+      de la fila". El correo de prueba llegó a Gmail. Detalle en
+      `PLAN_N8N_DEFINITIVO.md` punto 7.
 - [ ] `NUEVOS_POR_DIA` (10 por defecto, ya en el código): cuántos nuevos toma
       PT1 de la fila al día. Se cambia con `--update-env-vars NUEVOS_POR_DIA=…`,
       nunca con `--set-env-vars`. Con tope 20 y 3 correos por persona, el
       ritmo real se queda en unos **6-7 nuevos al día**: la lista de 30 de
       Carlos sale en unos 3 días hábiles.
-- [ ] Horario de PT1: lunes a viernes a las **10:00** (después de PT4). Mientras
-      sigan las pruebas, PT1 se corre a mano.
+- [ ] Horario de PT1: lunes a viernes a las **10:00** (después de PT4). El
+      horario va en **PT1a** (cambiar su Manual Trigger por un Schedule), no en
+      PT1, que ahora solo se ejecuta llamado por PT1a. Mientras sigan las
+      pruebas, PT1a se corre a mano.
 - [ ] **Lunes 16-nov-2026 (feriado): apagar PT1 y PT4 a mano.** Ni n8n ni la
       API conocen los feriados.
 - Nota, no es error: el primer recordatorio sale al **6.º día hábil**, no al

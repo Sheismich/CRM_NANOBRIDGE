@@ -94,7 +94,9 @@ export function MandarAutomatizacionModal({
     }
   }
 
-  const titulo = prospectos.length === 1 ? "Mandar a automatización" : `Mandar ${prospectos.length} a automatización`;
+  // Si todos ya esperan en la fila, lo único que hace es cambiarles la campaña.
+  const soloCambio = yaEnFila === prospectos.length;
+  const titulo = soloCambio ? "Cambiar de campaña" : prospectos.length === 1 ? "Mandar a automatización" : `Mandar ${prospectos.length} a automatización`;
 
   if (resultado) {
     const { agregados, cambiados, rechazados } = resultado;
@@ -134,7 +136,7 @@ export function MandarAutomatizacionModal({
             Cancelar
           </Button>
           <Button onClick={() => void mandar()} disabled={enviando || !campana || demasiados}>
-            {enviando ? "Mandando…" : "Mandar"}
+            {enviando ? "Guardando…" : soloCambio ? "Cambiar campaña" : "Mandar"}
           </Button>
         </>
       }
