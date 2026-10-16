@@ -35,6 +35,12 @@ export function campanaEnEsperaSql(hoy: string) {
   return sql`((${campanas.estado} = 'pausada' OR (${campanas.estado} = 'activa' AND NOT ${campanaYaEmpezoSql(hoy)})) AND ${campanaNoHaTerminadoSql(hoy)})`;
 }
 
+// Predicado SQL de "activa" (la fila de automatización solo entrega gente de
+// campañas que mandan hoy). Debe coincidir con vigenciaCampana().
+export function campanaActivaSql(hoy: string) {
+  return sql`(${campanas.estado} = 'activa' AND ${campanaYaEmpezoSql(hoy)} AND ${campanaNoHaTerminadoSql(hoy)})`;
+}
+
 type EstadoCampana = typeof campanas.$inferSelect["estado"];
 
 // MySQL devuelve las comparaciones como 0/1 (a veces como texto).

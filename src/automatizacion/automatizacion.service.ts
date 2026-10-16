@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, gte, inArray, isNotNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, procesosFallidos, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
@@ -10,7 +10,9 @@ import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
 import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
-import { campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
+import { MAX_CONTACTOS_POR_CICLO, cicloActualDePersona, correoUtilizable } from "../shared/ciclo-contacto.js";
+import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
+import { HORAS_PARA_RETOMAR_DE_FILA } from "../shared/listo-para-automatizacion.js";
 import { diaSiguiente, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
 import { env } from "../config/env.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
@@ -18,7 +20,7 @@ import { firmarReplyTo, leerReplyTo, tieneFormaDeReplyTo } from "../shared/reply
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import { EVENTOS_BAJA_DE_PERSONA } from "./dto/automatizacion.schema.js";
-import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, RespuestaSugeridaInput, ScoringInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
+import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, RespuestaSugeridaInput, ScoringInput, TomarDeFilaInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
 // tipo fijo de incidencias.tipo para todo lo que reporta el Error Workflow
 // global de n8n (B4) — junto con execution_id es la pareja que usa el
@@ -31,13 +33,9 @@ export const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
 // POST /automatizacion/envios para un prospecto que no está validado.
 export const CODIGO_PROSPECTO_NO_VALIDADO = "PROSPECTO_NO_VALIDADO";
 
-// Política de contactos (PLAN_N8N_DEFINITIVO.md): máximo tres contactos
-// totales POR PERSONA (contacto), no por prospecto -- la misma persona
-// puede entrar varias veces al flujo de ingesta y cada entrada crea un
-// prospecto nuevo. Tras MESES_ENFRIAMIENTO sin ningún contacto, la persona
-// puede arrancar un ciclo nuevo (decisión de negocio, 23-sep-2026).
-const MAX_CONTACTOS_POR_CICLO = 3;
-const MESES_ENFRIAMIENTO = 6;
+// La política de contactos (máximo 3 por persona, 6 meses de espera) vive
+// en shared/ciclo-contacto.ts: el botón "Mandar a automatización" del CRM
+// revisa lo mismo.
 
 // Estados en los que un prospecto ya no recibe recordatorios: respondió y
 // se clasificó, pidió la baja, o la automatización lo sacó del flujo.
@@ -58,12 +56,6 @@ type DatosRecordatorio = {
   campana_id: number | null;
   campana_activa: boolean | null;
 };
-
-function sumarMeses(fecha: Date, meses: number): Date {
-  const result = new Date(fecha);
-  result.setMonth(result.getMonth() + meses);
-  return result;
-}
 
 @Injectable()
 export class AutomatizacionService {
@@ -405,6 +397,114 @@ export class AutomatizacionService {
     throw new HttpError(409, "No se pudo registrar el prospecto tras varios intentos concurrentes; reintenta");
   }
 
+  // --- Fila de automatización (botón "Mandar a automatización", 16-oct-2026) ---
+  // PT1 ya no registra prospectos: toma de la fila que arma el CRM, en orden
+  // de llegada y solo de campañas activas (las pausadas o que aún no empiezan
+  // esperan; las terminadas se quedan para que alguien las cambie). Cupo del
+  // día: NUEVOS_POR_DIA tomados hoy, sin pasarse de TOPE_DIARIO_CORREOS
+  // contando los recordatorios que ya salieron (PT4 corre antes).
+  //
+  // - Idempotente por execution_id: si esta ejecución ya tomó, recibe los
+  //   mismos que siguen en_fila y nada más (Retry On Fail de n8n).
+  // - Los tomados se quedan en_fila con fila_tomado_en; Validaciones los
+  //   mueve a validado/excluido. Si en HORAS_PARA_RETOMAR_DE_FILA no
+  //   avanzaron (PT1 se cayó antes), se pueden volver a tomar.
+  async tomarDeFila(input: TomarDeFilaInput) {
+    const hoy = fechaMx(new Date());
+    return this.db.transaction(async (tx) => {
+      // Primero se bloquea toda la fila (son decenas o cientos de renglones):
+      // dos corridas a la vez se forman, y la segunda cuenta el cupo con lo
+      // que ya tomó la primera. Sin esto las dos veían cupo 10 y salían 20.
+      await tx.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.estado, "en_fila")).for("update");
+
+      const [deEstaEjecucion] = await tx.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.filaExecutionId, input.execution_id)).limit(1);
+      const correosHoy = await this.correosEnviadosHoy(tx);
+      const [tomados] = await tx.select({ n: sql<number>`COUNT(*)`.mapWith(Number) }).from(prospectos).where(and(
+        gte(prospectos.filaTomadoEn, sql`${inicioDelDiaMxSql(hoy)}`),
+        lt(prospectos.filaTomadoEn, sql`${inicioDelDiaMxSql(diaSiguiente(hoy))}`)
+      ));
+      const tomadosHoy = tomados?.n ?? 0;
+
+      let ids: number[];
+      let nuevos = 0;
+      if (deEstaEjecucion) {
+        const mismos = await tx
+          .select({ id: prospectos.id })
+          .from(prospectos)
+          .where(and(eq(prospectos.filaExecutionId, input.execution_id), eq(prospectos.estado, "en_fila")))
+          .orderBy(asc(prospectos.filaDesde), asc(prospectos.id));
+        ids = mismos.map((m) => m.id);
+      } else {
+        const cupo = Math.min(input.limite, env.NUEVOS_POR_DIA - tomadosHoy, env.TOPE_DIARIO_CORREOS - correosHoy);
+        const candidatos = cupo <= 0 ? [] : await tx
+          .select({ id: prospectos.id })
+          .from(prospectos)
+          .innerJoin(campanas, eq(campanas.id, prospectos.campanaId))
+          .where(and(
+            eq(prospectos.estado, "en_fila"),
+            or(isNull(prospectos.filaTomadoEn), sql`${prospectos.filaTomadoEn} < CURRENT_TIMESTAMP - INTERVAL ${sql.raw(String(HORAS_PARA_RETOMAR_DE_FILA))} HOUR`),
+            campanaActivaSql(hoy)
+          ))
+          .orderBy(asc(prospectos.filaDesde), asc(prospectos.id))
+          .limit(cupo);
+        ids = candidatos.map((c) => c.id);
+        nuevos = ids.length;
+        if (nuevos > 0) {
+          await tx.update(prospectos).set({ filaTomadoEn: sql`CURRENT_TIMESTAMP`, filaExecutionId: input.execution_id }).where(inArray(prospectos.id, ids));
+          await tx.insert(auditoria).values(ids.map((id) => ({
+            usuarioId: null,
+            entidad: "prospecto",
+            entidadId: id,
+            accion: "tomar_de_fila",
+            despues: { execution_id: input.execution_id }
+          })));
+        }
+      }
+
+      const data = [];
+      if (ids.length > 0) {
+        const filas = await tx
+          .select({
+            prospectoId: prospectos.id,
+            campanaId: prospectos.campanaId,
+            contactoId: prospectos.contactoId,
+            contactoNombre: contactos.nombre,
+            empresaNombre: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
+            giro: empresas.giro,
+            filaDesde: prospectos.filaDesde
+          })
+          .from(prospectos)
+          .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+          .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+          .where(inArray(prospectos.id, ids))
+          .orderBy(asc(prospectos.filaDesde), asc(prospectos.id));
+        // Mismos datos que un recordatorio de PT4 (destinoDeRecordatorio):
+        // PT1 arma el correo sin otra consulta. correo null = ya no hay uno
+        // utilizable (se suprimió mientras esperaba); PT1 lo excluye en la
+        // verificación de envío, como siempre.
+        for (const f of filas) {
+          const correo = await correoUtilizable(tx, f.contactoId);
+          data.push({
+            prospecto_id: f.prospectoId,
+            campana_id: f.campanaId,
+            correo: "valor" in correo ? correo.valor : null,
+            contacto_nombre: f.contactoNombre,
+            empresa_nombre: f.empresaNombre,
+            giro: f.giro,
+            fila_desde: f.filaDesde
+          });
+        }
+      }
+
+      const libresDelTope = env.TOPE_DIARIO_CORREOS - correosHoy - nuevos;
+      return {
+        data,
+        cupo_restante: Math.max(0, Math.min(env.NUEVOS_POR_DIA - tomadosHoy - nuevos, libresDelTope)),
+        tope_diario_alcanzado: libresDelTope <= 0
+      };
+    });
+  }
+
   // --- Consulta de prospecto para scoring ---------------------------------------
   // B2 (PLAN_API_DEFINITIVO.md #14): datos firmográficos para que n8n arme
   // el prompt de Gemini. Deliberadamente no incluye correo ni teléfono
@@ -568,33 +668,6 @@ export class AutomatizacionService {
     return !!suprimido;
   }
 
-  // Compartido por verificarEnvio(), registrarEnvio() y
-  // listarVentanasVencidas(): envíos del ciclo actual de la PERSONA en este
-  // canal, sumando todos sus prospectos, del más reciente al más antiguo.
-  // Antes se contaba por prospecto_id, así que un reingreso de la misma
-  // persona (prospecto nuevo, mismo contacto) arrancaba otra vez en 0
-  // envíos y sin ventana abierta (hallazgo de la auditoría del workflow
-  // "PT1. ingesta y scoring", 22-sep-2026). El ciclo se corta en el primer
-  // hueco de MESES_ENFRIAMIENTO o más: si el último envío ya tiene esa
-  // antigüedad, el ciclo está vacío y la persona vuelve a empezar.
-  private async cicloActualDePersona(db: DrizzleDb | DrizzleTx, contactoId: number, canal: "correo" | "whatsapp") {
-    const rows = await db
-      .select({ id: envios.id, enviadoEn: envios.enviadoEn, ventanaEstado: envios.ventanaEstado, ventanaVenceEn: envios.ventanaVenceEn })
-      .from(envios)
-      .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
-      .where(and(eq(prospectos.contactoId, contactoId), eq(envios.canal, canal)))
-      .orderBy(desc(envios.enviadoEn), desc(envios.id));
-
-    const ciclo: typeof rows = [];
-    let referencia = new Date();
-    for (const row of rows) {
-      if (sumarMeses(row.enviadoEn, MESES_ENFRIAMIENTO) <= referencia) break;
-      ciclo.push(row);
-      referencia = row.enviadoEn;
-    }
-    return ciclo;
-  }
-
   // --- Verificación de envío ----------------------------------------------------------
   // B1, paso 9 (PLAN_N8N_DEFINITIVO.md): gate antes de enviar. Bloquea por
   // canal apagado (política de contactos: WhatsApp sigue desactivado hasta
@@ -659,7 +732,7 @@ export class AutomatizacionService {
       return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto está en la lista de supresión", numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
-    const ciclo = await this.cicloActualDePersona(this.db, prospecto.contactoId, query.canal);
+    const ciclo = await cicloActualDePersona(this.db, prospecto.contactoId, query.canal);
     const ultimo = ciclo[0];
     const total = ciclo.length;
 
@@ -761,7 +834,7 @@ export class AutomatizacionService {
           // medios_contacto, así que dos envíos concurrentes para la misma
           // persona (desde prospectos distintos, donde el UNIQUE de
           // numero_contacto no los detecta) se serializan aquí.
-          const ciclo = await this.cicloActualDePersona(tx, prospecto.contactoId, input.canal);
+          const ciclo = await cicloActualDePersona(tx, prospecto.contactoId, input.canal);
           if (ciclo.length >= MAX_CONTACTOS_POR_CICLO) throw new HttpError(409, "Máximo de 3 contactos alcanzado para esta persona y canal");
           const ultimoDePersona = ciclo[0];
           if (ultimoDePersona && ultimoDePersona.ventanaEstado === "abierta" && ultimoDePersona.ventanaVenceEn > new Date()) {
@@ -885,7 +958,7 @@ export class AutomatizacionService {
       let correosQueSalen = 0;
       for (const row of rows) {
         const contactoId = contactoDe.get(row.prospectoId)!;
-        const ciclo = await this.cicloActualDePersona(tx, contactoId, row.canal);
+        const ciclo = await cicloActualDePersona(tx, contactoId, row.canal);
         if (ciclo[0]?.id !== row.id) {
           reclamadas.push(row.id);
           continue;
@@ -971,7 +1044,7 @@ export class AutomatizacionService {
     const campanaActiva = contexto.campanaId === null || contexto.campanaEstado === null
       ? null
       : vigenciaCampana(contexto.campanaEstado, contexto.campanaYaEmpezo, contexto.campanaNoHaTerminado).vigencia === "activa";
-    const correo: CorreoDeRecordatorio = canal === "correo" ? await this.correoParaRecordatorio(tx, contactoId) : { motivo: "canal_desactivado" };
+    const correo: CorreoDeRecordatorio = canal === "correo" ? await correoUtilizable(tx, contactoId) : { motivo: "canal_desactivado" };
     const datos = {
       correo: "valor" in correo ? correo.valor : null,
       contacto_nombre: contexto.contactoNombre,
@@ -987,26 +1060,6 @@ export class AutomatizacionService {
     return datos;
   }
 
-  // El correo al que se manda: uno activo y fuera de lista_supresion (el
-  // principal primero). "sin_correo" si la persona no tiene ninguno
-  // utilizable; "suprimido" si los que tiene están dados de baja.
-  private async correoParaRecordatorio(tx: DrizzleTx, contactoId: number): Promise<CorreoDeRecordatorio> {
-    const medios = await tx
-      .select({ valor: mediosContacto.valor, valorNormalizado: mediosContacto.valorNormalizado, estado: mediosContacto.estadoContacto })
-      .from(mediosContacto)
-      .where(and(eq(mediosContacto.contactoId, contactoId), eq(mediosContacto.tipo, "correo"), inArray(mediosContacto.estadoContacto, ["activo", "no_contactar"])))
-      .orderBy(desc(mediosContacto.esPrincipal), mediosContacto.id);
-    if (medios.length === 0) return { motivo: "sin_correo" as const };
-
-    const suprimidos = await tx
-      .select({ valorNormalizado: listaSupresion.valorNormalizado })
-      .from(listaSupresion)
-      .where(and(eq(listaSupresion.tipo, "correo"), inArray(listaSupresion.valorNormalizado, medios.map((m) => m.valorNormalizado))));
-    const enSupresion = new Set(suprimidos.map((s) => s.valorNormalizado));
-
-    const utilizable = medios.find((m) => m.estado === "activo" && !enSupresion.has(m.valorNormalizado));
-    return utilizable ? { valor: utilizable.valor } : { motivo: "suprimido" as const };
-  }
 
   // --- Campaña activa ----------------------------------------------------------------
   // B1, paso previo a "Registro de envío" (PLAN_N8N_DEFINITIVO.md): n8n

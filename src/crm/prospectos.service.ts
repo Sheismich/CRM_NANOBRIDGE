@@ -10,9 +10,12 @@ import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { parseCsv } from "../shared/csv.js";
 import { decodificarArchivoTexto } from "../shared/texto.js";
 import { buscarPersona } from "../shared/identidad.js";
-import { personaEnBaja } from "../shared/baja-prospecto.js";
+import { bloquearPersona, personaEnBaja } from "../shared/baja-prospecto.js";
+import { campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
+import { fechaMx } from "../shared/dia-habil.js";
+import { revisarListoParaAutomatizacion, tomadoDeFilaHace } from "../shared/listo-para-automatizacion.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
-import { COLUMNAS_CSV, filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ConteosProspectosQuery, type ProspectoInput } from "./dto/prospecto.schema.js";
+import { COLUMNAS_CSV, filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ConteosProspectosQuery, type MandarAutomatizacionInput, type ProspectoInput } from "./dto/prospecto.schema.js";
 
 const BORRADORES_TTL_DIAS = 30;
 // Tope defensivo por importación: STEELSAFE (el primer caso de uso real)
@@ -25,6 +28,11 @@ export const CODIGO_IMPORTACION_VENCIDA = "IMPORTACION_VENCIDA";
 export const CODIGO_CONTACTO_DE_OTRO_AGENTE = "CONTACTO_DE_OTRO_AGENTE";
 export const CODIGO_CONTACTO_DESACTIVADO = "CONTACTO_DESACTIVADO";
 export const CODIGO_PERSONA_YA_REGISTRADA = "PERSONA_YA_REGISTRADA";
+// Fila de automatización (16-oct-2026).
+export const CODIGO_CAMPANA_TERMINADA = "CAMPANA_TERMINADA";
+export const CODIGO_NO_EN_FILA = "NO_EN_FILA";
+export const CODIGO_PROSPECTO_YA_TOMADO = "PROSPECTO_YA_TOMADO";
+const ESTADOS_QUE_ENTRAN_A_FILA: readonly string[] = ["capturado", "excluido"];
 
 type ErrorFila = { campo: string; mensaje: string };
 type BorradorRow = typeof borradoresCaptura.$inferSelect;
@@ -38,6 +46,24 @@ type Candidato = {
 
 // El prospecto ya recibió al menos un correo.
 const tieneEnvios = () => sql`EXISTS (SELECT 1 FROM ${envios} WHERE ${envios.prospectoId} = ${prospectos.id})`;
+
+// Lo de la fila de automatización que enseñan la lista y el detalle (con
+// leftJoin a campanas). fila_posicion: 1 = el siguiente en salir, contando a
+// todos los que esperan sin que PT1 los haya tomado; null si no está en la
+// fila o si ya lo tomaron. La vigencia de la campaña la arma quien llama con
+// vigenciaCampana (activa / en_espera / inactiva = "campaña terminada").
+const columnasDeFila = (hoy: string) => ({
+  fila_desde: prospectos.filaDesde,
+  fila_tomado_en: prospectos.filaTomadoEn,
+  fila_posicion: sql<number | null>`CASE WHEN ${prospectos.estado} = 'en_fila' AND ${prospectos.filaTomadoEn} IS NULL THEN 1 + (
+    SELECT COUNT(*) FROM prospectos f
+    WHERE f.estado = 'en_fila' AND f.fila_tomado_en IS NULL
+      AND (f.fila_desde < ${prospectos.filaDesde} OR (f.fila_desde = ${prospectos.filaDesde} AND f.id < ${prospectos.id}))
+  ) END`.mapWith(Number),
+  campanaEstado: campanas.estado,
+  campanaYaEmpezo: campanaYaEmpezoSql(hoy),
+  campanaNoHaTerminado: campanaNoHaTerminadoSql(hoy)
+});
 
 @Injectable()
 export class ProspectosService {
@@ -523,8 +549,10 @@ export class ProspectosService {
     const orden = {
       creado: [asc(prospectos.creadoEn), asc(prospectos.id)],
       recientes: [desc(prospectos.creadoEn), desc(prospectos.id)],
-      score: [sql`${prospectos.score} IS NULL`, desc(prospectos.score), asc(prospectos.id)]
+      score: [sql`${prospectos.score} IS NULL`, desc(prospectos.score), asc(prospectos.id)],
+      fila: [sql`${prospectos.filaDesde} IS NULL`, asc(prospectos.filaDesde), asc(prospectos.id)]
     }[query.orden];
+    const hoy = fechaMx(new Date());
 
     // La fila trae lo que la lista de Prospectos (9-oct-2026) enseña sin
     // pedir cada ficha: giro y estado de la empresa, puesto del contacto,
@@ -548,7 +576,8 @@ export class ProspectosService {
         campana_nombre: campanas.nombre,
         envios: sql<number>`(SELECT COUNT(*) FROM ${envios} WHERE ${envios.prospectoId} = ${prospectos.id})`.mapWith(Number),
         ultimo_envio_en: sql<Date | null>`(SELECT MAX(${envios.enviadoEn}) FROM ${envios} WHERE ${envios.prospectoId} = ${prospectos.id})`,
-        creado_en: prospectos.creadoEn
+        creado_en: prospectos.creadoEn,
+        ...columnasDeFila(hoy)
       })
       .from(prospectos)
       .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
@@ -559,7 +588,35 @@ export class ProspectosService {
       .limit(query.limit)
       .offset(offset);
 
-    return { page: query.page, limit: query.limit, data: rows };
+    const exclusiones = await this.motivosExclusionAnterior(rows.filter((r) => r.estado === "excluido").map((r) => r.id));
+    const data = rows.map(({ campanaEstado, campanaYaEmpezo, campanaNoHaTerminado, ...row }) => ({
+      ...row,
+      campana_vigencia: campanaEstado === null ? null : vigenciaCampana(campanaEstado, campanaYaEmpezo, campanaNoHaTerminado).vigencia,
+      motivo_exclusion_anterior: exclusiones.get(row.id) ?? null
+    }));
+    return { page: query.page, limit: query.limit, data };
+  }
+
+  // Por qué se excluyó la última vez cada uno de estos prospectos (el modal
+  // del botón lo enseña como aviso, sin bloquear). Sale de la auditoría:
+  // Validaciones guarda sus motivos (giro_no_informado...) y PT1, al
+  // marcarlo excluido después de la verificación de envío, el motivo en
+  // texto ("Ventana de espera activa"...).
+  private async motivosExclusionAnterior(ids: number[]): Promise<Map<number, string[]>> {
+    const motivos = new Map<number, string[]>();
+    if (ids.length === 0) return motivos;
+    const filas = await this.db
+      .select({ entidadId: auditoria.entidadId, accion: auditoria.accion, despues: auditoria.despues })
+      .from(auditoria)
+      .where(and(eq(auditoria.entidad, "prospecto"), inArray(auditoria.entidadId, ids), inArray(auditoria.accion, ["validar_automatizacion", "cambiar_estado_automatizacion"])))
+      .orderBy(desc(auditoria.id));
+    for (const fila of filas) {
+      if (motivos.has(fila.entidadId)) continue;
+      const despues = (fila.despues ?? {}) as { valido?: boolean; motivos?: string[]; estado?: string; motivo?: string };
+      if (fila.accion === "validar_automatizacion" && despues.valido === false && despues.motivos?.length) motivos.set(fila.entidadId, despues.motivos);
+      if (fila.accion === "cambiar_estado_automatizacion" && despues.estado === "excluido" && despues.motivo) motivos.set(fila.entidadId, [despues.motivo]);
+    }
+    return motivos;
   }
 
   // Tarjetas del embudo de Prospectos (9-oct-2026): cuántos hay en cada
@@ -616,11 +673,13 @@ export class ProspectosService {
         contactoPuesto: contactos.puesto,
         empresaId: empresas.id,
         empresaNombreLegal: empresas.nombreLegal,
-        empresaPropietarioId: empresas.propietarioId
+        empresaPropietarioId: empresas.propietarioId,
+        ...columnasDeFila(fechaMx(new Date()))
       })
       .from(prospectos)
       .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
       .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
       .where(eq(prospectos.id, id))
       .limit(1);
 
@@ -639,10 +698,136 @@ export class ProspectosService {
       confianza: row.confianza,
       fuente_url: row.fuenteUrl,
       campana_id: row.campanaId,
+      campana_vigencia: row.campanaEstado === null ? null : vigenciaCampana(row.campanaEstado, row.campanaYaEmpezo, row.campanaNoHaTerminado).vigencia,
       creado_en: row.creadoEn,
+      fila_desde: row.fila_desde,
+      fila_tomado_en: row.fila_tomado_en,
+      fila_posicion: row.fila_posicion,
+      motivo_exclusion_anterior: row.estado === "excluido" ? (await this.motivosExclusionAnterior([row.id])).get(row.id) ?? null : null,
       contacto: { id: row.contactoId, nombre: row.contactoNombre, puesto: row.contactoPuesto, medios },
       empresa: { id: row.empresaId, nombre_legal: row.empresaNombreLegal }
     };
+  }
+
+  // --- Fila de automatización (botón "Mandar a automatización", 16-oct-2026)
+  // Solo administrador y supervisor (el controlador lo exige): manda correos a
+  // nombre de la empresa y gasta el cupo diario de todos. Uno por uno, cada
+  // uno en su transacción: entran los listos y los demás regresan con su
+  // motivo, en vez de que uno malo tumbe a los 200.
+  async mandarAAutomatizacion(user: CurrentUser, input: MandarAutomatizacionInput) {
+    const hoy = fechaMx(new Date());
+    const [campana] = await this.db
+      .select({ estado: campanas.estado, yaEmpezo: campanaYaEmpezoSql(hoy), noHaTerminado: campanaNoHaTerminadoSql(hoy) })
+      .from(campanas)
+      .where(eq(campanas.id, input.campanaId))
+      .limit(1);
+    if (!campana) throw new HttpError(404, "Campaña no encontrada");
+    // Una campaña en espera (pausada o que aún no empieza) sí sirve: la gente
+    // espera en la fila y sale cuando la campaña mande (Q7, 16-oct-2026).
+    if (vigenciaCampana(campana.estado, campana.yaEmpezo, campana.noHaTerminado).vigencia === "inactiva") {
+      throw new HttpError(409, "La campaña ya terminó (finalizada, vencida o en borrador); elige otra", CODIGO_CAMPANA_TERMINADA);
+    }
+
+    const agregados: number[] = [];
+    const cambiados: number[] = [];
+    const rechazados: { id: number; motivos: string[] }[] = [];
+    for (const id of new Set(input.prospectoIds)) {
+      const resultado = await this.mandarUno(user, id, input.campanaId);
+      if (resultado === "agregado") agregados.push(id);
+      else if (resultado === "cambiado") cambiados.push(id);
+      else rechazados.push({ id, motivos: resultado });
+    }
+    return { agregados, cambiados, rechazados };
+  }
+
+  private async mandarUno(user: CurrentUser, id: number, campanaId: number): Promise<"agregado" | "cambiado" | string[]> {
+    // Fuera de la transacción: solo para saber a quién bloquear. Adentro, lo
+    // primero es el bloqueo de la persona (mismo orden que la baja, ver
+    // bloquearPersona), así las lecturas que siguen ya ven una baja o un
+    // hermano que entró a la fila justo antes.
+    const [inicial] = await this.db.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, id)).limit(1);
+    if (!inicial) return ["no_encontrado"];
+
+    return this.db.transaction(async (tx) => {
+      await bloquearPersona(tx, inicial.contactoId);
+      const [p] = await tx
+        .select({ estado: prospectos.estado, campanaId: prospectos.campanaId, filaTomadoEn: prospectos.filaTomadoEn })
+        .from(prospectos)
+        .where(eq(prospectos.id, id))
+        .for("update");
+      if (!p) return ["no_encontrado"];
+
+      // Ya en la fila: solo se le cambia la campaña, sin moverle fila_desde
+      // (no pierde su lugar). Si PT1 ya lo tomó, ya va de salida.
+      if (p.estado === "en_fila") {
+        if (tomadoDeFilaHace(p.filaTomadoEn)) return ["ya_tomado"];
+        if (p.campanaId !== campanaId) {
+          await tx.update(prospectos).set({ campanaId }).where(eq(prospectos.id, id));
+          await tx.insert(auditoria).values({ usuarioId: user.id, entidad: "prospecto", entidadId: id, accion: "cambiar_campana_fila", antes: { campana_id: p.campanaId }, despues: { campana_id: campanaId } });
+        }
+        return "cambiado";
+      }
+
+      // capturado = nunca pasó por la automatización; excluido = uno al que
+      // le faltaba un dato y ya se corrigió (P5). inactivo / descartado y los
+      // que ya respondieron no: volver a escribirles lo decide el negocio.
+      if (!ESTADOS_QUE_ENTRAN_A_FILA.includes(p.estado)) return ["estado_no_permitido"];
+
+      const motivos = await revisarListoParaAutomatizacion(tx, id);
+      if (motivos.length > 0) return motivos;
+
+      await tx.update(prospectos).set({
+        estado: "en_fila",
+        campanaId,
+        filaDesde: sql`CURRENT_TIMESTAMP`,
+        filaPor: user.id,
+        filaTomadoEn: null,
+        filaExecutionId: null,
+        filaEstadoPrevio: p.estado
+      }).where(eq(prospectos.id, id));
+      await tx.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "prospecto",
+        entidadId: id,
+        accion: "mandar_automatizacion",
+        antes: { estado: p.estado, campana_id: p.campanaId },
+        despues: { estado: "en_fila", campana_id: campanaId }
+      });
+      return "agregado";
+    });
+  }
+
+  // Sacar de la fila (P4): mientras PT1 no lo haya tomado. Siempre regresa
+  // a capturado, aunque haya entrado como excluido; la campaña se queda.
+  async sacarDeFila(user: CurrentUser, id: number) {
+    return this.db.transaction(async (tx) => {
+      const [p] = await tx
+        .select({ estado: prospectos.estado, filaTomadoEn: prospectos.filaTomadoEn, filaEstadoPrevio: prospectos.filaEstadoPrevio })
+        .from(prospectos)
+        .where(eq(prospectos.id, id))
+        .for("update");
+      if (!p) throw new HttpError(404, "Prospecto no encontrado");
+      if (p.estado !== "en_fila") throw new HttpError(409, "Este prospecto no está en la fila de automatización", CODIGO_NO_EN_FILA);
+      if (tomadoDeFilaHace(p.filaTomadoEn)) throw new HttpError(409, "La automatización ya lo tomó; ya no se puede sacar de la fila", CODIGO_PROSPECTO_YA_TOMADO);
+
+      await tx.update(prospectos).set({
+        estado: "capturado",
+        filaDesde: null,
+        filaPor: null,
+        filaTomadoEn: null,
+        filaExecutionId: null,
+        filaEstadoPrevio: null
+      }).where(eq(prospectos.id, id));
+      await tx.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "prospecto",
+        entidadId: id,
+        accion: "sacar_de_fila",
+        antes: { estado: "en_fila", estado_previo: p.filaEstadoPrevio },
+        despues: { estado: "capturado" }
+      });
+      return { id, estado: "capturado" as const };
+    });
   }
 
   // Ids de los contactos con los que coinciden estas filas que el usuario

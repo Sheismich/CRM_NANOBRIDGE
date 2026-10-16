@@ -451,12 +451,31 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - [x] Respaldos automáticos de Cloud SQL activos (ya lo estaban; revisado el 7-oct-2026, §9).
 - [ ] Tope diario a 20 para calentar el dominio:
       `--update-env-vars TOPE_DIARIO_CORREOS=20`.
-- [ ] Cupo apartado para recordatorios y fila de espera de correos iniciales.
-      Depende de Carlos: ¿los prospectos llegan en lotes o uno por uno?
-- [ ] Publicar PT4.
+- [x] Cupo apartado para recordatorios y fila de espera de correos iniciales
+      (16-oct-2026): lo resuelve la fila del botón de abajo. Los recordatorios
+      van primero (PT4 corre antes) y los nuevos solo usan lo que sobra del
+      tope, hasta `NUEVOS_POR_DIA`.
+- [ ] Publicar PT4 con horario de lunes a viernes a las **9:00** (hora de México).
 - [ ] Botón "Mandar a automatización" en el CRM (entrada de prospectos a PT1,
       opción B decidida el 15-oct-2026): sin él, un CSV importado se queda en
-      `capturado` y no le sale ningún correo.
+      `capturado` y no le sale ningún correo. **API hecha el 16-oct-2026**
+      (migración 031, `POST /prospectos/automatizacion`,
+      `POST /prospectos/:id/sacar-de-fila`,
+      `POST /automatizacion/prospectos/fila/tomar`); faltan la pantalla, el
+      arranque nuevo de PT1 y la prueba en vivo con +prueba12.
+      Decisiones en `PLAN_N8N_DEFINITIVO.md` punto 7.
+- [ ] `NUEVOS_POR_DIA` (10 por defecto, ya en el código): cuántos nuevos toma
+      PT1 de la fila al día. Se cambia con `--update-env-vars NUEVOS_POR_DIA=…`,
+      nunca con `--set-env-vars`. Con tope 20 y 3 correos por persona, el
+      ritmo real se queda en unos **6-7 nuevos al día**: la lista de 30 de
+      Carlos sale en unos 3 días hábiles.
+- [ ] Horario de PT1: lunes a viernes a las **10:00** (después de PT4). Mientras
+      sigan las pruebas, PT1 se corre a mano.
+- [ ] **Lunes 16-nov-2026 (feriado): apagar PT1 y PT4 a mano.** Ni n8n ni la
+      API conocen los feriados.
+- Nota, no es error: el primer recordatorio sale al **6.º día hábil**, no al
+      5.º. La ventana vence a la misma hora del primer correo (10:05 + 5 días
+      hábiles) y PT4 pasa a las 9:00, así que lo toma al día siguiente.
 - [ ] Decidir `min-instances=1` en Cloud Run: sin él la API se apaga cuando
       nadie la usa y la primera petición tarda 5-10 s en despertarla (visto el
       15-oct-2026: Administración marcó 9,540 ms; las siguientes, 0.25 s).

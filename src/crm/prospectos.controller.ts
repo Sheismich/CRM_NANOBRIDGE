@@ -8,7 +8,7 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { conteosProspectosQuerySchema, importarCsvBodySchema, listBorradoresQuerySchema, listLotesQuerySchema, listProspectosQuerySchema, prospectoInputSchema } from "./dto/prospecto.schema.js";
+import { conteosProspectosQuerySchema, importarCsvBodySchema, listBorradoresQuerySchema, listLotesQuerySchema, listProspectosQuerySchema, mandarAutomatizacionInputSchema, prospectoInputSchema } from "./dto/prospecto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 const confirmarBodySchema = z.object({ usarContactoExistente: z.boolean().default(false) });
@@ -79,6 +79,25 @@ export class ProspectosController {
   importar(@UploadedFile() archivo: Express.Multer.File | undefined, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
     const input = importarCsvBodySchema.parse(body);
     return this.prospectosService.importarCsv(user, archivo, input.campanaId);
+  }
+
+  // Botón "Mandar a automatización" (16-oct-2026): pone en la fila de PT1 a
+  // los listos y le cambia la campaña a los que ya esperan. Solo admin y
+  // supervisor: manda correos a nombre de la empresa.
+  @Post("automatizacion")
+  @HttpCode(200)
+  @Roles("administrador", "supervisor")
+  mandarAAutomatizacion(@Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    const input = mandarAutomatizacionInputSchema.parse(body);
+    return this.prospectosService.mandarAAutomatizacion(user, input);
+  }
+
+  @Post(":id/sacar-de-fila")
+  @HttpCode(200)
+  @Roles("administrador", "supervisor")
+  sacarDeFila(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
+    const id = idParamSchema.parse(idParam);
+    return this.prospectosService.sacarDeFila(user, id);
   }
 
   @Get("importaciones/:loteId")

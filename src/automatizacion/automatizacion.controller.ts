@@ -18,6 +18,7 @@ import {
   respuestaRecibidaInputSchema,
   scoringInputSchema,
   tareaAutomatizacionInputSchema,
+  tomarDeFilaInputSchema,
   validacionInputSchema,
   ventanasVencidasQuerySchema,
   verificacionEnvioQuerySchema
@@ -74,6 +75,15 @@ export class AutomatizacionController {
     const result = await this.automatizacionService.registrarProspecto(input);
     response.status(result.ya_existia ? 200 : 201);
     return result;
+  }
+
+  // Botón "Mandar a automatización" (16-oct-2026): PT1 toma de la fila los
+  // que le tocan hoy. 200 también con data vacía (nada que hacer no es error).
+  @Post("prospectos/fila/tomar")
+  @HttpCode(200)
+  tomarDeFila(@Body() body: unknown) {
+    const input = tomarDeFilaInputSchema.parse(body);
+    return this.automatizacionService.tomarDeFila(input);
   }
 
   @Post("prospectos/estado")

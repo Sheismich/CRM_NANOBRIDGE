@@ -64,6 +64,11 @@ const schema = z.object({
   // (bloque "antes de encender", decidido el 5-oct-2026: 50 para calentar el
   // dominio). Se sube con --update-env-vars en Cloud Run, sin deploy de código.
   TOPE_DIARIO_CORREOS: z.coerce.number().int().positive().default(50),
+  // Prospectos nuevos que PT1 toma de la fila de automatización al día
+  // (botón "Mandar a automatización", 16-oct-2026). Sin pasarse de
+  // TOPE_DIARIO_CORREOS: los recordatorios van primero. Se cambia con
+  // --update-env-vars, igual que el tope.
+  NUEVOS_POR_DIA: z.coerce.number().int().positive().default(10),
   // Expediente documental (PLAN_CRM_DEFINITIVO.md #8). STORAGE_DRIVER
   // decide en runtime qué StorageService implementa
   // src/documentos/storage/storage.provider.ts:

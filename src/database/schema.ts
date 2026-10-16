@@ -134,9 +134,17 @@ export const prospectos = mysqlTable("prospectos", {
   fuenteUrl: varchar("fuente_url", { length: 2048 }),
   confianza: mysqlEnum("confianza", ["alta", "media", "baja"]),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
-  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  // 031_fila_automatizacion.sql: botón "Mandar a automatización".
+  filaDesde: datetime("fila_desde"),
+  filaPor: bigint("fila_por", { mode: "number", unsigned: true }),
+  filaTomadoEn: datetime("fila_tomado_en"),
+  filaExecutionId: varchar("fila_execution_id", { length: 100 }),
+  filaEstadoPrevio: varchar("fila_estado_previo", { length: 60 })
 }, (table) => [
-  index("idx_prospectos_contacto").on(table.contactoId)
+  index("idx_prospectos_contacto").on(table.contactoId),
+  index("idx_prospectos_fila").on(table.estado, table.filaDesde),
+  index("idx_prospectos_fila_execution").on(table.filaExecutionId)
 ]);
 
 export const catalogoEtapaEmbudo = mysqlTable("catalogo_etapa_embudo", {

@@ -111,10 +111,19 @@ export const listProspectosQuerySchema = z.object({
   // 15-oct-2026. Mapeo explícito: z.coerce.boolean() tomaría "false" como true.
   enCampana: z.enum(["true", "false"]).optional().transform((v) => (v === undefined ? undefined : v === "true")),
   // "creado" = los más viejos primero (como siempre); "score" = el más
-  // prometedor primero (lista de Prospectos, 9-oct-2026).
-  orden: z.enum(["creado", "recientes", "score"]).default("creado")
+  // prometedor primero (lista de Prospectos, 9-oct-2026); "fila" = en el
+  // orden en que salen de la fila de automatización (16-oct-2026).
+  orden: z.enum(["creado", "recientes", "score", "fila"]).default("creado")
 });
 export type ListProspectosQuery = z.infer<typeof listProspectosQuerySchema>;
+
+// Botón "Mandar a automatización" (16-oct-2026): la misma llamada pone en la
+// fila a los nuevos y le cambia la campaña a los que ya esperan en ella.
+export const mandarAutomatizacionInputSchema = z.object({
+  prospectoIds: z.array(z.coerce.number().int().positive()).min(1).max(200),
+  campanaId: z.coerce.number().int().positive()
+});
+export type MandarAutomatizacionInput = z.infer<typeof mandarAutomatizacionInputSchema>;
 
 // Tarjetas del embudo de Prospectos: cuántos hay en cada estado.
 export const conteosProspectosQuerySchema = z.object({

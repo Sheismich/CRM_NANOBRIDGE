@@ -40,10 +40,31 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
    - **Hueco:** confirmar una fila del importador CSV del CRM crea el prospecto en `capturado` y
      no dispara nada (`prospectos.service.ts`). Lo importado por el CRM nunca recibe correo; solo
      PT1 califica y manda.
-   - **Propuesta:** un workflow de n8n que lea el Excel (o una copia en Google Sheets) y mande unos
-     10 por día a PT1. 10 nuevos más los recordatorios dan unos 20 al día, que es el tope de
-     calentamiento, así que la fila de espera de iniciales casi no hace falta. La alternativa es
-     un botón "mandar a automatización" en el CRM, que es más trabajo.
+   - **Decidido: opción B, botón "Mandar a automatización" en el CRM** (15-oct-2026; detalle
+     decidido con Fabián el 16-oct-2026). La opción A (n8n lee el Excel) no: dos listas y doble
+     trabajo. Si algún día hay una fuente automática, n8n mete al CRM, no a PT1.
+     - El Excel entra por el importador CSV del CRM, como cualquier lista. Un admin o
+       supervisor elige prospectos y aprieta el botón con una campaña que no haya terminado
+       (activa, pausada o que aún no empieza). Entran a una **fila** (`estado = 'en_fila'`) solo
+       los `capturado` o `excluido` que pasan la revisión de `shared/listo-para-automatizacion.ts`
+       (giro, tamaño, correo usable, sin baja, menos de 3 correos, sin ventana abierta, nadie
+       más de la misma persona en la fila). Los demás regresan con su motivo; no se marca
+       `excluido` a nadie. A uno que ya está en la fila, el botón solo le cambia la campaña,
+       sin quitarle su lugar. Se le puede sacar de la fila mientras PT1 no lo haya tomado, y
+       entonces siempre vuelve a `capturado`.
+     - **PT1 ya no registra prospectos.** Le pide a la API los que le tocan:
+       `POST /automatizacion/prospectos/fila/tomar` `{ execution_id, limite }`. La API entrega en
+       orden de llegada, solo de campañas activas, hasta `NUEVOS_POR_DIA` (10) al día sin pasar
+       de `TOPE_DIARIO_CORREOS`, que cuenta los recordatorios ya enviados. Misma `execution_id`
+       = mismos prospectos. Si uno tomado no avanzó en 24 h, se puede volver a tomar. Cada uno
+       trae `prospecto_id, campana_id, correo, contacto_nombre, empresa_nombre, giro` y entra
+       directo a Validaciones; lo que cambió mientras esperaba, Validaciones y `verificarEnvio`
+       lo vuelven a revisar.
+     - Horario el día de encender: PT4 a las 9:00 y PT1 a las 10:00, de lunes a viernes. Mientras
+       sigan las pruebas, a mano. Feriados: apagarlo a mano (16-nov-2026). Ritmo real esperado:
+       unos 6-7 nuevos al día. El primer recordatorio sale al 6.º día hábil.
+     - API hecha el 16-oct-2026 (migración 031, `test/485-fila-automatizacion.spec.ts`).
+       Faltan la pantalla (Prospectos), el arranque nuevo de PT1 (por prompts) y la prueba en vivo.
    - LinkedIn: sin correo, PT1 no puede escribirles. A quien pide el servicio quizá le conviene
      más que le escriba un vendedor que la secuencia automática; lo decide Carlos.
    - Sigue pendiente de Carlos lo legal (aviso de privacidad), que aplica a los dos orígenes.

@@ -77,6 +77,15 @@ export const registroProspectoInputSchema = z.object({
 });
 export type RegistroProspectoInput = z.infer<typeof registroProspectoInputSchema>;
 
+// --- Fila de automatización (16-oct-2026) ---------------------------------------
+// PT1 pide los que le tocan hoy. limite = lo más que quiere en esta corrida;
+// la API entrega menos si ya se acabó el cupo del día.
+export const tomarDeFilaInputSchema = z.object({
+  execution_id: z.string().trim().min(1).max(100),
+  limite: z.coerce.number().int().min(1).max(50).default(10)
+});
+export type TomarDeFilaInput = z.infer<typeof tomarDeFilaInputSchema>;
+
 // --- Consulta de prospecto para scoring -------------------------------------------
 export const consultaProspectoScoringQuerySchema = z.object({
   prospecto_id: z.coerce.number().int().positive()
