@@ -88,10 +88,19 @@ Se mapeó `Prospeccion_industrial_STEELSAFE_NANO.xlsx` (hoja "Prospectos") al co
   - 2 filas con correo inválido — resultó ser P2 disfrazado: el Excel original traía **más de un correo en la misma celda**, separados por "`|`" (ej. `"correo1@x.com | correo2@x.com"`), lo que rompe el formato de un solo correo. Se corrigió el mapeo tomando el primero.
 - **2ª corrida (tras el ajuste):** **29 de 30 filas listas para confirmar**, 0 duplicadas dentro del propio archivo, 1 rechazada (la de solo formulario web, correcta).
 
-### 2.2 Pendiente de validar (requiere MySQL real, no disponible en el entorno donde se construyó esto)
+### 2.2 Validación contra MySQL real (actualizado el 16-oct-2026)
 
-- P6, P7, P8, P9, P10, P11 requieren una base de datos real corriendo — se validaron por revisión de código y por analogía con el mismo patrón ya probado end-to-end en el resto del backend (commit `ff2225d`, Fabián — race conditions, transacciones), pero no con una corrida real todavía.
-- Siguiente paso: `npm run migrate` contra MySQL local y subir `steelsafe_prospectos_import.csv` de verdad al endpoint `POST /api/v1/prospectos/importaciones`, confirmar algunas filas y verificar en BD que empresa/contacto/prospecto quedaron bien ligados.
+Cuando se escribió esto (14-sep) no había MySQL en el entorno. Hoy la suite de pruebas corre contra un MySQL 8 de verdad (contenedor desechable o `TEST_DATABASE_URL`, ver README) y estos casos ya tienen prueba automatizada:
+
+- **P6** (coincide con un contacto en BD → `duplicado` con `match_contacto_id`, por correo o por teléfono): `test/255-identidad-personas.spec.ts`.
+- **P7** (confirmar crea empresa + contacto + prospecto y la fila pasa a `importado`): `255-identidad-personas`, `200-prospectos-lotes` (el resumen del lote refleja lo confirmado) y `315-importacion-csv-limites`.
+- **P8 y P9** (no se confirma un duplicado por accidente): cubiertos en su variante de agentes, `409 CONTACTO_DE_OTRO_AGENTE` cuando el contacto es de otro agente (`315-importacion-csv-limites`), y la búsqueda de identidad al confirmar (`255`, `345-identidad-inactivos`).
+- **P10** (lotes de otro agente): la lista de lotes de un agente solo trae los suyos (`200-prospectos-lotes`).
+- **P11** (borrador vencido): una fila vencida ya no se confirma, `409 IMPORTACION_VENCIDA` (`315-importacion-csv-limites`); el job `limpiar-borradores` lo dispara n8n por endpoint (`290-jobs-por-endpoint`).
+
+Sigue pendiente:
+- Pruebas explícitas de tres detalles: P8 exacto (un `duplicado` con `match_contacto_id` sin `usarContactoExistente` responde 409), P10 en el detalle y al confirmar (el lote ajeno responde 404, no 403) y P11 completo (el job deja la fila en `expirado`).
+- La corrida con datos reales: subir el Excel de Carlos (el de STEELSAFE, 29 de 30 filas válidas en §2.1) a `POST /api/v1/prospectos/importaciones` en producción, confirmar las filas y revisar que empresa, contacto y prospecto quedaron ligados. Va junto con decidir la entrada de prospectos a PT1 (botón "Mandar a automatización", `RUNBOOK_DEPLOY.md` §10).
 
 ## 3. Estado
 
@@ -101,4 +110,4 @@ Se mapeó `Prospeccion_industrial_STEELSAFE_NANO.xlsx` (hoja "Prospectos") al co
 | Fecha | 14 de septiembre de 2026 |
 | Evidencia de código | `015_prospectos_importacion.sql`, `schema.ts`, `shared/csv.ts` (`parseCsv`), `crm/prospectos.service.ts`, `crm/prospectos.controller.ts` |
 | Evidencia de prueba | §2.1 de este documento (29/30 filas reales de STEELSAFE validadas) |
-| Pendiente | §2.2 — validación end-to-end contra MySQL real |
+| Pendiente | §2.2 — tres pruebas explícitas (P8, P10, P11) y la carga real del Excel de Carlos en producción (lo end-to-end contra MySQL ya está cubierto desde las pruebas automatizadas) |

@@ -64,8 +64,9 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 - Backend: que el Historial muestre los documentos enviados y su revisión (PLAN_CRM_DEFINITIVO.md #4).
 - Backlog del code review y del plan de fixes: Gmail con puntos y `+`, teléfonos E.164, auditoría de
   tareas liberadas, aviso de medio suprimido en el CSV, entre otros.
-- Documentos desactualizados: README "Qué falta", S3 §2.2, PLAN_FRONTEND §7 ("el envío sigue en
-  MOCK") y la línea de este plan que dice que `listarVentanasVencidas` no revisa la campaña.
+- ~~Documentos desactualizados: README "Qué falta", S3 §2.2, PLAN_FRONTEND §7 ("el envío sigue en
+  MOCK") y la línea de este plan que dice que `listarVentanasVencidas` no revisa la campaña.~~
+  Hecho el 16-oct-2026 (Mich). PLAN_FRONTEND §7 ya estaba corregido desde el 8-oct.
 
 **Descartado, ya revisado:**
 - PT1 no adivina correos: solo limpia espacios y mayúsculas, y si sigue mal crea tarea.
@@ -497,8 +498,11 @@ Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no
      abierta.
    - Baja por link o spam suprime todos los medios y pasa el prospecto a baja. Un rebote
      definitivo suprime solo ese correo.
-   - El flujo de recordatorios pregunta **si la campaña sigue activa** antes de mandar. Hoy
-     `listarVentanasVencidas` no revisa la campaña.
+   - El flujo de recordatorios pregunta **si la campaña sigue activa** antes de mandar.
+     `listarVentanasVencidas` ya lo hace (revisado el 16-oct-2026): las ventanas de una campaña
+     en espera (pausada o que todavía no empieza) no se reclaman y salen cuando la campaña vuelve a
+     mandar, y las de una campaña finalizada, en borrador o con la fecha de fin pasada se omiten y
+     quedan en auditoría como `recordatorio_omitido` (`shared/campana-vigente.ts`).
    - Pendientes fuera del código: fuente de prospectos, base legal y aviso de privacidad,
      cuenta definitiva de SendGrid (la prueba vence el 24-nov-2026) y confirmar Inbound Parse
      en el plan Essentials.
