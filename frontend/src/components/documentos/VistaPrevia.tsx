@@ -1,18 +1,30 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
 import { Icono } from "../ui/Icono";
 import { ApiError, api } from "../../lib/api";
 import { tieneVistaPrevia } from "../../lib/documentos";
 import type { Documento } from "../../types";
 
+const PdfPaginas = lazy(() => import("./PdfPaginas"));
+
 // Vista previa del documento dentro del panel. Se pide el archivo con la
 // sesión (?modo=ver, que el backend solo da para PDF e imágenes), se arma
 // un URL blob: y se muestra: PDF en <iframe> (visor del navegador), imagen
-// en <img>. DOCX y XLSX no tienen vista previa: se descargan.
-type Estado = { tipo: "cargando" } | { tipo: "listo"; url: string } | { tipo: "error"; mensaje: string };
+// en <img>. DOCX y XLSX no tienen vista previa: se descargan. El <iframe>
+// solo en Chrome/Edge/Firefox de compu con su visor de PDF; en lo demás el
+// PDF va con pdf.js (PdfPaginas): el celular y la tableta no enseñan PDF en
+// <iframe>, y Safari le aplica al blob: el frame-ancestors 'none' de la
+// página (firebase.json) y lo bloquea.
+type Estado = { tipo: "cargando" } | { tipo: "listo"; archivo: Blob; url: string } | { tipo: "error"; mensaje: string };
+
+function visorDelNavegador() {
+  if (navigator.pdfViewerEnabled === false || navigator.vendor.startsWith("Apple")) return false;
+  return !window.matchMedia("(max-width: 767px), (pointer: coarse)").matches;
+}
 
 export function VistaPrevia({ documento, onDescargar }: { documento: Pick<Documento, "id" | "mime_type" | "nombre_original">; onDescargar: () => void }) {
   const se = tieneVistaPrevia(documento.mime_type);
   const [estado, setEstado] = useState<Estado>({ tipo: "cargando" });
+  const [conIframe] = useState(visorDelNavegador);
 
   useEffect(() => {
     if (!se) return;
@@ -22,7 +34,7 @@ export function VistaPrevia({ documento, onDescargar }: { documento: Pick<Docume
       .blob(`/api/v1/documentos/${documento.id}/descarga?modo=ver`, control.signal)
       .then((b) => {
         url = URL.createObjectURL(b);
-        setEstado({ tipo: "listo", url });
+        setEstado({ tipo: "listo", archivo: b, url });
       })
       .catch((err: unknown) => {
         if (control.signal.aborted) return;
@@ -48,9 +60,16 @@ export function VistaPrevia({ documento, onDescargar }: { documento: Pick<Docume
   if (estado.tipo === "cargando") return <Aviso>Abriendo el archivo…</Aviso>;
   if (estado.tipo === "error") return <Aviso>{estado.mensaje}</Aviso>;
   if (documento.mime_type === "application/pdf") {
+    if (!conIframe) {
+      return (
+        <Suspense fallback={<Aviso>Abriendo el archivo…</Aviso>}>
+          <PdfPaginas archivo={estado.archivo} onDescargar={onDescargar} />
+        </Suspense>
+      );
+    }
     return <iframe title={`Vista previa de ${documento.nombre_original}`} src={estado.url} className="h-[62vh] min-h-[360px] w-full rounded-[6px] bg-white" />;
   }
-  return <img src={estado.url} alt={`Vista previa de ${documento.nombre_original}`} className="mx-auto max-h-[62vh] max-w-full rounded-[6px] bg-white object-contain shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]" />;
+  return <img src={estado.url} alt={`Vista previa de ${documento.nombre_original}`} className="mx-auto block h-auto max-h-[62vh] w-auto max-w-full rounded-[6px] bg-white object-contain shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]" />;
 }
 
 function Aviso({ children }: { children: ReactNode }) {

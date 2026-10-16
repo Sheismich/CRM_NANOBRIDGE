@@ -76,8 +76,10 @@ function Encabezado({ fila, puedeRevisar }: { fila: DocumentoBandeja; puedeRevis
 
   return (
     <div>
+      {/* basis-60: con flex-1 (base 0) el texto se encogía letra por letra
+          en el celular en vez de mandar los botones al siguiente renglón. */}
       <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-60">
           <div className="flex flex-wrap items-center gap-2">
             <Pastilla tono={TONO_REVISION[d.revision]} punto mayusculas>
               {TEXTO_ESTADO[d.revision]}
@@ -96,7 +98,7 @@ function Encabezado({ fila, puedeRevisar }: { fila: DocumentoBandeja; puedeRevis
           </p>
         </div>
         {puedeRevisar && vigente && (
-          <div className="flex gap-2">
+          <div className="flex w-full gap-2 sm:w-auto [&>*]:flex-1 [&>*]:px-3 sm:[&>*]:flex-none sm:[&>*]:px-4">
             {d.revision !== "rechazado" && (
               <Button variant="rechazar" disabled={ocupado} onClick={() => setRechazando(true)}>
                 <Icono nombre="xCirculo" size={17} /> Rechazar
@@ -104,13 +106,13 @@ function Encabezado({ fila, puedeRevisar }: { fila: DocumentoBandeja; puedeRevis
             )}
             {d.revision !== "aprobado" && (
               <Button variant="aprobar" disabled={ocupado} onClick={() => void ejecutar(() => api.patch(`/api/v1/documentos/${d.id}/aprobar`))}>
-                <Icono nombre="escudo" size={17} /> Aprobar documento
+                <Icono nombre="escudo" size={17} /> Aprobar<span className="hidden sm:inline"> documento</span>
               </Button>
             )}
           </div>
         )}
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex gap-2 [&>button]:flex-1 [&>button]:px-3 sm:[&>button]:flex-none sm:[&>button]:px-4">
         {vigente && (
           <>
             <input ref={archivo} type="file" accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg" className="hidden" onChange={(e) => nuevaVersion(e.target.files?.[0])} />
