@@ -6,7 +6,7 @@ import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin, loginAs } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, campanas, envios, listaSupresion, prospectos } from "../src/database/schema.js";
+import { auditoria, campanas, envios, listaSupresion, mediosContacto, prospectos } from "../src/database/schema.js";
 import { env } from "../src/config/env.js";
 import { normalizeEmail } from "../src/shared/normalize.js";
 import { diaSiguiente, fechaMx, inicioDelDiaMxSql, sumarDiasFecha } from "../src/shared/dia-habil.js";
@@ -326,12 +326,15 @@ describe("fila de automatización", () => {
       const c = await prospecto();
       await mandar(adminCookie, [a.id, b.id, c.id], activa);
       await db.update(prospectos).set({ filaDesde: new Date(Date.now() - 120_000) }).where(eq(prospectos.id, c.id));
+      // El score de PT1 suma por tamaño, región y teléfono: van en la respuesta.
+      await db.insert(mediosContacto).values({ contactoId: c.contactoId, tipo: "telefono", valor: "449 123 4567", valorNormalizado: "4491234567" });
 
       const exec = randomUUID();
       const res = await tomar(exec, 2);
       expect(res.status).toBe(200);
       expect(res.body.data.map((d: { prospecto_id: number }) => d.prospecto_id)).toEqual([c.id, a.id]);
-      expect(res.body.data[0]).toMatchObject({ prospecto_id: c.id, campana_id: activa, correo: c.correo, contacto_nombre: "Persona Fila", giro: "Manufactura" });
+      expect(res.body.data[0]).toMatchObject({ prospecto_id: c.id, campana_id: activa, correo: c.correo, contacto_nombre: "Persona Fila", giro: "Manufactura", tamano: "mediana", region: null, telefono: "449 123 4567" });
+      expect(res.body.data[1]).toMatchObject({ prospecto_id: a.id, telefono: null });
       expect(res.body.data[0].empresa_nombre).toMatch(/^Fila /);
       expect(res.body.tope_diario_alcanzado).toBe(false);
 

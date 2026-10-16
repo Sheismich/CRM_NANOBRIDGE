@@ -471,6 +471,11 @@ export class AutomatizacionService {
             contactoNombre: contactos.nombre,
             empresaNombre: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
             giro: empresas.giro,
+            tamano: empresas.tamano,
+            region: empresas.region,
+            telefono: sql<string | null>`(SELECT ${mediosContacto.valor} FROM ${mediosContacto}
+              WHERE ${mediosContacto.contactoId} = ${prospectos.contactoId} AND ${mediosContacto.tipo} = 'telefono' AND ${mediosContacto.estadoContacto} = 'activo'
+              ORDER BY ${mediosContacto.esPrincipal} DESC, ${mediosContacto.id} LIMIT 1)`,
             filaDesde: prospectos.filaDesde
           })
           .from(prospectos)
@@ -478,8 +483,9 @@ export class AutomatizacionService {
           .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
           .where(inArray(prospectos.id, ids))
           .orderBy(asc(prospectos.filaDesde), asc(prospectos.id));
-        // Mismos datos que un recordatorio de PT4 (destinoDeRecordatorio):
-        // PT1 arma el correo sin otra consulta. correo null = ya no hay uno
+        // Mismos datos que un recordatorio de PT4 (destinoDeRecordatorio),
+        // más tamaño, región y teléfono, que suman en el score de PT1 (el
+        // teléfono solo cuenta; nunca va a Gemini): PT1 arma todo sin otra consulta. correo null = ya no hay uno
         // utilizable (se suprimió mientras esperaba); PT1 lo excluye en la
         // verificación de envío, como siempre.
         for (const f of filas) {
@@ -491,6 +497,9 @@ export class AutomatizacionService {
             contacto_nombre: f.contactoNombre,
             empresa_nombre: f.empresaNombre,
             giro: f.giro,
+            tamano: f.tamano,
+            region: f.region,
+            telefono: f.telefono,
             fila_desde: f.filaDesde
           });
         }
