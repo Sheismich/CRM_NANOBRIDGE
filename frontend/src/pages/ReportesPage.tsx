@@ -12,7 +12,7 @@ import { Segmento } from "../components/ui/Segmento";
 import { ApiError, api } from "../lib/api";
 import { useAuth } from "../lib/auth-context";
 import { isoDia } from "../lib/inicio";
-import { nombreMesLargo, rangosDelPeriodo, type Periodo } from "../lib/reportes";
+import { rangosDelPeriodo, type Periodo } from "../lib/reportes";
 import type { Paginated, Usuario } from "../types";
 
 // Reportes del rediseño (docs/diseno/reportes.html, opción A): cómo vamos
@@ -60,8 +60,10 @@ export function ReportesPage() {
     setParams(siguientes, { replace: true });
   }
 
-  // Día: la bitácora en CSV. Panel: el informe ejecutivo en PDF del mes
-  // en que termina el periodo (de Fabián, GET /reportes/export/informe-ejecutivo).
+  // Día: la bitácora en CSV. Panel: el reporte del periodo en PDF, lo mismo
+  // que se ve con su periodo y responsable (GET /reportes/export/periodo,
+  // 16-oct-2026). Antes bajaba el informe ejecutivo del mes, que es otro
+  // documento y se queda en Oportunidades.
   async function exportar() {
     setExportando(true);
     setErrorExportar(null);
@@ -69,9 +71,9 @@ export function ReportesPage() {
       const qs = new URLSearchParams(
         periodo === "dia"
           ? { fecha, ...(responsable ? { usuarioId: String(responsable) } : {}) }
-          : { formato: "pdf", mes: rangos!.actual.fechaFin.slice(0, 7), ...(responsable ? { responsableId: String(responsable) } : {}) }
+          : { periodo, ...(responsable ? { responsableId: String(responsable) } : {}) }
       );
-      await api.descargar(`/api/v1/reportes/export/${periodo === "dia" ? "dia" : "informe-ejecutivo"}?${qs.toString()}`);
+      await api.descargar(`/api/v1/reportes/export/${periodo === "dia" ? "dia" : "periodo"}?${qs.toString()}`);
     } catch (err) {
       setErrorExportar(err instanceof ApiError ? err.message : "No se pudo exportar");
     } finally {
@@ -105,7 +107,7 @@ export function ReportesPage() {
                 <Button
                   disabled={exportando}
                   onClick={() => void exportar()}
-                  title={errorExportar ?? (periodo === "dia" ? "La bitácora del día en CSV" : `Informe ejecutivo de ${nombreMesLargo(rangos!.actual.fechaFin.slice(0, 7))} en PDF`)}
+                  title={errorExportar ?? (periodo === "dia" ? "La bitácora del día en CSV" : "Este reporte en PDF, con el periodo y el responsable elegidos")}
                 >
                   <Icono nombre="descargar" size={15} /> {exportando ? "Exportando…" : errorExportar ? "Reintentar" : "Exportar"}
                 </Button>

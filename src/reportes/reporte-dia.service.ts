@@ -91,7 +91,7 @@ export class ReporteDiaService {
         .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
         .where(delDia(envios.enviadoEn)),
       this.db
-        .select({ id: respuestas.id, fecha: respuestas.recibidoEn, clasificacion: respuestas.clasificacion, estado: respuestas.estado, contactoNombre: contactos.nombre, empresaId: empresas.id, empresaNombre })
+        .select({ id: respuestas.id, fecha: respuestas.recibidoEn, clasificacion: respuestas.clasificacion, estado: respuestas.estado, contactoId: contactos.id, contactoNombre: contactos.nombre, empresaId: empresas.id, empresaNombre })
         .from(respuestas)
         .innerJoin(prospectos, eq(prospectos.id, respuestas.prospectoId))
         .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
@@ -287,7 +287,9 @@ export class ReporteDiaService {
       movimientos: deLaPersona,
       resumen: {
         correos: usuarioId ? null : { enviados: filasEnvios.length, campanas: new Set(filasEnvios.map((e) => e.campanaId).filter((id) => id !== null)).size, ultimo_en: ultimoEnvio },
-        respuestas: usuarioId ? null : { recibidas: filasRespuestas.length, interesados: filasRespuestas.filter((r) => r.clasificacion === "interesado").length },
+        // Interesados = personas distintas (16-oct-2026): quien contesta dos
+        // veces "me interesa" cuenta una vez, como en el resto de los reportes.
+        respuestas: usuarioId ? null : { recibidas: filasRespuestas.length, interesados: new Set(filasRespuestas.filter((r) => r.clasificacion === "interesado").map((r) => r.contactoId)).size },
         // Cuenta por RESPONSABLE: tareas cerradas ese día; con persona, las
         // que son de esa persona, las haya cerrado ella u otro. Junto a
         // vencian_ese_dia da "7 de 9 que vencían hoy". Quién cerró cada una

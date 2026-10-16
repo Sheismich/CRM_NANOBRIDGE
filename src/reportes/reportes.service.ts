@@ -717,7 +717,7 @@ export class ReportesService {
       ...condicionRangoFecha(respuestas.recibidoEn, query.fechaInicio, query.fechaFin)
     ]);
 
-    const [enviosPorCampana, personasTotal, respondieronPorCampana, respondieronTotal, respuestasRecibidas, interesadosPorCampana] = await Promise.all([
+    const [enviosPorCampana, personasTotal, respondieronPorCampana, respondieronTotal, respuestasRecibidas, interesadosPorCampana, interesadosTotal] = await Promise.all([
       this.db
         .select({
           campanaId: prospectos.campanaId,
@@ -767,7 +767,15 @@ export class ReportesService {
         .innerJoin(envios, eq(envios.id, respuestas.envioId))
         .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
         .where(and(eq(respuestas.clasificacion, "interesado"), whereEnvio))
-        .groupBy(prospectos.campanaId)
+        .groupBy(prospectos.campanaId),
+      // El total de interesados no es la suma de las campañas (16-oct-2026):
+      // una persona interesada en dos campañas es una sola.
+      this.db
+        .select({ personas: sql<number>`COUNT(DISTINCT ${prospectos.contactoId})` })
+        .from(respuestas)
+        .innerJoin(envios, eq(envios.id, respuestas.envioId))
+        .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
+        .where(and(eq(respuestas.clasificacion, "interesado"), whereEnvio))
     ]);
     const interesados = new Map(interesadosPorCampana.map((fila) => [fila.campanaId, Number(fila.personas)]));
 
@@ -820,7 +828,8 @@ export class ReportesService {
         tardias,
         pendientes_clasificar: pendientes,
         por_clasificacion: [...porClasificacion.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([clasificacion, cantidad]) => ({ clasificacion, cantidad })),
-        personas_que_respondieron: personasQueRespondieron
+        personas_que_respondieron: personasQueRespondieron,
+        personas_interesadas: Number(interesadosTotal[0]?.personas ?? 0)
       },
       tasa_respuesta_pct: porcentaje(personasQueRespondieron, totalEnvios.personas_contactadas),
       por_campana: porCampana

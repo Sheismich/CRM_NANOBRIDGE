@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PERIODOS } from "../frases.js";
 
 // Compartido por reporteQuerySchema y metricasDiariasQuerySchema, para que
 // la regla de validación no pueda divergir entre los dos.
@@ -81,6 +82,14 @@ export const informeEjecutivoQuerySchema = z.object({
   responsableId: z.coerce.number().int().positive().optional()
 });
 export type InformeEjecutivoQuery = z.infer<typeof informeEjecutivoQuerySchema>;
+
+// Reporte del periodo (16-oct-2026): el PDF del botón "Exportar" de
+// Reportes. El periodo va hasta hoy, igual que la pantalla.
+export const reportePeriodoQuerySchema = z.object({
+  periodo: z.enum(PERIODOS).default("mes"),
+  responsableId: z.coerce.number().int().positive().optional()
+});
+export type ReportePeriodoQuery = z.infer<typeof reportePeriodoQuerySchema>;
 
 // Reportes disponibles para exportación CSV (GET /reportes/export/:reporte).
 // Mismo set que los endpoints de lectura -- ver ReportesController. "dia" es

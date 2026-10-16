@@ -116,7 +116,8 @@ describe("reportes: prospección", () => {
       tardias: 1,
       pendientes_clasificar: 1,
       por_clasificacion: [{ clasificacion: "interesado", cantidad: 1 }],
-      personas_que_respondieron: 2
+      personas_que_respondieron: 2,
+      personas_interesadas: 1
     });
     expect(res.body.tasa_respuesta_pct).toBe(66.67);
     expect(res.body.por_campana).toEqual([
