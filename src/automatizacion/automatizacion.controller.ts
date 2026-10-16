@@ -162,7 +162,7 @@ export class AutomatizacionController {
     const result = await this.automatizacionService.registrarRespuesta(input);
     // 200 también si se ignoró (dirección que no es de nuestras respuestas).
     response.status(result.ya_existia || "ignorada" in result ? 200 : 201);
-    return result;
+    return this.automatizacionService.conNombres(result);
   }
 
   @Post("respuestas/clasificacion")
@@ -170,7 +170,7 @@ export class AutomatizacionController {
     const input = respuestaClasificadaInputSchema.parse(body);
     const result = await this.automatizacionService.clasificarRespuesta(input);
     response.status(result.ya_existia ? 200 : 201);
-    return result;
+    return this.automatizacionService.conNombres(result);
   }
 
   @Post("respuestas/sugerencia")

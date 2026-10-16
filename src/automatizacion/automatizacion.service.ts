@@ -1179,6 +1179,21 @@ export class AutomatizacionService {
   // respuestas tardías: crear tarea comercial, no reiniciar
   // automáticamente el outbound"). PT2 usa además los modos
   // crear_tarea_clasificacion y automatica (ver respuestaRecibidaInputSchema).
+  // El aviso de PT2 al supervisor (16-oct-2026) decía solo "Prospecto: 29":
+  // las respuestas de /respuestas y /respuestas/clasificacion también llevan
+  // quién es (contacto y empresa), así n8n no tiene que pedirlo aparte.
+  async conNombres<T extends { prospecto_id: number | null }>(resultado: T): Promise<T & { contacto_nombre: string | null; empresa_nombre: string | null }> {
+    if (resultado.prospecto_id == null) return { ...resultado, contacto_nombre: null, empresa_nombre: null };
+    const [fila] = await this.db
+      .select({ contacto: contactos.nombre, empresa: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})` })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .where(eq(prospectos.id, resultado.prospecto_id))
+      .limit(1);
+    return { ...resultado, contacto_nombre: fila?.contacto ?? null, empresa_nombre: fila?.empresa ?? null };
+  }
+
   async registrarRespuesta(input: RespuestaRecibidaInput) {
     const [existing] = await this.db
       .select({ id: respuestas.id, prospectoId: respuestas.prospectoId, envioId: respuestas.envioId, tardia: respuestas.tardia })
