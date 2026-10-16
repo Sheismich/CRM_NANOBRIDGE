@@ -180,7 +180,20 @@ gcloud sql instances patch nanobridge-db --clear-authorized-networks --project=c
 
 **Orden:** la migración va **antes** del código. El código nuevo suele leer
 las columnas nuevas (con la 023, `GET /cola-clasificacion` tronaba sin
-ellas); el código viejo con columnas de más no se rompe.
+ellas); el código viejo con columnas de más no se rompe. **Ojo: si la tabla
+gana columnas, también fallan las altas**, no solo las pantallas que las
+leen: Drizzle nombra todas las columnas del esquema en cada `INSERT`.
+
+Antes de `gcloud builds submit`, revisa que `npm run migrate` haya
+impreso **`Applied <la migración nueva>.sql`**. Si se te pasó y ya
+desplegaste (16-oct-2026, 031 → Prospectos no cargaba), regresa el tráfico a
+la revisión anterior, migra y vuelve a la nueva, sin build nuevo:
+
+```bash
+gcloud run services update-traffic nanobridge-api --to-revisions=<revisión-anterior>=100 --region=us-central1
+# pasos 1 a 4 de arriba (migración)
+gcloud run services update-traffic nanobridge-api --to-latest --region=us-central1
+```
 
 **Si `npm run migrate` se queda colgado en Cloud Shell**, la migración se
 aplica a mano con el cliente de MySQL (`-p` pide la contraseña sin
@@ -253,6 +266,7 @@ Actualiza esta tabla en cada deploy.
 | 15-oct-2026 | `nanobridge-api-00027-ss6` | `45f36ed` | (sin migración) | `PATCH /tareas/:id/reprogramar` para el botón Reprogramar de Tareas (Mi día). Los demás commits desde `ad172eb` son solo del front (aún no publicado en Firebase). `/health` ok, la ruta nueva responde 401 sin sesión; `TRUST_PROXY` y `SESSION_COOKIE_NAME` siguen puestas |
 | 15-oct-2026 | `nanobridge-api-00028-cs9` | `3824942` | (sin migración) | Pendientes de la revisión de la vista previa: `GET /tareas?empresaId=` y `prospeccion` en `GET /empresas/:id` (ficha), `en_campana` en `/prospectos/conteos` y filtro `enCampana`, tareas reprogramadas en Reportes · Día, **aceptar una cotización gana su oportunidad** (valor = total aceptado) y **`POST /automatizacion/envios` responde 409 `PROSPECTO_NO_VALIDADO`** si el prospecto no está validado (vigilar el siguiente PT1/PT4: un 409 ahí lo avisa B4). `/health` ok |
 | 15-oct-2026 | `nanobridge-api-00029-hjq` | `6bd5dad` | (sin migración) | **Día del cambio**: el front nuevo pasó a la liga oficial (`hosting:clone` del canal `nuevo-diseno` a `live`, 14:47) y luego este backend: `/auditoria` solo del administrador, motivo de rechazo de cotización obligatorio y `PATCH /documentos/:id/revisar` solo administrador y supervisor. `/health` ok; Administración en la liga oficial enseña "revisión 00029-hjq" (`/admin/salud` con sesión, revisado) |
+| 16-oct-2026 | `nanobridge-api-00030-gq4` | `ef5e06c` | `031_fila_automatizacion.sql` | API del botón "Mandar a automatización": fila de PT1 (`POST /prospectos/automatizacion`, `POST /prospectos/:id/sacar-de-fila`, `POST /automatizacion/prospectos/fila/tomar`), `NUEVOS_POR_DIA` = 10 por defecto (sin poner). **Se desplegó antes de migrar y Prospectos dejó de cargar** (el código lee las columnas `fila_*`, y las altas de prospectos también fallaban): se regresó el tráfico a 00029-hjq, se aplicó la 031 y se volvió con `--to-latest`. Prospectos carga; las rutas nuevas responden 401 sin llave o sesión |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
