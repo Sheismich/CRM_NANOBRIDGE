@@ -16,9 +16,14 @@ export const crearOportunidadSchema = z.object({
   // Tope de la columna DECIMAL(12,2): más grande tronaba en MySQL con 500
   // (C3 del plan de fixes, 2-oct-2026).
   valorEstimado: z.coerce.number().min(0).max(9_999_999_999.99).optional(),
-  fechaCierreEstimada: z.string().date().optional()
+  fechaCierreEstimada: z.string().date().optional(),
+  // 032: la venta lleva factura (su expediente pide la constancia fiscal).
+  llevaFactura: z.boolean().optional()
 });
 export type CrearOportunidadInput = z.infer<typeof crearOportunidadSchema>;
+
+export const cambiarLlevaFacturaSchema = z.object({ llevaFactura: z.boolean() });
+export type CambiarLlevaFacturaInput = z.infer<typeof cambiarLlevaFacturaSchema>;
 
 export const listOportunidadesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

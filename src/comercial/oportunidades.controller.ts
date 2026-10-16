@@ -6,7 +6,7 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { cambiarEtapaSchema, crearOportunidadSchema, listOportunidadesQuerySchema, reabrirOportunidadSchema } from "./dto/oportunidad.schema.js";
+import { cambiarEtapaSchema, cambiarLlevaFacturaSchema, crearOportunidadSchema, listOportunidadesQuerySchema, reabrirOportunidadSchema } from "./dto/oportunidad.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -50,6 +50,15 @@ export class OportunidadesController {
     const id = idParamSchema.parse(idParam);
     const input = cambiarEtapaSchema.parse(body);
     return this.oportunidadesService.cambiarEtapa(user, id, input);
+  }
+
+  @Patch(":id/factura")
+  @HttpCode(200)
+  @Roles("administrador", "supervisor", "agente")
+  cambiarLlevaFactura(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    const id = idParamSchema.parse(idParam);
+    const input = cambiarLlevaFacturaSchema.parse(body);
+    return this.oportunidadesService.cambiarLlevaFactura(user, id, input);
   }
 
   @Patch(":id/reabrir")

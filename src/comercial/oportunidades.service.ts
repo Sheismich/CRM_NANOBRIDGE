@@ -6,7 +6,7 @@ import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
-import type { CambiarEtapaInput, CrearOportunidadInput, ListOportunidadesQuery, ReabrirOportunidadInput } from "./dto/oportunidad.schema.js";
+import type { CambiarEtapaInput, CambiarLlevaFacturaInput, CrearOportunidadInput, ListOportunidadesQuery, ReabrirOportunidadInput } from "./dto/oportunidad.schema.js";
 
 function toRow(row: typeof oportunidades.$inferSelect & { etapaClave: string; etapaNombre: string; probabilidad: number }) {
   return {
@@ -24,6 +24,7 @@ function toRow(row: typeof oportunidades.$inferSelect & { etapaClave: string; et
     motivo_perdida_id: row.motivoPerdidaId,
     motivo_perdida_detalle: row.motivoPerdidaDetalle,
     cerrada: row.cerrada,
+    lleva_factura: row.llevaFactura,
     creado_en: row.creadoEn,
     actualizado_en: row.actualizadoEn
   };
@@ -218,7 +219,8 @@ export class OportunidadesService {
         etapaId: etapaInicial.id,
         responsableId,
         valorEstimado: input.valorEstimado !== undefined ? input.valorEstimado.toFixed(2) : null,
-        fechaCierreEstimada: input.fechaCierreEstimada ?? null
+        fechaCierreEstimada: input.fechaCierreEstimada ?? null,
+        llevaFactura: input.llevaFactura ?? false
       });
 
       await tx.insert(historialEtapaOportunidad).values({
@@ -240,6 +242,28 @@ export class OportunidadesService {
 
       return created.insertId;
     });
+  }
+
+  // Casilla "Lleva factura" (16-oct-2026): si está marcada, el expediente de
+  // la venta pide la constancia de situación fiscal. La cambia quien puede
+  // mover la venta (un agente, solo las suyas), abierta o ya ganada: la
+  // factura a veces se pide después de cerrar.
+  async cambiarLlevaFactura(user: CurrentUser, id: number, input: CambiarLlevaFacturaInput) {
+    const actual = await this.findScoped(user, id);
+    if (actual.oportunidad.llevaFactura !== input.llevaFactura) {
+      await this.db.transaction(async (tx) => {
+        await tx.update(oportunidades).set({ llevaFactura: input.llevaFactura }).where(eq(oportunidades.id, id));
+        await tx.insert(auditoria).values({
+          usuarioId: user.id,
+          entidad: "oportunidad",
+          entidadId: id,
+          accion: "cambiar_lleva_factura",
+          antes: { lleva_factura: actual.oportunidad.llevaFactura },
+          despues: { lleva_factura: input.llevaFactura }
+        });
+      });
+    }
+    return { id, lleva_factura: input.llevaFactura };
   }
 
   async cambiarEtapa(user: CurrentUser, id: number, input: CambiarEtapaInput) {

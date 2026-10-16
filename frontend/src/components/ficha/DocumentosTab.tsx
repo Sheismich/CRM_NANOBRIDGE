@@ -6,10 +6,11 @@ import { Field, ServerError, inputClass } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { formatoFecha, formatoFechaHora, formatoTamano } from "../../lib/formato";
-import type { Documento, DocumentoBandeja, Paginated } from "../../types";
+import type { Documento, DocumentoBandeja, Paginated, TipoDocumento } from "../../types";
 import { Pastilla } from "../ui/Pastilla";
 import { PanelDocumento } from "../documentos/PanelDocumento";
 import { ETIQUETA_REVISION, TONO_REVISION, useExpediente } from "../../lib/documentos";
+import { ExpedienteVenta } from "../documentos/ExpedienteVenta";
 import { useOportunidadesEmpresa } from "./queries";
 
 // Mismos tipos que TIPOS_MIME_PERMITIDOS (documento.schema.ts) y el tope de
@@ -34,8 +35,6 @@ function validarArchivo(archivo: File | undefined): string | null {
   if (archivo.name.length > 255) return "El nombre del archivo no puede exceder 255 caracteres";
   return null;
 }
-
-type TipoDocumento = { id: number; clave: string; nombre: string };
 
 export function DocumentosTab({ empresaId, contactos }: { empresaId: number; contactos: { id: number; nombre: string }[] }) {
   const { user } = useAuth();
@@ -70,21 +69,15 @@ export function DocumentosTab({ empresaId, contactos }: { empresaId: number; con
           </Button>
         )}
       </div>
-      {/* Expediente (punto 49): solo cuando el catálogo marca papeles
-          obligatorios; hoy no hay (Carlos, 12-oct-2026) y no se enseña. */}
-      {expediente && expediente.total > 0 && (
-        <div className="border-b border-border px-5 py-3.5">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-[13px] font-bold">Expediente</span>
-            <Pastilla tono={expediente.completo ? "ok" : "warn"}>{`${expediente.aprobados} de ${expediente.total} aprobados`}</Pastilla>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {expediente.papeles.map((p) => (
-              <Pastilla key={p.tipo_id} tono={p.estado === "falta" ? "neutro" : TONO_REVISION[p.estado]} punto>
-                {`${p.nombre}: ${p.estado === "falta" ? "falta" : ETIQUETA_REVISION[p.estado].toLowerCase()}`}
-              </Pastilla>
-            ))}
-          </div>
+      {/* Expediente por venta (16-oct-2026): cada oportunidad abierta o
+          ganada con sus papeles obligatorios, las ganadas primero. Sin
+          oportunidades no hay expediente que pedir. */}
+      {expediente && expediente.ventas.length > 0 && (
+        <div className="flex flex-col gap-3.5 border-b border-border px-5 py-3.5">
+          <span className="text-[13px] font-bold">Expediente por venta</span>
+          {expediente.ventas.map((v) => (
+            <ExpedienteVenta key={v.oportunidad_id} venta={v} />
+          ))}
         </div>
       )}
       {subiendo && (
@@ -124,7 +117,7 @@ export function SubirDocumentoForm({
 }: {
   empresaId: number;
   tipos: TipoDocumento[];
-  oportunidades: { id: number; titulo: string }[];
+  oportunidades: { id: number; titulo: string; etapa_clave?: string }[];
   contactos: { id: number; nombre: string }[];
   onDone: () => void;
 }) {
@@ -136,12 +129,25 @@ export function SubirDocumentoForm({
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  // Pago, recibido/guía y cotización son de una venta (alcance "venta",
+  // 16-oct-2026): sin oportunidad no contarían en ningún expediente.
+  const deVenta = tipos.find((t) => String(t.id) === tipoDocumentoId)?.alcance === "venta";
+  const faltaOportunidad = deVenta && !oportunidadId;
+
+  function elegirTipo(id: string) {
+    setTipoDocumentoId(id);
+    // Viene puesta la venta ganada más reciente (o la única que haya).
+    if (tipos.find((t) => String(t.id) === id)?.alcance === "venta" && !oportunidadId) {
+      const sugerida = oportunidades.find((o) => o.etapa_clave === "ganada") ?? (oportunidades.length === 1 ? oportunidades[0] : undefined);
+      if (sugerida) setOportunidadId(String(sugerida.id));
+    }
+  }
 
   async function onSubmit() {
     setServerError(null);
     const error = validarArchivo(archivo);
     setErrorArchivo(error);
-    if (error || !archivo) return;
+    if (error || !archivo || faltaOportunidad) return;
 
     // multipart: el archivo va en el campo "archivo" (uploadInterceptor de
     // DocumentosController); los ids viajan como texto.
@@ -171,7 +177,7 @@ export function SubirDocumentoForm({
           <input id="doc-archivo" type="file" accept={ACCEPT} className={inputClass} onChange={(e) => setArchivo(e.target.files?.[0])} />
         </Field>
         <Field label="Tipo (opcional)" htmlFor="doc-tipo">
-          <select id="doc-tipo" className={inputClass} value={tipoDocumentoId} onChange={(e) => setTipoDocumentoId(e.target.value)}>
+          <select id="doc-tipo" className={inputClass} value={tipoDocumentoId} onChange={(e) => elegirTipo(e.target.value)}>
             <option value="">— Sin clasificar —</option>
             {tipos.map((t) => (
               <option key={t.id} value={t.id}>
@@ -180,7 +186,7 @@ export function SubirDocumentoForm({
             ))}
           </select>
         </Field>
-        <Field label="Oportunidad (opcional)" htmlFor="doc-oportunidad">
+        <Field label={deVenta ? "Oportunidad (obligatoria para este papel)" : "Oportunidad (opcional)"} htmlFor="doc-oportunidad" error={faltaOportunidad ? "Este papel es de una venta: elige la oportunidad" : undefined}>
           <select id="doc-oportunidad" className={inputClass} value={oportunidadId} onChange={(e) => setOportunidadId(e.target.value)}>
             <option value="">— Ninguna —</option>
             {oportunidades.map((o) => (
@@ -208,7 +214,7 @@ export function SubirDocumentoForm({
         <Button type="button" variant="ghost" onClick={onDone}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={enviando}>
+        <Button type="submit" disabled={enviando || faltaOportunidad}>
           {enviando ? "Subiendo…" : "Subir"}
         </Button>
       </div>

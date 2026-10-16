@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, catalogoTipoDocumento, contactos, documentos, empresas, oportunidades, tareas, usuarios } from "../database/schema.js";
+import { auditoria, catalogoEtapaEmbudo, catalogoTipoDocumento, contactos, cotizaciones, documentos, empresas, oportunidades, tareas, usuarios } from "../database/schema.js";
+import { CLAVE_COTIZACION_FIRMADA, evaluarVenta, type DocumentoDeExpediente } from "./expediente.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { env } from "../config/env.js";
@@ -23,6 +24,7 @@ export type ArchivoSubido = { originalname: string; mimetype: string; size: numb
 export const CODIGO_DOCUMENTO_NO_VIGENTE = "DOCUMENTO_NO_VIGENTE";
 export const CODIGO_VISTA_PREVIA_NO_DISPONIBLE = "VISTA_PREVIA_NO_DISPONIBLE";
 export const CODIGO_LOTE_DEMASIADO_GRANDE = "LOTE_DEMASIADO_GRANDE";
+export const CODIGO_OPORTUNIDAD_REQUERIDA = "OPORTUNIDAD_REQUERIDA";
 
 // Vista previa (?modo=ver): solo lo que un navegador sabe mostrar. Word y
 // Excel se descargan.
@@ -32,11 +34,6 @@ const MIME_CON_VISTA_PREVIA: readonly string[] = ["application/pdf", "image/png"
 // con más que esto se pide filtrar más.
 export const LOTE_MAX_ARCHIVOS = 100;
 export const LOTE_MAX_BYTES = 200 * 1024 * 1024;
-
-// "Mejor estado" de un papel del expediente cuando hay varios vigentes del
-// mismo tipo (Fabián, 12-oct-2026): uno aprobado no lo tumba un duplicado
-// rechazado.
-const RANGO_REVISION = { aprobado: 3, por_revisar: 2, rechazado: 1 } as const;
 
 // Estados (PLAN_CRM_DEFINITIVO.md #8 no detalla el criterio, se define
 // aquí): 'obsoleto' nunca es destino de un cambio de estado manual -- solo
@@ -120,9 +117,12 @@ export class DocumentosService {
     }
   }
 
-  private async validarTipoDocumento(tipoDocumentoId: number) {
-    const [row] = await this.db.select({ id: catalogoTipoDocumento.id }).from(catalogoTipoDocumento).where(eq(catalogoTipoDocumento.id, tipoDocumentoId)).limit(1);
+  // Un papel de venta (pago, recibido, cotización) cuenta en el expediente
+  // de UNA oportunidad: sin ella se quedaría suelto sin contar en ninguna.
+  private async validarTipoDocumento(tipoDocumentoId: number, oportunidadId: number | null) {
+    const [row] = await this.db.select({ id: catalogoTipoDocumento.id, alcance: catalogoTipoDocumento.alcance }).from(catalogoTipoDocumento).where(eq(catalogoTipoDocumento.id, tipoDocumentoId)).limit(1);
     if (!row) throw new HttpError(404, "Tipo de documento no encontrado");
+    if (row.alcance === "venta" && !oportunidadId) throw new HttpError(400, "Este papel es de una venta: elige la oportunidad", CODIGO_OPORTUNIDAD_REQUERIDA);
   }
 
   // A diferencia de catalogos() en OportunidadesService (donde el resto de
@@ -133,7 +133,7 @@ export class DocumentosService {
   // solo la clave, para poder enviarlo de vuelta.
   async catalogos() {
     const tiposDocumento = await this.db
-      .select({ id: catalogoTipoDocumento.id, clave: catalogoTipoDocumento.clave, nombre: catalogoTipoDocumento.nombre, obligatorio: catalogoTipoDocumento.obligatorio })
+      .select({ id: catalogoTipoDocumento.id, clave: catalogoTipoDocumento.clave, nombre: catalogoTipoDocumento.nombre, obligatorio: catalogoTipoDocumento.obligatorio, alcance: catalogoTipoDocumento.alcance, solo_con_factura: catalogoTipoDocumento.soloConFactura })
       .from(catalogoTipoDocumento)
       .orderBy(catalogoTipoDocumento.nombre);
     return { tipos_documento: tiposDocumento, motivos_rechazo: MOTIVOS_RECHAZO_DOCUMENTO };
@@ -238,7 +238,7 @@ export class DocumentosService {
       this.validarEmpresaScoped(user, input.empresaId),
       input.oportunidadId ? this.validarOportunidad(user, input.empresaId, input.oportunidadId) : Promise.resolve(),
       input.contactoId ? this.validarContacto(input.empresaId, input.contactoId) : Promise.resolve(),
-      input.tipoDocumentoId ? this.validarTipoDocumento(input.tipoDocumentoId) : Promise.resolve()
+      input.tipoDocumentoId ? this.validarTipoDocumento(input.tipoDocumentoId, input.oportunidadId ?? null) : Promise.resolve()
     ]);
 
     const key = this.buildStorageKey(input.empresaId, archivo.mimetype);
@@ -337,13 +337,14 @@ export class DocumentosService {
   }
 
   // Contadores de la bandeja (12-oct-2026). Por revisar / aprobados /
-  // rechazados: versiones vigentes. Expedientes incompletos: clientes (empresa
-  // activa con una oportunidad ganada o con al menos un documento -- Fabián,
-  // 12-oct-2026) a los que les falta aprobar algún papel obligatorio. Mismo
-  // alcance que la lista: un agente, sus empresas.
+  // rechazados: versiones vigentes. Expedientes incompletos (16-oct-2026):
+  // ventas ganadas a las que les falta aprobar algún papel obligatorio, con
+  // la misma regla del expediente (./expediente.ts). Una abierta no cuenta:
+  // el expediente se exige al ganarla. Mismo alcance que la lista: un
+  // agente, sus empresas.
   async conteos(user: CurrentUser) {
     const deAgente = user.rol === "agente" ? sql`AND e.propietario_id = ${user.id}` : sql``;
-    const [[revisiones], [incompletos]] = await Promise.all([
+    const [[revisiones], empresasConGanadas] = await Promise.all([
       this.db.execute(sql`
         SELECT
           COALESCE(SUM(d.revision = 'por_revisar'), 0) AS por_revisar,
@@ -351,59 +352,98 @@ export class DocumentosService {
           COALESCE(SUM(d.revision = 'rechazado'), 0) AS rechazados
         FROM documentos d JOIN empresas e ON e.id = d.empresa_id
         WHERE d.activo AND d.estado = 'vigente' AND e.activo ${deAgente}`),
-      this.db.execute(sql`
-        SELECT COUNT(*) AS n
-        FROM empresas e
-        WHERE e.activo ${deAgente}
-          AND (
-            EXISTS (SELECT 1 FROM oportunidades o JOIN catalogo_etapa_embudo c ON c.id = o.etapa_id
-                    WHERE o.empresa_id = e.id AND o.cerrada AND c.es_ganada)
-            OR EXISTS (SELECT 1 FROM documentos d WHERE d.empresa_id = e.id AND d.activo)
-          )
-          AND (SELECT COUNT(DISTINCT d.tipo_documento_id)
-               FROM documentos d JOIN catalogo_tipo_documento t ON t.id = d.tipo_documento_id
-               WHERE d.empresa_id = e.id AND d.activo AND d.estado = 'vigente' AND d.revision = 'aprobado' AND t.obligatorio)
-              < (SELECT COUNT(*) FROM catalogo_tipo_documento WHERE obligatorio)`)
+      this.db
+        .selectDistinct({ id: oportunidades.empresaId })
+        .from(oportunidades)
+        .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
+        .innerJoin(empresas, eq(empresas.id, oportunidades.empresaId))
+        .where(and(
+          eq(oportunidades.cerrada, true),
+          eq(catalogoEtapaEmbudo.esGanada, true),
+          eq(empresas.activo, true),
+          user.rol === "agente" ? eq(empresas.propietarioId, user.id) : undefined
+        ))
     ]);
+    const ganadas = await this.ventasConExpediente(empresasConGanadas.map((e) => e.id), { soloGanadas: true });
     const r = (revisiones as unknown as Record<string, unknown>[])[0] ?? {};
-    const i = (incompletos as unknown as Record<string, unknown>[])[0] ?? {};
     return {
       por_revisar: Number(r.por_revisar ?? 0),
       aprobados: Number(r.aprobados ?? 0),
       rechazados: Number(r.rechazados ?? 0),
-      expedientes_incompletos: Number(i.n ?? 0)
+      expedientes_incompletos: ganadas.filter((v) => !v.completo).length
     };
   }
 
-  // Expediente de un cliente (punto 49): cada papel obligatorio con su
-  // estado -- falta, por revisar, aprobado o rechazado -- según su mejor
-  // versión vigente (RANGO_REVISION). "Incompleto" = algún papel sin aprobar.
+  // Expediente de un cliente (punto 49), por venta desde el 16-oct-2026:
+  // cada oportunidad abierta o ganada (las perdidas no) con sus papeles
+  // obligatorios y el estado de cada uno -- falta, por revisar, aprobado o
+  // rechazado. Las ganadas primero. Un agente ve el de sus empresas, como
+  // los documentos.
   async expediente(user: CurrentUser, empresaId: number) {
     await this.validarEmpresaScoped(user, empresaId);
-    const [tipos, docs] = await Promise.all([
-      this.db.select({ id: catalogoTipoDocumento.id, clave: catalogoTipoDocumento.clave, nombre: catalogoTipoDocumento.nombre })
-        .from(catalogoTipoDocumento).where(eq(catalogoTipoDocumento.obligatorio, true)).orderBy(catalogoTipoDocumento.nombre),
-      this.db.select().from(documentos)
-        .where(and(eq(documentos.empresaId, empresaId), eq(documentos.activo, true), eq(documentos.estado, "vigente")))
+    const ventas = await this.ventasConExpediente([empresaId], { soloGanadas: false });
+    return { empresa_id: empresaId, ventas };
+  }
+
+  // Lo que necesita la regla del expediente (evaluarVenta) para estas
+  // empresas, en cuatro consultas sin importar cuántas ventas sean.
+  private async ventasConExpediente(empresaIds: number[], opciones: { soloGanadas: boolean }) {
+    if (empresaIds.length === 0) return [];
+    const [filas, tipos, firmada, docs] = await Promise.all([
+      this.db
+        .select({ id: oportunidades.id, empresaId: oportunidades.empresaId, titulo: oportunidades.titulo, llevaFactura: oportunidades.llevaFactura, cerrada: oportunidades.cerrada, esGanada: catalogoEtapaEmbudo.esGanada })
+        .from(oportunidades)
+        .innerJoin(catalogoEtapaEmbudo, eq(catalogoEtapaEmbudo.id, oportunidades.etapaId))
+        .where(and(
+          inArray(oportunidades.empresaId, empresaIds),
+          opciones.soloGanadas
+            ? and(eq(oportunidades.cerrada, true), eq(catalogoEtapaEmbudo.esGanada, true))
+            : or(eq(oportunidades.cerrada, false), eq(catalogoEtapaEmbudo.esGanada, true))
+        ))
+        .orderBy(desc(oportunidades.cerrada), desc(oportunidades.creadoEn), desc(oportunidades.id)),
+      this.db
+        .select({ id: catalogoTipoDocumento.id, clave: catalogoTipoDocumento.clave, nombre: catalogoTipoDocumento.nombre, alcance: catalogoTipoDocumento.alcance, soloConFactura: catalogoTipoDocumento.soloConFactura })
+        .from(catalogoTipoDocumento)
+        .where(eq(catalogoTipoDocumento.obligatorio, true)),
+      this.db.select({ id: catalogoTipoDocumento.id }).from(catalogoTipoDocumento).where(eq(catalogoTipoDocumento.clave, CLAVE_COTIZACION_FIRMADA)).limit(1),
+      this.db
+        .select({
+          id: documentos.id,
+          empresaId: documentos.empresaId,
+          oportunidadId: documentos.oportunidadId,
+          tipoDocumentoId: documentos.tipoDocumentoId,
+          revision: documentos.revision,
+          nombreOriginal: documentos.nombreOriginal,
+          version: documentos.version,
+          creadoEn: documentos.creadoEn,
+          revisadoEn: documentos.revisadoEn,
+          motivoRechazo: documentos.motivoRechazo,
+          motivoRechazoDetalle: documentos.motivoRechazoDetalle
+        })
+        .from(documentos)
+        .where(and(inArray(documentos.empresaId, empresaIds), eq(documentos.activo, true), eq(documentos.estado, "vigente")))
         .orderBy(desc(documentos.creadoEn), desc(documentos.id))
     ]);
+    if (filas.length === 0) return [];
+    const aceptadas = await this.db
+      .select({ id: cotizaciones.id, version: cotizaciones.version, oportunidadId: cotizaciones.oportunidadId })
+      .from(cotizaciones)
+      .where(and(inArray(cotizaciones.oportunidadId, filas.map((f) => f.id)), eq(cotizaciones.estado, "aceptada")))
+      .orderBy(desc(cotizaciones.id));
 
-    const papeles = tipos.map((tipo) => {
-      const delTipo = docs.filter((d) => d.tipoDocumentoId === tipo.id);
-      // sort es estable: a igual estado, queda el más reciente.
-      const mejor = [...delTipo].sort((a, b) => RANGO_REVISION[b.revision] - RANGO_REVISION[a.revision])[0];
-      return {
-        tipo_id: tipo.id,
-        clave: tipo.clave,
-        nombre: tipo.nombre,
-        estado: mejor ? mejor.revision : ("falta" as const),
-        documento: mejor
-          ? { id: mejor.id, nombre_original: mejor.nombreOriginal, version: mejor.version, creado_en: mejor.creadoEn, revisado_en: mejor.revisadoEn, motivo_rechazo: mejor.motivoRechazo, motivo_rechazo_detalle: mejor.motivoRechazoDetalle }
-          : null
-      };
+    // Las ganadas primero (cerrada DESC ya las junta con las perdidas, que
+    // aquí no llegan: solo quedan abiertas y ganadas).
+    return filas.map((f) => {
+      const aceptada = aceptadas.find((c) => c.oportunidadId === f.id);
+      const docsEmpresa: DocumentoDeExpediente[] = docs.filter((d) => d.empresaId === f.empresaId);
+      return evaluarVenta(
+        { id: f.id, titulo: f.titulo, ganada: f.cerrada && f.esGanada, llevaFactura: f.llevaFactura },
+        tipos,
+        docsEmpresa,
+        aceptada ? { id: aceptada.id, version: aceptada.version } : undefined,
+        firmada[0]?.id
+      );
     });
-    const aprobados = papeles.filter((p) => p.estado === "aprobado").length;
-    return { empresa_id: empresaId, papeles, aprobados, total: papeles.length, completo: aprobados === papeles.length };
   }
 
   // Descargar lote (punto 48): qué entra en el zip, con los mismos filtros
@@ -513,7 +553,7 @@ export class DocumentosService {
     this.validarArchivo(archivo);
     const actual = await this.obtenerScoped(user, id);
     if (actual.estado === "obsoleto") throw new HttpError(409, "No se puede versionar un documento ya obsoleto");
-    if (input.tipoDocumentoId) await this.validarTipoDocumento(input.tipoDocumentoId);
+    if (input.tipoDocumentoId) await this.validarTipoDocumento(input.tipoDocumentoId, actual.oportunidadId);
 
     const raizId = actual.documentoRaizId ?? actual.id;
     const nuevaVersionNum = actual.version + 1;

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin, loginAs } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, catalogoTipoDocumento, documentos, empresas, tareas, usuarios } from "../src/database/schema.js";
+import { auditoria, documentos, empresas, tareas, usuarios } from "../src/database/schema.js";
 import { CLAVES_MOTIVO_RECHAZO_DOCUMENTO } from "../src/shared/motivos-rechazo-documento.js";
 
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -182,28 +182,20 @@ describe("documentos: revisión, expediente y contadores", () => {
     });
   });
 
-  // Carlos (12-oct-2026): de momento no hay papeles obligatorios. Se marcan
-  // desde el CRM el día que los quiera.
-  it("los motivos salen del catálogo y coinciden con el ENUM de la base; ningún papel viene marcado obligatorio", async () => {
+  // Los obligatorios son los del 16-oct-2026 (expediente por venta, ver
+  // test/490-expediente-por-venta.spec.ts); el 12-oct no había ninguno.
+  it("los motivos salen del catálogo y coinciden con el ENUM de la base; los obligatorios son los 4 de la venta", async () => {
     const res = await api().get("/api/v1/documentos/catalogos").set("Cookie", adminCookie);
     expect(res.body.motivos_rechazo.map((m: { clave: string }) => m.clave)).toEqual([...CLAVES_MOTIVO_RECHAZO_DOCUMENTO]);
     expect(res.body.motivos_rechazo[0]).toEqual({ clave: "ilegible", nombre: "Ilegible o borroso" });
-    expect(res.body.tipos_documento.filter((t: { obligatorio: boolean }) => t.obligatorio)).toEqual([]);
+    expect(res.body.tipos_documento.filter((t: { obligatorio: boolean }) => t.obligatorio).map((t: { clave: string }) => t.clave).sort())
+      .toEqual(["comprobante_pago", "comprobante_recibido", "constancia_situacion_fiscal", "cotizacion"]);
     const [filas] = await db.execute(sql`SELECT COLUMN_TYPE AS tipo FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'documentos' AND COLUMN_NAME = 'motivo_rechazo'`);
     const tipo = (filas as unknown as { tipo: string }[])[0]!.tipo;
     expect([...tipo.matchAll(/'([^']*)'/g)].map((m) => m[1])).toEqual([...CLAVES_MOTIVO_RECHAZO_DOCUMENTO]);
   });
 
-  it("sin papeles obligatorios el expediente sale vacío y completo, y no hay expedientes incompletos", async () => {
-    const agenteCookie = await crearAgente(app, adminCookie, `docs.sin.${Date.now()}@test.local`);
-    const empresaId = await empresaDe(await usuarioId(agenteCookie));
-    await subir(agenteCookie, empresaId, "acta_constitutiva");
-    const res = await api().get(`/api/v1/documentos/expediente/${empresaId}`).set("Cookie", agenteCookie);
-    expect(res.body).toEqual({ empresa_id: empresaId, papeles: [], aprobados: 0, total: 0, completo: true });
-    expect((await api().get("/api/v1/documentos/conteos").set("Cookie", agenteCookie)).body.expedientes_incompletos).toBe(0);
-  });
-
-  describe("lista, expediente y contadores de un agente", () => {
+  describe("lista y contadores de un agente", () => {
     let agenteCookie: string[];
     let empExpediente: number;
     let empSoloDoc: number;
@@ -212,13 +204,7 @@ describe("documentos: revisión, expediente y contadores", () => {
     const ids: Record<string, number> = {};
     const CINCO_PAPELES = ["acta_constitutiva", "comprobante_domicilio", "identificacion_oficial", "contrato", "cotizacion_firmada"];
 
-    // Cambia el catálogo (compartido) y lo deja como estaba.
-    afterAll(async () => {
-      await db.update(catalogoTipoDocumento).set({ obligatorio: false }).where(inArray(catalogoTipoDocumento.clave, CINCO_PAPELES));
-    });
-
     beforeAll(async () => {
-      await db.update(catalogoTipoDocumento).set({ obligatorio: true }).where(inArray(catalogoTipoDocumento.clave, CINCO_PAPELES));
       agenteCookie = await crearAgente(app, adminCookie, `docs.exp.${Date.now()}@test.local`);
       const agenteId = await usuarioId(agenteCookie);
       empExpediente = await empresaDe(agenteId, `Moldes ${marca} SA`);
@@ -251,21 +237,6 @@ describe("documentos: revisión, expediente y contadores", () => {
       }
     });
 
-    it("el expediente dice qué papel falta, cuál está por revisar, aprobado o rechazado", async () => {
-      const res = await api().get(`/api/v1/documentos/expediente/${empExpediente}`).set("Cookie", agenteCookie);
-      expect(res.status).toBe(200);
-      const porClave = Object.fromEntries(res.body.papeles.map((p: { clave: string }) => [p.clave, p]));
-      expect(porClave.acta_constitutiva).toEqual(expect.objectContaining({ estado: "aprobado", documento: expect.objectContaining({ id: ids.acta }) }));
-      expect(porClave.comprobante_domicilio.estado).toBe("por_revisar");
-      expect(porClave.identificacion_oficial).toEqual(expect.objectContaining({ estado: "rechazado", documento: expect.objectContaining({ motivo_rechazo: "vencido", motivo_rechazo_detalle: "INE vencida en 2024" }) }));
-      expect(porClave.contrato).toEqual(expect.objectContaining({ estado: "falta", documento: null }));
-      expect(porClave.cotizacion_firmada.estado).toBe("falta");
-      expect(res.body).toEqual(expect.objectContaining({ aprobados: 1, total: 5, completo: false }));
-
-      const completa = await api().get(`/api/v1/documentos/expediente/${empCompleta}`).set("Cookie", agenteCookie);
-      expect(completa.body).toEqual(expect.objectContaining({ aprobados: 5, total: 5, completo: true }));
-    });
-
     it("un agente no ve el expediente de una empresa que no es suya", async () => {
       const otro = await crearAgente(app, adminCookie, `docs.otro.${Date.now()}@test.local`);
       expect((await api().get(`/api/v1/documentos/expediente/${empExpediente}`).set("Cookie", otro)).status).toBe(404);
@@ -275,9 +246,10 @@ describe("documentos: revisión, expediente y contadores", () => {
       const res = await api().get("/api/v1/documentos/conteos").set("Cookie", agenteCookie);
       expect(res.status).toBe(200);
       // Por revisar: comprobante + suelto. Aprobados: acta + 5 de la completa.
-      // Rechazados: acta duplicada + identificación. Incompletos: la del
-      // expediente, la del documento suelto y la ganada sin papeles.
-      expect(res.body).toEqual({ por_revisar: 2, aprobados: 6, rechazados: 2, expedientes_incompletos: 3 });
+      // Rechazados: acta duplicada + identificación. Incompletos: solo la
+      // venta ganada sin papeles (desde el 16-oct se cuentan ventas, y los
+      // papeles de empresa de antes ya no son obligatorios).
+      expect(res.body).toEqual({ por_revisar: 2, aprobados: 6, rechazados: 2, expedientes_incompletos: 1 });
     });
 
     it("la lista filtra por revisión, tipo y texto, y dice el tipo y quién revisó", async () => {

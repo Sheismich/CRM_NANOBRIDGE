@@ -157,7 +157,7 @@ function Cuerpo({ fila }: { fila: DocumentoBandeja }) {
           {detalle.versiones.map((v) => `v${v.version}${v.id === d.id ? " (esta)" : ""}`).join(" · ")}
         </p>
       )}
-      <ResumenExpediente empresaId={d.empresa_id} empresa={fila.empresa_nombre} actual={d.id} />
+      <ResumenExpediente empresaId={d.empresa_id} empresa={fila.empresa_nombre} oportunidadId={d.oportunidad_id} actual={d.id} />
     </div>
   );
 }
@@ -169,12 +169,15 @@ const CLASE_TARJETITA: Record<"falta" | Documento["revision"], string> = {
   falta: "border-dashed border-border bg-soft text-ink-3"
 };
 
-// Resumen del expediente (punto 49). Mientras no haya papeles obligatorios
-// (total 0, decisión de Carlos del 12-oct), enseña los documentos vigentes
-// de la empresa con su estado. Cada tarjetita lleva a la ficha.
-function ResumenExpediente({ empresaId, empresa, actual }: { empresaId: number; empresa: string; actual: number }) {
+// Resumen del expediente (punto 49), por venta desde el 16-oct-2026: el de
+// la venta de este documento (o la venta cuyo expediente lo usa, como la
+// constancia fiscal, que es de la empresa). Si el documento no es de
+// ninguna venta, enseña los documentos vigentes de la empresa con su
+// estado. Cada tarjetita lleva a la ficha.
+function ResumenExpediente({ empresaId, empresa, oportunidadId, actual }: { empresaId: number; empresa: string; oportunidadId: number | null; actual: number }) {
   const { data: expediente } = useExpediente(empresaId);
-  const sinPapeles = expediente?.total === 0;
+  const venta = expediente?.ventas.find((v) => v.oportunidad_id === oportunidadId) ?? expediente?.ventas.find((v) => v.papeles.some((p) => p.documento?.id === actual));
+  const sinPapeles = expediente !== undefined && !venta;
   const { data: docs } = useQuery({
     queryKey: ["documentos", "de-empresa", empresaId],
     queryFn: () => api.get<Paginated<DocumentoBandeja>>("/api/v1/documentos", { empresaId, estado: "vigente", limit: 6 }),
@@ -184,18 +187,24 @@ function ResumenExpediente({ empresaId, empresa, actual }: { empresaId: number; 
   const liga = `/empresas/${empresaId}?tab=documentos`;
   const tarjetas = sinPapeles
     ? (docs?.data ?? []).slice(0, 5).map((x) => ({ clave: String(x.id), titulo: x.tipo_nombre ?? "Sin tipo", estado: x.revision as "falta" | Documento["revision"], pie: x.nombre_original, esta: x.id === actual }))
-    : expediente.papeles.map((p, i) => ({ clave: String(p.tipo_id), titulo: `${i + 1}. ${p.nombre}`, estado: p.estado, pie: p.documento ? `v${p.documento.version} · ${p.documento.nombre_original}` : "aún no se sube", esta: p.documento?.id === actual }));
+    : (venta?.papeles ?? []).map((p, i) => ({
+        clave: String(p.tipo_id),
+        titulo: `${i + 1}. ${p.nombre}`,
+        estado: p.estado,
+        pie: p.origen === "cotizacion_crm" ? `Cotización v${p.cotizacion?.version ?? 1} aceptada en el CRM` : p.documento ? `v${p.documento.version} · ${p.documento.nombre_original}` : "aún no se sube",
+        esta: p.documento?.id === actual
+      }));
 
   return (
     <section className="rounded-[18px] bg-card px-4 py-4 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.5)] md:px-5">
       <div className="flex flex-wrap items-start gap-3">
         <Icono nombre="carpeta" size={20} className="mt-0.5 text-navy" />
         <div className="min-w-0 flex-1">
-          <h3 className="font-heading text-[15px] font-extrabold text-strong">Expediente de {empresa}</h3>
+          <h3 className="font-heading text-[15px] font-extrabold text-strong">{venta ? `Expediente de la venta «${venta.titulo}»` : `Documentos de ${empresa}`}</h3>
           <p className="text-[12px] text-ink-3">Toca un papel para abrir el expediente en la ficha de la empresa.</p>
         </div>
-        <Pastilla tono={sinPapeles ? "navy" : expediente.completo ? "ok" : "warn"}>
-          {sinPapeles ? plural(docs?.data.length ?? 0, "documento", "documentos") : `${expediente.aprobados} de ${expediente.total} aprobados`}
+        <Pastilla tono={!venta ? "navy" : venta.completo ? "ok" : "warn"}>
+          {!venta ? plural(docs?.data.length ?? 0, "documento", "documentos") : `${venta.aprobados} de ${venta.total} aprobados`}
         </Pastilla>
       </div>
       {tarjetas.length > 0 ? (

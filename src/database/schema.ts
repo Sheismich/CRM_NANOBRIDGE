@@ -183,6 +183,8 @@ export const oportunidades = mysqlTable("oportunidades", {
   motivoPerdidaId: bigint("motivo_perdida_id", { mode: "number", unsigned: true }),
   motivoPerdidaDetalle: varchar("motivo_perdida_detalle", { length: 500 }),
   cerrada: boolean("cerrada").notNull().default(false),
+  // 032: la venta lleva factura (su expediente pide la constancia fiscal).
+  llevaFactura: boolean("lleva_factura").notNull().default(false),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
@@ -519,6 +521,10 @@ export const catalogoTipoDocumento = mysqlTable("catalogo_tipo_documento", {
   nombre: varchar("nombre", { length: 120 }).notNull(),
   // 029: papel obligatorio del expediente de un cliente.
   obligatorio: boolean("obligatorio").notNull().default(false),
+  // 032: dónde se busca el papel (en la venta o en toda la empresa) y si
+  // solo se pide cuando la venta lleva factura.
+  alcance: mysqlEnum("alcance", ["venta", "empresa"]).notNull().default("empresa"),
+  soloConFactura: boolean("solo_con_factura").notNull().default(false),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
   uniqueIndex("uq_tipo_documento_clave").on(table.clave)

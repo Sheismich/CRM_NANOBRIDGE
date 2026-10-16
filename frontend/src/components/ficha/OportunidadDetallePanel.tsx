@@ -10,6 +10,8 @@ import { Field, ServerError, inputClass } from "../ui/Field";
 import { Pastilla } from "../ui/Pastilla";
 import { ApiError, api } from "../../lib/api";
 import { ETIQUETA_ESTADO_COTIZACION, TONO_ESTADO_COTIZACION } from "../../lib/cotizaciones";
+import { useExpediente } from "../../lib/documentos";
+import { ExpedienteVenta } from "../documentos/ExpedienteVenta";
 import { fechaLocal, formatoDiaMes, formatoFecha, formatoFechaHora, formatoMonedaEntera, plural } from "../../lib/formato";
 import type { CatalogosOportunidad, CotizacionTablero, OportunidadDetalle, OportunidadTablero, Paginated } from "../../types";
 
@@ -75,6 +77,7 @@ export function OportunidadDetallePanel({ id, onClose, enPanel = false, tarjeta 
 
       {oportunidad && <ResumenOportunidad oportunidad={oportunidad} responsableNombre={tarjeta?.responsable_nombre} />}
       {oportunidad && <CotizacionesDeOportunidad oportunidad={oportunidad} />}
+      {oportunidad && oportunidad.etapa_clave !== "perdida" && <ExpedienteDeOportunidad oportunidad={oportunidad} />}
 
       {oportunidad && catalogos && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -197,6 +200,49 @@ function CotizacionesDeOportunidad({ oportunidad: o }: { oportunidad: Oportunida
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+// Papeles de la venta (16-oct-2026) y la casilla "Lleva factura", que suma
+// la constancia de situación fiscal. Si quien la ve no puede ver los
+// documentos de la empresa (un agente responsable de una empresa ajena),
+// el expediente no sale, pero la casilla sí.
+function ExpedienteDeOportunidad({ oportunidad: o }: { oportunidad: OportunidadDetalle }) {
+  const queryClient = useQueryClient();
+  const { data: expediente } = useExpediente(o.empresa_id);
+  const venta = expediente?.ventas.find((v) => v.oportunidad_id === o.id);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function cambiarFactura(llevaFactura: boolean) {
+    setError(null);
+    setGuardando(true);
+    try {
+      await api.patch(`/api/v1/oportunidades/${o.id}/factura`, { llevaFactura });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["oportunidad", o.id] }),
+        queryClient.invalidateQueries({ queryKey: ["oportunidades"] }),
+        queryClient.invalidateQueries({ queryKey: ["documentos"] })
+      ]);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "No se pudo conectar con el servidor");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="mb-5 flex flex-col gap-2.5 rounded-[12px] border border-border bg-card px-3.5 py-3">
+      {venta ? <ExpedienteVenta venta={venta} conTitulo={false} /> : <span className="text-[13px] font-bold text-strong">Expediente</span>}
+      <label className="flex items-center gap-2 text-[13px] text-ink-2">
+        <input type="checkbox" className="h-4 w-4 accent-navy" checked={o.lleva_factura} disabled={guardando} onChange={(e) => void cambiarFactura(e.target.checked)} />
+        Lleva factura (pide la constancia de situación fiscal)
+      </label>
+      <Link to={`/empresas/${o.empresa_id}?tab=documentos`} className="text-[12px] font-semibold text-navy hover:underline">
+        Subir papeles en la ficha ›
+      </Link>
+      <ServerError message={error} />
     </div>
   );
 }

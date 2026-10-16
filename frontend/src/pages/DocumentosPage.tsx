@@ -115,7 +115,7 @@ export function DocumentosPage() {
       <FilaContadores>
         <Contador etiqueta="Por revisar" valor={c?.por_revisar ?? "…"} detalle="subidos sin revisar" tono="warn" seleccionado={revision === "por_revisar"} onClick={() => porRevision(revision === "por_revisar" ? "" : "por_revisar")} />
         <Contador etiqueta="Aprobados" valor={c?.aprobados ?? "…"} detalle="vigentes" tono="ok" seleccionado={revision === "aprobado"} onClick={() => porRevision(revision === "aprobado" ? "" : "aprobado")} />
-        <Contador etiqueta="Expedientes incompletos" valor={c?.expedientes_incompletos ?? "…"} detalle="clientes con faltantes" tono="warn" />
+        <Contador etiqueta="Expedientes incompletos" valor={c?.expedientes_incompletos ?? "…"} detalle="ventas ganadas con faltantes" tono="warn" />
         <Contador etiqueta="Rechazados" valor={c?.rechazados ?? "…"} detalle="por corregir" tono="danger" seleccionado={revision === "rechazado"} onClick={() => porRevision(revision === "rechazado" ? "" : "rechazado")} />
       </FilaContadores>
 

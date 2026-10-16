@@ -105,6 +105,8 @@ export type Oportunidad = {
   valor_estimado: string | null;
   fecha_cierre_estimada: string | null;
   cerrada: boolean;
+  // 032: su expediente pide la constancia de situación fiscal.
+  lleva_factura: boolean;
   actualizado_en: string;
 };
 
@@ -190,26 +192,45 @@ export type DocumentoDetalle = Documento & { versiones: { id: number; version: n
 
 export type ConteosDocumentos = { por_revisar: number; aprobados: number; rechazados: number; expedientes_incompletos: number };
 
+// alcance (migración 032, 16-oct-2026): "venta" = el papel es de una
+// oportunidad (al subirlo hay que elegirla); "empresa" = de la empresa.
+// solo_con_factura: solo se pide si la venta lleva factura.
+export type TipoDocumento = { id: number; clave: string; nombre: string; obligatorio: boolean; alcance: "venta" | "empresa"; solo_con_factura: boolean };
+
 export type CatalogosDocumentos = {
-  tipos_documento: { id: number; clave: string; nombre: string; obligatorio: boolean }[];
+  tipos_documento: TipoDocumento[];
   motivos_rechazo: { clave: string; nombre: string }[];
 };
 
-// GET /documentos/expediente/:empresaId. Mientras no haya papeles
-// obligatorios en el catálogo (Carlos, 12-oct-2026), papeles = [] y total 0.
-export type Expediente = {
-  empresa_id: number;
-  papeles: {
-    tipo_id: number;
-    clave: string;
-    nombre: string;
-    estado: "falta" | Documento["revision"];
-    documento: { id: number; nombre_original: string; version: number; creado_en: string; revisado_en: string | null; motivo_rechazo: string | null; motivo_rechazo_detalle: string | null } | null;
-  }[];
+// Un papel obligatorio del expediente de una venta. La cotización puede
+// cumplirse sola con la cotización aceptada del CRM (origen "cotizacion_crm").
+export type PapelExpediente = {
+  tipo_id: number;
+  clave: string;
+  nombre: string;
+  alcance: TipoDocumento["alcance"];
+  estado: "falta" | Documento["revision"];
+  origen: "documento" | "cotizacion_crm" | null;
+  documento: { id: number; nombre_original: string; version: number; creado_en: string; revisado_en: string | null; motivo_rechazo: string | null; motivo_rechazo_detalle: string | null } | null;
+  cotizacion: { id: number; version: number } | null;
+};
+
+// El expediente de una venta (oportunidad abierta o ganada). Solo las
+// ganadas cuentan en "Expedientes incompletos".
+export type ExpedienteVenta = {
+  oportunidad_id: number;
+  titulo: string;
+  ganada: boolean;
+  lleva_factura: boolean;
+  papeles: PapelExpediente[];
   aprobados: number;
   total: number;
   completo: boolean;
 };
+
+// GET /documentos/expediente/:empresaId: por venta desde el 16-oct-2026,
+// las ganadas primero (antes era uno solo por empresa).
+export type Expediente = { empresa_id: number; ventas: ExpedienteVenta[] };
 
 export type EstadoBorrador = "pendiente_revision" | "duplicado" | "importado" | "rechazado" | "expirado";
 
