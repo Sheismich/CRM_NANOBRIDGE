@@ -253,8 +253,23 @@ export type ProspectoResumen = {
   creado_en: string;
 };
 
+// Lo de la fila de automatización que traen la lista y el detalle
+// (16-oct-2026). Las fechas vienen de Drizzle (ISO); fila_posicion: 1 = el
+// siguiente en salir, null si no está en la fila o PT1 ya lo tomó.
+// campana_vigencia (shared/campana-vigente.ts): en_espera = pausada o aún
+// no empieza (espera sin aviso), inactiva = "campaña terminada".
+export type DatosFila = {
+  fila_desde: string | null;
+  fila_tomado_en: string | null;
+  fila_posicion: number | null;
+  campana_vigencia: "activa" | "en_espera" | "inactiva" | null;
+  // Solo en los excluidos: por qué se excluyó la vez pasada (claves de
+  // Validaciones o el texto de PT1); null si no se sabe.
+  motivo_exclusion_anterior: string[] | null;
+};
+
 // GET /prospectos/:id (ProspectosService.getProspecto).
-export type ProspectoDetalle = {
+export type ProspectoDetalle = DatosFila & {
   id: number;
   estado: string;
   score: string | null;
@@ -558,7 +573,7 @@ export type ContactoLista = {
 // Fila de GET /prospectos: lo de ProspectoResumen más lo que la lista nueva
 // enseña sin pedir cada ficha. `envios` es el "1/3"; `ultimo_envio_en` sale
 // crudo de MySQL ("YYYY-MM-DD HH:MM:SS", UTC), leerlo con fechaUtc().
-export type ProspectoFila = ProspectoResumen & {
+export type ProspectoFila = ProspectoResumen & DatosFila & {
   confianza: "alta" | "media" | "baja" | null;
   contacto_id: number;
   contacto_puesto: string | null;
