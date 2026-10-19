@@ -78,8 +78,9 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
        - Prueba en vivo: Daniel (La Casa del Chilaquil) salió de la fila, quedó validado con score 47
          y el correo llegó a Gmail. Confirmado el 19-oct: PT1a con la fila vacía termina sin error,
          B4 sin avisos raros y PT1 sin datos fijados (pins).
-       - Falta: borrar de PT1 los nodos viejos que quedaron sueltos ("validacion de Formato", "If",
-         "HTTP Request1", "cuenta intentos y normalizacion", "If1", "Tareas") y, el día de encender,
+       - Los nodos viejos sueltos de PT1 ("validacion de Formato", "If", "HTTP Request1", "cuenta
+         intentos y normalizacion", "If1", "Tareas") ya no están desde la versión publicada el 16-oct
+         (revisado el 19-oct; nadie los menciona). Falta: el día de encender,
          cambiar el Manual Trigger de PT1a por el horario de las 10:00.
    - LinkedIn: sin correo, PT1 no puede escribirles. A quien pide el servicio quizá le conviene
      más que le escriba un vendedor que la secuencia automática; lo decide Carlos.
