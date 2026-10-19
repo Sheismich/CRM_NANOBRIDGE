@@ -126,8 +126,8 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 - Si Gemini falla definitivamente, usar scoring por reglas.
 - Registrar incidencia mediante API.
 - Nunca enviar correo, teléfono, descripción libre o documentos a Gemini. (Para clasificar
-  respuestas hay una excepción propuesta, **pendiente de aprobar por Carlos**: ver B2, "Clasificación
-  con IA: modo sugerencia primero".)
+  respuestas hay una excepción con candados e interruptor, que se abre cuando Dirección lo
+  apruebe: ver B2, "Clasificación con IA: modo sugerencia primero".)
 
 ## B1 Sustituir MOCK por API
 
@@ -194,7 +194,7 @@ guardados en el **borrador** de n8n a propósito: no se publica hasta terminar d
 - Recibir respuestas desde webhook del proveedor de correo. **Proveedor: SendGrid (decidido 22-sep-2026, `/grill-me`)** — Inbound Parse para entrada (webhook nativo, cumple "no usar polling"), API transaccional para salida, nodo nativo en n8n. Reemplaza al nodo "MOCK · envio de campana (7)" del workflow "PT1" (que trae `proveedor: "pendiente_de_elegir"`) cuando se construya el envío real.
 - Registrar respuesta mediante API.
 - Clasificar con IA o enviar a cola manual (actualizado 30-sep-2026):
-  - **Hoy (modo sugerencia):** cada respuesta entra a la cola (`crear_tarea_clasificacion: true`). La IA, cuando exista, solo propone con `POST /respuestas/sugerencia` y una persona confirma. Ver "Clasificación con IA: modo sugerencia primero".
+  - **Hoy (modo sugerencia):** cada respuesta entra a la cola (`crear_tarea_clasificacion: true`). La IA solo propone con `POST /respuestas/sugerencia` (subflujo PT2a, construido el 19-oct-2026) y una persona confirma. Ver "Clasificación con IA: modo sugerencia primero".
   - **Modo directo, más adelante:** n8n llama al endpoint "Respuesta clasificada". Si es ambigua, ese endpoint deja o reusa una `tarea` con `tipo=clasificacion` (no hay tabla `cola_clasificacion` aparte), que aparece en `GET /api/v1/cola-clasificacion` para que el Equipo CRM la resuelva.
 - Procesar no interesado, baja, respuesta automática, ambigua e interesado.
 - **La supresión por "baja" ya no es un paso de n8n (cambiado 24-sep-2026).** El endpoint
@@ -352,15 +352,30 @@ todavía no existe.
    - "ambigua" reusa esa tarea en vez de crear otra;
    - si una persona intenta clasificar una respuesta que ya decidió la IA, recibe 409
      `RESPUESTA_YA_CLASIFICADA` y no la pisa.
-4. **Privacidad: ⚠ PENDIENTE DE APROBAR POR CARLOS.** La regla de "Reintento Gemini" dice "nunca
-   enviar descripción libre a Gemini", y el texto de una respuesta es justo eso.
-   - **Propuesta de Fabián:** permitirlo **solo después de** que n8n quite correos, teléfonos y la
-     firma del texto.
-   - **También hay que confirmar qué plan de Gemini se usa.** En el gratuito, Google puede usar
-     los datos para entrenar.
+4. **Privacidad: se construye con interruptor (decisión de Fabián, 19-oct-2026).** La regla de
+   "Reintento Gemini" dice "nunca enviar descripción libre a Gemini", y el texto de una respuesta
+   es justo eso.
+   - **Plan de Gemini: de pago** (AI Studio, igual que GCP; confirmado 19-oct). Google no usa los
+     datos para entrenar. Falta solo comprobar que la llave que usa n8n sea de ese proyecto.
+   - **Candados:** antes de llamar a Gemini, n8n quita correos, teléfonos, la firma y el correo
+     citado; a Gemini solo le llega el texto de la respuesta, sin nombre ni empresa.
+   - **Interruptor `IA_MODO`** en PT2: `pruebas` (de inicio) solo manda a Gemini las respuestas de
+     las direcciones de prueba (mismas que PERMITIDOS de PT1, sin +etiqueta); `abierto` manda
+     todas; `apagado` no manda ninguna. Las demás se siguen clasificando a mano, igual que hoy.
+   - Se pasa a `abierto` cuando Dirección (el jefe o Carlos) apruebe y el aviso de privacidad lo
+     cubra. Ese aviso sigue pendiente (ver "Base legal y aviso de privacidad").
 
-   Hasta que Carlos lo apruebe, la regla original sigue vigente y el paso de IA de PT2 no se
-   construye. No bloquea nada: mientras tanto, todo se sigue clasificando a mano.
+   **Construido, publicado y probado en vivo el 19-oct-2026.** PT2, después de "Responder 200":
+   Code "Datos para IA" → Execute Workflow "Sugerencia IA (subflujo)" **sin esperar** (PT2 le
+   contesta a SendGrid con el último nodo; así Gemini no toca esa respuesta). Subflujo nuevo
+   **PT2a. sugerencia IA** (publicado, Error Workflow = B4): "Preparar texto para IA" (interruptor +
+   limpieza) → IF "¿Pedir sugerencia?" → HTTP "Gemini clasificar" (mismo modelo y credencial que
+   PT1, 3 intentos, On Error = Continue) → Code "Leer sugerencia" (si Gemini falla o contesta algo
+   inválido, termina sin error) → HTTP "Guardar sugerencia" (Never Error) → Code "Revisar guardado"
+   (200/201/409 bien; otro status = error → B4). El código de los nodos está en
+   `docs/n8n/pt2a-sugerencia-ia/`. Prueba real: respuesta tardía de Daniel (prospecto 36,
+   respuesta 7, tarea 16) → a Gemini llegó "…Mi cel es [teléfono]" → "interesado", 100 → 201 →
+   la cola del CRM muestra la sugerencia con su motivo.
 5. `prospecto_clasificado` solo sale de la clasificación **manual**. Si clasificó n8n, n8n ya lo
    sabe. Además, sin `N8N_WEBHOOK_URL` cada evento terminaría en `procesos_fallidos`, y eso sería
    una fila por respuesta.
