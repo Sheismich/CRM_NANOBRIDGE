@@ -6,6 +6,7 @@ import { DocumentosService } from "../documentos/documentos.service.js";
 import { ReportesService } from "../reportes/reportes.service.js";
 import { ProspectosService } from "../crm/prospectos.service.js";
 import { CotizacionesService } from "../comercial/cotizaciones.service.js";
+import { NotificacionesService } from "../notificaciones/notificaciones.service.js";
 import { HttpError } from "../shared/http-error.js";
 import { fechaMx } from "../shared/dia-habil.js";
 
@@ -27,12 +28,18 @@ export class JobsController {
     documentosService: DocumentosService,
     reportesService: ReportesService,
     prospectosService: ProspectosService,
-    cotizacionesService: CotizacionesService
+    cotizacionesService: CotizacionesService,
+    notificacionesService: NotificacionesService
   ) {
     this.trabajos = {
       // Tareas abiertas con su fecha límite vencida (p. ej. "Contactar
-      // prospecto interesado" que nadie tomó).
-      "sla-tareas": async () => ({ procesados: await tareasService.alertarTareasSlaVencidas() }),
+      // prospecto interesado" que nadie tomó). También reintenta los correos
+      // de aviso que no salieron (etapa 2 de las mejoras, 19-oct-2026; va
+      // aquí y no en un trabajo propio para no tener que tocar PT5).
+      "sla-tareas": async () => ({
+        procesados: await tareasService.alertarTareasSlaVencidas(),
+        correos_reintentados: await notificacionesService.reintentarCorreos()
+      }),
       // Documentos vigentes sin revisar después de 7 días.
       "documentos-pendientes": async () => ({ procesados: await documentosService.alertarDocumentosPendientes() }),
       // El día ANTERIOR completo, en hora de México (n8n lo corre en la mañana).

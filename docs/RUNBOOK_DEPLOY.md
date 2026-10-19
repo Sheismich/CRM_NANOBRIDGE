@@ -277,6 +277,9 @@ conserva; no uses `--set-env-vars`, que borra las que no menciones):
 - `SESSION_COOKIE_NAME=__session` — el front publicado en Firebase
   (https://crm-prospeccion-outbound.web.app) solo deja pasar esa cookie; sin ella
   nadie puede iniciar sesión.
+- `CORREO_DRIVER=sendgrid` y el secreto `SENDGRID_API_KEY` (desde la etapa 2 de las
+  mejoras, avisos del CRM; ver §8b) — sin ellas la campanita sigue, pero no sale
+  ningún correo de aviso (el driver "falso" solo los guarda en memoria).
 - `TOPE_DIARIO_CORREOS` no está puesta: vale 50 por defecto. Al encender los
   envíos reales se baja a 20 (calentamiento del dominio, PLAN_N8N_DEFINITIVO.md)
   con `--update-env-vars TOPE_DIARIO_CORREOS=20`.
@@ -337,7 +340,7 @@ gcloud secrets versions access latest --secret=<NOMBRE> --project=crm-prospeccio
 ```
 
 Nombres válidos: `CRM_CALLBACK_API_KEY`, `WEBHOOK_ENTRADA_API_KEY`,
-`REPLY_TO_SIGNING_SECRET`, `DATABASE_URL`. (`STORAGE_LOCAL_SIGNING_SECRET`
+`REPLY_TO_SIGNING_SECRET`, `DATABASE_URL`, `SENDGRID_API_KEY` (§8b). (`STORAGE_LOCAL_SIGNING_SECRET`
 ya no se usa desde el 2-oct-2026: las descargas no llevan URL firmada.)
 
 **Rotar `REPLY_TO_SIGNING_SECRET` invalida los Reply-To de los correos ya
@@ -367,6 +370,37 @@ Cloud Run la recuerda: los deploys siguientes ya no la necesitan.
 Si se olvida el paso 3, la revisión nueva no arranca y Cloud Run deja
 funcionando la anterior; no se cae nada, solo hay que repetir el deploy con
 la línea.
+
+## 8b. Secreto nuevo `SENDGRID_API_KEY` (avisos del CRM, una sola vez)
+
+Desde la etapa 2 de las mejoras (19-oct-2026) la API manda sola los correos de aviso
+(tarea asignada, interesado, tarea vencida, documento rechazado). Usa una llave de
+SendGrid **propia**, distinta de la de n8n, con permiso **solo Mail Send**:
+
+1. SendGrid → Settings → API Keys → **Create API Key** → nombre `API CRM avisos` →
+   **Restricted Access** → **Mail Send: Full Access** (todo lo demás en "No Access") →
+   Create. SendGrid la enseña **una sola vez**: cópiala.
+2. En Cloud Shell (la pide sin mostrarla ni guardarla en el historial):
+
+```bash
+P=crm-prospeccion-outbound
+read -s -p "Llave de SendGrid: " K; echo
+printf %s "$K" | gcloud secrets create SENDGRID_API_KEY --data-file=- --project=$P
+unset K
+gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
+  --member=serviceAccount:nanobridge-api-sa@$P.iam.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor --project=$P
+```
+
+3. En ese primer deploy, agregar al `gcloud run deploy` las líneas
+`--update-secrets=SENDGRID_API_KEY=SENDGRID_API_KEY:latest` y
+`--update-env-vars=CORREO_DRIVER=sendgrid`. Cloud Run las recuerda.
+
+**Al cambiar a la cuenta de SendGrid definitiva (antes del 24-nov-2026)** se crea la
+llave igual en la cuenta nueva y se guarda como versión nueva del mismo secreto
+(`printf %s "$K" | gcloud secrets versions add SENDGRID_API_KEY --data-file=-`), y
+se redespliega para que la tome. Si una llave se filtra: se borra en SendGrid y se
+repite esto.
 
 Si necesitas la contraseña de MySQL y no la tienes, no es recuperable desde
 Cloud SQL directamente — resetéala con:

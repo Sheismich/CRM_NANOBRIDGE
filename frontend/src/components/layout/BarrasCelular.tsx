@@ -6,6 +6,7 @@ import { Icono } from "../ui/Icono";
 import { useDialogo } from "../ui/dialogo";
 import { itemsVisibles, type NavItem } from "./nav-items";
 import { Logo } from "./Logo";
+import { Campanita } from "./Campanita";
 import { SelectorTema } from "./SelectorTema";
 import { Avatar } from "./Sidebar";
 import { ETIQUETA_ROL } from "./usuario";
@@ -19,7 +20,8 @@ export function BarraSuperiorCelular({ onAbrirMas }: { onAbrirMas: () => void })
   return (
     <div className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-white/8 bg-[#101733] px-4 py-3 text-white md:hidden">
       <Logo sobreOscuro />
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1">
+        <Campanita sobreOscuro />
         <SelectorTema sobreOscuro />
       </div>
       {user && (

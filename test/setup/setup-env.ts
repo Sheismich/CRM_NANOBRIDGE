@@ -36,6 +36,12 @@ process.env.STORAGE_LOCAL_DIR = "./storage-test";
 process.env.GCS_BUCKET = "";
 process.env.GCS_PROJECT_ID = "";
 process.env.GCS_KEY_FILE = "";
+// Integraciones (etapa 2): nunca SendGrid ni Gemini de verdad en pruebas.
+process.env.CORREO_DRIVER = "falso";
+process.env.SENDGRID_API_KEY = "";
+process.env.IA_DRIVER = "falso";
+process.env.GEMINI_API_KEY = "";
+process.env.CRM_URL = "https://crm.test";
 process.env.PORT = "3000";
 process.env.SESSION_COOKIE_NAME = "nanobridge_session";
 process.env.SESSION_TTL_HOURS = "12";

@@ -37,7 +37,9 @@ export const usuarios = mysqlTable("usuarios", {
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   // 030_ultimo_acceso_y_registro.sql: última vez que usó el CRM.
-  ultimoAccesoEn: datetime("ultimo_acceso_en")
+  ultimoAccesoEn: datetime("ultimo_acceso_en"),
+  // 034_notificaciones.sql: interruptor "Recibir avisos por correo".
+  avisosPorCorreo: boolean("avisos_por_correo").notNull().default(true)
 }, (table) => [
   uniqueIndex("uq_usuarios_correo").on(table.correo)
 ]);
@@ -403,6 +405,27 @@ export const plantillasCorreo = mysqlTable("plantillas_correo", {
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
   uniqueIndex("uq_plantillas_correo_giro_numero").on(table.giro, table.numero)
+]);
+
+// 034: avisos de la campanita (etapa 2 de las mejoras, 19-oct-2026).
+export const notificaciones = mysqlTable("notificaciones", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull(),
+  tipo: varchar("tipo", { length: 40 }).notNull(),
+  titulo: varchar("titulo", { length: 200 }).notNull(),
+  cuerpo: varchar("cuerpo", { length: 1000 }),
+  enlace: varchar("enlace", { length: 300 }),
+  entidad: varchar("entidad", { length: 40 }),
+  entidadId: bigint("entidad_id", { mode: "number", unsigned: true }),
+  leidaEn: datetime("leida_en"),
+  correoEstado: mysqlEnum("correo_estado", ["no_aplica", "pendiente", "enviado", "fallido"]).notNull().default("no_aplica"),
+  correoIntentos: tinyint("correo_intentos", { unsigned: true }).notNull().default(0),
+  correoError: varchar("correo_error", { length: 500 }),
+  correoEnviadoEn: datetime("correo_enviado_en"),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  index("idx_notificaciones_usuario_leida").on(table.usuarioId, table.leidaEn),
+  index("idx_notificaciones_correo").on(table.correoEstado, table.correoIntentos)
 ]);
 
 export const respuestas = mysqlTable("respuestas", {

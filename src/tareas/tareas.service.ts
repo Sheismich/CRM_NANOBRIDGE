@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, desc, eq, inArray, isNull, like, lt, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, campanas, contactos, empresas, envios, mediosContacto, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
+import { auditoria, campanas, contactos, empresas, envios, mediosContacto, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { aplicarClasificacionAlProspecto, type ClasificacionRespuesta, type OrigenClasificacion } from "../shared/clasificacion-respuesta.js";
@@ -13,6 +13,7 @@ import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { CODIGO_PERSONA_EN_BAJA, personaEnBajaBloqueando } from "../shared/baja-prospecto.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
+import { adminsYSupervisores, enlaceTarea, lineaDeTarea, nombreEmpresa, notificar, responsableOEquipo } from "../notificaciones/notificar.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
 import type { TareaAutomatizacionInput } from "../automatizacion/dto/automatizacion.schema.js";
@@ -182,8 +183,22 @@ export class TareasService {
       });
       // Asignar = dar dueño: ver shared/empresa-de-agente.ts.
       if (empresaId !== null) await darEmpresaAlAgente(tx, { empresaId, responsable, actor: user, origen: { tarea_id: result.insertId } });
+      await this.avisarAsignacion(tx, user, { id: result.insertId, titulo: input.titulo, empresaId, responsableId });
       return result.insertId;
     });
+  }
+
+  // Aviso con correo a quien le dieron la tarea (si no se la dio a sí mismo).
+  private async avisarAsignacion(tx: DrizzleTx, actor: CurrentUser, tarea: { id: number; titulo: string; empresaId: number | null; responsableId: number }) {
+    await notificar(tx, [tarea.responsableId], {
+      tipo: "tarea_asignada",
+      titulo: `${actor.nombre} te asignó una tarea`,
+      cuerpo: lineaDeTarea(tarea.titulo, await nombreEmpresa(tx, tarea.empresaId)),
+      enlace: enlaceTarea(tarea.id),
+      entidad: "tarea",
+      entidadId: tarea.id,
+      conCorreo: true
+    }, actor.id);
   }
 
   // De qué empresa y contacto es la tarea. El contacto y el prospecto tienen
@@ -375,6 +390,7 @@ export class TareasService {
       });
       // Asignar = dar dueño: ver shared/empresa-de-agente.ts.
       if (row.empresaId) await darEmpresaAlAgente(tx, { empresaId: row.empresaId, responsable, actor: user, origen: { tarea_id: id } });
+      await this.avisarAsignacion(tx, user, { id, titulo: row.titulo, empresaId: row.empresaId, responsableId });
     });
   }
 
@@ -652,7 +668,45 @@ export class TareasService {
       prioridad: "alta",
       fecha_limite: finSiguienteDiaHabilMx(new Date()).toISOString()
     }, tx);
+    if (tarea.id !== null && !tarea.ya_existia) await this.avisarInteresado(tx, tarea.id, input, contenido);
     return tarea.id;
+  }
+
+  // La tarea nace sin asignar y un agente no ve las tareas sin asignar: el
+  // aviso va a quienes la reparten (admins y supervisores). Si la empresa
+  // ya es de un agente, a él también, con la liga a la ficha (decisión del
+  // 19-oct-2026). Con correo; nunca a quien lo clasificó.
+  private async avisarInteresado(tx: DrizzleTx, tareaId: number, input: ClasificacionDeRespuesta, contenido: string | null) {
+    const [contexto] = await tx
+      .select({
+        empresaId: empresas.id,
+        empresa: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`,
+        contacto: contactos.nombre,
+        propietarioId: empresas.propietarioId,
+        rolPropietario: roles.clave
+      })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .leftJoin(usuarios, eq(usuarios.id, empresas.propietarioId))
+      .leftJoin(roles, eq(roles.id, usuarios.rolId))
+      .where(eq(prospectos.id, input.prospectoId))
+      .limit(1);
+    if (!contexto) return;
+
+    const aviso = {
+      tipo: "interesado" as const,
+      titulo: `Prospecto interesado: ${contexto.empresa}`,
+      cuerpo: [`${contexto.contacto} contestó que le interesa.`, contenido ? recortarTexto(contenido, 300) : null].filter(Boolean).join("\n"),
+      entidad: "tarea",
+      entidadId: tareaId,
+      conCorreo: true
+    };
+    const actorId = input.origen.usuarioId;
+    await notificar(tx, await adminsYSupervisores(tx), { ...aviso, enlace: enlaceTarea(tareaId, "sin_asignar") }, actorId);
+    if (contexto.propietarioId !== null && contexto.rolPropietario === "agente") {
+      await notificar(tx, [contexto.propietarioId], { ...aviso, enlace: `/empresas/${contexto.empresaId}` }, actorId);
+    }
   }
 
   // La decisión de la persona se aplica aquí mismo, en una sola transacción
@@ -766,6 +820,19 @@ export class TareasService {
         fechaLimite: input.fecha_limite ? new Date(input.fecha_limite) : null,
         creadaPor: null
       });
+      // Solo campanita: el correo de "llegó una respuesta" ya lo manda PT2
+      // al supervisor (decisión del 19-oct-2026).
+      if (input.tipo === "clasificacion") {
+        await notificar(tx, await adminsYSupervisores(tx), {
+          tipo: "respuesta_por_clasificar",
+          titulo: "Nueva respuesta por clasificar",
+          cuerpo: (await nombreEmpresa(tx, empresaId)) ?? input.titulo,
+          enlace: "/tareas?tab=cola",
+          entidad: "tarea",
+          entidadId: result.insertId,
+          conCorreo: false
+        });
+      }
       return { id: result.insertId, ya_existia: false as const };
     } catch (error) {
       if (isDuplicateEntry(error)) {
@@ -804,7 +871,7 @@ export class TareasService {
   // fixes, 2-oct-2026): con @Interval(24h) nunca corría en Cloud Run.
   async alertarTareasSlaVencidas() {
     const candidatas = await this.db
-      .select({ id: tareas.id, tipo: tareas.tipo, responsableId: tareas.responsableId, fechaLimite: tareas.fechaLimite })
+      .select({ id: tareas.id, tipo: tareas.tipo, titulo: tareas.titulo, empresaId: tareas.empresaId, responsableId: tareas.responsableId, fechaLimite: tareas.fechaLimite })
       .from(tareas)
       .where(and(
         sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`,
@@ -824,6 +891,18 @@ export class TareasService {
           entidadTipo: "tarea",
           entidadId: tarea.id,
           payload: { tarea_id: tarea.id, tipo: tarea.tipo, responsable_id: tarea.responsableId, fecha_limite: tarea.fechaLimite }
+        });
+        // Al responsable; sin responsable (o si ya no está), a quienes
+        // reparten. Con correo (etapa 2 de las mejoras, 19-oct-2026).
+        const { ids, delEquipo } = await responsableOEquipo(tx, tarea.responsableId);
+        await notificar(tx, ids, {
+          tipo: "tarea_vencida",
+          titulo: `Se venció una tarea: ${tarea.titulo}`,
+          cuerpo: lineaDeTarea(tarea.titulo, await nombreEmpresa(tx, tarea.empresaId)),
+          enlace: enlaceTarea(tarea.id, !delEquipo ? undefined : tarea.responsableId === null ? "sin_asignar" : "todas"),
+          entidad: "tarea",
+          entidadId: tarea.id,
+          conCorreo: true
         });
         return true;
       });

@@ -5,11 +5,13 @@ import { tareasPorAtender, useConteosTareas } from "../../lib/tareas";
 import { Icono } from "../ui/Icono";
 import { itemsVisibles } from "./nav-items";
 import { Logo } from "./Logo";
+import { Campanita } from "./Campanita";
 import { SelectorTema } from "./SelectorTema";
 import { ETIQUETA_ROL, iniciales } from "./usuario";
 
 // Menú lateral de compu (docs/diseno/inicio-aprobado.html): punto menta
-// en la opción activa, numerito en Tareas, abajo el tema y la persona.
+// en la opción activa, numerito en Tareas, la campanita de avisos junto
+// al logo, abajo el tema y la persona.
 // En el celular no se ve: ahí van las barras de BarrasCelular.tsx.
 export function Sidebar() {
   const { user, logout } = useAuth();
@@ -18,7 +20,10 @@ export function Sidebar() {
 
   return (
     <aside className="sticky top-0 hidden h-dvh w-[228px] shrink-0 flex-col border-r border-border bg-side px-3.5 py-[22px] md:flex">
-      <Logo className="px-2 pb-[26px]" />
+      <div className="flex items-start justify-between gap-2 pb-[26px] pl-2">
+        <Logo />
+        <Campanita />
+      </div>
 
       <nav className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
         {itemsVisibles(user?.rol).map((item) => (

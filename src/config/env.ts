@@ -95,6 +95,21 @@ const schema = z.object({
   // como "no identificadas".
   REPLY_TO_SIGNING_SECRET: z.string().min(32),
   REPLY_TO_DOMAIN: z.string().trim().toLowerCase().min(3).default("respuestas.contacto.nano-bridge-mex.com"),
+  // Integraciones que la API llama directo (etapa 2 de las mejoras,
+  // 19-oct-2026): src/integraciones/. Con "falso" no sale nada a internet:
+  // el driver guarda lo que se mandaría (pruebas y desarrollo). En
+  // producción CORREO_DRIVER=sendgrid con su llave en Secret Manager (solo
+  // permiso Mail Send).
+  CORREO_DRIVER: z.enum(["sendgrid", "falso"]).default("falso"),
+  SENDGRID_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(10).optional()),
+  // Remitente de los avisos del CRM (el dominio ya está autenticado en SendGrid).
+  CORREO_REMITENTE: z.string().trim().email().default("hola@contacto.nano-bridge-mex.com"),
+  CORREO_REMITENTE_NOMBRE: z.string().trim().min(1).default("CRM NANOBRIDGE"),
+  // Liga del CRM para los botones de los correos de aviso.
+  CRM_URL: z.string().url().transform((url) => url.replace(/\/+$/, "")).default("https://crm-prospeccion-outbound.web.app"),
+  IA_DRIVER: z.enum(["gemini", "falso"]).default("falso"),
+  GEMINI_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(10).optional()),
+  GEMINI_MODELO: z.string().trim().min(1).default("gemini-2.5-flash"),
   // Solo obligatorios cuando STORAGE_DRIVER=gcs (ver superRefine abajo).
   // z.preprocess normaliza "" a undefined: .env.example los deja vacíos
   // (documentados, sin valor) cuando STORAGE_DRIVER=local -- una cadena
@@ -109,6 +124,12 @@ const schema = z.object({
 }).superRefine((data, ctx) => {
   if (data.STORAGE_DRIVER === "gcs" && !data.GCS_BUCKET) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["GCS_BUCKET"], message: "GCS_BUCKET es obligatorio cuando STORAGE_DRIVER=gcs" });
+  }
+  if (data.CORREO_DRIVER === "sendgrid" && !data.SENDGRID_API_KEY) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["SENDGRID_API_KEY"], message: "SENDGRID_API_KEY es obligatoria cuando CORREO_DRIVER=sendgrid" });
+  }
+  if (data.IA_DRIVER === "gemini" && !data.GEMINI_API_KEY) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["GEMINI_API_KEY"], message: "GEMINI_API_KEY es obligatoria cuando IA_DRIVER=gemini" });
   }
 
   // Estos secretos protegen superficies distintas (callback del CRM,

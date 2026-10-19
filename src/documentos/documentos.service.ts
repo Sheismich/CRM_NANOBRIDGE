@@ -16,6 +16,7 @@ import { MOTIVOS_RECHAZO_DOCUMENTO, NOMBRE_MOTIVO_RECHAZO_DOCUMENTO } from "../s
 import { STORAGE_SERVICE } from "./storage/storage.constants.js";
 import type { StorageService } from "./storage/storage.types.js";
 import { contenidoEsDelTipo, nombreDeDescarga } from "./tipo-de-archivo.js";
+import { enlaceTarea, notificar } from "../notificaciones/notificar.js";
 import { EXTENSION_POR_MIME, TIPOS_MIME_PERMITIDOS, type CambiarEstadoDocumentoInput, type CambiarObligatorioInput, type ListDocumentosQuery, type LoteDocumentosQuery, type ModoDescarga, type NuevaVersionDocumentoInput, type RechazarDocumentoInput, type RevisarDocumentoInput, type SubirDocumentoInput } from "./dto/documento.schema.js";
 
 /** Subconjunto de Express.Multer.File que de verdad usa el servicio (memoryStorage: sin destination/filename/path). */
@@ -738,10 +739,23 @@ export class DocumentosService {
       "Sube la versión corregida desde el documento; esta tarea se cierra sola."
     ].join("\n");
 
-    const [abierta] = await tx.select({ id: tareas.id }).from(tareas)
+    // Aviso con correo a quien le toca corregirlo (etapa 2 de las mejoras,
+    // 19-oct-2026), también si lo rechazan otra vez con otro motivo.
+    const avisar = (tareaId: number, responsableId: number | null) => notificar(tx, [responsableId], {
+      tipo: "documento_rechazado",
+      titulo: `Rechazaron un documento: ${documento.nombreOriginal}`,
+      cuerpo: [`${contexto?.empresaNombre ?? "Empresa"} · Motivo: ${NOMBRE_MOTIVO_RECHAZO_DOCUMENTO[motivo]}`, detalle].join("\n"),
+      enlace: enlaceTarea(tareaId),
+      entidad: "tarea",
+      entidadId: tareaId,
+      conCorreo: true
+    }, user.id);
+
+    const [abierta] = await tx.select({ id: tareas.id, responsableId: tareas.responsableId }).from(tareas)
       .where(and(eq(tareas.documentoId, documento.id), inArray(tareas.estado, ["pendiente", "en_progreso"]))).limit(1);
     if (abierta) {
       await tx.update(tareas).set({ descripcion }).where(eq(tareas.id, abierta.id));
+      await avisar(abierta.id, abierta.responsableId);
       return;
     }
 
@@ -750,7 +764,7 @@ export class DocumentosService {
     const activo = (uid: number | null | undefined) => uid != null && activos.some((u) => u.id === uid);
     const responsableId = activo(documento.subidoPor) ? documento.subidoPor : activo(contexto?.propietarioId) ? contexto!.propietarioId : null;
 
-    await tx.insert(tareas).values({
+    const [nueva] = await tx.insert(tareas).values({
       tipo: "revision_documento",
       titulo: `Corregir documento: ${documento.nombreOriginal}`.slice(0, 255),
       descripcion,
@@ -761,6 +775,7 @@ export class DocumentosService {
       fechaLimite: finSiguienteDiaHabilMx(new Date()),
       creadaPor: user.id
     });
+    await avisar(nueva.insertId, responsableId);
   }
 
   // Cierra (versión nueva) o cancela (aprobado, archivado, borrado) la tarea

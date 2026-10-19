@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { clsx } from "clsx";
 import { Ficha } from "../ui/Ficha";
 import { Icono } from "../ui/Icono";
@@ -48,7 +49,16 @@ export function VerTodas({
   const [prioridad, setPrioridad] = useState<Tarea["prioridad"] | "">("");
   const [tipo, setTipo] = useState<Tarea["tipo"] | "">("");
   const [cerradas, setCerradas] = useState(false);
-  const [elegida, setElegida] = useState<number | null>(null);
+  // ?tarea=ID: la abre ya elegida (liga de un aviso de la campanita),
+  // también si la liga cambia con la pantalla ya abierta.
+  const [params] = useSearchParams();
+  const tareaDeLaLiga = Number(params.get("tarea")) || null;
+  const [elegida, setElegida] = useState<number | null>(tareaDeLaLiga);
+  const [ligaVista, setLigaVista] = useState(tareaDeLaLiga);
+  if (tareaDeLaLiga !== ligaVista) {
+    setLigaVista(tareaDeLaLiga);
+    if (tareaDeLaLiga !== null) setElegida(tareaDeLaLiga);
+  }
   const [haciendo, setHaciendo] = useState<Tarea | null>(null);
   const [reprogramando, setReprogramando] = useState<Tarea | null>(null);
 
