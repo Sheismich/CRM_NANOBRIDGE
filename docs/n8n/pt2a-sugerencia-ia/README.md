@@ -21,7 +21,8 @@ PT2a: When Executed by Another Workflow → Preparar texto para IA (1) → ¿Ped
 - PT2 **no espera** a PT2a: lo que pase con Gemini no cambia lo que PT2 le contesta a SendGrid.
 - Si Gemini falla o contesta algo raro, PT2a se detiene sin error; la tarea ya está en la cola.
 - Si la API rechaza la sugerencia con algo distinto de 409, "Revisar guardado" falla y B4 avisa.
-- `IA_MODO` está arriba del archivo 1: `pruebas` (de inicio), `abierto`, `apagado`.
+- `IA_MODO` está arriba del archivo 1: `pruebas`, `abierto` (vigente desde el 19-oct-2026, aprobado
+  por Dirección), `apagado`.
 
 ## Archivos
 

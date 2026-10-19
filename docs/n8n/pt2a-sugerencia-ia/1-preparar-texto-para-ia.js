@@ -3,13 +3,12 @@
 // Clasificación con IA en modo sugerencia (PLAN_N8N_DEFINITIVO.md, B2).
 //
 // Interruptor (decisión de Fabián, 19-oct-2026):
-//   "pruebas" = solo respuestas de las direcciones de prueba (de inicio)
-//   "abierto" = todas; SOLO cuando Dirección lo apruebe y el aviso de
-//               privacidad lo cubra
+//   "pruebas" = solo respuestas de las direcciones de prueba
+//   "abierto" = todas (aprobado por Dirección el 19-oct-2026)
 //   "apagado" = ninguna
 // Las que no pasan se siguen clasificando a mano, igual que siempre.
 // ============================================================
-const IA_MODO = "pruebas";
+const IA_MODO = "abierto";
 const PERMITIDOS = ["fabiandelirardz@gmail.com", "fabiannawal502@gmail.com"];
 
 const d = $input.first().json;

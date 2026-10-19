@@ -362,8 +362,9 @@ todavía no existe.
    - **Interruptor `IA_MODO`** en PT2: `pruebas` (de inicio) solo manda a Gemini las respuestas de
      las direcciones de prueba (mismas que PERMITIDOS de PT1, sin +etiqueta); `abierto` manda
      todas; `apagado` no manda ninguna. Las demás se siguen clasificando a mano, igual que hoy.
-   - Se pasa a `abierto` cuando Dirección (el jefe o Carlos) apruebe y el aviso de privacidad lo
-     cubra. Ese aviso sigue pendiente (ver "Base legal y aviso de privacidad").
+   - **Dirección lo aprobó el 19-oct-2026 → `IA_MODO = "abierto"`.** Sigue pendiente revisar que
+     el aviso de privacidad mencione el uso de servicios externos (ver "Base legal y aviso de
+     privacidad").
 
    **Construido, publicado y probado en vivo el 19-oct-2026.** PT2, después de "Responder 200":
    Code "Datos para IA" → Execute Workflow "Sugerencia IA (subflujo)" **sin esperar** (PT2 le
