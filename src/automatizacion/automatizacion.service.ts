@@ -19,6 +19,7 @@ import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo, tieneFormaDeReplyTo } from "../shared/reply-to.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { TareasService } from "../tareas/tareas.service.js";
+import { correoDeEnvio, correoParaEnvio } from "../plantillas/plantillas.correo.js";
 import { EVENTOS_BAJA_DE_PERSONA } from "./dto/automatizacion.schema.js";
 import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, RespuestaSugeridaInput, ScoringInput, TomarDeFilaInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
@@ -775,7 +776,9 @@ export class AutomatizacionService {
       .limit(1);
     // numero_en_ciclo: null en los reintentos idempotentes -- recalcularlo
     // después del hecho no es confiable (el ciclo pudo avanzar desde entonces).
-    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, numero_en_ciclo: null, ventana_vence_en: existing.ventanaVenceEn, reply_to: firmarReplyTo(existing.id), ya_existia: true as const };
+    // correo: el texto ya armado con la plantilla del número que toca
+    // (Administración → Correos de prospección); n8n ya no tiene texto propio.
+    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, numero_en_ciclo: null, ventana_vence_en: existing.ventanaVenceEn, reply_to: firmarReplyTo(existing.id), ya_existia: true as const, correo: await correoDeEnvio(this.db, existing.id) };
 
     if (input.canal === "whatsapp") {
       throw new HttpError(409, "Canal WhatsApp desactivado (pendiente proveedor aprobado)");
@@ -858,15 +861,18 @@ export class AutomatizacionService {
             .limit(1);
 
           const numeroContacto = (ultimo?.numeroContacto ?? 0) + 1;
+          const { plantillaId, correo } = await correoParaEnvio(tx, input.prospecto_id, ciclo.length + 1);
 
           const [result] = await tx.insert(envios).values({
             prospectoId: input.prospecto_id,
             canal: input.canal,
             numeroContacto,
             ventanaVenceEn,
-            executionId: input.execution_id
+            executionId: input.execution_id,
+            plantillaId,
+            asunto: correo.asunto.slice(0, 200)
           });
-          return { id: result.insertId, numero_contacto: numeroContacto, numero_en_ciclo: ciclo.length + 1, ventana_vence_en: ventanaVenceEn, reply_to: firmarReplyTo(result.insertId), ya_existia: false as const };
+          return { id: result.insertId, numero_contacto: numeroContacto, numero_en_ciclo: ciclo.length + 1, ventana_vence_en: ventanaVenceEn, reply_to: firmarReplyTo(result.insertId), ya_existia: false as const, correo };
         });
       } catch (error) {
         if (error instanceof HttpError) throw error;
@@ -877,7 +883,7 @@ export class AutomatizacionService {
           .from(envios)
           .where(eq(envios.executionId, input.execution_id))
           .limit(1);
-        if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, numero_en_ciclo: null, ventana_vence_en: retry.ventanaVenceEn, reply_to: firmarReplyTo(retry.id), ya_existia: true as const };
+        if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, numero_en_ciclo: null, ventana_vence_en: retry.ventanaVenceEn, reply_to: firmarReplyTo(retry.id), ya_existia: true as const, correo: await correoDeEnvio(this.db, retry.id) };
 
         // No fue nuestro propio execution_id el que chocó -- fue el
         // UNIQUE de numero_contacto contra otra llamada concurrente.

@@ -36,7 +36,7 @@ export function onSesionPerdida(callback: (() => void) | null) {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   // multipart/form-data (subida de documentos): FormData, sin Content-Type
   // manual -- el navegador pone el boundary correcto solo.
@@ -144,6 +144,7 @@ export const api = {
   get: <T>(path: string, query?: RequestOptions["query"]) => request<T>(path, { method: "GET", query }),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
   postForm: <T>(path: string, formData: FormData) => request<T>(path, { method: "POST", formData }),
+  put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   descargar,

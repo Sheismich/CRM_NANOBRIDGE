@@ -29,8 +29,10 @@ describe("acentos: lo que se guarda es lo que se lee", () => {
     const usuario = await api().post("/api/v1/usuarios").set("Cookie", adminCookie)
       .send({ nombre: nombreUsuario, correo: `acentos.${randomUUID()}@test.local`, password: "password_acentos_1", rol: "agente" });
     expect(usuario.status).toBe(201);
-    const lista = await api().get("/api/v1/usuarios").query({ limit: 100 }).set("Cookie", adminCookie);
-    expect(lista.body.data.some((u: { nombre: string }) => u.nombre === nombreUsuario)).toBe(true);
+    // Por id y no en la lista: con más de 100 usuarios en la base compartida
+    // de pruebas, el nuevo ya no cabe en la primera página (19-oct-2026).
+    const leido = await api().get(`/api/v1/usuarios/${usuario.body.id}`).set("Cookie", adminCookie);
+    expect(leido.body.nombre).toBe(nombreUsuario);
 
     const nombreEmpresa = `Compañía Ñandú y Asociación ${randomUUID().slice(0, 8)}`;
     const empresa = await api().post("/api/v1/empresas").set("Cookie", adminCookie)

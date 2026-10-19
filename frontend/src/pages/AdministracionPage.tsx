@@ -5,6 +5,7 @@ import { EstadoSistema } from "../components/admin/EstadoSistema";
 import { ProblemasAbiertos } from "../components/admin/ProblemasAbiertos";
 import { RegistroCambios, type FiltrosRegistro } from "../components/admin/RegistroCambios";
 import { EquipoRoles } from "../components/admin/EquipoRoles";
+import { CorreosProspeccion } from "../components/admin/CorreosProspeccion";
 import { IntegracionAdmin } from "../components/admin/IntegracionAdmin";
 import { UsuariosAdmin } from "../components/admin/UsuariosAdmin";
 import { Button } from "../components/ui/Button";
@@ -18,7 +19,8 @@ import { useAuth } from "../lib/auth-context";
 // Administración del rediseño (docs/diseno/administracion.html, ajustes del
 // 11-oct): centro de control. Todo lo de /admin (estado del sistema,
 // problemas agrupados, registro de cambios y su exportación) es solo del
-// administrador; el supervisor ve "Equipo y roles" sin editar. La pestaña
+// administrador; el supervisor ve "Equipo y roles" sin editar. Los dos
+// editan los "Correos de prospección" (19-oct-2026). La pestaña
 // Auditoría cruda desapareció: la reemplaza el Registro de cambios.
 // ?tab=integracion abre el detalle técnico de avisos y procesos fallidos
 // ("Ver los N" de un problema).
@@ -81,7 +83,7 @@ export function AdministracionPage() {
             </>
           }
           titulo="Administración"
-          subtitulo={esAdmin ? "Si todo está funcionando, qué falla, quién movió qué y quién tiene acceso." : "Quién tiene acceso y qué puede hacer."}
+          subtitulo={esAdmin ? "Si todo está funcionando, qué falla, quién movió qué y quién tiene acceso." : "Quién tiene acceso y qué le escribimos a los prospectos."}
           acciones={
             esAdmin && (
               <>
@@ -107,7 +109,10 @@ export function AdministracionPage() {
             <RegistroCambios filtros={filtros} onFiltros={setFiltros} />
           </div>
         )}
-        <EquipoRoles puedeEditar={esAdmin} onAdministrar={() => setUsuariosAbierto(true)} />
+        <div className="flex min-w-0 flex-col gap-4">
+          <EquipoRoles puedeEditar={esAdmin} onAdministrar={() => setUsuariosAbierto(true)} />
+          <CorreosProspeccion />
+        </div>
       </div>
 
       <PanelLateral abierto={usuariosAbierto} onCerrar={() => setUsuariosAbierto(false)} titulo={esAdmin ? "Administrar usuarios" : "Usuarios"} ancho={760} cuerpoClassName="!p-3 md:!p-4">

@@ -437,17 +437,19 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 ("Pendientes en orden").
 
 - [ ] Apagar `MODO_PRUEBAS` en PT1 y PT4.
-- [ ] Textos reales en los correos (quitar "correo de PRUEBA" en PT1b). Antes,
-      elegir con Carlos la opción A (plantilla por giro) o B (Gemini en vivo
-      con candados), `PLAN_N8N_DEFINITIVO.md` ronda 1 #3. El link de baja
-      visible ya está (8-oct-2026, abajo); al pie solo le falta el domicilio.
+- [ ] Textos reales en los correos. Desde el 19-oct-2026 se escriben en el
+      CRM (Administración → Correos de prospección, migración 033) y la API
+      se los da armados a n8n (`docs/n8n/pt1b-plantillas/`). Hoy tienen un
+      borrador: cambiarlo por los textos aprobados por Carlos. El pie
+      (domicilio y aviso de privacidad) se escribe en la misma sección. El
+      link de baja visible ya está (8-oct-2026, abajo).
 - [x] Link de baja visible en el pie (8-oct-2026). PT1b, nodo "Armar correo
       SendGrid": `subscription_tracking` lleva `text` y `html` (línea
       separadora, "NANOBRIDGE", "¿Ya no quieres recibir estos correos?
       Darte de baja"). Antes solo existía el encabezado `List-Unsubscribe`,
       que Gmail no muestra a un remitente nuevo. PT4 usa el mismo subflujo.
-- [ ] Domicilio de la empresa en ese pie (lo pasa Carlos; va en el renglón
-      de "NANOBRIDGE", en `text` y `html`).
+- [ ] Domicilio de la empresa (lo pasa Carlos): se escribe en Administración →
+      Correos de prospección → "Pie de los tres", no en n8n.
 - [ ] Página de baja en español: hoy, al darse de baja, SendGrid muestra
       "Unsubscribe successful" en inglés y sin diseño. Se hace en la cuenta
       DEFINITIVA de SendGrid (en la de prueba se perdería): Settings →

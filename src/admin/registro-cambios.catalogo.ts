@@ -40,6 +40,8 @@ const REGLAS: Record<TipoRegistro, Record<string, string[]>> = {
   },
   configuracion: {
     campana: ["crear", "editar", "activar", "pausar", "finalizar"],
+    plantilla_correo: ["editar"],
+    pie_correo: ["editar"],
     catalogo_tipo_documento: ["cambiar_obligatorio"],
     evento_pendiente: ["reintentar"],
     proceso_fallido: ["cambiar_estado"]

@@ -379,12 +379,30 @@ export const envios = mysqlTable("envios", {
   ventanaVenceEn: datetime("ventana_vence_en").notNull(),
   ventanaEstado: mysqlEnum("ventana_estado", ["abierta", "vencida", "cerrada"]).notNull().default("abierta"),
   executionId: varchar("execution_id", { length: 100 }),
-  enviadoEn: datetime("enviado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+  enviadoEn: datetime("enviado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  // 033_plantillas_correo.sql: qué plantilla y qué asunto salieron.
+  plantillaId: bigint("plantilla_id", { mode: "number", unsigned: true }),
+  asunto: varchar("asunto", { length: 200 })
 }, (table) => [
   uniqueIndex("uq_envios_execution_id").on(table.executionId),
   uniqueIndex("uq_envios_prospecto_canal_numero").on(table.prospectoId, table.canal, table.numeroContacto),
   index("idx_envios_prospecto_canal").on(table.prospectoId, table.canal),
   index("idx_envios_ventana").on(table.ventanaEstado, table.ventanaVenceEn)
+]);
+
+// 033_plantillas_correo.sql: texto de los correos de prospección. giro '' =
+// general; numero 1 = inicial, 2 y 3 = recordatorios.
+export const plantillasCorreo = mysqlTable("plantillas_correo", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  giro: varchar("giro", { length: 120 }).notNull().default(""),
+  numero: tinyint("numero", { unsigned: true }).notNull(),
+  asunto: varchar("asunto", { length: 200 }).notNull(),
+  cuerpo: text("cuerpo").notNull(),
+  actualizadoPor: bigint("actualizado_por", { mode: "number", unsigned: true }),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  uniqueIndex("uq_plantillas_correo_giro_numero").on(table.giro, table.numero)
 ]);
 
 export const respuestas = mysqlTable("respuestas", {

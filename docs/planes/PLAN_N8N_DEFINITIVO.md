@@ -414,6 +414,10 @@ ronda 1:
      calidad del texto, si B inventa algo indebido, si cumple los candados, qué pasa cuando
      Gemini falla, tiempo y costo por correo. Fabián y su jefe eligen con esos ejemplos en la
      mano.
+   - **Estado (19-oct-2026):** el texto ya no vive en n8n. Se escribe en el CRM
+     (Administración → Correos de prospección, tabla `plantillas_correo`, migración 033) y
+     `POST /envios` lo regresa armado en `correo` (`docs/n8n/pt1b-plantillas/`). Por ahora
+     solo 3 generales (sin párrafo por giro); la tabla ya admite versiones por giro.
 4. **Base legal y aviso de privacidad:** pendiente de Dirección. No bloquea construir; bloquea
    encender los envíos reales. Preguntas: de dónde salen los contactos y si se les puede
    escribir en frío (`CRM_09` exige base legal); texto o link del aviso de privacidad para el

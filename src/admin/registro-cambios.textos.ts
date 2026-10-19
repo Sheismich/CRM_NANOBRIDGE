@@ -69,7 +69,10 @@ const ETIQUETAS: Record<string, string> = {
   motivo_rechazo_detalle: "Explicación",
   obligatorio: "Obligatorio",
   intentos: "Intentos",
-  ultimo_error: "Error"
+  ultimo_error: "Error",
+  asunto: "Asunto",
+  cuerpo: "Texto",
+  pie: "Pie"
 };
 
 const ROLES: Record<string, string> = { administrador: "Administrador", supervisor: "Supervisor", agente: "Agente" };
@@ -86,6 +89,9 @@ const REPORTES: Record<string, string> = {
   "informe-ejecutivo": "el informe ejecutivo"
 };
 
+// Correos de prospección (033_plantillas_correo.sql): el número dice cuál.
+const NOMBRES_PLANTILLA: Record<string, string> = { 1: "Correo 1", 2: "Recordatorio 1", 3: "Recordatorio 2" };
+
 const VERBOS_CAMPANA: Record<string, string> = { crear: "creó", editar: "editó", activar: "activó", pausar: "pausó", finalizar: "finalizó" };
 
 function objeto(valor: unknown): Record<string, unknown> | null {
@@ -100,6 +106,8 @@ function legible(campo: string, valor: unknown, nombres: Nombres): string {
   if (campo === "rol") return ROLES[String(valor)] ?? String(valor);
   if (campo === "etapa_clave") return nombres.etapas.get(String(valor)) ?? String(valor);
   if (campo === "password") return "cambiada";
+  // Texto de un correo: tal cual (los "_" de {{primer_nombre}} se quedan).
+  if (campo === "asunto" || campo === "cuerpo" || campo === "pie") return String(valor);
   if (typeof valor === "boolean") return valor ? "Sí" : "No";
   // Medios de contacto: { valor, estado_contacto }.
   const comoObjeto = objeto(valor);
@@ -136,6 +144,8 @@ export function nombreDelRegistro(fila: FilaAuditoria, nombres: Nombres): string
       return d ? `${d.nombre} (v${d.version})` : null;
     }
     case "campana": return nombres.campanas.get(id) ?? null;
+    case "plantilla_correo": return NOMBRES_PLANTILLA[String(objeto(fila.despues)?.numero ?? "")] ?? null;
+    case "pie_correo": return "Pie de los correos";
     case "catalogo_tipo_documento": return nombres.tiposDocumento.get(id) ?? null;
     case "prospecto": {
       const p = nombres.prospectos.get(id);
@@ -202,6 +212,8 @@ export function frase(fila: FilaAuditoria, quien: string, nombres: Nombres): str
     case "evento_pendiente:reintentar": return `${quien} reintentó el aviso #${fila.entidadId} a n8n.`;
     case "proceso_fallido:cambiar_estado": return `${quien} marcó el problema #${fila.entidadId} como ${legible("estado", despues.estado, nombres)}.`;
     case "reporte:exportar": return `${quien} exportó ${nombre} (${String(despues.formato ?? "csv").toUpperCase()}).`;
+    case "plantilla_correo:editar": return `${quien} editó el correo de prospección «${nombre}».`;
+    case "pie_correo:editar": return `${quien} editó el pie de los correos de prospección.`;
     case "registro_cambios:exportar": return `${quien} exportó el Registro de cambios (${String(despues.formato ?? "csv").toUpperCase()}).`;
   }
   if (fila.entidad === "campana" && VERBOS_CAMPANA[fila.accion]) return `${quien} ${VERBOS_CAMPANA[fila.accion]} la campaña ${nombre}.`;
