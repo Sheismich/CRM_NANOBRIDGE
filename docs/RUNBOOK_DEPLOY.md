@@ -378,7 +378,7 @@ Desde la etapa 2 de las mejoras (19-oct-2026) la API manda sola los correos de a
 SendGrid **propia**, distinta de la de n8n, con permiso **solo Mail Send**:
 
 1. SendGrid → Settings → API Keys → **Create API Key** → nombre `API CRM avisos` →
-   **Restricted Access** → **Mail Send: Full Access** (todo lo demás en "No Access") →
+   **Custom Access** (antes se llamaba "Restricted Access"; NO "Full Access") → **Mail Send: Full Access** (todo lo demás en "No Access") →
    Create. SendGrid la enseña **una sola vez**: cópiala.
 2. En Cloud Shell (la pide sin mostrarla ni guardarla en el historial):
 
