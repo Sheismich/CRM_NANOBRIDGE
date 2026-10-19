@@ -15,15 +15,19 @@ contacto que sigue de la persona: 1 = correo inicial, 2 = recordatorio 1,
 el link de baja lo sigue poniendo SendGrid (`subscription_tracking`, no se
 toca).
 
+**Nombre del campo en n8n: `correo_contenido`.** En PT1b ya existía `correo`
+(la dirección del prospecto, el destinatario), así que el texto armado viaja
+como `correo_contenido` (decidido al aplicar el prompt 1, 19-oct-2026).
+
 **Orden:** primero el deploy de la API (con la 033). Luego los prompts 1 y 2,
-y al final el 3. Hasta que PT1b use `correo`, el campo de más no estorba.
+y al final el 3. Hasta que PT1b use `correo_contenido`, el campo de más no estorba.
 
 ## Prompt 1 · PT1 (flujo "PT1. ingesta y scoring")
 
 > En este flujo, el nodo HTTP que hace POST a `/automatizacion/envios` ahora
 > regresa un campo `correo` (objeto con `asunto`, `texto` y `html`). En el
 > nodo que llama al subflujo PT1b (Execute Workflow, o el Code "Datos para el
-> envío" que arma sus datos), agrega el campo `correo` con el valor
+> envío" que arma sus datos), agrega el campo `correo_contenido` con el valor
 > `{{ $('NOMBRE_DEL_NODO_POST_ENVIOS').item.json.correo }}`, junto a
 > `reply_to`. No cambies nada más.
 
@@ -34,18 +38,20 @@ que la IA de n8n lo encuentre.)
 
 > Igual que en PT1: el nodo HTTP que hace POST a `/automatizacion/envios`
 > regresa `correo` (objeto con `asunto`, `texto` y `html`). En los datos que
-> se le pasan al subflujo PT1b agrega `correo` con el valor de esa respuesta,
-> junto a `reply_to`. No cambies nada más.
+> se le pasan al subflujo PT1b agrega `correo_contenido` con el valor del
+> campo `correo` de esa respuesta (no cambies el campo `correo` que ya existe:
+> es la dirección del prospecto), junto a `reply_to`. No cambies nada más.
 
 ## Prompt 3 · PT1b, nodo "Armar correo SendGrid"
 
 > En el subflujo PT1b, si el disparador (Execute Workflow Trigger) tiene
-> campos definidos, agrega uno llamado `correo` de tipo objeto. Luego, en el
+> campos definidos, agrega uno llamado `correo_contenido` de tipo objeto (no
+> toques `correo`, que es la dirección del destinatario). Luego, en el
 > nodo Code "Armar correo SendGrid", quita el asunto y el texto temporales
-> ("correo de PRUEBA") y usa lo que llega en `correo`:
+> ("correo de PRUEBA") y usa lo que llega en `correo_contenido`:
 >
 > ```js
-> const c = d.correo;
+> const c = d.correo_contenido;
 > if (!c || !c.asunto || !c.texto || !c.html) {
 >   throw new Error('Falta el correo armado por la API (campo correo de POST /envios)');
 > }
@@ -58,7 +64,7 @@ que la IA de n8n lo encuentre.)
 > `reply_to`, el `from`, el `subscription_tracking` y lo demás.
 
 Si el nodo no usa la variable `d` para los datos de entrada, la IA de n8n la
-ajusta; lo importante es que el texto salga de `correo` y que, si no llega,
+ajusta; lo importante es que el texto salga de `correo_contenido` y que, si no llega,
 el flujo falle (lo atrapa B4) en lugar de mandar un correo vacío.
 
 ## Prueba
