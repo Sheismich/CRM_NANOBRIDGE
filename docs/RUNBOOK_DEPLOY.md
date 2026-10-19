@@ -269,6 +269,7 @@ Actualiza esta tabla en cada deploy.
 | 16-oct-2026 | `nanobridge-api-00030-gq4` | `ef5e06c` | `031_fila_automatizacion.sql` | API del botón "Mandar a automatización": fila de PT1 (`POST /prospectos/automatizacion`, `POST /prospectos/:id/sacar-de-fila`, `POST /automatizacion/prospectos/fila/tomar`), `NUEVOS_POR_DIA` = 10 por defecto (sin poner). **Se desplegó antes de migrar y Prospectos dejó de cargar** (el código lee las columnas `fila_*`, y las altas de prospectos también fallaban): se regresó el tráfico a 00029-hjq, se aplicó la 031 y se volvió con `--to-latest`. Prospectos carga; las rutas nuevas responden 401 sin llave o sesión |
 | 16-oct-2026 | `nanobridge-api-00031-rww` | `6544339` | (sin migración) | `fila/tomar` también regresa `tamano`, `region` y `telefono` (los usa el score de PT1, que ahora arranca desde la fila con el flujo nuevo "PT1a. tomar de la fila"). El mismo commit trae el front del botón en Prospectos (casillas, tarjeta "En fila", modal, sacar de la fila). `/health` ok |
 | 16-oct-2026 | `nanobridge-api-00032-qkd` | `9e44ef6` | `032_expediente_por_venta.sql` | Papeles obligatorios por venta (cotización, pago, recibido o guía; constancia fiscal si "Lleva factura"), `PATCH /oportunidades/:id/factura`, PDF "Reporte del periodo" (`GET /reportes/export/periodo`), interesados por persona, nombres de contacto y empresa en `/automatizacion/respuestas*` (aviso de PT2), `proxy-addr` 2.0.8. **Otra vez se desplegó antes de migrar** y Oportunidades no cargaba: se regresó a 00031-rww, se aplicó la 032 y se volvió con `--to-latest`. Oportunidades carga |
+| 19-oct-2026 | `nanobridge-api-00033-fkz` | `1ad5a70` | `033_plantillas_correo.sql` | Correos de prospección editables (etapa 1 de las mejoras): `/plantillas` (GET, `PUT /:numero`, `PUT /pie`, `POST /vista-previa`; administrador y supervisor), `POST /automatizacion/envios` regresa `correo` {asunto, texto, html} y guarda `plantilla_id` y `asunto` en `envios`; formato básico (negrita, cursiva, enlaces https). Esta vez la migración fue primero. `/health` ok, `/plantillas` da 401 sin sesión. Front publicado en Firebase el mismo día (tarjeta en Administración). En n8n el texto viaja como `correo_contenido` (`docs/n8n/pt1b-plantillas/`) |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
@@ -473,7 +474,12 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       (16-oct-2026): lo resuelve la fila del botón de abajo. Los recordatorios
       van primero (PT4 corre antes) y los nuevos solo usan lo que sobra del
       tope, hasta `NUEVOS_POR_DIA`.
-- [ ] Publicar PT4 con horario de lunes a viernes a las **9:00** (hora de México).
+- [x] PT4 publicado el 19-oct-2026 (lo publicó la IA de n8n al aplicar el
+      prompt de plantillas; Fabián decidió dejarlo así). Corre de lunes a
+      viernes a las **10:00** (hora de México), no a las 9:00 como se había
+      planeado; primera corrida el 20-oct. Con `MODO_PRUEBAS` encendido solo
+      escribe a los buzones de Fabián. Al encender, decidir si se queda a las
+      10:00 o se mueve a las 9:00.
 - [x] Botón "Mandar a automatización" en el CRM (entrada de prospectos a PT1,
       opción B decidida el 15-oct-2026). **Hecho y probado en vivo el 16-oct-2026**:
       API (migración 031, revisiones 00030-gq4 y 00031-rww), pantalla de
