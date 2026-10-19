@@ -28,3 +28,7 @@ test/setup/.test-env.json
 .agents/
 .claude/
 skills-lock.json
+# PDFs de pantallas para el jefe (13-oct-2026, ~20 MB): se guardan en Drive,
+# no en git, para no hacer pesado el historial.
+docs/diseno/CRM-NANOBRIDGE-pantallas.pdf
+docs/diseno/CRM-NANOBRIDGE-recorrido-pantallas.pdf
