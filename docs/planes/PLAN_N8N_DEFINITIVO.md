@@ -76,7 +76,8 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
          maneja un prospecto por ejecución (todos sus nodos usan `.first()`), por eso el reparto va
          en PT1a. PT1 tiene que estar publicado para que PT1a lo llame.
        - Prueba en vivo: Daniel (La Casa del Chilaquil) salió de la fila, quedó validado con score 47
-         y el correo llegó a Gmail.
+         y el correo llegó a Gmail. Confirmado el 19-oct: PT1a con la fila vacía termina sin error,
+         B4 sin avisos raros y PT1 sin datos fijados (pins).
        - Falta: borrar de PT1 los nodos viejos que quedaron sueltos ("validacion de Formato", "If",
          "HTTP Request1", "cuenta intentos y normalizacion", "If1", "Tareas") y, el día de encender,
          cambiar el Manual Trigger de PT1a por el horario de las 10:00.
