@@ -11,6 +11,7 @@ import { LoQueAcabaDePasar } from "../components/inicio/LoQueAcabaDePasar";
 import { CampanasInicio } from "../components/inicio/CampanasInicio";
 import { PipelineAbierto } from "../components/inicio/PipelineAbierto";
 import { NuevaOportunidadPanel } from "../components/inicio/NuevaOportunidadPanel";
+import { LoNuevoParaTi } from "../components/avisos/LoNuevoParaTi";
 import { useAuth } from "../lib/auth-context";
 import { api } from "../lib/api";
 import { useCampanas } from "../lib/campanas";
@@ -100,7 +101,9 @@ function InicioEquipo({ ahora, nombre }: { ahora: Date; nombre: string }) {
         />
       </Franja>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 md:mt-[22px] lg:grid-cols-2">
+      <LoNuevoParaTi className="mt-4 md:mt-[22px]" />
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Tarjeta estilo="relieve" titulo="Correos enviados por día" icono="correo" color="menta" extra={etiquetaRango(r.grafica.fechaInicio, r.grafica.fechaFin)}>
           {porDia.isPending && <Cargando />}
           {porDia.isError && <ErrorCarga que="la gráfica" />}
@@ -169,8 +172,10 @@ function InicioAgente({ ahora, nombre }: { ahora: Date; nombre: string }) {
         <Kpi valor={n(c?.cerradas_ayer)} etiqueta="Cerraste ayer" />
       </Franja>
 
+      <LoNuevoParaTi className="mt-4 md:mt-[22px]" />
+
       {porContestar > 0 && (
-        <Tarjeta estilo="relieve" className="mt-4 md:mt-[22px]">
+        <Tarjeta estilo="relieve" className="mt-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="font-heading text-[15px] font-extrabold text-strong">{porContestar === 1 ? "Tienes 1 respuesta por contestar" : `Tienes ${porContestar} respuestas por contestar`}</div>

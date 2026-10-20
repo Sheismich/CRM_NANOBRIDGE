@@ -1,28 +1,30 @@
+import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { clsx } from "clsx";
 import { useAuth } from "../../lib/auth-context";
 import { tareasPorAtender, useConteosTareas } from "../../lib/tareas";
+import { useConteoNotificaciones } from "../../lib/notificaciones";
 import { Icono } from "../ui/Icono";
 import { itemsVisibles } from "./nav-items";
 import { Logo } from "./Logo";
-import { Campanita } from "./Campanita";
 import { SelectorTema } from "./SelectorTema";
 import { ETIQUETA_ROL, iniciales } from "./usuario";
 
 // Menú lateral de compu (docs/diseno/inicio-aprobado.html): punto menta
-// en la opción activa, numerito en Tareas, la campanita de avisos junto
-// al logo, abajo el tema y la persona.
+// en la opción activa, numerito en Tareas y en Inicio (avisos sin leer:
+// la tarjeta "Lo nuevo para ti" vive en el Inicio, opción D del 20-oct),
+// abajo el tema y la persona.
 // En el celular no se ve: ahí van las barras de BarrasCelular.tsx.
 export function Sidebar() {
   const { user, logout } = useAuth();
   const { data: conteos } = useConteosTareas();
   const porAtender = tareasPorAtender(conteos);
+  const avisos = useConteoNotificaciones().data?.no_leidas ?? 0;
 
   return (
     <aside className="sticky top-0 hidden h-dvh w-[228px] shrink-0 flex-col border-r border-border bg-side px-3.5 py-[22px] md:flex">
-      <div className="flex items-start justify-between gap-2 pb-[26px] pl-2">
+      <div className="pb-[26px] pl-2">
         <Logo />
-        <Campanita />
       </div>
 
       <nav className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
@@ -39,11 +41,8 @@ export function Sidebar() {
               <>
                 <span className={clsx("h-[7px] w-[7px] shrink-0 rounded-full", isActive ? "bg-mint shadow-[0_0_10px_var(--mint)]" : "bg-border")} />
                 <span className="min-w-0 truncate">{item.label}</span>
-                {item.to === "/tareas" && porAtender > 0 && (
-                  <span className="ml-auto rounded-full bg-cyan px-[7px] py-px text-[11px] font-extrabold text-[#06121a]" title="Vencen hoy o ya vencieron">
-                    {porAtender}
-                  </span>
-                )}
+                {item.to === "/tareas" && porAtender > 0 && <Numerito titulo="Vencen hoy o ya vencieron">{porAtender}</Numerito>}
+                {item.to === "/" && avisos > 0 && <Numerito titulo="Avisos sin leer">{avisos > 99 ? "99+" : avisos}</Numerito>}
               </>
             )}
           </NavLink>
@@ -67,6 +66,14 @@ export function Sidebar() {
         </div>
       )}
     </aside>
+  );
+}
+
+function Numerito({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <span className="ml-auto rounded-full bg-cyan px-[7px] py-px text-[11px] font-extrabold text-[#06121a]" title={titulo}>
+      {children}
+    </span>
   );
 }
 

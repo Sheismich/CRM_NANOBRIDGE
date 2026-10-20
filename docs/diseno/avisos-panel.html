@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel de avisos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --page: #eef1f8; --surface: #ffffff; --strong: #101733; --ink2: #5b6482; --ink3: #8b92aa;
+  --border: #e6e9f2; --soft: #f4f6fb; --navy: #2a449b; --link: #2a449b; --cyan: #23bad3; --mint: #41e198;
+  --unread: rgba(65, 225, 152, .05); --shadow: 0 18px 50px rgba(16, 23, 51, .14);
+  --t-tarea: #2a449b; --t-interesado: #149a62; --t-vencida: #d03f58; --t-documento: #c27c06; --t-clasificar: #1597ad;
+  --switch-off: #cfd4e3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #060a16; --surface: #0c1224; --strong: #eef1fa; --ink2: #a6aec6; --ink3: #6f7894;
+    --border: #1d263f; --soft: #131b31; --navy: #4d6bd6; --link: #23bad3; --unread: rgba(65, 225, 152, .06);
+    --shadow: 0 18px 50px rgba(0, 0, 0, .5);
+    --t-tarea: #8ea4f2; --t-interesado: #41e198; --t-vencida: #ff7d92; --t-documento: #f2b443; --t-clasificar: #4fd3e8;
+    --switch-off: #2a3350;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #060a16; --surface: #0c1224; --strong: #eef1fa; --ink2: #a6aec6; --ink3: #6f7894;
+  --border: #1d263f; --soft: #131b31; --navy: #4d6bd6; --link: #23bad3; --unread: rgba(65, 225, 152, .06);
+  --shadow: 0 18px 50px rgba(0, 0, 0, .5);
+  --t-tarea: #8ea4f2; --t-interesado: #41e198; --t-vencida: #ff7d92; --t-documento: #f2b443; --t-clasificar: #4fd3e8;
+  --switch-off: #2a3350;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--strong); font-family: Manrope, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+h1, h2, h3 { font-family: Montserrat, sans-serif; margin: 0; }
+
+.top { max-width: 1320px; margin: 0 auto; padding: 32px 16px 8px; display: flex; flex-wrap: wrap; gap: 16px; align-items: end; justify-content: space-between; }
+.top h1 { font-size: 26px; font-weight: 800; }
+.top p { margin: 6px 0 0; color: var(--ink2); font-size: 14px; max-width: 640px; line-height: 1.5; }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { padding: 7px 13px; border-radius: 8px; font-size: 13px; font-weight: 700; color: var(--ink2); }
+.seg button[aria-pressed="true"] { background: var(--soft); color: var(--strong); }
+.controls { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.grid { max-width: 1320px; margin: 0 auto; padding: 20px 16px 48px; display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 28px; align-items: start; }
+.col h2 { font-size: 15px; font-weight: 800; }
+.col h2 small { font-family: Manrope, sans-serif; color: var(--ink3); font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; display: block; margin-bottom: 4px; }
+.col ul.notes { min-height: 84px; margin: 8px 0 16px; padding-left: 18px; color: var(--ink2); font-size: 13px; line-height: 1.55; }
+
+/* El panel */
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); width: 100%; max-width: 420px; height: 640px; display: flex; flex-direction: column; overflow: hidden; position: relative; transition: max-width .2s; }
+body.cel .panel { max-width: 375px; height: 700px; border-radius: 22px; }
+.ph { display: flex; align-items: center; gap: 10px; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
+.ph h3 { font-size: 17px; font-weight: 800; }
+.ph .count { font-size: 12px; font-weight: 800; color: #06121a; background: var(--cyan); border-radius: 999px; padding: 1px 7px; }
+.ph .spacer { flex: 1; }
+.ph .lnk, .v2 .filters .lnk { font-size: 12.5px; font-weight: 700; color: var(--link); white-space: nowrap; }
+.ph .lnk:hover { text-decoration: underline; }
+.ph .x { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--ink3); }
+.ph .x:hover { background: var(--soft); color: var(--strong); }
+.body { flex: 1; min-height: 0; overflow-y: auto; }
+.foot { border-top: 1px solid var(--border); padding: 14px 20px; }
+
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 8px var(--mint); flex-shrink: 0; }
+.dot.off { background: transparent; box-shadow: none; }
+.time { font-size: 11.5px; font-weight: 600; color: var(--ink3); white-space: nowrap; }
+.ttl { font-size: 13.5px; line-height: 1.35; font-weight: 800; color: var(--strong); }
+.read .ttl { font-weight: 600; color: var(--ink2); }
+.txt { font-size: 12.5px; line-height: 1.45; color: var(--ink2); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.read .txt { color: var(--ink3); }
+.kind { font-size: 10.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--k); }
+.empty { padding: 40px 24px; text-align: center; color: var(--ink2); font-size: 13px; line-height: 1.5; }
+.empty b { display: block; color: var(--strong); font-family: Montserrat, sans-serif; font-size: 14px; margin-bottom: 4px; }
+
+/* Interruptor */
+.sw { position: relative; width: 36px; height: 21px; border-radius: 999px; background: var(--switch-off); flex-shrink: 0; transition: background .15s; }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.sw[aria-checked="true"] { background: var(--navy); }
+.sw[aria-checked="true"]::after { transform: translateX(15px); }
+
+/* V1: por día */
+.v1 .day { position: sticky; top: 0; background: var(--surface); padding: 14px 20px 6px; font-size: 11px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--ink3); z-index: 1; }
+.v1 .it { display: flex; gap: 12px; width: 100%; text-align: left; padding: 11px 20px 12px; border-radius: 0; }
+.v1 .it:hover { background: var(--soft); }
+.v1 .it.unread { background: var(--unread); }
+.v1 .it .dot { margin-top: 5px; }
+.v1 .row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.v1 .row .time { margin-left: auto; }
+.v1 .foot { display: flex; gap: 14px; align-items: center; }
+.v1 .foot b { font-size: 13px; display: block; }
+.v1 .foot span { font-size: 11.5px; color: var(--ink3); line-height: 1.4; }
+
+/* V2: filtro arriba + opciones */
+.v2 .filters { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.v2 .chip { font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink2); }
+.v2 .chip[aria-pressed="true"] { background: var(--strong); border-color: var(--strong); color: var(--surface); }
+.v2 .it { display: flex; gap: 12px; width: 100%; text-align: left; padding: 13px 20px; border-bottom: 1px solid var(--border); position: relative; }
+.v2 .it:hover { background: var(--soft); }
+.v2 .rail { width: 3px; border-radius: 3px; background: var(--k); align-self: stretch; flex-shrink: 0; }
+.v2 .read .rail { opacity: .35; }
+.v2 .main { flex: 1; min-width: 0; }
+.v2 .head { display: flex; gap: 8px; align-items: start; }
+.v2 .head .ttl { flex: 1; }
+.v2 .head .dot { margin-top: 5px; }
+.v2 .meta { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+.v2 .tag { font-size: 11px; font-weight: 800; color: var(--k); background: color-mix(in srgb, var(--k) 12%, transparent); padding: 2px 8px; border-radius: 6px; }
+.v2 .opts { position: absolute; right: 16px; top: 54px; width: 300px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 16px; z-index: 5; display: none; }
+.v2 .opts.open { display: block; }
+.v2 .opts .r { display: flex; gap: 12px; align-items: start; justify-content: space-between; }
+.v2 .opts b { font-size: 13.5px; }
+.v2 .opts p { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink2); }
+.v2 .opts hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0 12px; }
+
+/* V3: por atender + ya vistos */
+.v3 .sec { padding: 16px 20px 8px; display: flex; align-items: center; gap: 8px; }
+.v3 .sec h4 { margin: 0; font-family: Montserrat, sans-serif; font-size: 13px; font-weight: 800; }
+.v3 .sec .n { font-size: 12px; font-weight: 700; color: var(--ink3); }
+.v3 .card { margin: 0 16px 10px; border: 1px solid var(--border); border-left: 3px solid var(--k); border-radius: 10px; padding: 12px 14px; }
+.v3 .card .top3 { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.v3 .card .top3 .time { margin-left: auto; }
+.v3 .card .acts { display: flex; gap: 14px; align-items: center; margin-top: 10px; }
+.v3 .btn { font-size: 12.5px; font-weight: 800; color: #fff; background: var(--navy); padding: 6px 12px; border-radius: 8px; }
+.v3 .quiet { font-size: 12px; font-weight: 700; color: var(--ink3); }
+.v3 .quiet:hover { color: var(--strong); }
+.v3 .seen { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 20px; }
+.v3 .seen:hover { background: var(--soft); }
+.v3 .seen .mini { width: 6px; height: 6px; border-radius: 2px; background: var(--k); flex-shrink: 0; opacity: .8; }
+.v3 .seen .one { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v3 .seen .one b { color: var(--strong); font-weight: 700; }
+.v3 .allok { margin: 0 16px 10px; padding: 14px; border-radius: 10px; background: var(--soft); font-size: 12.5px; color: var(--ink2); }
+.v3 .foot { font-size: 12px; color: var(--ink3); display: flex; gap: 6px; flex-wrap: wrap; }
+.v3 .foot button { color: var(--link); font-weight: 700; }
+
+.legend { max-width: 1320px; margin: 0 auto; padding: 0 16px; display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--ink2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 9px; height: 9px; border-radius: 3px; background: var(--k); }
+.reset { font-size: 12.5px; font-weight: 700; color: var(--link); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>Panel de avisos: 3 versiones</h1>
+    <p>Mismos 6 avisos en las tres (3 sin leer). Puedes darle clic a "Marcar todas como leídas", a los filtros y a las opciones para ver cómo se comportan.</p>
+  </div>
+  <div class="controls">
+    <div class="seg" id="ancho">
+      <button aria-pressed="true" data-v="compu">Compu</button>
+      <button aria-pressed="false" data-v="cel">Celular</button>
+    </div>
+    <div class="seg" id="tema">
+      <button aria-pressed="true" data-v="light">Claro</button>
+      <button aria-pressed="false" data-v="dark">Oscuro</button>
+    </div>
+    <button class="reset" id="reset">Reiniciar</button>
+  </div>
+</header>
+<div class="legend">
+  <span style="--k:var(--t-tarea)"><i></i>Tarea</span>
+  <span style="--k:var(--t-interesado)"><i></i>Interesado</span>
+  <span style="--k:var(--t-vencida)"><i></i>Vencida</span>
+  <span style="--k:var(--t-documento)"><i></i>Documento</span>
+  <span style="--k:var(--t-clasificar)"><i></i>Por clasificar</span>
+</div>
+
+<main class="grid">
+  <section class="col">
+    <h2><small>Versión 1</small>Por día</h2>
+    <ul class="notes">
+      <li>Grupos Hoy / Ayer / Antes, con el título del grupo fijo al hacer scroll.</li>
+      <li>El tipo va como etiqueta chiquita de color arriba del título.</li>
+      <li>La casilla de correo se vuelve un interruptor de un renglón abajo.</li>
+    </ul>
+    <div class="panel v1" id="p1"></div>
+  </section>
+  <section class="col">
+    <h2><small>Versión 2</small>Filtro arriba</h2>
+    <ul class="notes">
+      <li>Abre en "Sin leer"; "Todos" para ver el historial.</li>
+      <li>Rayita de color a la izquierda + etiqueta con el tipo.</li>
+      <li>El correo se esconde en "Opciones" (arriba), no ocupa lugar.</li>
+    </ul>
+    <div class="panel v2" id="p2"></div>
+  </section>
+  <section class="col">
+    <h2><small>Versión 3</small>Por atender</h2>
+    <ul class="notes">
+      <li>Lo nuevo como tarjetas con su botón ("Ver tarea", "Abrir prospecto").</li>
+      <li>Lo ya visto en una sola línea, sin ocupar espacio.</li>
+      <li>El correo se ajusta en Mi cuenta; aquí solo se dice si está prendido.</li>
+    </ul>
+    <div class="panel v3" id="p3"></div>
+  </section>
+</main>
+
+<script>
+const TIPOS = {
+  tarea:      { k: "--t-tarea",      label: "Tarea",          accion: "Ver tarea" },
+  interesado: { k: "--t-interesado", label: "Interesado",     accion: "Abrir prospecto" },
+  vencida:    { k: "--t-vencida",    label: "Vencida",        accion: "Ver tarea" },
+  documento:  { k: "--t-documento",  label: "Documento",      accion: "Ver documento" },
+  clasificar: { k: "--t-clasificar", label: "Por clasificar", accion: "Clasificar" },
+};
+const BASE = [
+  { id: 1, tipo: "tarea",      dia: "Hoy",   hora: "hace 5 min",        titulo: "Te asignaron una tarea",      texto: "Llamar a La Casa del Chilaquil", leida: false },
+  { id: 2, tipo: "interesado", dia: "Hoy",   hora: "hace 40 min",       titulo: "Nuevo prospecto interesado",  texto: "Universidad Politécnica de Ags respondió que quiere más información.", leida: false },
+  { id: 3, tipo: "vencida",    dia: "Hoy",   hora: "9:00 a.m.",         titulo: "Se venció tu tarea",          texto: "Enviar cotización a Empresa Prueba Nueve", leida: false },
+  { id: 4, tipo: "documento",  dia: "Ayer",  hora: "ayer 4:30 p.m.",    titulo: "Te rechazaron un documento",  texto: "Constancia fiscal de La Casa del Chilaquil: la imagen no se lee.", leida: true },
+  { id: 5, tipo: "tarea",      dia: "Ayer",  hora: "ayer 11:15 a.m.",   titulo: "Te asignaron una tarea",      texto: "Dar seguimiento a Empresa Prueba Envío 2", leida: true },
+  { id: 6, tipo: "clasificar", dia: "Antes", hora: "13 oct",            titulo: "Llegó una respuesta por clasificar", texto: "Empresa Prueba Once contestó al 2.º recordatorio.", leida: true },
+];
+const X = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+let st;
+function reset() {
+  st = {
+    p1: { avisos: structuredClone(BASE), correo: true },
+    p2: { avisos: structuredClone(BASE), correo: true, filtro: "sin", opts: false },
+    p3: { avisos: structuredClone(BASE), correo: true },
+  };
+  renderAll();
+}
+const noLeidas = (a) => a.filter((x) => !x.leida).length;
+const kvar = (t) => `--k:var(${TIPOS[t].k})`;
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function header(s, pid, extra = "", conMarcar = true) {
+  const n = noLeidas(s.avisos);
+  return `<div class="ph"><h3>Avisos</h3>${n ? `<span class="count">${n}</span>` : ""}<span class="spacer"></span>${extra}${conMarcar && n ? `<button class="lnk" data-act="todas" data-p="${pid}">Marcar todas como leídas</button>` : ""}<button class="x" aria-label="Cerrar">${X}</button></div>`;
+}
+
+function v1() {
+  const s = st.p1;
+  let html = header(s, "p1") + '<div class="body">';
+  for (const dia of ["Hoy", "Ayer", "Antes"]) {
+    const g = s.avisos.filter((a) => a.dia === dia);
+    if (!g.length) continue;
+    html += `<div class="day">${dia}</div>`;
+    for (const a of g) {
+      html += `<button class="it ${a.leida ? "read" : "unread"}" data-act="leer" data-p="p1" data-id="${a.id}" style="${kvar(a.tipo)}">
+        <span class="dot ${a.leida ? "off" : ""}"></span>
+        <span style="flex:1;min-width:0"><span class="row"><span class="kind">${TIPOS[a.tipo].label}</span><span class="time">${a.hora}</span></span>
+        <span class="ttl" style="display:block">${a.titulo}</span><span class="txt">${esc(a.texto)}</span></span></button>`;
+    }
+  }
+  html += `</div><div class="foot"><span style="flex:1"><b>Avisos por correo</b><span>Además de aquí, te llegan a tu correo.</span></span>
+    <button class="sw" role="switch" aria-checked="${s.correo}" aria-label="Avisos por correo" data-act="correo" data-p="p1"></button></div>`;
+  return html;
+}
+
+function v2() {
+  const s = st.p2;
+  const n = noLeidas(s.avisos);
+  const lista = s.filtro === "sin" ? s.avisos.filter((a) => !a.leida) : s.avisos;
+  let html = header(s, "p2", `<button class="lnk" data-act="opts" data-p="p2" style="color:var(--ink2)">Opciones</button>`, false);
+  html += `<div class="filters"><button class="chip" aria-pressed="${s.filtro === "sin"}" data-act="filtro" data-v="sin" data-p="p2">Sin leer${n ? ` (${n})` : ""}</button>
+    <button class="chip" aria-pressed="${s.filtro === "todos"}" data-act="filtro" data-v="todos" data-p="p2">Todos</button>${n ? `<span style="flex:1"></span><button class="lnk" data-act="todas" data-p="p2">Marcar todas como leídas</button>` : ""}</div><div class="body">`;
+  if (!lista.length) html += `<div class="empty"><b>Estás al día</b>No tienes avisos sin leer. En "Todos" están los anteriores.</div>`;
+  for (const a of lista) {
+    html += `<button class="it ${a.leida ? "read" : ""}" data-act="leer" data-p="p2" data-id="${a.id}" style="${kvar(a.tipo)}">
+      <span class="rail"></span><span class="main"><span class="head"><span class="ttl">${a.titulo}</span>${a.leida ? "" : '<span class="dot"></span>'}</span>
+      <span class="txt">${esc(a.texto)}</span><span class="meta"><span class="tag">${TIPOS[a.tipo].label}</span><span class="time">${a.hora}</span></span></span></button>`;
+  }
+  html += `</div><div class="opts ${s.opts ? "open" : ""}"><div class="r"><div><b>Avisos por correo</b>
+    <p>Tareas asignadas, interesados, tareas vencidas y documentos rechazados. Aquí en el CRM te siguen llegando aunque lo apagues.</p></div>
+    <button class="sw" role="switch" aria-checked="${s.correo}" aria-label="Avisos por correo" data-act="correo" data-p="p2"></button></div></div>`;
+  return html;
+}
+
+function v3() {
+  const s = st.p3;
+  const nuevos = s.avisos.filter((a) => !a.leida);
+  const vistos = s.avisos.filter((a) => a.leida);
+  let html = header(s, "p3") + '<div class="body">';
+  html += `<div class="sec"><h4>Por atender</h4><span class="n">${nuevos.length || ""}</span></div>`;
+  if (!nuevos.length) html += `<div class="allok">Nada pendiente. Aquí te avisamos cuando te asignen algo, llegue un interesado o se venza una tarea.</div>`;
+  for (const a of nuevos) {
+    html += `<div class="card" style="${kvar(a.tipo)}"><div class="top3"><span class="kind">${TIPOS[a.tipo].label}</span><span class="time">${a.hora}</span></div>
+      <div class="ttl">${a.titulo}</div><div class="txt">${esc(a.texto)}</div>
+      <div class="acts"><button class="btn" data-act="leer" data-p="p3" data-id="${a.id}">${TIPOS[a.tipo].accion}</button>
+      <button class="quiet" data-act="leer" data-p="p3" data-id="${a.id}">Ya lo vi</button></div></div>`;
+  }
+  html += `<div class="sec" style="padding-top:12px"><h4 style="color:var(--ink2)">Ya vistos</h4></div>`;
+  for (const a of vistos) {
+    html += `<button class="seen" style="${kvar(a.tipo)}"><span class="mini"></span><span class="one"><b>${a.titulo}</b> · ${esc(a.texto)}</span><span class="time">${a.hora}</span></button>`;
+  }
+  html += `</div><div class="foot"><span>Avisos por correo: <b style="color:var(--strong)">${s.correo ? "prendidos" : "apagados"}</b>.</span>
+    <button data-act="correo" data-p="p3">${s.correo ? "Apagar" : "Prender"}</button><span>(también en Mi cuenta)</span></div>`;
+  return html;
+}
+
+function renderAll() {
+  document.getElementById("p1").innerHTML = v1();
+  document.getElementById("p2").innerHTML = v2();
+  document.getElementById("p3").innerHTML = v3();
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]");
+  if (!b) return;
+  const s = st[b.dataset.p];
+  const act = b.dataset.act;
+  if (act === "todas") s.avisos.forEach((a) => (a.leida = true));
+  if (act === "leer") { const a = s.avisos.find((x) => x.id === +b.dataset.id); if (a) a.leida = true; }
+  if (act === "correo") s.correo = !s.correo;
+  if (act === "filtro") s.filtro = b.dataset.v;
+  if (act === "opts") s.opts = !s.opts;
+  renderAll();
+});
+function seg(id, on) {
+  const el = document.getElementById(id);
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    el.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    on(b.dataset.v);
+  });
+}
+seg("tema", (v) => (document.documentElement.dataset.theme = v));
+seg("ancho", (v) => document.body.classList.toggle("cel", v === "cel"));
+document.getElementById("reset").addEventListener("click", reset);
+try { if (matchMedia("(prefers-color-scheme: dark)").matches) document.querySelector('#tema [data-v="dark"]').click(); } catch (e) {}
+reset();
+</script>
+</body>
+</html>

@@ -2,11 +2,11 @@ import { NavLink, useLocation } from "react-router-dom";
 import { clsx } from "clsx";
 import { useAuth } from "../../lib/auth-context";
 import { tareasPorAtender, useConteosTareas } from "../../lib/tareas";
+import { useConteoNotificaciones } from "../../lib/notificaciones";
 import { Icono } from "../ui/Icono";
 import { useDialogo } from "../ui/dialogo";
 import { itemsVisibles, type NavItem } from "./nav-items";
 import { Logo } from "./Logo";
-import { Campanita } from "./Campanita";
 import { SelectorTema } from "./SelectorTema";
 import { Avatar } from "./Sidebar";
 import { ETIQUETA_ROL } from "./usuario";
@@ -21,7 +21,6 @@ export function BarraSuperiorCelular({ onAbrirMas }: { onAbrirMas: () => void })
     <div className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-white/8 bg-[#101733] px-4 py-3 text-white md:hidden">
       <Logo sobreOscuro />
       <div className="ml-auto flex items-center gap-1">
-        <Campanita sobreOscuro />
         <SelectorTema sobreOscuro />
       </div>
       {user && (
@@ -38,6 +37,8 @@ export function BarraNavegacion({ onAbrirMas }: { onAbrirMas: () => void }) {
   const { pathname } = useLocation();
   const { data: conteos } = useConteosTareas();
   const porAtender = tareasPorAtender(conteos);
+  // Avisos sin leer: el numerito va en Inicio, donde está "Lo nuevo para ti".
+  const avisos = useConteoNotificaciones().data?.no_leidas ?? 0;
   const items = itemsVisibles(user?.rol);
   const principales = items.filter((i) => i.celular);
   // "Más" se marca cuando la pantalla abierta es una de las que viven ahí.
@@ -49,7 +50,7 @@ export function BarraNavegacion({ onAbrirMas }: { onAbrirMas: () => void }) {
         <NavLink key={item.to} to={item.to} end={item.to === "/"} className={({ isActive }) => claseBoton(isActive)}>
           {({ isActive }) => (
             <>
-              <IconoBarra item={item} activo={isActive} numerito={item.to === "/tareas" ? porAtender : 0} />
+              <IconoBarra item={item} activo={isActive} numerito={item.to === "/tareas" ? porAtender : item.to === "/" ? avisos : 0} />
               {item.corto ?? item.label}
             </>
           )}
@@ -73,7 +74,7 @@ function IconoBarra({ item, activo, numerito }: { item: NavItem; activo: boolean
   return (
     <span className={clsx("relative grid h-[26px] w-[26px] place-items-center rounded-[8px]", activo && "bg-mint/12 text-ok")}>
       <Icono d={item.icon} size={19} />
-      {numerito > 0 && <em className="absolute -right-2.5 -top-1.5 rounded-full bg-cyan px-[5px] py-px text-[9px] font-extrabold not-italic text-[#06121a]">{numerito}</em>}
+      {numerito > 0 && <em className="absolute -right-2.5 -top-1.5 rounded-full bg-cyan px-[5px] py-px text-[9px] font-extrabold not-italic text-[#06121a]">{numerito > 99 ? "99+" : numerito}</em>}
     </span>
   );
 }
