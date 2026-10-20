@@ -18,6 +18,9 @@ import { env } from "../config/env.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo, tieneFormaDeReplyTo } from "../shared/reply-to.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
+import { vendedorDeLaConversacion } from "../shared/conversacion.js";
+import { notificar, responsableOEquipo } from "../notificaciones/notificar.js";
+import { recortarTexto } from "../shared/texto.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import { correoDeEnvio, correoParaEnvio } from "../plantillas/plantillas.correo.js";
 import { EVENTOS_BAJA_DE_PERSONA } from "./dto/automatizacion.schema.js";
@@ -1274,6 +1277,8 @@ export class AutomatizacionService {
           canal: input.canal,
           contenido: input.contenido ?? null,
           remitente: input.remitente ?? null,
+          messageId: input.message_id ?? null,
+          asunto: input.asunto ?? null,
           tardia,
           executionId: input.execution_id,
           // Una respuesta automática (fuera de oficina) no es una respuesta
@@ -1283,11 +1288,21 @@ export class AutomatizacionService {
           ...(input.automatica ? { estado: "clasificada" as const, clasificacion: "automatica" as const, clasificadoEn: sql`CURRENT_TIMESTAMP` } : {})
         });
         if (input.automatica) {
-          return { id: result.insertId, identificada: true as const, prospecto_id: prospectoId, envio_id: envioId, tardia, tarea_id: null, ya_existia: false as const };
+          return { id: result.insertId, identificada: true as const, prospecto_id: prospectoId, envio_id: envioId, tardia, tarea_id: null, en_conversacion: false, ya_existia: false as const };
         }
 
         if (ventanasAbiertas.length > 0) {
           await tx.update(envios).set({ ventanaEstado: "cerrada" }).where(and(inArray(envios.id, ventanasAbiertas.map((v) => v.id)), eq(envios.ventanaEstado, "abierta")));
+        }
+
+        // En conversación (un vendedor ya le contestó desde el CRM): la
+        // respuesta le llega a ese vendedor y no va a la cola (caso de
+        // Fabián, 20-oct-2026). PT2 puede saltarse su aviso al supervisor
+        // con en_conversacion.
+        const vendedorId = await vendedorDeLaConversacion(tx, prospectoId);
+        if (vendedorId !== null) {
+          await this.avisarRespuestaEnConversacion(tx, { respuestaId: result.insertId, prospectoId, vendedorId, contenido: input.contenido ?? null });
+          return { id: result.insertId, identificada: true as const, prospecto_id: prospectoId, envio_id: envioId, tardia, tarea_id: null, en_conversacion: true, ya_existia: false as const };
         }
 
         let tareaId: number | null = null;
@@ -1317,7 +1332,7 @@ export class AutomatizacionService {
           tareaId = tarea.id;
         }
 
-        return { id: result.insertId, identificada: true as const, prospecto_id: prospectoId, envio_id: envioId, tardia, tarea_id: tareaId, ya_existia: false as const };
+        return { id: result.insertId, identificada: true as const, prospecto_id: prospectoId, envio_id: envioId, tardia, tarea_id: tareaId, en_conversacion: false, ya_existia: false as const };
       });
     } catch (error) {
       if (isDuplicateEntry(error)) {
@@ -1330,6 +1345,30 @@ export class AutomatizacionService {
       }
       throw error;
     }
+  }
+
+  // "<contacto> te contestó": al vendedor de la conversación, con correo. Si
+  // ya no está activo, a quienes reparten, para que no se pierda. Lleva al
+  // Historial de la ficha, donde está el botón Responder.
+  private async avisarRespuestaEnConversacion(tx: DrizzleTx, datos: { respuestaId: number; prospectoId: number; vendedorId: number; contenido: string | null }) {
+    const [contexto] = await tx
+      .select({ empresaId: empresas.id, empresa: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`, contacto: contactos.nombre })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .where(eq(prospectos.id, datos.prospectoId))
+      .limit(1);
+    if (!contexto) return;
+    const { ids } = await responsableOEquipo(tx, datos.vendedorId);
+    await notificar(tx, ids, {
+      tipo: "respuesta_conversacion",
+      titulo: `${contexto.contacto} te contestó · ${contexto.empresa}`,
+      cuerpo: datos.contenido ? recortarTexto(datos.contenido, 300) : null,
+      enlace: `/empresas/${contexto.empresaId}?tab=historial`,
+      entidad: "respuesta",
+      entidadId: datos.respuestaId,
+      conCorreo: true
+    });
   }
 
   // Una respuesta a una dirección sin firma válida (alterada, de otro

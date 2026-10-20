@@ -84,13 +84,34 @@ export type ContactoConMedio = {
 // cerradas y cambios de estado de prospecto. `detalle` cambia de forma
 // según `tipo`, por eso queda como registro abierto.
 export type TimelineEvento = {
-  tipo: "llamada" | "whatsapp" | "comentario" | "correo_enviado" | "correo_recibido" | "tarea" | "cambio_estado_prospecto";
+  tipo: "llamada" | "whatsapp" | "comentario" | "correo_enviado" | "correo_recibido" | "correo_respondido" | "tarea" | "cambio_estado_prospecto";
   fecha: string;
   responsable_id: number | null;
   canal: string | null;
   resultado: string | null;
   proxima_accion: string | null;
   detalle: Record<string, unknown>;
+};
+
+// GET /respuestas/:id/contestar (etapa 3, 20-oct-2026): lo que hace falta
+// para contestarle al prospecto desde el CRM y si se puede.
+export type ContextoRespuesta = {
+  respuesta_id: number;
+  prospecto_id: number;
+  empresa_id: number;
+  empresa_nombre: string;
+  contacto_nombre: string;
+  contenido: string | null;
+  clasificacion: string | null;
+  recibido_en: string;
+  para: string | null;
+  asunto: string;
+  firma: string;
+  en_conversacion: boolean;
+  tarea_id: number | null;
+  tarea_abierta: boolean;
+  puede_responder: boolean;
+  motivo: string | null;
 };
 
 export type Oportunidad = {

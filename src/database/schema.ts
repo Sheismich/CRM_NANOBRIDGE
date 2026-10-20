@@ -453,11 +453,47 @@ export const respuestas = mysqlTable("respuestas", {
   executionIdSugerencia: varchar("execution_id_sugerencia", { length: 100 }),
   sugeridoEn: datetime("sugerido_en"),
   // 024_respuestas_remitente.sql: el "From" del correo, tal cual lo manda n8n.
-  remitente: varchar("remitente", { length: 320 })
+  remitente: varchar("remitente", { length: 320 }),
+  // 035_responder_prospecto.sql: para contestar en el mismo hilo (opcionales).
+  messageId: varchar("message_id", { length: 255 }),
+  asunto: varchar("asunto", { length: 500 })
 }, (table) => [
   uniqueIndex("uq_respuestas_execution_id").on(table.executionId),
   uniqueIndex("uq_respuestas_execution_id_clasificacion").on(table.executionIdClasificacion),
   index("idx_respuestas_prospecto").on(table.prospectoId)
+]);
+
+// 035_responder_prospecto.sql: lo que el vendedor le contestó al prospecto
+// desde el CRM (etapa 3). No es un envío de prospección.
+export const correosRespuesta = mysqlTable("correos_respuesta", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  respuestaId: bigint("respuesta_id", { mode: "number", unsigned: true }).notNull(),
+  prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }).notNull(),
+  usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull(),
+  para: varchar("para", { length: 320 }).notNull(),
+  asunto: varchar("asunto", { length: 500 }).notNull(),
+  texto: text("texto").notNull(),
+  usoIa: mysqlEnum("uso_ia", ["sin_ia", "tal_cual", "editado"]).notNull().default("sin_ia"),
+  estado: mysqlEnum("estado", ["enviando", "enviado", "fallido"]).notNull().default("enviando"),
+  error: varchar("error", { length: 300 }),
+  proveedorId: varchar("proveedor_id", { length: 255 }),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  enviadoEn: datetime("enviado_en")
+}, (table) => [
+  index("idx_correos_respuesta_respuesta").on(table.respuestaId, table.estado),
+  index("idx_correos_respuesta_prospecto").on(table.prospectoId, table.estado)
+]);
+
+// 035: cada pedido a la IA desde el CRM (límite diario y medir si sirve).
+export const usoIa = mysqlTable("uso_ia", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull(),
+  tipo: varchar("tipo", { length: 40 }).notNull(),
+  respuestaId: bigint("respuesta_id", { mode: "number", unsigned: true }),
+  resultado: text("resultado"),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => [
+  index("idx_uso_ia_usuario_fecha").on(table.usuarioId, table.creadoEn)
 ]);
 
 export const parametrosAutomatizacion = mysqlTable("parametros_automatizacion", {

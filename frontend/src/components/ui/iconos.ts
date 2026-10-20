@@ -36,7 +36,9 @@ export const ICONOS = {
   menu: "M4 6h16 M4 12h16 M4 18h16",
   puntos: "M5 12h.01 M12 12h.01 M19 12h.01",
   sol: "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4",
-  luna: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"
+  luna: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z",
+  responder: "M9 14 4 9l5-5 M4 9h10a6 6 0 0 1 6 6v4",
+  chispas: "M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z M19 15v4 M17 17h4"
 } as const;
 
 export type NombreIcono = keyof typeof ICONOS;

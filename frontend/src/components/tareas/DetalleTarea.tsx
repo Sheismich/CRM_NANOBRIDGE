@@ -12,6 +12,7 @@ import { horaEvento, TEXTO_CLASIFICACION, textoContacto } from "../../lib/inicio
 import { fechaVence, grupoDe, ligaTelefono } from "../../lib/mi-dia";
 import { ETIQUETA_ESTADO_TAREA, ETIQUETA_PRIORIDAD, ETIQUETA_TIPO_TAREA, asignarTarea, useHistorialTarea, useTareaDetalle } from "../../lib/tareas";
 import { iniciales } from "../layout/usuario";
+import { ResponderCorreo } from "../respuestas/ResponderCorreo";
 import type { EventoTarea, Tarea, Usuario } from "../../types";
 
 // Detalle de una tarea en "Ver todas" (opción 6 de tareas.html): etiquetas,
@@ -44,6 +45,7 @@ export function DetalleTarea({
   const { data: t, isPending, isError } = useTareaDetalle(id);
   const historial = useHistorialTarea(id);
   const [reasignando, setReasignando] = useState(false);
+  const [respondiendo, setRespondiendo] = useState(false);
 
   const marco = sinMarco ? "" : "tarjeta-blanca overflow-hidden !rounded-[18px]";
   if (isPending) return <div className={clsx(marco, "p-6 text-[13px] text-ink-3")}>Cargando…</div>;
@@ -75,6 +77,12 @@ export function DetalleTarea({
                 <Icono nombre="check" size={16} strokeWidth={3} /> Marcar como hecha
               </Button>
             )}
+            {/* Etapa 3: contestarle por correo desde aquí (el panel dice si no se puede). */}
+            {t.titulo === "Contactar prospecto interesado" && t.respuesta && (
+              <Button variant="outline" onClick={() => setRespondiendo(true)}>
+                <Icono nombre="responder" size={16} /> Responder por correo
+              </Button>
+            )}
             <Button variant="outline" onClick={() => onReprogramar(t)}>
               Reprogramar
             </Button>
@@ -86,6 +94,7 @@ export function DetalleTarea({
           </div>
         )}
         {reasignando && usuarios && <Reasignar tarea={t} usuarios={usuarios} onListo={() => setReasignando(false)} />}
+        <ResponderCorreo respuestaId={respondiendo && t.respuesta ? t.respuesta.id : null} onCerrar={() => setRespondiendo(false)} />
       </div>
 
       <dl className="grid grid-cols-2 gap-px border-b border-border bg-border md:grid-cols-4">

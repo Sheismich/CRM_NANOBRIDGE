@@ -18,6 +18,10 @@ import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
 import type { TareaAutomatizacionInput } from "../automatizacion/dto/automatizacion.schema.js";
 
+// La tarea que nace con un interesado; responder desde el CRM la busca por
+// este título (etapa 3).
+export const TITULO_TAREA_INTERESADO = "Contactar prospecto interesado";
+
 export type ListTareasFilters = {
   estado?: "pendiente" | "en_progreso" | "cerrada" | "cancelada";
   prioridad?: "baja" | "media" | "alta" | "urgente";
@@ -658,18 +662,57 @@ export class TareasService {
       const [respuesta] = await tx.select({ contenido: respuestas.contenido }).from(respuestas).where(eq(respuestas.id, input.respuestaId)).limit(1);
       contenido = respuesta?.contenido ?? null;
     }
+
+    // P3.9 (etapa 3, 20-oct-2026): si el prospecto ya tiene una abierta, no
+    // nace otra; la respuesta nueva se le agrega y se avisa a quien la tiene
+    // (o a quienes reparten, si está sin asignar).
+    const [abierta] = await tx
+      .select({ id: tareas.id, descripcion: tareas.descripcion, responsableId: tareas.responsableId, respuestaId: tareas.respuestaId })
+      .from(tareas)
+      .where(and(eq(tareas.prospectoId, input.prospectoId), eq(tareas.titulo, TITULO_TAREA_INTERESADO), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`))
+      .orderBy(tareas.id)
+      .limit(1)
+      .for("update");
+    if (abierta && abierta.respuestaId !== input.respuestaId) {
+      const agregado = [`Otra respuesta, clasificada como interesado (${input.origen.descripcion}):`, input.comentario, contenido].filter((linea) => linea).join("\n\n");
+      await tx.update(tareas).set({ descripcion: [abierta.descripcion, agregado].filter(Boolean).join("\n\n---\n\n") }).where(eq(tareas.id, abierta.id));
+      const { ids, delEquipo } = await responsableOEquipo(tx, abierta.responsableId);
+      const empresa = await this.empresaDelProspecto(tx, input.prospectoId);
+      await notificar(tx, ids, {
+        tipo: "interesado",
+        titulo: `Volvió a contestar: ${empresa ?? "prospecto interesado"}`,
+        cuerpo: contenido ? recortarTexto(contenido, 300) : null,
+        enlace: enlaceTarea(abierta.id, delEquipo ? "sin_asignar" : undefined),
+        entidad: "tarea",
+        entidadId: abierta.id,
+        conCorreo: true
+      }, input.origen.usuarioId);
+      return abierta.id;
+    }
+
     const tarea = await this.createFromAutomation({
       execution_id: input.respuestaId !== null ? `interesado-resp-${input.respuestaId}` : `interesado-tarea-${input.tareaClasificacionId}`,
       prospecto_id: input.prospectoId,
       respuesta_id: input.respuestaId ?? undefined,
       tipo: "seguimiento",
-      titulo: "Contactar prospecto interesado",
+      titulo: TITULO_TAREA_INTERESADO,
       descripcion: [`Clasificada como interesado (${input.origen.descripcion}).`, input.comentario, contenido].filter((linea) => linea).join("\n\n"),
       prioridad: "alta",
       fecha_limite: finSiguienteDiaHabilMx(new Date()).toISOString()
     }, tx);
     if (tarea.id !== null && !tarea.ya_existia) await this.avisarInteresado(tx, tarea.id, input, contenido);
     return tarea.id;
+  }
+
+  private async empresaDelProspecto(tx: DrizzleTx, prospectoId: number) {
+    const [fila] = await tx
+      .select({ empresa: sql<string>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})` })
+      .from(prospectos)
+      .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
+      .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+      .where(eq(prospectos.id, prospectoId))
+      .limit(1);
+    return fila?.empresa ?? null;
   }
 
   // La tarea nace sin asignar y un agente no ve las tareas sin asignar: el

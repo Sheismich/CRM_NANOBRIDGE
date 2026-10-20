@@ -2,8 +2,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { Tarjeta } from "../ui/Tarjeta";
+import { Icono } from "../ui/Icono";
 import { NuevaActividadForm } from "./NuevaActividadForm";
+import { ResponderCorreo } from "../respuestas/ResponderCorreo";
 import { api } from "../../lib/api";
+import { CLASIFICACIONES_SIN_RESPONDER } from "../../lib/respuestas";
 import type { TimelineEvento } from "../../types";
 
 const ETIQUETA_TIPO: Record<TimelineEvento["tipo"], string> = {
@@ -12,6 +15,7 @@ const ETIQUETA_TIPO: Record<TimelineEvento["tipo"], string> = {
   comentario: "Comentario",
   correo_enviado: "Correo enviado",
   correo_recibido: "Respuesta recibida",
+  correo_respondido: "Respuesta por correo",
   tarea: "Tarea cerrada",
   cambio_estado_prospecto: "Cambio de estado del prospecto"
 };
@@ -40,6 +44,7 @@ function textoPrincipal(evento: TimelineEvento): string | null {
   const d = evento.detalle;
   if (evento.tipo === "tarea") return typeof d.titulo === "string" ? d.titulo : null;
   if (evento.tipo === "correo_recibido") return typeof d.contenido === "string" ? d.contenido : null;
+  if (evento.tipo === "correo_respondido") return typeof d.texto === "string" ? d.texto : null;
   if (evento.tipo === "cambio_estado_prospecto") return typeof d.motivo === "string" ? d.motivo : null;
   if (evento.tipo === "correo_enviado") return typeof d.numero_contacto === "number" ? `Contacto #${d.numero_contacto} de la secuencia` : null;
   return typeof d.comentario === "string" ? d.comentario : null;
@@ -75,6 +80,7 @@ function claseEtiqueta(clave: string) {
 // con un punto cyan; las respuestas, con el color de su clasificación.
 export function HistorialTab({ empresaId, contactos }: { empresaId: number; contactos: { id: number; nombre: string }[] }) {
   const [registrando, setRegistrando] = useState(false);
+  const [respondiendo, setRespondiendo] = useState<number | null>(null);
   const { data, isPending, isError } = useQuery({
     queryKey: ["timeline", empresaId],
     queryFn: () => api.get<{ data: TimelineEvento[] }>("/api/v1/actividades", { empresaId, limit: 100 })
@@ -118,16 +124,30 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
                     <span className="text-[13px] font-bold text-strong">{ETIQUETA_TIPO[evento.tipo] ?? evento.tipo}</span>
                     {AUTOMATICOS.has(evento.tipo) && <span className="rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-bold text-info">Automático</span>}
                     {clave && <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${claseEtiqueta(clave)}`}>{ETIQUETA_RESULTADO[clave] ?? clave}</span>}
+                    {evento.tipo === "correo_respondido" && typeof evento.detalle.usuario_nombre === "string" && <span className="text-[12px] text-ink-3">{evento.detalle.usuario_nombre} desde el CRM</span>}
                   </div>
                   {texto && <p className="mt-1 whitespace-pre-line text-[13px] text-ink-2">{texto}</p>}
                   {libre && <p className="mt-1 text-xs text-ink-2">Resultado: {libre}</p>}
                   {evento.proxima_accion && <p className="mt-1 text-xs text-ink-3">Próxima acción: {evento.proxima_accion}</p>}
+                  {sePuedeResponder(evento) && (
+                    <button type="button" onClick={() => setRespondiendo(evento.detalle.respuesta_id as number)} className="mt-1.5 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-navy hover:underline">
+                      <Icono nombre="responder" size={14} /> Responder
+                    </button>
+                  )}
                 </div>
               </li>
             );
           })}
         </ol>
       )}
+      <ResponderCorreo respuestaId={respondiendo} onCerrar={() => setRespondiendo(null)} />
     </Tarjeta>
   );
+}
+
+// El botón sale en las respuestas que se podrían contestar; si no se puede
+// por otra razón (sin clasificar, correo en no contactar…), el panel dice por qué.
+function sePuedeResponder(evento: TimelineEvento) {
+  if (evento.tipo !== "correo_recibido" || evento.canal !== "correo" || typeof evento.detalle.respuesta_id !== "number") return false;
+  return !(evento.resultado && CLASIFICACIONES_SIN_RESPONDER.has(evento.resultado));
 }

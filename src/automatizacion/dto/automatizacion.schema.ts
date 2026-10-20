@@ -158,7 +158,12 @@ export const respuestaRecibidaInputSchema = z.object({
   // tardía, en lugar de la de "Respuesta tardía"). automatica: fuera de
   // oficina y similares; se guarda sin cerrar la ventana ni crear tarea.
   crear_tarea_clasificacion: z.boolean().default(false),
-  automatica: z.boolean().default(false)
+  automatica: z.boolean().default(false),
+  // Etapa 3 (20-oct-2026), opcionales: el Message-ID y el asunto del correo
+  // del cliente, para que la respuesta del vendedor quede en el mismo hilo.
+  // Sin ellos todo sigue igual.
+  message_id: z.string().trim().min(1).max(255).optional(),
+  asunto: z.string().trim().max(500).optional()
 }).refine((input) => !(input.crear_tarea_clasificacion && input.automatica), {
   message: "Una respuesta automática no lleva tarea de clasificación",
   path: ["automatica"]

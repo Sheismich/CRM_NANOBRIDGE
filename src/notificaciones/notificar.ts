@@ -4,7 +4,7 @@ import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
 import { empresas, notificaciones, roles, usuarios } from "../database/schema.js";
 
 // Avisos de la campanita (etapa 2 de las mejoras, 19-oct-2026).
-export type TipoAviso = "tarea_asignada" | "interesado" | "tarea_vencida" | "documento_rechazado" | "respuesta_por_clasificar";
+export type TipoAviso = "tarea_asignada" | "interesado" | "tarea_vencida" | "documento_rechazado" | "respuesta_por_clasificar" | "respuesta_conversacion";
 
 export type Aviso = {
   tipo: TipoAviso;

@@ -31,6 +31,7 @@ export function cuerpoSendgrid(correo: CorreoSaliente) {
     from: { email: env.CORREO_REMITENTE, name: correo.nombreRemitente ?? env.CORREO_REMITENTE_NOMBRE },
     ...(correo.replyTo ? { reply_to: { email: correo.replyTo } } : {}),
     subject: correo.asunto,
+    ...(correo.cabeceras ? { headers: correo.cabeceras } : {}),
     content: [
       { type: "text/plain", value: correo.texto },
       { type: "text/html", value: correo.html }

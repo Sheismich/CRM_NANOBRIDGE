@@ -11,6 +11,9 @@ export type CorreoSaliente = {
   html: string;
   nombreRemitente?: string;
   replyTo?: string;
+  // Cabeceras extra, p. ej. In-Reply-To/References para contestar en el
+  // mismo hilo del cliente (etapa 3).
+  cabeceras?: Record<string, string>;
   // Para separar en SendGrid estos correos de los de prospección.
   categoria: string;
 };

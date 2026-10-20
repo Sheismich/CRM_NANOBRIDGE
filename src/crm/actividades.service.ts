@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { actividades, auditoria, contactos, empresas, envios, oportunidades, prospectos, respuestas, tareas } from "../database/schema.js";
+import { actividades, auditoria, contactos, correosRespuesta, empresas, envios, oportunidades, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { ACCION_CAMBIO_ESTADO_POR_CLASIFICACION } from "../shared/clasificacion-respuesta.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
@@ -50,6 +50,20 @@ function respuestaToEvento(row: typeof respuestas.$inferSelect): TimelineEvento 
     resultado: row.clasificacion,
     proxima_accion: null,
     detalle: { respuesta_id: row.id, prospecto_id: row.prospectoId, contenido: row.contenido, tardia: row.tardia }
+  };
+}
+
+// Lo que el vendedor le contestó desde el CRM (etapa 3, 20-oct-2026). Solo
+// los que salieron: un intento fallido no es algo que haya pasado.
+function correoRespondidoToEvento(row: typeof correosRespuesta.$inferSelect & { usuarioNombre: string | null }): TimelineEvento {
+  return {
+    tipo: "correo_respondido",
+    fecha: row.enviadoEn ?? row.creadoEn,
+    responsable_id: row.usuarioId,
+    canal: "correo",
+    resultado: null,
+    proxima_accion: null,
+    detalle: { correo_respuesta_id: row.id, respuesta_id: row.respuestaId, prospecto_id: row.prospectoId, asunto: row.asunto, texto: row.texto, usuario_nombre: row.usuarioNombre, uso_ia: row.usoIa }
   };
 }
 
@@ -131,7 +145,7 @@ export class ActividadesService {
   // fuentes que ya existen, cada una con su propia forma de relacionarse
   // con la empresa/contacto:
   //   - actividades: columna empresa_id / contacto_id directa.
-  //   - envios / respuestas / auditoria (cambios de estado de prospecto):
+  //   - envios / respuestas / correos_respuesta / auditoria (cambios de estado de prospecto):
   //     se relacionan por prospecto_id, así que primero se resuelven los
   //     prospectos de la empresa (o del contacto, si se filtró por uno).
   //   - tareas: columna empresa_id / contacto_id directa (ya se resuelve
@@ -184,6 +198,15 @@ export class ActividadesService {
 
       const filasRespuestas = await this.db.select().from(respuestas).where(inArray(respuestas.prospectoId, prospectoIds)).orderBy(desc(respuestas.recibidoEn)).limit(query.limit);
       eventos.push(...filasRespuestas.map(respuestaToEvento));
+
+      const filasRespondidos = await this.db
+        .select({ correo: correosRespuesta, usuarioNombre: usuarios.nombre })
+        .from(correosRespuesta)
+        .leftJoin(usuarios, eq(usuarios.id, correosRespuesta.usuarioId))
+        .where(and(inArray(correosRespuesta.prospectoId, prospectoIds), eq(correosRespuesta.estado, "enviado")))
+        .orderBy(desc(correosRespuesta.enviadoEn))
+        .limit(query.limit);
+      eventos.push(...filasRespondidos.map((f) => correoRespondidoToEvento({ ...f.correo, usuarioNombre: f.usuarioNombre })));
 
       const filasAuditoria = await this.db
         .select()
