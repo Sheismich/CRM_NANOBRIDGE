@@ -45,7 +45,24 @@ export function ProspectosPage() {
   const tab: TabId = TABS.find((t) => t === searchParams.get("tab")) ?? "prospectos";
   const [creando, setCreando] = useState(false);
   // Recién creado: se abre su detalle (puede no caer en la página visible).
-  const [abiertoId, setAbiertoId] = useState<number | null>(null);
+  // ?prospecto=ID (liga del buscador, 21-oct-2026): lo abre ya elegido,
+  // también si la liga cambia con la pantalla ya abierta. Al cerrar se quita
+  // de la dirección, para que la misma liga lo vuelva a abrir.
+  const prospectoDeLaLiga = Number(searchParams.get("prospecto")) || null;
+  const [abiertoId, setAbiertoId] = useState<number | null>(prospectoDeLaLiga);
+  const [ligaVista, setLigaVista] = useState(prospectoDeLaLiga);
+  if (prospectoDeLaLiga !== ligaVista) {
+    setLigaVista(prospectoDeLaLiga);
+    if (prospectoDeLaLiga !== null) setAbiertoId(prospectoDeLaLiga);
+  }
+  function cerrarDetalle() {
+    setAbiertoId(null);
+    if (searchParams.has("prospecto")) {
+      const sinProspecto = new URLSearchParams(searchParams);
+      sinProspecto.delete("prospecto");
+      setSearchParams(sinProspecto, { replace: true });
+    }
+  }
   const [avisoNuevo, setAvisoNuevo] = useState<string | null>(null);
   // "Ver prospectos" de una campaña filtra la lista por esa campaña.
   const [campanaId, setCampanaId] = useState("");
@@ -136,7 +153,7 @@ export function ProspectosPage() {
         />
       </PanelLateral>
 
-      <PanelLateral abierto={abiertoId !== null} onCerrar={() => setAbiertoId(null)} titulo="Prospecto">
+      <PanelLateral abierto={abiertoId !== null} onCerrar={cerrarDetalle} titulo="Prospecto">
         {abiertoId !== null && <DetalleProspecto id={abiertoId} aviso={avisoNuevo} puedeMandar={puedeEditarCampanas} enFila={enFila} />}
       </PanelLateral>
     </AppShell>

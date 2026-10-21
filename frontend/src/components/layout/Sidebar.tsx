@@ -9,13 +9,16 @@ import { itemsVisibles } from "./nav-items";
 import { Logo } from "./Logo";
 import { SelectorTema } from "./SelectorTema";
 import { ETIQUETA_ROL, iniciales } from "./usuario";
+import { Tecla } from "../buscador/Buscador";
+
+const ES_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent);
 
 // Menú lateral de compu (docs/diseno/inicio-aprobado.html): punto menta
 // en la opción activa, numerito en Tareas y en Inicio (avisos sin leer:
 // la tarjeta "Lo nuevo para ti" vive en el Inicio, opción D del 20-oct),
 // abajo el tema y la persona.
 // En el celular no se ve: ahí van las barras de BarrasCelular.tsx.
-export function Sidebar() {
+export function Sidebar({ onAbrirBuscador }: { onAbrirBuscador: () => void }) {
   const { user, logout } = useAuth();
   const { data: conteos } = useConteosTareas();
   const porAtender = tareasPorAtender(conteos);
@@ -26,6 +29,18 @@ export function Sidebar() {
       <div className="pb-[26px] pl-2">
         <Logo />
       </div>
+
+      {/* Buscador general (etapa 5, 21-oct-2026): también con Ctrl+K. */}
+      <button
+        type="button"
+        onClick={onAbrirBuscador}
+        aria-keyshortcuts={ES_MAC ? "Meta+K" : "Control+K"}
+        className="mb-3.5 flex h-10 items-center gap-2 rounded-[11px] border border-border bg-card px-3 text-[13px] text-ink-3 hover:text-strong"
+      >
+        <Icono nombre="buscar" size={15} />
+        <span className="flex-1 text-left">Buscar</span>
+        <Tecla>{ES_MAC ? "⌘ K" : "Ctrl K"}</Tecla>
+      </button>
 
       <nav className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
         {itemsVisibles(user?.rol).map((item) => (

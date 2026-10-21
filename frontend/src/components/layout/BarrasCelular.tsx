@@ -15,12 +15,16 @@ import { ETIQUETA_ROL } from "./usuario";
 // navegación abajo, tipo app, con los 4 accesos marcados `celular` en
 // nav-items.ts + "Más" (los demás módulos, la persona y cerrar sesión).
 
-export function BarraSuperiorCelular({ onAbrirMas }: { onAbrirMas: () => void }) {
+export function BarraSuperiorCelular({ onAbrirMas, onAbrirBuscador }: { onAbrirMas: () => void; onAbrirBuscador: () => void }) {
   const { user } = useAuth();
   return (
     <div className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-white/8 bg-[#101733] px-4 py-3 text-white md:hidden">
       <Logo sobreOscuro />
       <div className="ml-auto flex items-center gap-1">
+        {/* Buscador general (etapa 5): a pantalla completa en el celular. */}
+        <button type="button" onClick={onAbrirBuscador} aria-label="Buscar" className="grid h-9 w-9 place-items-center rounded-full text-white/85 hover:bg-white/10 hover:text-white">
+          <Icono nombre="buscar" size={19} />
+        </button>
         <SelectorTema sobreOscuro />
       </div>
       {user && (

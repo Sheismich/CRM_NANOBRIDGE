@@ -4,6 +4,12 @@ export function patronLike(texto: string): string {
   return `%${texto.replace(/[\\%_]/g, "\\$&")}%`;
 }
 
+// Igual que patronLike, pero solo "empieza con" (el buscador general pone
+// esas filas primero).
+export function patronEmpiezaCon(texto: string): string {
+  return `${texto.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
 // Filtra los `undefined` de un arreglo de condiciones drizzle opcionales
 // (filtros que solo aplican cuando el query param correspondiente vino en
 // la petición) antes de pasarlo a and(...). El type guard se repetía
