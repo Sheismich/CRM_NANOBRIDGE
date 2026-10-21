@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, contactos, correosRespuesta, empresas, listaSupresion, mediosContacto, prospectos, respuestas, tareas, usoIa } from "../database/schema.js";
 import { CORREO_SERVICE, type CorreoService } from "../integraciones/correo.types.js";
@@ -27,6 +27,13 @@ const CLASIFICACIONES_CONTESTABLES = new Set(["interesado", "reagendar", "ambigu
 const CLASIFICACIONES_NUNCA = new Set(["baja", "no_interesado", "invalido", "automatica"]);
 export const CODIGO_NO_SE_PUEDE_RESPONDER = "NO_SE_PUEDE_RESPONDER";
 export const CODIGO_RESPUESTA_ENVIANDO = "RESPUESTA_ENVIANDO";
+// Un 'enviando' solo traba la respuesta estos minutos (revisión de Fabián,
+// 21-oct-2026). Si Cloud Run reinicia entre el insert y el update, la fila se
+// quedaría en 'enviando' y daría 409 para siempre; pasados estos minutos se
+// toma como fallida. Riesgo aceptado: si el correo sí salió, el siguiente
+// clic lo manda otra vez.
+const MINUTOS_CANDADO_ENVIANDO = 5;
+const ERROR_SIN_CONFIRMACION = `Sin confirmación: se quedó más de ${MINUTOS_CANDADO_ENVIANDO} minutos en enviando`;
 // P3.12.
 export const MAX_BORRADORES_POR_DIA = 20;
 const TIPO_BORRADOR = "borrador_respuesta";
@@ -214,7 +221,12 @@ export class RespuestasVendedorService {
     const correoId = await this.db.transaction(async (tx) => {
       // Bloquea la respuesta: dos clics a la vez no pasan los dos.
       await tx.select({ id: respuestas.id }).from(respuestas).where(eq(respuestas.id, respuestaId)).for("update");
-      const [enviando] = await tx.select({ id: correosRespuesta.id }).from(correosRespuesta).where(and(eq(correosRespuesta.respuestaId, respuestaId), eq(correosRespuesta.estado, "enviando"))).limit(1);
+      // Hora de la base en los dos lados: creado_en es DEFAULT CURRENT_TIMESTAMP.
+      const hace = sql`NOW() - INTERVAL ${sql.raw(String(MINUTOS_CANDADO_ENVIANDO))} MINUTE`;
+      await tx.update(correosRespuesta)
+        .set({ estado: "fallido", error: ERROR_SIN_CONFIRMACION })
+        .where(and(eq(correosRespuesta.respuestaId, respuestaId), eq(correosRespuesta.estado, "enviando"), lt(correosRespuesta.creadoEn, hace)));
+      const [enviando] = await tx.select({ id: correosRespuesta.id }).from(correosRespuesta).where(and(eq(correosRespuesta.respuestaId, respuestaId), eq(correosRespuesta.estado, "enviando"), gte(correosRespuesta.creadoEn, hace))).limit(1);
       if (enviando) throw new HttpError(409, "Ya se está mandando una respuesta a este correo.", CODIGO_RESPUESTA_ENVIANDO);
       const [fila] = await tx.insert(correosRespuesta).values({
         respuestaId,

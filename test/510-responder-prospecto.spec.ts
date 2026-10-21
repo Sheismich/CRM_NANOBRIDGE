@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
 import { crearAgente, ensureSeedAdmin, loginAs } from "./support/seed.js";
@@ -258,6 +258,20 @@ describe("responder al prospecto desde el CRM", () => {
       expect(res.status).toBe(409);
       expect(res.body.code).toBe("RESPUESTA_ENVIANDO");
     });
+
+    // Revisión de Fabián (21-oct-2026): si Cloud Run reinicia entre el
+    // 'enviando' y el update, la fila no debe trabar la respuesta para siempre.
+    it("un 'enviando' de hace más de 5 minutos ya no traba: se marca 'fallido' y se manda (201)", async () => {
+      const r = await respuestaDe();
+      const [{ id: usuarioId }] = await db.select({ id: usuarios.id }).from(usuarios).where(eq(usuarios.nombre, "Admin Semilla")).limit(1);
+      const [vieja] = await db.insert(correosRespuesta).values({ respuestaId: r.respuestaId, prospectoId: r.prospectoId, usuarioId: usuarioId!, para: r.correoContacto, asunto: "Re: x", texto: "x", usoIa: "sin_ia", estado: "enviando" });
+      await db.update(correosRespuesta).set({ creadoEn: sql`NOW() - INTERVAL 10 MINUTE` }).where(eq(correosRespuesta.id, vieja.insertId));
+      const res = await contestar(admin, r.respuestaId, { texto: "Hola de nuevo" });
+      expect(res.status).toBe(201);
+      const [fila] = await db.select({ estado: correosRespuesta.estado, error: correosRespuesta.error }).from(correosRespuesta).where(eq(correosRespuesta.id, vieja.insertId));
+      expect(fila!.estado).toBe("fallido");
+      expect(fila!.error).toContain("Sin confirmación");
+    });
   });
 
   describe("borrador con IA", () => {
@@ -364,6 +378,54 @@ describe("responder al prospecto desde el CRM", () => {
       expect(avisos.map((a) => a.usuarioId)).toContain(supervisorId);
       expect(avisos.map((a) => a.usuarioId)).not.toContain(temporalId);
     });
+
+    // Revisión de Fabián (21-oct-2026, aprobado): el vendedor ya recibió "te
+    // contestó"; un "interesado" (de la IA o manual) solo guarda la
+    // clasificación. La baja sí se aplica siempre.
+    async function enConversacion(cerrarTarea: boolean) {
+      const r = await respuestaDe();
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola Laura, le mando la información.", cerrar_tarea: cerrarTarea })).status).toBe(201);
+      const otra = await api().post("/api/v1/automatizacion/respuestas").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), reply_to: r.replyTo, canal: "correo", contenido: "Sí, ¿cuándo me llaman?", crear_tarea_clasificacion: true });
+      expect(otra.status).toBe(201);
+      expect(otra.body.en_conversacion).toBe(true);
+      return { r, otraId: otra.body.id as number };
+    }
+    const clasificarConIa = (respuestaId: number, clasificacion: string) =>
+      api().post("/api/v1/automatizacion/respuestas/clasificacion").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), respuesta_id: respuestaId, clasificacion });
+    const tareasInteresado = (prospectoId: number) =>
+      db.select({ id: tareas.id, estado: tareas.estado, descripcion: tareas.descripcion }).from(tareas).where(and(eq(tareas.prospectoId, prospectoId), eq(tareas.titulo, "Contactar prospecto interesado")));
+    const avisosInteresado = async () => Number((await db.select({ n: sql<number>`COUNT(*)` }).from(notificaciones).where(eq(notificaciones.tipo, "interesado")))[0]!.n);
+
+    it("'interesado' de la IA con la tarea ya cerrada: no crea otra tarea ni avisa", async () => {
+      const { r, otraId } = await enConversacion(true);
+      const avisosAntes = await avisosInteresado();
+      const res = await clasificarConIa(otraId, "interesado");
+      expect(res.status).toBe(201);
+      expect(res.body.tarea_id).toBeNull();
+      const [fila] = await db.select({ clasificacion: respuestas.clasificacion }).from(respuestas).where(eq(respuestas.id, otraId));
+      expect(fila!.clasificacion).toBe("interesado");
+      const tareasDelProspecto = await tareasInteresado(r.prospectoId);
+      expect(tareasDelProspecto.filter((t) => t.estado !== "cerrada")).toHaveLength(0);
+      expect(await avisosInteresado()).toBe(avisosAntes);
+    });
+
+    it("'interesado' de la IA con la tarea abierta: no le agrega la respuesta ni manda 'Volvió a contestar'", async () => {
+      const { r, otraId } = await enConversacion(false);
+      const [antes] = await tareasInteresado(r.prospectoId);
+      const avisosAntes = await avisosInteresado();
+      expect((await clasificarConIa(otraId, "interesado")).status).toBe(201);
+      const despues = await tareasInteresado(r.prospectoId);
+      expect(despues).toHaveLength(1);
+      expect(despues[0]!.descripcion).toBe(antes!.descripcion);
+      expect(await avisosInteresado()).toBe(avisosAntes);
+    });
+
+    it("'baja' en una conversación sí se aplica: el correo queda en no_contactar", async () => {
+      const { r, otraId } = await enConversacion(true);
+      expect((await clasificarConIa(otraId, "baja")).status).toBe(201);
+      const [medio] = await db.select({ estado: mediosContacto.estadoContacto }).from(mediosContacto).where(eq(mediosContacto.valorNormalizado, r.correoContacto.toLowerCase()));
+      expect(medio!.estado).toBe("no_contactar");
+    });
   });
 
   it("P3.9: un segundo 'interesado' del mismo prospecto no crea otra tarea si ya hay una abierta", async () => {
@@ -387,5 +449,28 @@ describe("responder al prospecto desde el CRM", () => {
     // El prospecto sigue siendo el mismo (no se rompió la identificación).
     const [p] = await db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.id, sin.prospectoId));
     expect(p).toBeDefined();
+  });
+
+  // Revisión de Fabián (21-oct-2026): PT2 no debe perder una respuesta del
+  // cliente por un message_id vacío o un asunto/Message-ID largo.
+  describe("message_id y asunto de PT2 nunca hacen fallar el registro", () => {
+    async function registrar(extra: Record<string, unknown>) {
+      const base = await respuestaDe({ clasificacion: null });
+      const res = await api().post("/api/v1/automatizacion/respuestas").set("X-API-Key", API_KEY).send({ execution_id: randomUUID(), prospecto_id: base.prospectoId, canal: "correo", contenido: "Otra respuesta", ...extra });
+      expect(res.status).toBe(201);
+      const [fila] = await db.select({ messageId: respuestas.messageId, asunto: respuestas.asunto }).from(respuestas).where(eq(respuestas.id, res.body.id));
+      return fila!;
+    }
+
+    it("message_id vacío o con solo espacios se guarda como NULL", async () => {
+      expect((await registrar({ message_id: "" })).messageId).toBeNull();
+      expect((await registrar({ message_id: "   ", asunto: "" })).asunto).toBeNull();
+    });
+
+    it("lo largo se recorta: asunto a 500 y Message-ID a 255", async () => {
+      const fila = await registrar({ asunto: "a".repeat(600), message_id: `<${"m".repeat(300)}@x.test>` });
+      expect(Array.from(fila.asunto!)).toHaveLength(500);
+      expect(Array.from(fila.messageId!)).toHaveLength(255);
+    });
   });
 });

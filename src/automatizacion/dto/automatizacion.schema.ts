@@ -4,6 +4,18 @@ import { tieneDigitosSuficientes } from "../../shared/normalize.js";
 import { CLASIFICACIONES_N8N } from "../../shared/clasificaciones.js";
 import { recortarTexto } from "../../shared/texto.js";
 
+// Un dato opcional que manda n8n y que nunca debe hacer fallar el registro
+// (revisión de Fabián, 21-oct-2026): "", solo espacios o null cuentan como
+// "no vino" (mismo criterio que N8N_WEBHOOK_URL en env.ts) y lo largo se
+// recorta a lo que mide la columna en vez de responder 400.
+const textoOpcionalRecortado = (max: number) =>
+  z.preprocess((v) => {
+    if (v === null || v === undefined) return undefined;
+    if (typeof v !== "string") return v;
+    const limpio = v.trim();
+    return limpio === "" ? undefined : recortarTexto(limpio, max);
+  }, z.string().optional());
+
 // --- Scoring -----------------------------------------------------------------
 export const scoringInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),
@@ -161,9 +173,9 @@ export const respuestaRecibidaInputSchema = z.object({
   automatica: z.boolean().default(false),
   // Etapa 3 (20-oct-2026), opcionales: el Message-ID y el asunto del correo
   // del cliente, para que la respuesta del vendedor quede en el mismo hilo.
-  // Sin ellos todo sigue igual.
-  message_id: z.string().trim().min(1).max(255).optional(),
-  asunto: z.string().trim().max(500).optional()
+  // Sin ellos todo sigue igual. Columnas VARCHAR(255) y VARCHAR(500) (035).
+  message_id: textoOpcionalRecortado(255),
+  asunto: textoOpcionalRecortado(500)
 }).refine((input) => !(input.crear_tarea_clasificacion && input.automatica), {
   message: "Una respuesta automática no lleva tarea de clasificación",
   path: ["automatica"]

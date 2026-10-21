@@ -13,6 +13,7 @@ import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { CODIGO_PERSONA_EN_BAJA, personaEnBajaBloqueando } from "../shared/baja-prospecto.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
+import { vendedorDeLaConversacion } from "../shared/conversacion.js";
 import { adminsYSupervisores, enlaceTarea, lineaDeTarea, nombreEmpresa, notificar, responsableOEquipo } from "../notificaciones/notificar.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
@@ -624,7 +625,13 @@ export class TareasService {
       }).where(and(eq(tareas.respuestaId, input.respuestaId), eq(tareas.tipo, "clasificacion"), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
     }
 
-    if (input.clasificacion === "interesado" && !enBaja) {
+    // En una conversación (un vendedor ya le contestó desde el CRM), el
+    // vendedor ya recibió "te contestó": un "interesado" (de la IA o manual)
+    // solo guarda la clasificación, sin tarea nueva, sin agregarse a la abierta
+    // y sin avisos (revisión de Fabián, 21-oct-2026). baja y no_interesado
+    // siguen igual: la supresión de arriba aplica siempre.
+    const enConversacion = input.clasificacion === "interesado" && (await vendedorDeLaConversacion(tx, input.prospectoId)) !== null;
+    if (input.clasificacion === "interesado" && !enBaja && !enConversacion) {
       tareaId = await this.crearTareaDeInteresado(tx, input);
     }
 
