@@ -3,7 +3,7 @@
 export function armarCorreoAviso(input: { nombre: string; titulo: string; cuerpo: string | null; url: string }) {
   const primerNombre = input.nombre.trim().split(/\s+/)[0] ?? "";
   const saludo = primerNombre ? `Hola ${primerNombre},` : "Hola,";
-  const pie = "Este aviso lo manda el CRM de NANOBRIDGE. Si no quieres recibirlos por correo, apágalos desde la campanita del CRM.";
+  const pie = "Este aviso lo manda el CRM de NANOBRIDGE. Si no quieres recibirlos por correo, apágalos en el CRM: Inicio → Lo nuevo para ti → Ver todos → Opciones.";
 
   const texto = [saludo, [input.titulo, input.cuerpo].filter(Boolean).join("\n"), `Ábrelo en el CRM: ${input.url}`, pie].join("\n\n");
 
