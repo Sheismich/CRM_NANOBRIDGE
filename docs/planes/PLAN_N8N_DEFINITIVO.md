@@ -429,6 +429,14 @@ ronda 1:
    escribir en frío (`CRM_09` exige base legal); texto o link del aviso de privacidad para el
    pie; cómo se identifica la empresa en el correo. Baja: link de baja de SendGrid (bloquea
    envíos futuros); sincronizarlo con `lista_supresion` en B2.
+   - **El aviso debe mencionar el uso de IA (condición de Dirección, 21-oct-2026).** Dirección
+     aprobó usar Gemini (Google, plan de pago, no entrena con los datos) en tres funciones, con
+     la condición de que el aviso de privacidad lo diga, en la sección de proveedores o
+     encargados: (1) clasificar las respuestas de los prospectos (PT2, aprobado el 19-oct);
+     (2) proponer al vendedor un borrador de respuesta (etapa 3 de las mejoras: respuesta del
+     cliente, correo enviado, nombre del contacto, empresa, giro; sin montos), y (3) resumir la
+     ficha del cliente (etapa 4: historial, oportunidades, cotizaciones). Las dos últimas se
+     aprobaron el 21-oct. En ninguna sale nada sin que lo revise una persona.
 5. **Pruebas:** primero el modo sandbox de SendGrid (no entrega nada), después solo a buzones de
    Fabián. Además, un **interruptor "modo pruebas"** en n8n: encendido, solo envía a una lista
    corta con los correos de Fabián y descarta cualquier otro destinatario; apagado, envía

@@ -33,6 +33,11 @@ también esto, o hay que pedirlo de nuevo? El aviso de privacidad sigue en revis
 
 > Sugerencia: pedirle al jefe un solo permiso que cubra las etapas 3 y 4 antes de empezarlas.
 
+**RESUELTA (21-oct-2026):** Dirección aprobó usar Gemini en las etapas 3 y 4, con la condición
+de que el aviso de privacidad lo mencione (anotado en PLAN_N8N_DEFINITIVO.md, "Base legal y aviso
+de privacidad"). Se construye y se prueba normal; antes de encender `IA_DRIVER=gemini` con
+clientes reales, el aviso de privacidad ya debe decirlo.
+
 ❓ **P0.2 · Llave de Gemini en Cloud Run.** Hoy la llave de Gemini solo está dentro de n8n. ¿Se usa
 la misma o se crea una aparte para la API? Hay que guardarla como secreto `GEMINI_API_KEY`
 (RUNBOOK §8b) y desplegar con `IA_DRIVER=gemini`.
