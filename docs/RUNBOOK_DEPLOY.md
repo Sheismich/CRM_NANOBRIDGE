@@ -553,6 +553,15 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       de pruebas tiene el de la casa de Fabián).
 - [ ] Cambiar `DESTINOS` de los avisos (hoy el Gmail de Fabián): en B4 ("armar correo de error") a
       quien atienda los errores, y en PT2 ("armar aviso de respuesta") al supervisor que clasifica.
+- [ ] **IA en la API (etapa 3, "Redactar con IA"; también la usará la etapa 4).**
+      Hasta que el jefe dé el permiso de mandar estos datos a Gemini (P0.1 de
+      `PREGUNTAS_ETAPAS_3_4_5.md`), la API corre con `IA_DRIVER=falso`. El día
+      que lo dé: crear una llave **aparte** de la de n8n (P0.2), en el mismo
+      proyecto de pago, guardarla como secreto `GEMINI_API_KEY` igual que
+      SENDGRID_API_KEY en §8b (no hace falta dar permiso por secreto) y
+      desplegar con `--update-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest`
+      y `--update-env-vars=IA_DRIVER=gemini`. Sin la llave, la API no arranca
+      con `IA_DRIVER=gemini` (lo revisa `src/config/env.ts`).
 - [ ] Cuenta definitiva de SendGrid (la de prueba vence el 24-nov-2026 y está
       con el correo de pasante). Al cambiar: rehacer la autenticación del
       dominio, dar de alta Inbound Parse, poner la API key nueva en n8n y la

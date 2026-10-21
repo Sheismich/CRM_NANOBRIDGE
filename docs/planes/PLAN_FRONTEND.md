@@ -485,6 +485,30 @@ Relación con las fases de `PLAN_CRM_DEFINITIVO.md`: aquellas son las del backen
   - `GET /tareas` no filtra por fecha y regresa máximo 100 por página: vencidas y de hoy se sacan en el cliente de las pendientes, y el conteo no es exacto si alguien tiene más de 100.
   - Inicio ya tiene parte de esto (`DashboardPage.tsx`): cola de clasificación, tareas pendientes, pipeline, forecast y actividad por agente. Lo nuevo es el orden, la prospección del mes y las campañas.
 
+## Mejoras · Etapa 3: responder al prospecto desde el CRM (Mich, 20-21 oct 2026)
+
+Plan aprobado por Fabián el 20-oct (respuestas a P0.1–P3.13 en `PREGUNTAS_ETAPAS_3_4_5.md`). Backend en
+`src/respuestas-vendedor/` y migración `035_responder_prospecto.sql`; pruebas en
+`test/510-responder-prospecto.spec.ts`.
+
+- **Panel nuevo `components/respuestas/ResponderCorreo.tsx`** (en `PanelLateral`): arriba lo que escribió el
+  cliente; "Para" y "Asunto" fijos; el texto; "Redactar con IA" (reemplaza lo escrito, avisando si ya había
+  algo); la firma; la casilla "Marcar la tarea como hecha" y "Mandar respuesta". Si no se puede contestar
+  (por ejemplo, una respuesta sin clasificar o una "baja"), dice por qué. Hooks en `lib/respuestas.ts` y tipos
+  en `types.ts`.
+- **Ficha · Historial (pantalla de Mich):** cada correo recibido que se puede contestar lleva "Responder", y
+  aparece el evento nuevo "Respuesta por correo" (`correo_respondido`) con lo que se mandó y quién.
+- **Tareas · detalle (pantalla de Fabián, con su visto bueno):** botón "Responder" en la tarea "Contactar
+  prospecto interesado" (`DetalleTarea.tsx`).
+- Al mandar, el aviso de que el cliente contestó llega en «Lo nuevo para ti» (el texto ya no habla de la
+  campanita, que se quitó el 20-oct).
+- Revisado el 21-oct con la API simulada en Edge, Safari (WebKit) y Firefox, a 320, 375, 768 y 1440 px, de
+  día y de noche: 120 vistas sin problemas. Falta la prueba en vivo con Fabián (que llegue como
+  "<vendedor> · NANOBRIDGE" en el mismo hilo de Gmail y que la contestación regrese al CRM).
+- **Para Fabián:** el pie de los correos de aviso (`src/notificaciones/correo-aviso.ts`) todavía dice
+  "apágalos desde la campanita del CRM"; desde el 20-oct ya no hay campanita (los avisos por correo se apagan
+  en el panel de avisos → Opciones). También queda la palabra en un comentario de `VerTodas.tsx`.
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.

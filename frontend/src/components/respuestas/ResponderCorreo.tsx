@@ -83,7 +83,7 @@ function Formulario({ c, onCerrar }: { c: ContextoRespuesta; onCerrar: () => voi
         </span>
         <h3 className="font-heading text-[17px] font-extrabold text-strong">Le mandaste tu respuesta a {c.contacto_nombre}</h3>
         <p className="max-w-[380px] text-[13px] text-ink-2">
-          Queda en el Historial de {c.empresa_nombre}. Si contesta, te llega un aviso a la campanita.
+          Queda en el Historial de {c.empresa_nombre}. Si contesta, te llega un aviso en «Lo nuevo para ti», en el Inicio.
           {enviado.tareaCerrada && " La tarea quedó como hecha."}
         </p>
         <Button variant="outline" onClick={onCerrar}>

@@ -89,6 +89,12 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
    ajustar el peso de Gemini (hoy 60%).
 
 **Después, no bloquean encender:**
+- **PT2 → `message_id` y `asunto` (etapa 3, 20-oct-2026).** Para que la respuesta que el vendedor
+  manda desde el CRM quede en el mismo hilo del cliente, `POST /automatizacion/respuestas` acepta dos
+  campos nuevos, opcionales: `message_id` (el `Message-ID` del correo que llegó; PT2 ya lo lee para
+  armar el `execution_id`) y `asunto`. Sin ellos todo funciona igual, solo que el correo del vendedor
+  sale como uno nuevo. Hacerlo con un prompt corto para la IA de n8n en el nodo que arma el cuerpo de
+  "Registrar respuesta".
 - IA que sugiere la clasificación de respuestas en PT2: la API ya está lista; falta el workflow y el
   permiso de Carlos para mandar el texto a Gemini (B2).
 - B3, webhook único de reingreso, y luego poner `N8N_WEBHOOK_URL`. Primero decidir qué hace n8n con
