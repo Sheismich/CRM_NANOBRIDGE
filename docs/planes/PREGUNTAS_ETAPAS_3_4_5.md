@@ -201,6 +201,21 @@ guarda, el tope importa menos.)*
 oportunidades, cotizaciones y tareas, hasta 5 por grupo. Cada resultado lleva a su pantalla. Un
 agente solo encuentra lo suyo, con las mismas reglas de cada lista.
 
+> **✅ Contestada el 21-oct-2026 (Fabián).** Las preguntas de abajo ya no están abiertas:
+> - **P5.1:** empresas, contactos, **prospectos**, oportunidades, cotizaciones y tareas. Documentos no.
+> - **P5.2:** empresas por nombre legal y comercial (no giro ni ciudad); contactos por nombre,
+>   correo y teléfono; prospectos por persona, empresa, correo y teléfono; oportunidades por título y
+>   empresa; cotizaciones por folio ("#12" o "12"), empresa y oportunidad; tareas por título y
+>   empresa. **Sin RFC: no existe en la base.**
+> - **P5.3:** las mismas reglas de cada lista. Un agente no ve las tareas de otros aunque sean de
+>   empresas suyas. Solo tareas abiertas; sin empresas ni contactos inactivos ni cotizaciones obsoletas.
+> - **P5.4:** desde **1 letra**; 5 por grupo con **"Ver más"** que trae 5 más en la misma ventana.
+> - **P5.5:** sin búsquedas recientes. **P5.6:** lupa en la barra de arriba del celular, pantalla
+>   completa. **P5.7:** "contiene", sin índices (prod el 21-oct: 22 empresas, 38 prospectos).
+>
+> Hecho en `src/buscador/` (`GET /api/v1/buscar`), `test/520-buscador.spec.ts` y
+> `frontend/src/components/buscador/Buscador.tsx`.
+
 **Datos ya revisados (20-oct):**
 - Ya buscan por texto (`q`): empresas, contactos (incluye correo y teléfono), cotizaciones,
   tareas y el Registro de cambios.

@@ -506,6 +506,22 @@ Plan aprobado por Fabián el 20-oct (respuestas a P0.1–P3.13 en `PREGUNTAS_ETA
   día y de noche: 120 vistas sin problemas. Falta la prueba en vivo con Fabián (que llegue como
   "<vendedor> · NANOBRIDGE" en el mismo hilo de Gmail y que la contestación regrese al CRM).
 
+## Mejoras · Etapa 5: buscador general Ctrl+K (Fabián, 21 oct 2026)
+
+Respuestas a P5.1–P5.7 en `PREGUNTAS_ETAPAS_3_4_5.md`. Backend en `src/buscador/`
+(`GET /api/v1/buscar?q=&grupo=&desde=`), pruebas en `test/520-buscador.spec.ts`.
+
+- **Base común (Fabián):** `components/buscador/Buscador.tsx` + `lib/buscar.ts`. Se abre con la caja
+  "Buscar · Ctrl K" arriba del menú (`Sidebar.tsx`), con Ctrl+K / Cmd+K en cualquier pantalla
+  (`AppShell.tsx`) y con la lupa de la barra azul del celular (`BarrasCelular.tsx`). `Sidebar` y
+  `BarraSuperiorCelular` ahora reciben `onAbrirBuscador`.
+- **Para Mich, a dónde lleva cada resultado:** empresa → `/empresas/:id`; contacto → ficha de su
+  empresa; oportunidad → `/empresas/:id?tab=oportunidades`; cotización → `?tab=cotizaciones`;
+  tarea → `/tareas?vista=todas&tarea=:id`; prospecto → `/prospectos?prospecto=:id`. Si cambias esas
+  rutas o pestañas al rehacer la ficha, avísale a Fabián (están en `ligaDe()` de `lib/buscar.ts`).
+- **Cambio en una pantalla de Mich (`ProspectosPage.tsx`):** lee `?prospecto=ID` y abre su panel, igual
+  que `?tarea=` en Tareas; al cerrar el panel se quita de la dirección. Son unas líneas junto a `abiertoId`.
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.
