@@ -505,9 +505,6 @@ Plan aprobado por Fabián el 20-oct (respuestas a P0.1–P3.13 en `PREGUNTAS_ETA
 - Revisado el 21-oct con la API simulada en Edge, Safari (WebKit) y Firefox, a 320, 375, 768 y 1440 px, de
   día y de noche: 120 vistas sin problemas. Falta la prueba en vivo con Fabián (que llegue como
   "<vendedor> · NANOBRIDGE" en el mismo hilo de Gmail y que la contestación regrese al CRM).
-- **Para Fabián:** el pie de los correos de aviso (`src/notificaciones/correo-aviso.ts`) todavía dice
-  "apágalos desde la campanita del CRM"; desde el 20-oct ya no hay campanita (los avisos por correo se apagan
-  en el panel de avisos → Opciones). También queda la palabra en un comentario de `VerTodas.tsx`.
 
 ## 7. Fuera de alcance de este plan
 
