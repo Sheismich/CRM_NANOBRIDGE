@@ -270,6 +270,7 @@ Actualiza esta tabla en cada deploy.
 | 16-oct-2026 | `nanobridge-api-00031-rww` | `6544339` | (sin migración) | `fila/tomar` también regresa `tamano`, `region` y `telefono` (los usa el score de PT1, que ahora arranca desde la fila con el flujo nuevo "PT1a. tomar de la fila"). El mismo commit trae el front del botón en Prospectos (casillas, tarjeta "En fila", modal, sacar de la fila). `/health` ok |
 | 16-oct-2026 | `nanobridge-api-00032-qkd` | `9e44ef6` | `032_expediente_por_venta.sql` | Papeles obligatorios por venta (cotización, pago, recibido o guía; constancia fiscal si "Lleva factura"), `PATCH /oportunidades/:id/factura`, PDF "Reporte del periodo" (`GET /reportes/export/periodo`), interesados por persona, nombres de contacto y empresa en `/automatizacion/respuestas*` (aviso de PT2), `proxy-addr` 2.0.8. **Otra vez se desplegó antes de migrar** y Oportunidades no cargaba: se regresó a 00031-rww, se aplicó la 032 y se volvió con `--to-latest`. Oportunidades carga |
 | 19-oct-2026 | `nanobridge-api-00033-fkz` | `1ad5a70` | `033_plantillas_correo.sql` | Correos de prospección editables (etapa 1 de las mejoras): `/plantillas` (GET, `PUT /:numero`, `PUT /pie`, `POST /vista-previa`; administrador y supervisor), `POST /automatizacion/envios` regresa `correo` {asunto, texto, html} y guarda `plantilla_id` y `asunto` en `envios`; formato básico (negrita, cursiva, enlaces https). Esta vez la migración fue primero. `/health` ok, `/plantillas` da 401 sin sesión. Front publicado en Firebase el mismo día (tarjeta en Administración). En n8n el texto viaja como `correo_contenido` (`docs/n8n/pt1b-plantillas/`) |
+| 20-oct-2026 | `nanobridge-api-00034-qn5` | `e95d1ee` (código de `9181ecf`) | `034_notificaciones.sql` | Avisos al vendedor (etapa 2 de las mejoras): campanita (`/api/v1/notificaciones`: lista, `conteo`, `leida`, `leer-todas`, `preferencias`) y correos de aviso (tarea asignada, interesado, tarea vencida, documento rechazado) por SendGrid directo desde la API. Secreto nuevo `SENDGRID_API_KEY` (§8b) y `CORREO_DRIVER=sendgrid`. Migración primero. `/health` ok, `/api/v1/notificaciones/conteo` da 401 sin sesión, `TRUST_PROXY` y `SESSION_COOKIE_NAME` siguen puestas |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
@@ -387,10 +388,15 @@ P=crm-prospeccion-outbound
 read -s -p "Llave de SendGrid: " K; echo
 printf %s "$K" | gcloud secrets create SENDGRID_API_KEY --data-file=- --project=$P
 unset K
-gcloud secrets add-iam-policy-binding SENDGRID_API_KEY \
-  --member=serviceAccount:nanobridge-api-sa@$P.iam.gserviceaccount.com \
-  --role=roles/secretmanager.secretAccessor --project=$P
+# Revisar que se guardó bien sin mostrarla: debe dar "SG." y 69.
+gcloud secrets versions access latest --secret=SENDGRID_API_KEY --project=$P | cut -c1-3
+gcloud secrets versions access latest --secret=SENDGRID_API_KEY --project=$P | wc -c
 ```
+
+No hace falta darle permiso a la API sobre este secreto: `nanobridge-api-sa` ya tiene
+`roles/secretmanager.secretAccessor` en **todo el proyecto** (revisado el 20-oct-2026). El
+comando `gcloud secrets add-iam-policy-binding` además da 403 con la cuenta de pasante.
+Secreto guardado el 20-oct-2026 (versión 1).
 
 3. En ese primer deploy, agregar al `gcloud run deploy` las líneas
 `--update-secrets=SENDGRID_API_KEY=SENDGRID_API_KEY:latest` y
