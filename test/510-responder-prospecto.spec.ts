@@ -467,6 +467,12 @@ describe("responder al prospecto desde el CRM", () => {
       expect((await registrar({ message_id: "   ", asunto: "" })).asunto).toBeNull();
     });
 
+    // n8n manda null cuando el correo no trae Message-ID o asunto (Fabián, 21-oct-2026).
+    it("message_id y asunto en null cuentan como 'no vino' (201, NULL)", async () => {
+      const fila = await registrar({ message_id: null, asunto: null });
+      expect(fila).toEqual({ messageId: null, asunto: null });
+    });
+
     it("lo largo se recorta: asunto a 500 y Message-ID a 255", async () => {
       const fila = await registrar({ asunto: "a".repeat(600), message_id: `<${"m".repeat(300)}@x.test>` });
       expect(Array.from(fila.asunto!)).toHaveLength(500);
