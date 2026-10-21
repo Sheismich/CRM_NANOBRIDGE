@@ -122,7 +122,9 @@ describe("responder al prospecto desde el CRM", () => {
       empresa_nombre: r.empresa,
       puede_responder: true,
       motivo: null,
-      tarea_id: r.tareaInteresadoId
+      tarea_id: r.tareaInteresadoId,
+      // En pruebas IA_DRIVER=falso.
+      ia_activa: false
     }));
     expect(res.body.asunto).toMatch(/^Re: /);
     expect(res.body.firma).toContain("Admin Semilla");

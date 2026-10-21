@@ -10,6 +10,6 @@ import { AuthModule } from "../auth/auth.module.js";
   controllers: [OportunidadesController, CotizacionesController],
   providers: [OportunidadesService, CotizacionesService],
   // JobsModule: vencer cotizaciones en el trabajo diario.
-  exports: [CotizacionesService]
+  exports: [CotizacionesService, OportunidadesService]
 })
 export class ComercialModule {}

@@ -4,6 +4,7 @@ import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, contactos, correosRespuesta, empresas, listaSupresion, mediosContacto, prospectos, respuestas, tareas, usoIa } from "../database/schema.js";
 import { CORREO_SERVICE, type CorreoService } from "../integraciones/correo.types.js";
 import { IA_SERVICE, type IaService } from "../integraciones/ia.types.js";
+import { iaActiva } from "../integraciones/ia-activa.js";
 import { HttpError } from "../shared/http-error.js";
 import { recortarTexto } from "../shared/texto.js";
 import { armarCorreo } from "../shared/plantillas.js";
@@ -158,6 +159,8 @@ export class RespuestasVendedorService {
       para: c.para,
       asunto: c.asunto,
       firma: this.firma(user),
+      // Con la IA apagada, "Redactar con IA" se enseña desactivado (21-oct-2026).
+      ia_activa: iaActiva(),
       en_conversacion: c.enConversacion,
       tarea_id: c.tarea?.id ?? null,
       tarea_abierta: c.tarea ? c.tarea.estado !== "cerrada" && c.tarea.estado !== "cancelada" : false,

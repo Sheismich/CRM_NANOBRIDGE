@@ -490,10 +490,13 @@ export const usoIa = mysqlTable("uso_ia", {
   usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull(),
   tipo: varchar("tipo", { length: 40 }).notNull(),
   respuestaId: bigint("respuesta_id", { mode: "number", unsigned: true }),
+  // Etapa 4 (036): de qué empresa es el resumen de la ficha.
+  empresaId: bigint("empresa_id", { mode: "number", unsigned: true }),
   resultado: text("resultado"),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
-  index("idx_uso_ia_usuario_fecha").on(table.usuarioId, table.creadoEn)
+  index("idx_uso_ia_usuario_fecha").on(table.usuarioId, table.creadoEn),
+  index("idx_uso_ia_empresa").on(table.empresaId, table.usuarioId, table.tipo, table.creadoEn)
 ]);
 
 export const parametrosAutomatizacion = mysqlTable("parametros_automatizacion", {

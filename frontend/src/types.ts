@@ -112,6 +112,20 @@ export type ContextoRespuesta = {
   tarea_abierta: boolean;
   puede_responder: boolean;
   motivo: string | null;
+  // false mientras la API use la IA falsa (IA_DRIVER=falso, 21-oct-2026).
+  ia_activa: boolean;
+};
+
+// --- Etapa 4: resumen con IA en la ficha (src/resumen-ficha/) ---
+
+// GET y POST /empresas/:id/resumen-ia. El resumen es el último de esta
+// persona para esta empresa (cada quien resume lo que ve).
+export type ResumenFicha = {
+  resumen: { texto: string; siguiente_paso: string | null; creado_en: string } | null;
+  desactualizado: boolean;
+  ia_activa: boolean;
+  puede_generar: boolean;
+  motivo: string | null;
 };
 
 export type Oportunidad = {

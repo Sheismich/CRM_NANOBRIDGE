@@ -9,6 +9,7 @@ import { CotizacionesTab } from "../components/ficha/CotizacionesTab";
 import { DocumentosTab } from "../components/ficha/DocumentosTab";
 import { HistorialTab } from "../components/ficha/HistorialTab";
 import { OportunidadesTab } from "../components/ficha/OportunidadesTab";
+import { ResumenIa } from "../components/ficha/ResumenIa";
 import { TareasEmpresa } from "../components/ficha/TareasEmpresa";
 import { NuevaTareaForm } from "../components/tareas/NuevaTareaForm";
 import { useOportunidadesEmpresa } from "../components/ficha/queries";
@@ -193,6 +194,7 @@ function FichaCliente({ id }: { id: string }) {
                 <HistorialTab empresaId={empresa.id} contactos={opcionesContacto} />
               </div>
               <div className="flex min-w-0 flex-col gap-4 md:gap-5">
+                <ResumenIa empresaId={empresa.id} />
                 <Tarjeta
                   titulo="Oportunidades"
                   icono="bandera"

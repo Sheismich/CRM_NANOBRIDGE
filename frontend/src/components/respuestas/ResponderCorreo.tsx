@@ -123,7 +123,14 @@ function Formulario({ c, onCerrar }: { c: ContextoRespuesta; onCerrar: () => voi
               <label htmlFor="respuesta-texto" className="text-xs font-semibold text-ink-2">
                 Tu respuesta
               </label>
-              <Button type="button" variant="outline" className="px-3 py-1.5 text-[12.5px]" disabled={redactando || mandando} onClick={() => void redactar()}>
+              <Button
+                type="button"
+                variant="outline"
+                className="px-3 py-1.5 text-[12.5px]"
+                disabled={redactando || mandando || !c.ia_activa}
+                title={c.ia_activa ? undefined : "La IA todavía no está encendida"}
+                onClick={() => void redactar()}
+              >
                 <Icono nombre="chispas" size={15} /> {redactando ? "Redactando…" : "Redactar con IA"}
               </Button>
             </div>

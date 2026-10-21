@@ -505,6 +505,26 @@ Plan aprobado por Fabián el 20-oct (respuestas a P0.1–P3.13 en `PREGUNTAS_ETA
 - Revisado el 21-oct con la API simulada en Edge, Safari (WebKit) y Firefox, a 320, 375, 768 y 1440 px, de
   día y de noche: 120 vistas sin problemas. Falta la prueba en vivo con Fabián (que llegue como
   "<vendedor> · NANOBRIDGE" en el mismo hilo de Gmail y que la contestación regrese al CRM).
+- "Redactar con IA" se ve desactivado con "La IA todavía no está encendida" mientras la API diga
+  `ia_activa: false` (con `IA_DRIVER=falso` la IA falsa no regresa texto y antes daba error).
+
+## Mejoras · Etapa 4: resumen con IA en la ficha del cliente (Mich, 21 oct 2026)
+
+Respuestas propuestas a P4.1–P4.8 en el plan de la etapa 4; **pendientes de que Fabián las confirme**. Backend
+en `src/resumen-ficha/` y migración `036_resumen_ficha.sql` (`uso_ia.empresa_id`); pruebas en
+`test/515-resumen-ficha.spec.ts`.
+
+- **Tarjeta nueva `components/ficha/ResumenIa.tsx`**, arriba de "Oportunidades" en la columna derecha de la
+  pestaña Resumen. Sin resumen: una línea que explica qué hace y "Resumir con IA". Con resumen: el texto, el
+  siguiente paso resaltado, cuándo lo hiciste con la leyenda "Puede equivocarse: revísalo antes de usarlo" y
+  "Actualizar". Si hubo movimientos después del resumen, lo avisa en ámbar.
+- El botón queda desactivado, con el motivo al lado, si la IA no está encendida o si todavía no hay
+  información para resumir. Los errores de la API (límite de 20 al día, IA caída) salen arriba del botón.
+- El resumen es por persona (cada quien resume lo que puede ver). Hooks en `lib/resumen-ficha.ts`, con la
+  clave debajo de `["timeline", id]` para que se refresque junto con el Historial; tipos en `types.ts`.
+- Revisado el 21-oct con la API simulada en Edge, Safari (WebKit) y Firefox, a 320, 375, 768 y 1440 px, de
+  día y de noche (sin resumen, resumiendo, con resumen, error, desactualizado, IA apagada y sin información):
+  168 vistas sin problemas.
 
 ## Mejoras · Etapa 5: buscador general Ctrl+K (Fabián, 21 oct 2026)
 
