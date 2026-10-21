@@ -272,6 +272,7 @@ Actualiza esta tabla en cada deploy.
 | 19-oct-2026 | `nanobridge-api-00033-fkz` | `1ad5a70` | `033_plantillas_correo.sql` | Correos de prospección editables (etapa 1 de las mejoras): `/plantillas` (GET, `PUT /:numero`, `PUT /pie`, `POST /vista-previa`; administrador y supervisor), `POST /automatizacion/envios` regresa `correo` {asunto, texto, html} y guarda `plantilla_id` y `asunto` en `envios`; formato básico (negrita, cursiva, enlaces https). Esta vez la migración fue primero. `/health` ok, `/plantillas` da 401 sin sesión. Front publicado en Firebase el mismo día (tarjeta en Administración). En n8n el texto viaja como `correo_contenido` (`docs/n8n/pt1b-plantillas/`) |
 | 20-oct-2026 | `nanobridge-api-00034-qn5` | `e95d1ee` (código de `9181ecf`) | `034_notificaciones.sql` | Avisos al vendedor (etapa 2 de las mejoras): campanita (`/api/v1/notificaciones`: lista, `conteo`, `leida`, `leer-todas`, `preferencias`) y correos de aviso (tarea asignada, interesado, tarea vencida, documento rechazado) por SendGrid directo desde la API. Secreto nuevo `SENDGRID_API_KEY` (§8b) y `CORREO_DRIVER=sendgrid`. Migración primero. `/health` ok, `/api/v1/notificaciones/conteo` da 401 sin sesión, `TRUST_PROXY` y `SESSION_COOKIE_NAME` siguen puestas. Front publicado en Firebase el 21-oct con el rediseño `8657306` (sin campanita: numerito en Inicio y tarjeta "Lo nuevo para ti"), desde la terminal de la compu en `frontend/`: `npx firebase-tools login --reauth` (la sesión había expirado) y `npx firebase-tools deploy --only hosting` |
 | 21-oct-2026 | `nanobridge-api-00035-lwk` | `d86caf1` | `036_resumen_ficha.sql` | Etapas 3, 4 y 5 de las mejoras: responder al prospecto desde el CRM (`/api/v1/respuestas/:id/contestar`, `borrador-ia`), resumen con IA en la ficha (`/api/v1/empresas/:id/resumen-ia`) y buscador Ctrl+K (`/api/v1/buscar`). Migraciones 035 y 036 primero, desde la terminal de la compu de Mich con el gcloud instalado (la cuenta `pasante.tics001` ya lee secretos): IP autorizada solo durante `npm run migrate` y revocada al terminar. Build desde una copia limpia del commit (`git archive`), para no subir el `.env` local a Cloud Build. `/health` ok y las rutas nuevas dan 401 sin sesión; `IA_DRIVER` sin poner (IA apagada: los botones de IA salen desactivados). Front publicado en Firebase el mismo día (`npx firebase-tools login --reauth` por código y `deploy --only hosting`) |
+| 21-oct-2026 | `nanobridge-api-00036-jvl` | `d86caf1` (misma imagen) | ninguna | IA encendida sin build: `gcloud run services update` con `--update-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest --update-env-vars=IA_DRIVER=gemini,GEMINI_MODELO=gemini-3.8-flash`. Antes: aviso de privacidad publicado (condición de Dirección) y llave probada con `curl` desde Cloud Shell. Después: `/health` ok y siguen `TRUST_PROXY`, `SESSION_COOKIE_NAME` y `CORREO_DRIVER`. Detalle en §10 |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
@@ -554,15 +555,19 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       de pruebas tiene el de la casa de Fabián).
 - [ ] Cambiar `DESTINOS` de los avisos (hoy el Gmail de Fabián): en B4 ("armar correo de error") a
       quien atienda los errores, y en PT2 ("armar aviso de respuesta") al supervisor que clasifica.
-- [ ] **IA en la API (etapa 3, "Redactar con IA"; también la usará la etapa 4).**
-      Hasta que el jefe dé el permiso de mandar estos datos a Gemini (P0.1 de
-      `PREGUNTAS_ETAPAS_3_4_5.md`), la API corre con `IA_DRIVER=falso`. El día
-      que lo dé: crear una llave **aparte** de la de n8n (P0.2), en el mismo
-      proyecto de pago, guardarla como secreto `GEMINI_API_KEY` igual que
-      SENDGRID_API_KEY en §8b (no hace falta dar permiso por secreto) y
-      desplegar con `--update-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest`
-      y `--update-env-vars=IA_DRIVER=gemini`. Sin la llave, la API no arranca
-      con `IA_DRIVER=gemini` (lo revisa `src/config/env.ts`).
+- [x] **IA en la API (etapas 3 y 4: "Redactar con IA" y "Resumir con IA").**
+      Encendida el 21-oct-2026 (`nanobridge-api-00036-jvl`), después de publicar el
+      aviso de privacidad en https://nanobridge-mex.com/aviso-de-privacidad (sección 7
+      describe las funciones de IA; condición de Dirección). Llave **aparte** de la de
+      n8n (P0.2), en el mismo proyecto de pago, guardada como secreto `GEMINI_API_KEY`
+      igual que SENDGRID_API_KEY en §8b. Las llaves nuevas de AI Studio ya no empiezan
+      con `AIza`: esta empieza con `AQ.` y mide 53 caracteres, y funciona.
+      `gemini-2.5-flash` responde 404 a llaves nuevas ("no longer available to new
+      users"), así que va `GEMINI_MODELO=gemini-3.8-flash` (probado: 200 en ~4 s con
+      `systemInstruction` + `responseSchema`). Comando usado:
+      `gcloud run services update nanobridge-api --update-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest --update-env-vars=IA_DRIVER=gemini,GEMINI_MODELO=gemini-3.8-flash --region=us-central1`.
+      Para apagarla: `--update-env-vars=IA_DRIVER=falso` (los botones vuelven a salir
+      desactivados).
 - [ ] Cuenta definitiva de SendGrid (la de prueba vence el 24-nov-2026 y está
       con el correo de pasante). Al cambiar: rehacer la autenticación del
       dominio, dar de alta Inbound Parse, poner la API key nueva en n8n y la

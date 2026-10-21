@@ -45,7 +45,7 @@ describe("drivers de SendGrid y Gemini (fetch simulado)", () => {
     const res = await new IaGeminiDriver().generarJson<{ resumen: string }>({ instrucciones: "Resume", texto: "Datos", esquema });
     expect(res).toEqual({ resumen: "Todo bien" });
     const [url, opciones] = fetchFalso.mock.calls[0]!;
-    expect(String(url)).toContain("/models/gemini-2.5-flash:generateContent");
+    expect(String(url)).toContain("/models/gemini-3.8-flash:generateContent");
     const cuerpo = JSON.parse(String(opciones!.body));
     expect(cuerpo.generationConfig).toEqual({ responseMimeType: "application/json", responseSchema: esquema });
     expect(cuerpo.systemInstruction.parts[0].text).toBe("Resume");

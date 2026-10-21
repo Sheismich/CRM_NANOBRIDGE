@@ -109,7 +109,9 @@ const schema = z.object({
   CRM_URL: z.string().url().transform((url) => url.replace(/\/+$/, "")).default("https://crm-prospeccion-outbound.web.app"),
   IA_DRIVER: z.enum(["gemini", "falso"]).default("falso"),
   GEMINI_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(10).optional()),
-  GEMINI_MODELO: z.string().trim().min(1).default("gemini-2.5-flash"),
+  // gemini-2.5-flash da 404 a llaves nuevas desde el 21-oct-2026 ("no longer
+  // available to new users"); producción corre con gemini-3.8-flash.
+  GEMINI_MODELO: z.string().trim().min(1).default("gemini-3.8-flash"),
   // Solo obligatorios cuando STORAGE_DRIVER=gcs (ver superRefine abajo).
   // z.preprocess normaliza "" a undefined: .env.example los deja vacíos
   // (documentados, sin valor) cuando STORAGE_DRIVER=local -- una cadena
