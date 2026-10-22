@@ -542,6 +542,23 @@ Respuestas a P5.1–P5.7 en `PREGUNTAS_ETAPAS_3_4_5.md`. Backend en `src/buscado
 - **Cambio en una pantalla de Mich (`ProspectosPage.tsx`):** lee `?prospecto=ID` y abre su panel, igual
   que `?tarea=` en Tareas; al cerrar el panel se quita de la dirección. Son unas líneas junto a `abiertoId`.
 
+## Prospectos desde empresas que ya existen (Fabián, 22 oct 2026)
+
+Antes, una empresa dada de alta en Empresas no tenía cómo entrar a Prospectos, y "Nuevo prospecto"
+siempre creaba otra empresa aunque se llamara igual. Backend con migración 037
+(`borradores_captura.empresa_id`), pruebas en `test/525-prospecto-empresa-existente.spec.ts`.
+
+- **Cambio en una pantalla de Mich (`NuevoProspectoForm.tsx`):** la sección Empresa tiene dos
+  botones, "Empresa nueva" (los campos de siempre) y "Ya existe en el CRM" (`BuscadorEmpresa` +
+  `EmpresaElegida`, con aviso si a la empresa le falta giro o tamaño). Con "Ya existe" se manda
+  `empresaId` a `POST /prospectos` en vez de los campos de empresa.
+- **Cambio en una pantalla de Mich (`FichaClientePage.tsx`, `TarjetaContactos`):** botón "A prospección"
+  en cada contacto con correo activo → `POST /api/v1/prospectos/desde-contacto` `{ contactoId }`. Si la
+  empresa tiene oportunidades abiertas, primero un `Modal` que pregunta. Al terminar, aviso verde con
+  "Ver prospecto" (`/prospectos?prospecto=ID`). Errores 409: `PROSPECTO_YA_ABIERTO` (ya está en
+  prospección), `PERSONA_EN_BAJA`, `CONTACTO_DESACTIVADO`.
+- `GET /empresas` trae ahora `tamano` (tipo `Empresa.tamano`, opcional).
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.

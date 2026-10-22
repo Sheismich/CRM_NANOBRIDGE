@@ -8,7 +8,7 @@ import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { conteosProspectosQuerySchema, importarCsvBodySchema, listBorradoresQuerySchema, listLotesQuerySchema, listProspectosQuerySchema, mandarAutomatizacionInputSchema, prospectoInputSchema } from "./dto/prospecto.schema.js";
+import { conteosProspectosQuerySchema, desdeContactoInputSchema, importarCsvBodySchema, listBorradoresQuerySchema, listLotesQuerySchema, listProspectosQuerySchema, mandarAutomatizacionInputSchema, prospectoInputSchema } from "./dto/prospecto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 const confirmarBodySchema = z.object({ usarContactoExistente: z.boolean().default(false) });
@@ -70,6 +70,16 @@ export class ProspectosController {
   crear(@Body() body: unknown, @CurrentUser() user: CurrentUserType) {
     const input = prospectoInputSchema.parse(body);
     return this.prospectosService.crearManual(user, input);
+  }
+
+  // "Agregar a prospección" en la ficha: un contacto que ya está en el CRM
+  // entra a Prospectos sin volver a capturarlo (22-oct-2026).
+  @Post("desde-contacto")
+  @HttpCode(201)
+  @Roles("administrador", "supervisor", "agente")
+  desdeContacto(@Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    const input = desdeContactoInputSchema.parse(body);
+    return this.prospectosService.crearDesdeContacto(user, input);
   }
 
   @Post("importaciones")

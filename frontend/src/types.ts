@@ -32,6 +32,8 @@ export type Empresa = {
   nombre_legal: string;
   nombre_comercial: string | null;
   giro: string | null;
+  // GET /empresas lo trae desde el 22-oct-2026 (Nuevo prospecto avisa si falta).
+  tamano?: "micro" | "pequena" | "mediana" | "grande" | null;
   region: string | null;
   estado: string | null;
   ciudad: string | null;

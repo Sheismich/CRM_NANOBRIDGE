@@ -10,7 +10,7 @@ import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
 import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
-import { MAX_CONTACTOS_POR_CICLO, cicloActualDePersona, correoUtilizable } from "../shared/ciclo-contacto.js";
+import { ESTADOS_PROSPECTO_CERRADO, MAX_CONTACTOS_POR_CICLO, cicloActualDePersona, correoUtilizable } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { HORAS_PARA_RETOMAR_DE_FILA } from "../shared/listo-para-automatizacion.js";
 import { diaSiguiente, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
@@ -41,9 +41,6 @@ export const CODIGO_PROSPECTO_NO_VALIDADO = "PROSPECTO_NO_VALIDADO";
 // en shared/ciclo-contacto.ts: el botón "Mandar a automatización" del CRM
 // revisa lo mismo.
 
-// Estados en los que un prospecto ya no recibe recordatorios: respondió y
-// se clasificó, pidió la baja, o la automatización lo sacó del flujo.
-const ESTADOS_PROSPECTO_CERRADO: readonly string[] = ["baja", "interesado", "no_interesado", "descartado", "excluido", "inactivo"];
 
 // Por qué /envios/vencidas no devuelve una ventana (ver destinoDeRecordatorio).
 type MotivoRecordatorioOmitido = "prospecto_cerrado" | "campana_inactiva" | "sin_correo" | "suprimido" | "canal_desactivado";

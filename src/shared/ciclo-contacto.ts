@@ -12,6 +12,11 @@ import { envios, listaSupresion, mediosContacto, prospectos } from "../database/
 export const MAX_CONTACTOS_POR_CICLO = 3;
 export const MESES_ENFRIAMIENTO = 6;
 
+// Estados en los que un prospecto ya terminó: respondió y se clasificó, pidió
+// la baja, o la automatización lo sacó del flujo. No recibe recordatorios
+// (PT4) y la persona puede volver a entrar a prospección (salvo la baja).
+export const ESTADOS_PROSPECTO_CERRADO: readonly string[] = ["baja", "interesado", "no_interesado", "descartado", "excluido", "inactivo"];
+
 function sumarMeses(fecha: Date, meses: number): Date {
   const result = new Date(fecha);
   result.setMonth(result.getMonth() + meses);

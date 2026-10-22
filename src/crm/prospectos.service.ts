@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, asc, desc, eq, inArray, like, lt, or, sql } from "drizzle-orm";
-import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
+import { and, asc, desc, eq, inArray, like, lt, notInArray, or, sql } from "drizzle-orm";
+import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, borradoresCaptura, campanas, contactos, empresas, envios, mediosContacto, prospectos } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
@@ -10,12 +10,13 @@ import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { parseCsv } from "../shared/csv.js";
 import { decodificarArchivoTexto } from "../shared/texto.js";
 import { buscarPersona } from "../shared/identidad.js";
-import { bloquearPersona, personaEnBaja } from "../shared/baja-prospecto.js";
+import { CODIGO_PERSONA_EN_BAJA, bloquearPersona, personaEnBaja, personaEnBajaBloqueando } from "../shared/baja-prospecto.js";
+import { ESTADOS_PROSPECTO_CERRADO } from "../shared/ciclo-contacto.js";
 import { campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { fechaMx } from "../shared/dia-habil.js";
 import { revisarListoParaAutomatizacion, tomadoDeFilaHace } from "../shared/listo-para-automatizacion.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
-import { COLUMNAS_CSV, filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ConteosProspectosQuery, type MandarAutomatizacionInput, type ProspectoInput } from "./dto/prospecto.schema.js";
+import { COLUMNAS_CSV, filaCsvSchema, type FilaCsv, type ListBorradoresQuery, type ListLotesQuery, type ListProspectosQuery, type ConteosProspectosQuery, type DesdeContactoInput, type MandarAutomatizacionInput, type ProspectoInput } from "./dto/prospecto.schema.js";
 
 const BORRADORES_TTL_DIAS = 30;
 // Tope defensivo por importación: STEELSAFE (el primer caso de uso real)
@@ -32,6 +33,8 @@ export const CODIGO_PERSONA_YA_REGISTRADA = "PERSONA_YA_REGISTRADA";
 export const CODIGO_CAMPANA_TERMINADA = "CAMPANA_TERMINADA";
 export const CODIGO_NO_EN_FILA = "NO_EN_FILA";
 export const CODIGO_PROSPECTO_YA_TOMADO = "PROSPECTO_YA_TOMADO";
+// "Agregar a prospección" (22-oct-2026): la persona ya tiene un prospecto en curso.
+export const CODIGO_PROSPECTO_YA_ABIERTO = "PROSPECTO_YA_ABIERTO";
 const ESTADOS_QUE_ENTRAN_A_FILA: readonly string[] = ["capturado", "excluido"];
 
 type ErrorFila = { campo: string; mensaje: string };
@@ -78,12 +81,62 @@ export class ProspectosService {
   // validación/deduplicación que una fila de CSV en vez de tener su
   // propia copia.
   async crearManual(user: CurrentUser, input: ProspectoInput) {
+    // Empresa que ya existe: el borrador lleva su nombre (para la pantalla
+    // y la confirmación) y no los demás datos de empresa que hayan llegado.
+    let fila = input;
+    if (input.empresaId) {
+      const empresa = await this.empresaParaProspecto(this.db, user, input.empresaId);
+      fila = { ...input, empresaNombreLegal: empresa.nombreLegal, empresaGiro: undefined, empresaTamano: undefined, empresaRegion: undefined, empresaEstado: undefined, empresaCiudad: undefined, empresaSitioWeb: undefined };
+    }
     const loteId = randomUUID();
     const [borrador] = await this.crearBorradores(user, loteId, "manual", [
-      { numero: 1, filaOriginal: input as Record<string, unknown>, fila: input, errores: null }
+      { numero: 1, filaOriginal: input as Record<string, unknown>, fila, errores: null }
     ]);
     const visibles = await this.contactosVisibles(user, [borrador!]);
     return this.toJson(borrador!, visibles);
+  }
+
+  // La empresa elegida en el alta manual: tiene que existir, estar activa y,
+  // para un agente, ser suya (la de otro agente responde igual que si no
+  // existiera). Se revisa al capturar y otra vez al confirmar.
+  private async empresaParaProspecto(db: DrizzleDb | DrizzleTx, user: CurrentUser, empresaId: number) {
+    const [empresa] = await db
+      .select({ id: empresas.id, nombreLegal: empresas.nombreLegal, activo: empresas.activo, propietarioId: empresas.propietarioId })
+      .from(empresas)
+      .where(eq(empresas.id, empresaId))
+      .limit(1);
+    if (!empresa || (user.rol === "agente" && empresa.propietarioId !== user.id)) throw new HttpError(404, "Empresa no encontrada");
+    if (!empresa.activo) throw new HttpError(409, "Esta empresa está desactivada en el CRM; no se le pueden agregar prospectos");
+    return empresa;
+  }
+
+  // "Agregar a prospección" (ficha de la empresa, 22-oct-2026): prospecto
+  // 'capturado' para una persona que ya está en el CRM, listo para "Mandar a
+  // automatización". No si ya tiene uno en curso (le saldrían dos ciclos) ni
+  // si pidió la baja. Se bloquea a la persona para que dos clics no creen dos.
+  async crearDesdeContacto(user: CurrentUser, input: DesdeContactoInput) {
+    return this.db.transaction(async (tx) => {
+      const [contacto] = await tx
+        .select({ id: contactos.id, activo: contactos.activo, empresaId: empresas.id, empresaActiva: empresas.activo, propietarioId: empresas.propietarioId })
+        .from(contactos)
+        .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
+        .where(eq(contactos.id, input.contactoId))
+        .limit(1);
+      if (!contacto || (user.rol === "agente" && contacto.propietarioId !== user.id)) throw new HttpError(404, "Contacto no encontrado");
+      if (!contacto.activo || !contacto.empresaActiva) throw new HttpError(409, "Esta persona está desactivada en el CRM; no se le puede crear un prospecto", CODIGO_CONTACTO_DESACTIVADO);
+      if (await personaEnBajaBloqueando(tx, contacto.id)) throw new HttpError(409, "Esta persona pidió la baja: no se le puede volver a escribir", CODIGO_PERSONA_EN_BAJA);
+
+      const [enCurso] = await tx
+        .select({ id: prospectos.id })
+        .from(prospectos)
+        .where(and(eq(prospectos.contactoId, contacto.id), notInArray(prospectos.estado, [...ESTADOS_PROSPECTO_CERRADO])))
+        .limit(1);
+      if (enCurso) throw new HttpError(409, `Esta persona ya está en prospección (prospecto ${enCurso.id})`, CODIGO_PROSPECTO_YA_ABIERTO);
+
+      const [prospecto] = await tx.insert(prospectos).values({ contactoId: contacto.id, estado: "capturado" });
+      await tx.insert(auditoria).values({ usuarioId: user.id, entidad: "prospecto", entidadId: prospecto.insertId, accion: "crear_desde_contacto", despues: { contacto_id: contacto.id, empresa_id: contacto.empresaId } });
+      return { id: prospecto.insertId, contacto_id: contacto.id, empresa_id: contacto.empresaId };
+    });
   }
 
   // --- Importación CSV --------------------------------------------------
@@ -219,6 +272,7 @@ export class ProspectosService {
       fuente,
       filaNumero: candidato.numero,
       filaOriginal: candidato.filaOriginal,
+      empresaId: fila && "empresaId" in fila ? fila.empresaId ?? null : null,
       empresaNombreLegal: fila?.empresaNombreLegal ?? null,
       empresaGiro: fila?.empresaGiro ?? null,
       empresaTamano: fila?.empresaTamano ?? null,
@@ -410,14 +464,17 @@ export class ProspectosService {
         // verla (administrador, supervisor o su dueño); si no, a una empresa
         // propia. En los dos casos el teléfono no se le vuelve a guardar: ya
         // es de otro contacto.
-        let empresaDelTelefono: number | null = null;
-        if (identidad.empresaDelTelefono !== null) {
+        // Empresa elegida en el alta manual: manda sobre la del teléfono.
+        let empresaExistente: number | null = null;
+        if (borrador.empresaId !== null) {
+          empresaExistente = (await this.empresaParaProspecto(tx, user, borrador.empresaId)).id;
+        } else if (identidad.empresaDelTelefono !== null) {
           const [empresa] = await tx.select({ propietarioId: empresas.propietarioId }).from(empresas).where(eq(empresas.id, identidad.empresaDelTelefono)).limit(1);
-          if (user.rol !== "agente" || empresa?.propietarioId === user.id) empresaDelTelefono = identidad.empresaDelTelefono;
+          if (user.rol !== "agente" || empresa?.propietarioId === user.id) empresaExistente = identidad.empresaDelTelefono;
         }
 
-        if (empresaDelTelefono !== null) {
-          empresaId = empresaDelTelefono;
+        if (empresaExistente !== null) {
+          empresaId = empresaExistente;
         } else {
           const [empresa] = await tx.insert(empresas).values({
             nombreLegal: borrador.empresaNombreLegal,

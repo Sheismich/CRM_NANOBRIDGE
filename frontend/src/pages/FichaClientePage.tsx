@@ -190,7 +190,7 @@ function FichaCliente({ id }: { id: string }) {
           {tab === "resumen" && (
             <div className="grid grid-cols-1 gap-4 md:gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
               <div className="flex min-w-0 flex-col gap-4 md:gap-5">
-                <TarjetaContactos empresaId={empresa.id} contactos={contactos} />
+                <TarjetaContactos empresaId={empresa.id} contactos={contactos} oportunidadesAbiertas={abiertas.length} />
                 <HistorialTab empresaId={empresa.id} contactos={opcionesContacto} />
               </div>
               <div className="flex min-w-0 flex-col gap-4 md:gap-5">
@@ -378,12 +378,32 @@ function Kpi({ etiqueta, children }: { etiqueta: string; children: ReactNode }) 
 
 type ContactoAgrupado = ReturnType<typeof agruparContactos>[number];
 
-function TarjetaContactos({ empresaId, contactos }: { empresaId: number; contactos: ContactoAgrupado[] }) {
+// "A prospección" (22-oct-2026): POST /prospectos/desde-contacto crea su
+// prospecto sin volver a capturarlo; de ahí se manda a automatización desde
+// Prospectos. Solo a quien tiene correo activo (la automatización solo
+// escribe por correo). Con oportunidades abiertas se pregunta antes: a un
+// cliente con el que ya se negocia no le conviene un correo en frío.
+function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { empresaId: number; contactos: ContactoAgrupado[]; oportunidadesAbiertas: number }) {
   const queryClient = useQueryClient();
   const [agregando, setAgregando] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [porDesactivar, setPorDesactivar] = useState<ContactoAgrupado | null>(null);
+  const [porProspectar, setPorProspectar] = useState<ContactoAgrupado | null>(null);
+  const [prospectado, setProspectado] = useState<{ nombre: string; prospectoId: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function aProspeccion(c: ContactoAgrupado) {
+    setError(null);
+    setProspectado(null);
+    setPorProspectar(null);
+    try {
+      const res = await api.post<{ id: number }>("/api/v1/prospectos/desde-contacto", { contactoId: c.contacto.id });
+      setProspectado({ nombre: c.contacto.nombre, prospectoId: res.id });
+      await queryClient.invalidateQueries({ queryKey: ["prospectos"] });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+    }
+  }
 
   async function desactivar(c: ContactoAgrupado) {
     setError(null);
@@ -419,6 +439,15 @@ function TarjetaContactos({ empresaId, contactos }: { empresaId: number; contact
       cuerpoClassName="!p-0"
     >
       <ServerError message={error} />
+      {prospectado && (
+        <div className="mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-[12px] bg-ok-bg px-3.5 py-3 text-[12px] font-semibold text-ok md:mx-[22px]">
+          <Icono nombre="check" size={15} className="shrink-0" />
+          <span className="min-w-0 flex-1">{prospectado.nombre} ya está en Prospectos. Desde ahí lo mandas a automatización.</span>
+          <Link to={`/prospectos?prospecto=${prospectado.prospectoId}`} className="font-bold underline">
+            Ver prospecto
+          </Link>
+        </div>
+      )}
       {agregando && (
         <div className="p-4 md:px-[22px]">
           <ContactoForm empresaId={empresaId} onDone={() => setAgregando(false)} />
@@ -436,6 +465,7 @@ function TarjetaContactos({ empresaId, contactos }: { empresaId: number; contact
             );
           }
           const sinMedioActivo = medios.every((m) => m.estado_contacto !== "activo");
+          const conCorreo = medios.some((m) => m.medio_tipo === "correo" && m.estado_contacto === "activo");
           return (
             <li key={contacto.id} className="flex flex-wrap items-start gap-3 px-4 py-3.5 md:px-[22px]">
               <Avatar nombre={contacto.nombre} className={sinMedioActivo ? "!bg-none !bg-soft !text-ink-3" : ""} />
@@ -453,6 +483,16 @@ function TarjetaContactos({ empresaId, contactos }: { empresaId: number; contact
                 </div>
               </div>
               <div className="flex gap-1">
+                {conCorreo && (
+                  <button
+                    type="button"
+                    className="rounded-[8px] px-2 py-1 text-[12px] font-bold text-navy hover:bg-soft"
+                    title="Lo agrega a Prospectos para mandarlo a automatización"
+                    onClick={() => (oportunidadesAbiertas > 0 ? setPorProspectar(agrupado) : void aProspeccion(agrupado))}
+                  >
+                    A prospección
+                  </button>
+                )}
                 <button
                   type="button"
                   className="rounded-[8px] px-2 py-1 text-[12px] font-bold text-navy hover:bg-soft"
@@ -484,6 +524,20 @@ function TarjetaContactos({ empresaId, contactos }: { empresaId: number; contact
             <Button variant="rechazar" onClick={() => porDesactivar && void desactivar(porDesactivar)}>
               Sí, desactivar
             </Button>
+          </>
+        }
+      />
+      <Modal
+        abierto={porProspectar !== null}
+        onCerrar={() => setPorProspectar(null)}
+        titulo="Esta empresa ya tiene un trato abierto"
+        descripcion={`Tiene ${oportunidadesAbiertas === 1 ? "1 oportunidad abierta" : `${oportunidadesAbiertas} oportunidades abiertas`}. Los correos de la automatización son para gente que todavía no habla con nosotros; a un cliente con el que ya se negocia normalmente le escribe su vendedor. ¿Agregarlo de todos modos?`}
+        acciones={
+          <>
+            <Button variant="ghost" onClick={() => setPorProspectar(null)}>
+              No
+            </Button>
+            <Button onClick={() => porProspectar && void aProspeccion(porProspectar)}>Sí, agregarlo</Button>
           </>
         }
       />

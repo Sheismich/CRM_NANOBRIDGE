@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { clsx } from "clsx";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,15 +11,18 @@ import type { NombreIcono } from "../ui/iconos";
 import { ApiError, api } from "../../lib/api";
 import { campanasAsignables, useCampanas } from "../../lib/campanas";
 import { avisoMediosSuprimidos } from "../../lib/medios";
-import type { Borrador } from "../../types";
+import type { Borrador, Empresa } from "../../types";
+import { BuscadorEmpresa, EmpresaElegida } from "../empresas/BuscadorEmpresa";
 import { TAMANOS, correoOpcional, sinVacios, telefonoOpcional, textoOpcional, urlOpcional } from "../empresas/campos";
 
 // Mismos límites que prospectoInputSchema (src/crm/dto/prospecto.schema.ts).
 // El backend deduplica por correo y teléfono, por eso pide al menos uno, y
 // el canal inicial debe tener su medio (WhatsApp usa el teléfono).
+// El nombre de la empresa solo se pide con "Empresa nueva" (se revisa al
+// guardar, porque con "Ya existe" no se escribe).
 const prospectoSchema = z
   .object({
-    empresaNombreLegal: z.string().trim().min(2, "Mínimo 2 caracteres").max(255, "Máximo 255 caracteres"),
+    empresaNombreLegal: z.string().trim().max(255, "Máximo 255 caracteres"),
     empresaGiro: textoOpcional(120),
     empresaTamano: z.string(),
     empresaRegion: textoOpcional(120),
@@ -48,15 +52,20 @@ type Confirmado = { id: number; empresa_id?: number; medios_suprimidos?: string[
 // porque quien lo captura ya lo revisó. Si sale duplicado contra un
 // contacto existente, se pregunta antes de reutilizarlo.
 // Score sigue fuera: lo calcula la automatización.
+// "Ya existe" (22-oct-2026): se elige una empresa del CRM y el contacto nuevo
+// se cuelga de ella (empresaId); si no, cada alta creaba otra empresa.
 export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | null, aviso?: string | null) => void }) {
   const queryClient = useQueryClient();
   const { data: campanas } = useCampanas();
   const [serverError, setServerError] = useState<string | null>(null);
   const [duplicado, setDuplicado] = useState<Borrador | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [empresaExiste, setEmpresaExiste] = useState(false);
+  const [empresaElegida, setEmpresaElegida] = useState<Empresa | null>(null);
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting }
   } = useForm<ProspectoInput>({
     resolver: zodResolver(prospectoSchema),
@@ -89,9 +98,20 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
 
   async function onSubmit(values: ProspectoInput) {
     setServerError(null);
+    if (empresaExiste && !empresaElegida) {
+      setServerError("Elige la empresa, o cambia a Empresa nueva.");
+      return;
+    }
+    if (!empresaExiste && values.empresaNombreLegal.length < 2) {
+      setError("empresaNombreLegal", { message: "Mínimo 2 caracteres" });
+      return;
+    }
     try {
-      const { campanaId, ...resto } = values;
-      const borrador = await api.post<Borrador>("/api/v1/prospectos", { ...sinVacios(resto), ...(campanaId ? { campanaId: Number(campanaId) } : {}) });
+      const { campanaId, empresaNombreLegal, empresaGiro, empresaTamano, empresaRegion, empresaEstado, empresaCiudad, empresaSitioWeb, ...resto } = values;
+      const empresa = empresaExiste && empresaElegida
+        ? { empresaId: empresaElegida.id }
+        : sinVacios({ empresaNombreLegal, empresaGiro, empresaTamano, empresaRegion, empresaEstado, empresaCiudad, empresaSitioWeb });
+      const borrador = await api.post<Borrador>("/api/v1/prospectos", { ...sinVacios(resto), ...empresa, ...(campanaId ? { campanaId: Number(campanaId) } : {}) });
       if (borrador.estado === "duplicado") {
         setDuplicado(borrador);
         return;
@@ -150,6 +170,40 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
     <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="flex min-h-full flex-col">
       <div className="flex flex-col gap-[22px] px-4 py-5 md:px-6">
       <Seccion icono="empresa" titulo="Empresa">
+      <div className="flex flex-wrap gap-1.5">
+        {[
+          { existe: false, texto: "Empresa nueva" },
+          { existe: true, texto: "Ya existe en el CRM" }
+        ].map((o) => (
+          <button
+            key={o.texto}
+            type="button"
+            onClick={() => setEmpresaExiste(o.existe)}
+            aria-pressed={empresaExiste === o.existe}
+            className={clsx("rounded-full border px-3 py-1.5 text-[12px] font-bold", empresaExiste === o.existe ? "border-navy bg-navy-bg text-navy" : "border-border bg-card text-ink-2 hover:text-strong")}
+          >
+            {o.texto}
+          </button>
+        ))}
+      </div>
+      {empresaExiste ? (
+        empresaElegida ? (
+          <>
+            <div className="rounded-[12px] border border-border">
+              <EmpresaElegida empresa={empresaElegida} onCambiar={() => setEmpresaElegida(null)} />
+            </div>
+            {(!empresaElegida.giro || !empresaElegida.tamano) && (
+              <div className="flex gap-2.5 rounded-[12px] bg-warn-bg px-3.5 py-3 text-[12px] font-semibold text-warn">
+                <Icono nombre="aviso" size={15} className="mt-px shrink-0" />
+                A esta empresa le falta {[!empresaElegida.giro && "giro", !empresaElegida.tamano && "tamaño"].filter(Boolean).join(" y ")}: complétalo en su ficha o la automatización no le escribe.
+              </div>
+            )}
+          </>
+        ) : (
+          <BuscadorEmpresa pregunta="¿Qué empresa?" onElegir={setEmpresaElegida} />
+        )
+      ) : (
+      <>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="md:col-span-2">
           <Field label="Nombre legal" htmlFor="pr-empresa" error={errors.empresaNombreLegal?.message}>
@@ -186,6 +240,8 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
         <Icono nombre="aviso" size={15} className="mt-px shrink-0" />
         Sin giro ni tamaño la automatización lo marca como excluido y no le escribe.
       </div>
+      </>
+      )}
       </Seccion>
 
       <Seccion icono="persona" titulo="Contacto">

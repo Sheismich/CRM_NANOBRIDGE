@@ -553,6 +553,8 @@ export const borradoresCaptura = mysqlTable("borradores_captura", {
   filaNumero: int("fila_numero", { unsigned: true }).notNull(),
   filaOriginal: json("fila_original").notNull(),
 
+  // Empresa que ya existía, elegida en el alta manual (037). NULL = crear una.
+  empresaId: bigint("empresa_id", { mode: "number", unsigned: true }),
   empresaNombreLegal: varchar("empresa_nombre_legal", { length: 255 }),
   empresaGiro: varchar("empresa_giro", { length: 120 }),
   empresaTamano: mysqlEnum("empresa_tamano", ["micro", "pequena", "mediana", "grande"]),

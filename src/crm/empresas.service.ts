@@ -67,6 +67,7 @@ export class EmpresasService {
         nombre_legal: empresas.nombreLegal,
         nombre_comercial: empresas.nombreComercial,
         giro: empresas.giro,
+        tamano: empresas.tamano,
         region: empresas.region,
         estado: empresas.estado,
         ciudad: empresas.ciudad,

@@ -43,8 +43,12 @@ function refinarProspecto<T extends z.ZodTypeAny>(schema: T) {
     });
 }
 
-// Alta manual de un solo prospecto (POST /api/v1/prospectos).
-export const prospectoInputSchema = refinarProspecto(z.object(camposProspecto));
+// Alta manual de un solo prospecto (POST /api/v1/prospectos). Con
+// empresaId el contacto nuevo va a esa empresa que ya existe y los demás
+// campos de empresa no se usan (22-oct-2026); sin él, hace falta el nombre.
+export const prospectoInputSchema = refinarProspecto(
+  z.object({ ...camposProspecto, empresaNombreLegal: camposProspecto.empresaNombreLegal.optional(), empresaId: z.coerce.number().int().positive().optional() })
+).refine((input) => input.empresaId || input.empresaNombreLegal, { message: "Elige una empresa o escribe el nombre de una nueva", path: ["empresaNombreLegal"] });
 export type ProspectoInput = z.infer<typeof prospectoInputSchema>;
 
 // Una fila de CSV ya parseada por parseCsv() llega como
@@ -124,6 +128,12 @@ export const mandarAutomatizacionInputSchema = z.object({
   campanaId: z.coerce.number().int().positive()
 });
 export type MandarAutomatizacionInput = z.infer<typeof mandarAutomatizacionInputSchema>;
+
+// "Agregar a prospección" desde la ficha de la empresa (22-oct-2026).
+export const desdeContactoInputSchema = z.object({
+  contactoId: z.coerce.number().int().positive()
+});
+export type DesdeContactoInput = z.infer<typeof desdeContactoInputSchema>;
 
 // Tarjetas del embudo de Prospectos: cuántos hay en cada estado.
 export const conteosProspectosQuerySchema = z.object({
