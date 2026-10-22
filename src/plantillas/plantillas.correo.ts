@@ -44,7 +44,7 @@ async function elegirPlantilla(db: Db, giro: string | null, numero: number) {
 export async function correoParaEnvio(db: Db, prospectoId: number, numeroEnCiclo: number): Promise<{ plantillaId: number; correo: CorreoArmado }> {
   const datos = await datosDelProspecto(db, prospectoId);
   const plantilla = await elegirPlantilla(db, datos.giro, Math.min(Math.max(numeroEnCiclo, 1), 3));
-  return { plantillaId: plantilla.id, correo: armarCorreo(plantilla, datos, await leerPie(db)) };
+  return { plantillaId: plantilla.id, correo: armarCorreo(plantilla, datos, await leerPie(db), { linkDeBaja: true }) };
 }
 
 /**
@@ -59,5 +59,5 @@ export async function correoDeEnvio(db: Db, envioId: number): Promise<CorreoArma
   const datos = await datosDelProspecto(db, envio.prospectoId);
   const [guardada] = envio.plantillaId != null ? await db.select().from(plantillasCorreo).where(eq(plantillasCorreo.id, envio.plantillaId)).limit(1) : [];
   const plantilla = guardada ?? (await elegirPlantilla(db, null, Math.min(envio.numeroContacto, 3)));
-  return armarCorreo(plantilla, datos, await leerPie(db));
+  return armarCorreo(plantilla, datos, await leerPie(db), { linkDeBaja: true });
 }

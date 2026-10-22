@@ -16,7 +16,12 @@ export type CorreoSaliente = {
   cabeceras?: Record<string, string>;
   // Para separar en SendGrid estos correos de los de prospección.
   categoria: string;
+  // Correos a prospectos: SendGrid cambia ETIQUETA_BAJA (en texto y html)
+  // por su link de baja. Los avisos internos no lo llevan.
+  linkDeBaja?: boolean;
 };
+
+export { ETIQUETA_BAJA } from "../shared/plantillas.js";
 
 export interface CorreoService {
   // Lanza error si no salió; regresa el id que dio el proveedor, si dio uno.

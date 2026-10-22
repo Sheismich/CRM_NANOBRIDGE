@@ -257,7 +257,8 @@ export class RespuestasVendedorService {
         nombreRemitente: `${user.nombre} · NANOBRIDGE`,
         replyTo: firmarReplyTo(c.envioId!),
         ...(c.messageId ? { cabeceras: { "In-Reply-To": c.messageId, References: c.messageId } } : {}),
-        categoria: CATEGORIA
+        categoria: CATEGORIA,
+        linkDeBaja: true
       }));
     } catch (error) {
       const detalle = error instanceof Error ? error.message : String(error);
@@ -294,19 +295,12 @@ export class RespuestasVendedorService {
     return igual(b.resultado ?? "") === igual(input.texto) ? "tal_cual" : "editado";
   }
 
-  // El texto del vendedor + su firma + el pie de siempre, y abajo lo que
-  // escribió el cliente, citado.
+  // El texto del vendedor + su firma con logo + el pie de siempre + el link
+  // de baja que el pie promete, y abajo lo que escribió el cliente, citado.
   private async armar(user: CurrentUser, c: Contexto, texto: string) {
     const nombre = { nombre: c.contactoNombre, empresa: c.empresaNombre, giro: c.giro };
-    const base = armarCorreo({ asunto: c.asunto, cuerpo: `${texto}\n\n${this.firma(user)}` }, nombre, await leerPie(this.db));
-    if (!c.contenido) return base;
     const cuando = new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" }).format(c.recibidoEn);
-    const encabezado = `El ${cuando}, ${c.contactoNombre} escribió:`;
-    const cita = c.contenido.split("\n").map((linea) => `> ${linea}`).join("\n");
-    const escapar = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    return {
-      texto: `${base.texto}\n\n${encabezado}\n${cita}`,
-      html: `${base.html}<p style="color:#6b7280;font-size:12px">${escapar(encabezado)}</p><blockquote style="margin:0 0 0 8px;padding-left:12px;border-left:3px solid #d1d5db;color:#4b5563">${escapar(c.contenido).replace(/\n/g, "<br>")}</blockquote>`
-    };
+    const cita = c.contenido ? { encabezado: `El ${cuando}, ${c.contactoNombre} escribió:`, contenido: c.contenido } : undefined;
+    return armarCorreo({ asunto: c.asunto, cuerpo: texto }, nombre, await leerPie(this.db), { firma: user.nombre, linkDeBaja: true, cita });
   }
 }

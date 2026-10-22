@@ -113,15 +113,70 @@ function textoDe(plantilla: string, v: Record<VariablePlantilla, string>) {
   return normalizar(sustituir(formatoTexto(normalizar(plantilla)), v));
 }
 
+/** Lo que SendGrid cambia por la URL de baja (subscription_tracking.substitution_tag). */
+export const ETIQUETA_BAJA = "[darte_de_baja]";
+const PREGUNTA_BAJA = "¿Ya no quiere recibir estos correos?";
+
+// El logo va en PNG (Gmail no muestra SVG) desde el front publicado.
+const LOGO = "https://crm-prospeccion-outbound.web.app/logo-n.png";
+const SITIO = "nanobridge-mex.com";
+const FUENTE = "font-family:Arial,Helvetica,sans-serif";
+const TABLA = 'role="presentation" cellpadding="0" cellspacing="0" border="0"';
+
+export interface OpcionesCorreo {
+  /** Quien firma (respuestas desde el CRM). Sin él, la firma con logo dice solo NANOBRIDGE. */
+  firma?: string;
+  /** Todo lo que va a un prospecto: "Darte de baja" al final del pie (ETIQUETA_BAJA). */
+  linkDeBaja?: boolean;
+  /** Lo que escribió el cliente, citado al final (respuestas desde el CRM). */
+  cita?: { encabezado: string; contenido: string };
+}
+
+// Molde del 22-oct-2026 (opción A de docs/diseno/correo-diseno.html): se ve
+// como el correo de una persona con firma cuidada, no como boletín. Solo
+// tablas y estilos en línea, que es lo que Gmail y Outlook respetan.
+function molde(partes: { cuerpo: string; firma?: string; pie: string; linkDeBaja: boolean; cita?: OpcionesCorreo["cita"] }) {
+  const nombre = partes.firma ? `<div style="font-size:15px;font-weight:bold;color:#1f2933">${escaparHtml(partes.firma)}</div>` : "";
+  const firma =
+    `<table ${TABLA}><tr>` +
+    `<td style="padding:0 14px 0 0;vertical-align:middle"><img src="${LOGO}" width="44" height="44" alt="NANOBRIDGE" style="display:block;border:0"></td>` +
+    `<td style="border-left:2px solid #2a449b;padding:2px 0 2px 14px;vertical-align:middle;${FUENTE}">${nombre}` +
+    `<div style="font-size:13px;color:#2a449b;letter-spacing:.5px">NANOBRIDGE</div>` +
+    `<div style="font-size:12px"><a href="https://${SITIO}" style="color:#7b8794;text-decoration:none">${SITIO}</a></div>` +
+    `</td></tr></table>`;
+  const baja = partes.linkDeBaja ? `<p style="margin:10px 0 0">${PREGUNTA_BAJA} <a href="${ETIQUETA_BAJA}" style="color:#2a449b;font-weight:bold">Darte de baja</a></p>` : "";
+  const pie = partes.pie || baja
+    ? `<tr><td style="border-top:1px solid #e4e7eb;padding:14px 0 0;${FUENTE};font-size:11px;line-height:1.55;color:#7b8794">${partes.pie}${baja}</td></tr>`
+    : "";
+  const cita = partes.cita
+    ? `<tr><td style="padding:18px 0 0;${FUENTE}"><p style="margin:0 0 6px;font-size:12px;color:#7b8794">${escaparHtml(partes.cita.encabezado)}</p>` +
+      `<blockquote style="margin:0 0 0 4px;padding-left:12px;border-left:3px solid #d1d5db;color:#52606d;font-size:14px">${escaparHtml(partes.cita.contenido).replace(/\n/g, "<br>")}</blockquote></td></tr>`
+    : "";
+  return (
+    `<table ${TABLA} width="100%" style="background:#ffffff"><tr><td style="padding:16px 24px">` +
+    `<table ${TABLA} width="100%" style="max-width:600px">` +
+    `<tr><td style="${FUENTE};font-size:15px;line-height:1.6;color:#1f2933">${partes.cuerpo}</td></tr>` +
+    `<tr><td style="padding:6px 0 20px">${firma}</td></tr>` +
+    pie +
+    cita +
+    `</table></td></tr></table>`
+  );
+}
+
 /** El correo listo para mandar: asunto, texto plano y html. `pie` puede ir vacío. */
-export function armarCorreo(plantilla: { asunto: string; cuerpo: string }, datos: DatosPlantilla, pie: string): CorreoArmado {
+export function armarCorreo(plantilla: { asunto: string; cuerpo: string }, datos: DatosPlantilla, pie: string, opciones: OpcionesCorreo = {}): CorreoArmado {
   const v = valores(datos);
   const asunto = sustituir(plantilla.asunto, v).replace(/\s+/g, " ").trim();
-  const cuerpo = textoDe(plantilla.cuerpo, v);
-  const pieTexto = textoDe(pie, v);
+  const texto = [
+    textoDe(plantilla.cuerpo, v),
+    opciones.firma ? `${opciones.firma}\nNANOBRIDGE` : "",
+    textoDe(pie, v),
+    opciones.linkDeBaja ? `${PREGUNTA_BAJA} Darte de baja: ${ETIQUETA_BAJA}` : "",
+    opciones.cita ? `${opciones.cita.encabezado}\n${opciones.cita.contenido.split("\n").map((linea) => `> ${linea}`).join("\n")}` : ""
+  ].filter(Boolean).join("\n\n");
   return {
     asunto,
-    texto: pieTexto ? `${cuerpo}\n\n${pieTexto}` : cuerpo,
-    html: htmlDe(plantilla.cuerpo, v) + htmlDe(pie, v, "color:#6b7280;font-size:12px")
+    texto,
+    html: molde({ cuerpo: htmlDe(plantilla.cuerpo, v), firma: opciones.firma, pie: htmlDe(pie, v, "margin:0 0 8px"), linkDeBaja: Boolean(opciones.linkDeBaja), cita: opciones.cita })
   };
 }

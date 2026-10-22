@@ -8,7 +8,7 @@ import { closeTestDb, testDb } from "./support/db.js";
 import { crearAgente, ensureSeedAdmin, loginAs } from "./support/seed.js";
 import { validarParaEnvio } from "./support/prospectos.js";
 import { correosRespuesta, empresas, envios, mediosContacto, notificaciones, prospectos, respuestas, tareas, usoIa, usuarios } from "../src/database/schema.js";
-import { CORREO_SERVICE } from "../src/integraciones/correo.types.js";
+import { CORREO_SERVICE, ETIQUETA_BAJA } from "../src/integraciones/correo.types.js";
 import { IA_SERVICE } from "../src/integraciones/ia.types.js";
 import type { CorreoFalsoDriver } from "../src/integraciones/correo-falso.driver.js";
 import type { IaFalsaDriver } from "../src/integraciones/ia-falsa.driver.js";
@@ -151,6 +151,17 @@ describe("responder al prospecto desde el CRM", () => {
     expect(enviado.html).toContain("<blockquote");
     // Sin Message-ID del cliente no hay cabeceras de hilo.
     expect(enviado.cabeceras).toBeUndefined();
+    // El pie promete el enlace "Darte de baja": va debajo del pie y antes de
+    // la cita, y SendGrid pone ahí la URL (substitution_tag).
+    expect(enviado.linkDeBaja).toBe(true);
+    expect(enviado.html).toMatch(new RegExp(`<a href="\\[darte_de_baja\\]"[^>]*>Darte de baja</a>`));
+    // Firma con logo y el nombre de quien contesta (molde del 22-oct).
+    expect(enviado.html).toContain("logo-n.png");
+    expect(enviado.html).toContain("Admin Semilla");
+    expect(enviado.html.indexOf(ETIQUETA_BAJA)).toBeLessThan(enviado.html.indexOf("<blockquote"));
+    expect(enviado.texto).toContain(`Darte de baja: ${ETIQUETA_BAJA}`);
+    expect(enviado.texto.indexOf(ETIQUETA_BAJA)).toBeLessThan(enviado.texto.indexOf("> Me interesa"));
+    expect(cuerpoSendgrid(enviado).tracking_settings.subscription_tracking).toEqual({ enable: true, substitution_tag: ETIQUETA_BAJA });
 
     const [fila] = await db.select().from(correosRespuesta).where(eq(correosRespuesta.respuestaId, r.respuestaId));
     expect(fila).toEqual(expect.objectContaining({ estado: "enviado", usoIa: "sin_ia", proveedorId: expect.stringMatching(/^falso-/), para: r.correoContacto }));

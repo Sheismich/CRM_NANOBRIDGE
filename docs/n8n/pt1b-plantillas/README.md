@@ -74,3 +74,33 @@ Con `MODO_PRUEBAS` encendido, un correo nuevo a `+prueba12`:
 2. Correr PT1 con ese prospecto.
 3. El correo que llega trae el asunto y el texto de la pantalla, con el
    primer nombre y la empresa cambiados, y el link de baja al final.
+
+## Prompt 4 · PT1b, link de baja dentro del pie (22-oct-2026)
+
+Desde el molde nuevo del correo (opción A de `docs/diseno/correo-diseno.html`)
+el html y el texto que regresa la API ya traen la línea "¿Ya no quiere recibir
+estos correos? Darte de baja" dentro del pie, con la etiqueta
+`[darte_de_baja]` donde va el link. SendGrid cambia esa etiqueta por su URL de
+baja si se lo pedimos con `substitution_tag`. Por eso PT1b deja de pegar su
+propio pie (`text`/`html` del `subscription_tracking`).
+
+**Orden:** este cambio va JUSTO DESPUÉS del deploy de la API que trae el molde.
+Antes del deploy, SendGrid no encontraría la etiqueta y el correo saldría sin
+link de baja. Después del deploy pero sin este cambio, el correo saldría con
+`[darte_de_baja]` a la vista y con dos pies. No hacerlo cerca de las 10:00 de
+un día hábil (PT4 corre solo a esa hora).
+
+> En el subflujo PT1b, nodo Code "Armar correo SendGrid", cambia
+> `tracking_settings.subscription_tracking` para que quede exactamente así
+> (quita sus campos `text` y `html`):
+>
+> ```js
+> subscription_tracking: { enable: true, substitution_tag: '[darte_de_baja]' }
+> ```
+>
+> No cambies nada más (ni `content`, ni `click_tracking`, ni `open_tracking`).
+
+**Prueba:** correr PT1a con un prospecto de prueba (`+pruebaN`). El correo
+llega con la firma con logo, el pie gris y "Darte de baja" como link (al pasar
+el mouse debe apuntar a SendGrid, no decir `[darte_de_baja]`), y sin un
+segundo pie al final.

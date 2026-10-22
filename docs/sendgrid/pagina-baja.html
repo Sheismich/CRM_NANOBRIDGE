@@ -5,10 +5,11 @@
   Landing Page (HTML propio), en la cuenta DEFINITIVA de SendGrid
   (RUNBOOK_DEPLOY.md §10). El Status de esa pantalla se queda APAGADO: si se
   prende, SendGrid pega su pie a todos los correos (doble pie en los
-  nuestros y pie en los avisos de B4 y PT2). Nuestro pie se enciende correo
-  por correo desde PT1b.
-  Cuando Carlos pase un correo real de la empresa, agregarlo al último
-  párrafo (hola@contacto… no tiene bandeja).
+  nuestros y pie en los avisos de B4 y PT2). Nuestro link se enciende correo
+  por correo (substitution_tag, desde el 22-oct-2026).
+  22-oct-2026: mismo estilo que el molde del correo (opción A de
+  docs/diseno/correo-diseno.html), de "usted" como los correos, y con el
+  contacto y el aviso de privacidad reales.
 -->
 <html lang="es">
 <head>
@@ -17,13 +18,21 @@
 <title>Baja confirmada · NANOBRIDGE</title>
 </head>
 <body style="margin:0;background:#f4f5f7;font-family:Arial,Helvetica,sans-serif;color:#1f2933">
-<div style="padding:72px 16px">
-<div style="max-width:440px;margin:0 auto;padding:40px 32px;background:#fff;border-radius:12px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08)">
-<img src="https://crm-prospeccion-outbound.web.app/logo-nanobridge.png" alt="NANOBRIDGE" style="height:40px;margin-bottom:24px">
-<h1 style="font-size:20px;margin:0 0 12px">Listo, te diste de baja</h1>
-<p style="font-size:15px;line-height:1.6;color:#52606d;margin:0">Ya no te enviaremos más correos de NANOBRIDGE.</p>
-<p style="font-size:13px;line-height:1.6;color:#7b8794;margin:24px 0 0">Si fue un error, contesta el último correo que te enviamos.</p>
+<div style="padding:64px 16px">
+<div style="max-width:460px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)">
+<div style="height:4px;background:#2a449b;background-image:linear-gradient(90deg,#2a449b,#5b2d86,#1fc8c4)"></div>
+<div style="padding:36px 32px 32px;text-align:center">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 28px"><tr>
+<td style="vertical-align:middle"><img src="https://crm-prospeccion-outbound.web.app/logo-n.png" width="36" height="36" alt="" style="display:block;border:0"></td>
+<td style="vertical-align:middle;padding-left:10px;font-size:16px;font-weight:bold;letter-spacing:3px;color:#2a449b">NANOBRIDGE</td>
+</tr></table>
+<div style="width:48px;height:48px;line-height:48px;margin:0 auto 16px;border-radius:50%;background:#e8f6ee;color:#1f8a4c;font-size:24px;font-weight:bold">&#10003;</div>
+<h1 style="font-size:20px;margin:0 0 10px">Listo, se dio de baja</h1>
+<p style="font-size:15px;line-height:1.6;color:#52606d;margin:0">Ya no le enviaremos más correos de prospección de NANOBRIDGE.</p>
+<p style="font-size:13px;line-height:1.6;color:#7b8794;margin:24px 0 0;padding-top:20px;border-top:1px solid #e4e7eb">Si fue un error o tiene alguna duda, escríbanos a <a href="mailto:director.general@nano-bridge-mex.com" style="color:#2a449b">director.general@nano-bridge-mex.com</a>.<br>Consulte nuestro <a href="https://nanobridge-mex.com/aviso-de-privacidad" style="color:#2a449b">aviso de privacidad</a>.</p>
 </div>
+</div>
+<p style="text-align:center;font-size:11px;color:#9aa5b1;margin:16px 0 0">Nano Bridge SA de CV · Ignacio T Chávez 328, col. Obraje, C.P. 20230, Aguascalientes, Ags.</p>
 </div>
 </body>
 </html>

@@ -1,13 +1,15 @@
 import { Injectable } from "@nestjs/common";
 import { env } from "../config/env.js";
+import { ETIQUETA_BAJA } from "../shared/plantillas.js";
 import type { CorreoSaliente, CorreoService } from "./correo.types.js";
 
 const URL_SENDGRID = "https://api.sendgrid.com/v3/mail/send";
 const TIEMPO_MAXIMO_MS = 8000;
 
 // SendGrid v3 mail/send con fetch (sin SDK). Sin rastreo de clics ni de
-// aperturas ni link de baja: son correos internos o respuestas uno a uno, no
-// campañas. La llave solo necesita el permiso Mail Send.
+// aperturas. Link de baja solo en lo que va a prospectos (linkDeBaja): el
+// pie de prospección lo promete; los avisos internos no lo llevan. La llave
+// solo necesita el permiso Mail Send.
 @Injectable()
 export class CorreoSendgridDriver implements CorreoService {
   async enviar(correo: CorreoSaliente) {
@@ -40,7 +42,7 @@ export function cuerpoSendgrid(correo: CorreoSaliente) {
     tracking_settings: {
       click_tracking: { enable: false, enable_text: false },
       open_tracking: { enable: false },
-      subscription_tracking: { enable: false }
+      subscription_tracking: correo.linkDeBaja ? { enable: true, substitution_tag: ETIQUETA_BAJA } : { enable: false }
     }
   };
 }

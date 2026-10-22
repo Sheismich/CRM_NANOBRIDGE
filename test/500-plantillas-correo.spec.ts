@@ -7,7 +7,7 @@ import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
 import { crearAgente, ensureSeedAdmin, loginAs } from "./support/seed.js";
 import { auditoria, envios, plantillasCorreo, prospectos } from "../src/database/schema.js";
-import { armarCorreo, enlacesInvalidos, variablesDesconocidas } from "../src/shared/plantillas.js";
+import { armarCorreo, enlacesInvalidos, ETIQUETA_BAJA, variablesDesconocidas } from "../src/shared/plantillas.js";
 
 const API_KEY = "test_crm_callback_api_key_0001";
 
@@ -21,7 +21,7 @@ describe("armarCorreo (función pura)", () => {
     const correo = armarCorreo(plantilla, { nombre: "Ana María López", empresa: "Moldes del Bajío", giro: "Manufactura" }, "");
     expect(correo.asunto).toBe("Una propuesta para Moldes del Bajío");
     expect(correo.texto).toBe("Hola Ana,\n\nSomos de NANOBRIDGE.\nGiro: Manufactura.\n\nSaludos");
-    expect(correo.html).toBe("<p>Hola Ana,</p><p>Somos de NANOBRIDGE.<br>Giro: Manufactura.</p><p>Saludos</p>");
+    expect(correo.html).toContain("<p>Hola Ana,</p><p>Somos de NANOBRIDGE.<br>Giro: Manufactura.</p><p>Saludos</p>");
   });
 
   it("un dato vacío se quita limpio, con todo y el espacio de antes", () => {
@@ -31,7 +31,7 @@ describe("armarCorreo (función pura)", () => {
 
   it("escapa el html (un nombre con < o & no rompe el correo)", () => {
     const correo = armarCorreo({ asunto: "A", cuerpo: "Para {{empresa}}" }, { empresa: "Tom & <Jerry>" }, "");
-    expect(correo.html).toBe("<p>Para Tom &amp; &lt;Jerry&gt;</p>");
+    expect(correo.html).toContain("<p>Para Tom &amp; &lt;Jerry&gt;</p>");
     expect(correo.texto).toBe("Para Tom & <Jerry>");
   });
 
@@ -44,7 +44,7 @@ describe("armarCorreo (función pura)", () => {
 
   it("formato básico: **negrita**, *cursiva* y [enlace](https://…), en html y en texto", () => {
     const correo = armarCorreo({ asunto: "A", cuerpo: "Somos **NANOBRIDGE**, *con gusto*.\nVea [nuestro sitio](https://nano-bridge-mex.com/?a=1&b=2)." }, {}, "");
-    expect(correo.html).toBe('<p>Somos <strong>NANOBRIDGE</strong>, <em>con gusto</em>.<br>Vea <a href="https://nano-bridge-mex.com/?a=1&amp;b=2">nuestro sitio</a>.</p>');
+    expect(correo.html).toContain('<p>Somos <strong>NANOBRIDGE</strong>, <em>con gusto</em>.<br>Vea <a href="https://nano-bridge-mex.com/?a=1&amp;b=2">nuestro sitio</a>.</p>');
     expect(correo.texto).toBe("Somos NANOBRIDGE, con gusto.\nVea nuestro sitio (https://nano-bridge-mex.com/?a=1&b=2).");
   });
 
@@ -55,13 +55,38 @@ describe("armarCorreo (función pura)", () => {
 
   it("los datos del prospecto no meten formato (una empresa con asteriscos se queda igual)", () => {
     const correo = armarCorreo({ asunto: "A", cuerpo: "Para **{{empresa}}** y {{nombre}}" }, { empresa: "*Tienda* [X](https://malo.test)", nombre: "**Ana**" }, "");
-    expect(correo.html).toBe("<p>Para <strong>*Tienda* [X](https://malo.test)</strong> y **Ana**</p>");
+    expect(correo.html).toContain("<p>Para <strong>*Tienda* [X](https://malo.test)</strong> y **Ana**</p>");
     expect(correo.texto).toBe("Para *Tienda* [X](https://malo.test) y **Ana**");
   });
 
   it("un enlace que no es http(s) no se vuelve enlace", () => {
-    expect(armarCorreo({ asunto: "A", cuerpo: "[clic](javascript:alert(1))" }, {}, "").html).not.toContain("<a");
+    const html = armarCorreo({ asunto: "A", cuerpo: "[clic](javascript:alert(1))" }, {}, "").html;
+    expect(html).toContain("<p>[clic](javascript:alert(1))</p>");
+    expect(html).not.toContain('href="javascript');
     expect(enlacesInvalidos("[clic](javascript:alert(1)) y [bien](https://a.mx) y [mal](www.a.mx)")).toEqual(["clic", "mal"]);
+  });
+
+  it("molde (opción A, 22-oct): firma con logo, pie separado, link de baja y cita, en ese orden", () => {
+    const correo = armarCorreo({ asunto: "A", cuerpo: "Hola." }, {}, "Domicilio", {
+      firma: "Ana <López>",
+      linkDeBaja: true,
+      cita: { encabezado: "El 21 de octubre, Daniel escribió:", contenido: "¿Precio?\nGracias" }
+    });
+    expect(correo.texto).toBe(`Hola.\n\nAna <López>\nNANOBRIDGE\n\nDomicilio\n\n¿Ya no quiere recibir estos correos? Darte de baja: ${ETIQUETA_BAJA}\n\nEl 21 de octubre, Daniel escribió:\n> ¿Precio?\n> Gracias`);
+    const h = correo.html;
+    expect(h).toContain("https://crm-prospeccion-outbound.web.app/logo-n.png");
+    expect(h).toContain("Ana &lt;López&gt;");
+    const orden = ["<p>Hola.</p>", "logo-n.png", "Domicilio", `<a href="${ETIQUETA_BAJA}"`, "<blockquote", "¿Precio?<br>Gracias"].map((t) => h.indexOf(t));
+    expect(orden.every((i) => i >= 0)).toBe(true);
+    expect([...orden].sort((a, b) => a - b)).toEqual(orden);
+  });
+
+  it("sin linkDeBaja no hay etiqueta, y sin firma la firma dice solo NANOBRIDGE", () => {
+    const correo = armarCorreo({ asunto: "A", cuerpo: "Hola." }, {}, "");
+    expect(correo.texto).toBe("Hola.");
+    expect(correo.html).not.toContain(ETIQUETA_BAJA);
+    expect(correo.html).toContain("NANOBRIDGE");
+    expect(correo.html).toContain("nanobridge-mex.com");
   });
 
   it("detecta variables que no existen", () => {
@@ -185,13 +210,16 @@ describe("plantillas de correo", () => {
     const ejemplo = await api().post("/api/v1/plantillas/vista-previa").set("Cookie", supervisor).send({ asunto: "Para {{empresa}}", cuerpo: "Hola {{primer_nombre}}." });
     expect(ejemplo.status).toBe(200);
     expect(ejemplo.body.asunto).toBe("Para Moldes del Bajío");
-    expect(ejemplo.body.texto).toBe("Hola Daniela.\n\nNANOBRIDGE · Calle Falsa 123, León, Gto.");
+    expect(ejemplo.body.texto).toBe(`Hola Daniela.\n\nNANOBRIDGE · Calle Falsa 123, León, Gto.\n\n¿Ya no quiere recibir estos correos? Darte de baja: ${ETIQUETA_BAJA}`);
+    // En la pantalla el link de baja no lleva a ningún lado (SendGrid pone la URL al mandar).
+    expect(ejemplo.body.html).toContain('<a href="#"');
+    expect(ejemplo.body.html).not.toContain(ETIQUETA_BAJA);
 
     const prospectoId = await prospectoValidado("Alimentos", "Ramiro Sánchez");
     const real = await api().post("/api/v1/plantillas/vista-previa").set("Cookie", supervisor).send({ asunto: "Giro {{giro}}", cuerpo: "Hola {{nombre}}.", pie: "", prospecto_id: prospectoId });
     expect(real.status).toBe(200);
     expect(real.body.asunto).toBe("Giro Alimentos");
-    expect(real.body.texto).toBe("Hola Ramiro Sánchez.");
+    expect(real.body.texto).toBe(`Hola Ramiro Sánchez.\n\n¿Ya no quiere recibir estos correos? Darte de baja: ${ETIQUETA_BAJA}`);
 
     const mala = await api().post("/api/v1/plantillas/vista-previa").set("Cookie", supervisor).send({ asunto: "{{precio}}", cuerpo: "Hola." });
     expect(mala.status).toBe(400);
@@ -207,8 +235,12 @@ describe("plantillas de correo", () => {
     const primero = await registrarEnvio(prospectoId, executionId);
     expect(primero.status).toBe(201);
     expect(primero.body.correo.asunto).toMatch(/^Propuesta para Plantillas /);
-    expect(primero.body.correo.texto).toBe("Hola Ernesto,\n\nPrimer correo.\n\nNANOBRIDGE · Calle Falsa 123, León, Gto.");
+    expect(primero.body.correo.texto).toBe(`Hola Ernesto,\n\nPrimer correo.\n\nNANOBRIDGE · Calle Falsa 123, León, Gto.\n\n¿Ya no quiere recibir estos correos? Darte de baja: ${ETIQUETA_BAJA}`);
     expect(primero.body.correo.html).toContain("<p>Hola Ernesto,</p><p>Primer correo.</p>");
+    // Molde del 22-oct (opción A): firma con logo y link de baja dentro del
+    // pie; PT1b le dice a SendGrid que cambie la etiqueta por la URL.
+    expect(primero.body.correo.html).toContain("logo-n.png");
+    expect(primero.body.correo.html).toContain(`<a href="${ETIQUETA_BAJA}"`);
 
     const [envio] = await db.select().from(envios).where(eq(envios.id, primero.body.id));
     const generales = (await api().get("/api/v1/plantillas").set("Cookie", admin)).body.plantillas;

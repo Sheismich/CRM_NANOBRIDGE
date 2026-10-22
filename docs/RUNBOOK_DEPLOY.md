@@ -491,6 +491,10 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       separadora, "NANOBRIDGE", "¿Ya no quieres recibir estos correos?
       Darte de baja"). Antes solo existía el encabezado `List-Unsubscribe`,
       que Gmail no muestra a un remitente nuevo. PT4 usa el mismo subflujo.
+      **22-oct-2026:** con el molde nuevo del correo la línea de baja ya
+      viene de la API dentro del pie (etiqueta `[darte_de_baja]`) y PT1b
+      solo manda `substitution_tag` (prompt 4 de `docs/n8n/pt1b-plantillas/`).
+      Las respuestas desde el CRM también la llevan.
 - [ ] Domicilio de la empresa (lo pasa Carlos): se escribe en Administración →
       Correos de prospección → "Pie de los tres", no en n8n.
 - [ ] Página de baja en español: hoy, al darse de baja, SendGrid muestra
