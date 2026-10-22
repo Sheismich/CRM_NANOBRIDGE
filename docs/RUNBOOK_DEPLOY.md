@@ -499,8 +499,8 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - [ ] Domicilio de la empresa (lo pasa Carlos): se escribe en Administración →
       Correos de prospección → "Pie de los tres", no en n8n.
 - [ ] Página de baja en español: hoy, al darse de baja, SendGrid muestra
-      "Unsubscribe successful" en inglés y sin diseño. Se hace en la cuenta
-      DEFINITIVA de SendGrid (en la de prueba se perdería): Settings →
+      "Unsubscribe successful" en inglés y sin diseño. Desde el 22-oct-2026
+      la cuenta actual es la definitiva (abajo), así que se hace ya: Settings →
       Tracking → Subscription Tracking → Landing Page con HTML propio, pegar
       `docs/sendgrid/pagina-baja.html`. El Status de esa pantalla se queda
       APAGADO, o SendGrid pondría su pie en todos los correos (doble en los
@@ -573,11 +573,14 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       `gcloud run services update nanobridge-api --update-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest --update-env-vars=IA_DRIVER=gemini,GEMINI_MODELO=gemini-3.8-flash --region=us-central1`.
       Para apagarla: `--update-env-vars=IA_DRIVER=falso` (los botones vuelven a salir
       desactivados).
-- [ ] Cuenta definitiva de SendGrid (la de prueba vence el 24-nov-2026 y está
-      con el correo de pasante). Al cambiar: rehacer la autenticación del
-      dominio, dar de alta Inbound Parse, poner la API key nueva en n8n y la
-      página de baja en español (arriba).
-      Antes de que termine la pasantía de Fabián.
+- [ ] Cuenta de SendGrid: **DECIDIDO 22-oct-2026, se queda la actual** (la de
+      `pasante.tics002@nano-bridge-mex.com`): ya tiene el dominio verificado,
+      Inbound Parse, el Event Webhook de PT3 y las llaves, y el jefe tiene
+      acceso al correo. Ya no se migra. Falta, antes del 24-nov-2026 (vence la
+      prueba): pasarla a un plan de pago con la tarjeta de la empresa,
+      confirmando antes con SendGrid que ese plan incluye Inbound Parse (sin él
+      no llegan las respuestas a PT2). Recomendado: dar de alta al jefe como
+      Teammate administrador, para que la cuenta no dependa de la pasantía.
 - [x] Nombre del admin corregido a "Fabián" (7-oct-2026). Desde la revisión `00021-xq8` un
       JSON que no es UTF-8 se rechaza (400 `TEXTO_NO_UTF8`), así que no se repite.
 - [ ] Las 5 respuestas de Carlos, incluida: ¿"no interesado" bloquea para
