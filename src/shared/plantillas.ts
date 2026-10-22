@@ -124,8 +124,14 @@ const FUENTE = "font-family:Arial,Helvetica,sans-serif";
 const TABLA = 'role="presentation" cellpadding="0" cellspacing="0" border="0"';
 
 export interface OpcionesCorreo {
-  /** Quien firma (respuestas desde el CRM). Sin él, la firma con logo dice solo NANOBRIDGE. */
+  /** Quien firma (respuestas desde el CRM). Sin él, la firma dice solo NANOBRIDGE. */
   firma?: string;
+  /**
+   * Logo en la firma: solo en las respuestas desde el CRM (el cliente ya
+   * contestó). En prospección no: con la imagen Gmail los mandaba a
+   * Promociones (22-oct-2026).
+   */
+  logo?: boolean;
   /** Todo lo que va a un prospecto: "Darte de baja" al final del pie (ETIQUETA_BAJA). */
   linkDeBaja?: boolean;
   /** Lo que escribió el cliente, citado al final (respuestas desde el CRM). */
@@ -135,11 +141,11 @@ export interface OpcionesCorreo {
 // Molde del 22-oct-2026 (opción A de docs/diseno/correo-diseno.html): se ve
 // como el correo de una persona con firma cuidada, no como boletín. Solo
 // tablas y estilos en línea, que es lo que Gmail y Outlook respetan.
-function molde(partes: { cuerpo: string; firma?: string; pie: string; linkDeBaja: boolean; cita?: OpcionesCorreo["cita"] }) {
+function molde(partes: { cuerpo: string; firma?: string; logo: boolean; pie: string; linkDeBaja: boolean; cita?: OpcionesCorreo["cita"] }) {
   const nombre = partes.firma ? `<div style="font-size:15px;font-weight:bold;color:#1f2933">${escaparHtml(partes.firma)}</div>` : "";
   const firma =
     `<table ${TABLA}><tr>` +
-    `<td style="padding:0 14px 0 0;vertical-align:middle"><img src="${LOGO}" width="44" height="44" alt="NANOBRIDGE" style="display:block;border:0"></td>` +
+    (partes.logo ? `<td style="padding:0 14px 0 0;vertical-align:middle"><img src="${LOGO}" width="44" height="44" alt="NANOBRIDGE" style="display:block;border:0"></td>` : "") +
     `<td style="border-left:2px solid #2a449b;padding:2px 0 2px 14px;vertical-align:middle;${FUENTE}">${nombre}` +
     `<div style="font-size:13px;color:#2a449b;letter-spacing:.5px">NANOBRIDGE</div>` +
     `<div style="font-size:12px"><a href="https://${SITIO}" style="color:#7b8794;text-decoration:none">${SITIO}</a></div>` +
@@ -177,6 +183,6 @@ export function armarCorreo(plantilla: { asunto: string; cuerpo: string }, datos
   return {
     asunto,
     texto,
-    html: molde({ cuerpo: htmlDe(plantilla.cuerpo, v), firma: opciones.firma, pie: htmlDe(pie, v, "margin:0 0 8px"), linkDeBaja: Boolean(opciones.linkDeBaja), cita: opciones.cita })
+    html: molde({ cuerpo: htmlDe(plantilla.cuerpo, v), firma: opciones.firma, logo: Boolean(opciones.logo), pie: htmlDe(pie, v, "margin:0 0 8px"), linkDeBaja: Boolean(opciones.linkDeBaja), cita: opciones.cita })
   };
 }

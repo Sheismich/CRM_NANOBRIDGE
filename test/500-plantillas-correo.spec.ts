@@ -69,6 +69,7 @@ describe("armarCorreo (función pura)", () => {
   it("molde (opción A, 22-oct): firma con logo, pie separado, link de baja y cita, en ese orden", () => {
     const correo = armarCorreo({ asunto: "A", cuerpo: "Hola." }, {}, "Domicilio", {
       firma: "Ana <López>",
+      logo: true,
       linkDeBaja: true,
       cita: { encabezado: "El 21 de octubre, Daniel escribió:", contenido: "¿Precio?\nGracias" }
     });
@@ -85,6 +86,7 @@ describe("armarCorreo (función pura)", () => {
     const correo = armarCorreo({ asunto: "A", cuerpo: "Hola." }, {}, "");
     expect(correo.texto).toBe("Hola.");
     expect(correo.html).not.toContain(ETIQUETA_BAJA);
+    expect(correo.html).not.toContain("<img");
     expect(correo.html).toContain("NANOBRIDGE");
     expect(correo.html).toContain("nanobridge-mex.com");
   });
@@ -237,9 +239,10 @@ describe("plantillas de correo", () => {
     expect(primero.body.correo.asunto).toMatch(/^Propuesta para Plantillas /);
     expect(primero.body.correo.texto).toBe(`Hola Ernesto,\n\nPrimer correo.\n\nNANOBRIDGE · Calle Falsa 123, León, Gto.\n\n¿Ya no quiere recibir estos correos? Darte de baja: ${ETIQUETA_BAJA}`);
     expect(primero.body.correo.html).toContain("<p>Hola Ernesto,</p><p>Primer correo.</p>");
-    // Molde del 22-oct (opción A): firma con logo y link de baja dentro del
-    // pie; PT1b le dice a SendGrid que cambie la etiqueta por la URL.
-    expect(primero.body.correo.html).toContain("logo-n.png");
+    // Molde del 22-oct (opción A): link de baja dentro del pie (PT1b le dice
+    // a SendGrid que cambie la etiqueta por la URL) y firma SIN logo: con la
+    // imagen, Gmail lo mandaba a Promociones.
+    expect(primero.body.correo.html).not.toContain("logo-n.png");
     expect(primero.body.correo.html).toContain(`<a href="${ETIQUETA_BAJA}"`);
 
     const [envio] = await db.select().from(envios).where(eq(envios.id, primero.body.id));
