@@ -34,7 +34,8 @@ export function Contador({
     </>
   );
   const clases = clsx(
-    "tarjeta-blanca relative block min-w-0 overflow-hidden px-4 pb-4 pt-3.5 text-left",
+    // w-full: como botón (con onClick) no se estira solo y en el celular se salía de su columna.
+    "tarjeta-blanca relative block w-full min-w-0 overflow-hidden px-4 pb-4 pt-3.5 text-left",
     seleccionado && "!border-navy ring-1 ring-navy"
   );
   if (onClick) {

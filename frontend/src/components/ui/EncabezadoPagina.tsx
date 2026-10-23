@@ -13,7 +13,8 @@ export function EncabezadoPagina({ ceja, titulo, subtitulo, acciones, className 
         <h1 className="font-heading text-[24px] font-black tracking-[-0.5px] text-strong md:text-[30px]">{titulo}</h1>
         {subtitulo && <p className="mt-1 text-[14px] text-ink-2">{subtitulo}</p>}
       </div>
-      {acciones && <div className="flex flex-wrap items-center gap-2.5">{acciones}</div>}
+      {/* min-w-0 y max-w-full: sin ellos, unas pestañas (Segmento) que no caben en el celular empujaban toda la página. */}
+      {acciones && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2.5">{acciones}</div>}
     </div>
   );
 }
