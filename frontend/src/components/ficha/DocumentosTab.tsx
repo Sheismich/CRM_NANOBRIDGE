@@ -161,7 +161,8 @@ export function SubirDocumentoForm({
     setEnviando(true);
     try {
       await api.postForm("/api/v1/documentos", form);
-      await queryClient.invalidateQueries({ queryKey: ["documentos"] });
+      // También el Historial de la ficha (y su resumen con IA), que enseña los documentos.
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["documentos"] }), queryClient.invalidateQueries({ queryKey: ["timeline"] })]);
       onDone();
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
@@ -233,7 +234,8 @@ function DocumentoFila({ documento: d, tipo, oportunidad, puedeEliminar, onAbrir
     setOcupado(true);
     try {
       await accion();
-      await queryClient.invalidateQueries({ queryKey: ["documentos"] });
+      // También el Historial de la ficha (y su resumen con IA), que enseña los documentos.
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["documentos"] }), queryClient.invalidateQueries({ queryKey: ["timeline"] })]);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
     } finally {

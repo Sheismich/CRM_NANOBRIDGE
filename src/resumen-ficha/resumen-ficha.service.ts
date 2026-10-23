@@ -61,6 +61,12 @@ export function sinDatosDeContacto(texto: string): string {
     .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[correo]")
     .replace(/\+?\d[\d\s().-]{6,}\d/g, (coincidencia) => (coincidencia.replace(/\D/g, "").length >= 7 ? "[teléfono]" : coincidencia));
 }
+// La tarea automática de un documento rechazado se llama "Corregir documento:
+// <nombre del archivo>" (documentos.service.ts), y el nombre a veces trae el de
+// una persona ("INE Rosa Peña.pdf"). A la IA le basta con saber que es un archivo.
+export function sinNombreDeArchivo(titulo: unknown): unknown {
+  return typeof titulo === "string" ? titulo.replace(/^(Corregir documento:\s*).+$/s, "$1[archivo]") : titulo;
+}
 const limpio = (texto: unknown) => (typeof texto === "string" && texto.trim() ? recortarTexto(sinDatosDeContacto(texto.trim().replace(/\s+/g, " ")), MAX_TEXTO) : null);
 
 type Evento = { tipo: string; fecha: Date; resultado: string | null; proxima_accion: string | null; detalle: Record<string, unknown> };
@@ -89,8 +95,16 @@ function lineaDeEvento(e: Evento): string | null {
       partes.push(limpio(d.texto));
       break;
     case "tarea":
-      partes.push(`Tarea cerrada: ${limpio(d.titulo) ?? "(sin título)"}`);
+      partes.push(`Tarea cerrada: ${limpio(sinNombreDeArchivo(d.titulo)) ?? "(sin título)"}`);
       partes.push(limpio(e.resultado) && `resultado: ${limpio(e.resultado)}`);
+      break;
+    // Sin el nombre del archivo ni la explicación del rechazo: a veces traen
+    // nombres de personas o datos de una identificación.
+    case "documento_subido":
+      partes.push(`Se subió ${limpio(d.tipo_nombre) ?? "un documento"}${typeof d.version === "number" && d.version > 1 ? ` (versión ${d.version})` : ""}`);
+      break;
+    case "documento_revisado":
+      partes.push(`${limpio(d.tipo_nombre) ?? "Documento"} ${e.resultado === "rechazado" ? "rechazado" : "aprobado"}${e.resultado === "rechazado" && limpio(d.motivo) ? `: ${limpio(d.motivo)}` : ""}`);
       break;
     case "cambio_estado_prospecto":
       partes.push(`El prospecto pasó a ${e.resultado ?? "otro estado"}`);
@@ -226,7 +240,7 @@ export class ResumenFichaService {
       ...(d.cotizaciones.length === 0 ? ["(ninguna)"] : d.cotizaciones.map((c) => `- #${c.id} v${c.version} · ${c.estado} · total ${moneda.format(Number(c.total))} ${c.moneda} · emitida ${dia(c.fecha_emision)}${c.fecha_envio ? ` · enviada ${dia(c.fecha_envio)}` : ""}`)),
       "",
       "Tareas abiertas:",
-      ...(d.tareasAbiertas.length === 0 ? ["(ninguna)"] : d.tareasAbiertas.map((t) => `- ${limpio(t.titulo)}${t.fecha_limite ? ` · vence ${dia(t.fecha_limite)}` : ""}`))
+      ...(d.tareasAbiertas.length === 0 ? ["(ninguna)"] : d.tareasAbiertas.map((t) => `- ${limpio(sinNombreDeArchivo(t.titulo))}${t.fecha_limite ? ` · vence ${dia(t.fecha_limite)}` : ""}`))
     ];
     return lineas.join("\n");
   }

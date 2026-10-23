@@ -59,7 +59,8 @@ function Encabezado({ fila, puedeRevisar }: { fila: DocumentoBandeja; puedeRevis
     setError(null);
     try {
       await accion();
-      await queryClient.invalidateQueries({ queryKey: ["documentos"] });
+      // También el Historial de la ficha (y su resumen con IA), que enseña los documentos.
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["documentos"] }), queryClient.invalidateQueries({ queryKey: ["timeline"] })]);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
     } finally {

@@ -1,7 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { actividades, auditoria, contactos, correosRespuesta, empresas, envios, oportunidades, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
+import { actividades, auditoria, catalogoTipoDocumento, contactos, correosRespuesta, documentos, empresas, envios, oportunidades, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
+import { NOMBRE_MOTIVO_RECHAZO_DOCUMENTO } from "../shared/motivos-rechazo-documento.js";
 import { HttpError } from "../shared/http-error.js";
 import { ACCION_CAMBIO_ESTADO_POR_CLASIFICACION } from "../shared/clasificacion-respuesta.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
@@ -89,6 +91,44 @@ function auditoriaToEvento(row: typeof auditoria.$inferSelect): TimelineEvento {
     resultado: despues.estado ?? null,
     proxima_accion: null,
     detalle: { prospecto_id: row.entidadId, motivo: despues.motivo ?? null }
+  };
+}
+
+// Documentos (23-oct-2026, PLAN_CRM_DEFINITIVO.md #4: "Documentos enviados" y
+// "Confirmaciones de revisión"). Cada versión subida es un evento y su
+// revisión, otro; solo se guarda la última revisión de cada versión, así que
+// si se rechaza y luego se aprueba, el Historial enseña la aprobación.
+type FilaDocumento = { documento: typeof documentos.$inferSelect; tipoNombre: string | null; usuarioNombre: string | null };
+
+function documentoSubidoToEvento({ documento: d, tipoNombre, usuarioNombre }: FilaDocumento): TimelineEvento {
+  return {
+    tipo: "documento_subido",
+    fecha: d.creadoEn,
+    responsable_id: d.subidoPor,
+    canal: null,
+    resultado: null,
+    proxima_accion: null,
+    detalle: { documento_id: d.id, tipo_nombre: tipoNombre, nombre: d.nombreOriginal, version: d.version, oportunidad_id: d.oportunidadId, contacto_id: d.contactoId, usuario_nombre: usuarioNombre }
+  };
+}
+
+function documentoRevisadoToEvento({ documento: d, tipoNombre, usuarioNombre }: FilaDocumento): TimelineEvento {
+  return {
+    tipo: "documento_revisado",
+    fecha: d.revisadoEn!,
+    responsable_id: d.revisadoPor,
+    canal: null,
+    resultado: d.revision,
+    proxima_accion: null,
+    detalle: {
+      documento_id: d.id,
+      tipo_nombre: tipoNombre,
+      nombre: d.nombreOriginal,
+      version: d.version,
+      motivo: d.motivoRechazo ? NOMBRE_MOTIVO_RECHAZO_DOCUMENTO[d.motivoRechazo] : null,
+      motivo_detalle: d.motivoRechazoDetalle,
+      usuario_nombre: usuarioNombre
+    }
   };
 }
 
@@ -226,6 +266,32 @@ export class ActividadesService {
       : and(eq(tareas.empresaId, query.empresaId), isNotNull(tareas.cerradaEn));
     const filasTareas = await this.db.select().from(tareas).where(tareasCondition).orderBy(desc(tareas.cerradaEn)).limit(query.limit);
     eventos.push(...filasTareas.map(tareaToEvento));
+
+    // Mismo alcance que la pestaña Documentos: si se ve la empresa, se ven sus documentos.
+    const documentosCondition = query.contactoId
+      ? and(eq(documentos.empresaId, query.empresaId), eq(documentos.contactoId, query.contactoId), eq(documentos.activo, true))
+      : and(eq(documentos.empresaId, query.empresaId), eq(documentos.activo, true));
+    const subidoPor = alias(usuarios, "subido_por");
+    const filasSubidos = await this.db
+      .select({ documento: documentos, tipoNombre: catalogoTipoDocumento.nombre, usuarioNombre: subidoPor.nombre })
+      .from(documentos)
+      .leftJoin(catalogoTipoDocumento, eq(catalogoTipoDocumento.id, documentos.tipoDocumentoId))
+      .leftJoin(subidoPor, eq(subidoPor.id, documentos.subidoPor))
+      .where(documentosCondition)
+      .orderBy(desc(documentos.creadoEn))
+      .limit(query.limit);
+    eventos.push(...filasSubidos.map(documentoSubidoToEvento));
+
+    const revisor = alias(usuarios, "revisor");
+    const filasRevisados = await this.db
+      .select({ documento: documentos, tipoNombre: catalogoTipoDocumento.nombre, usuarioNombre: revisor.nombre })
+      .from(documentos)
+      .leftJoin(catalogoTipoDocumento, eq(catalogoTipoDocumento.id, documentos.tipoDocumentoId))
+      .leftJoin(revisor, eq(revisor.id, documentos.revisadoPor))
+      .where(and(documentosCondition, isNotNull(documentos.revisadoEn), ne(documentos.revision, "por_revisar")))
+      .orderBy(desc(documentos.revisadoEn))
+      .limit(query.limit);
+    eventos.push(...filasRevisados.map(documentoRevisadoToEvento));
 
     eventos.sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
     return { data: eventos.slice(0, query.limit) };

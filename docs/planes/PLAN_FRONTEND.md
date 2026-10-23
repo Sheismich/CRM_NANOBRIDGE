@@ -559,6 +559,27 @@ siempre creaba otra empresa aunque se llamara igual. Backend con migración 037
   prospección), `PERSONA_EN_BAJA`, `CONTACTO_DESACTIVADO`.
 - `GET /empresas` trae ahora `tamano` (tipo `Empresa.tamano`, opcional).
 
+## Documentos en el Historial de la ficha (Mich, 23 oct 2026)
+
+`PLAN_CRM_DEFINITIVO.md` #4 pide "Documentos enviados" y "Confirmaciones de revisión" en la línea de
+tiempo; antes solo se veían en la pestaña Documentos. Sin migración: `GET /actividades` los lee de
+`documentos`. Pruebas en `test/530-historial-documentos.spec.ts`.
+
+- **Eventos nuevos:** `documento_subido` (cada versión, con tipo, nombre, versión y quién lo subió) y
+  `documento_revisado` (`resultado` = `aprobado` o `rechazado`, con el motivo). Solo se guarda la última
+  revisión de cada versión: si se rechaza y luego se aprueba, el Historial enseña la aprobación. Los
+  eliminados no salen. Mismo alcance que la pestaña Documentos (quien ve la empresa ve sus documentos).
+- **`HistorialTab.tsx`:** "Documento subido" / "Documento revisado" con la pastilla Aprobado (verde) o
+  Rechazado (rojo), quién, el motivo y "Ver en Documentos" (`?tab=documentos`).
+- Subir, aprobar o rechazar un documento ahora también refresca el Historial (`["timeline"]`) en
+  `DocumentosTab`, `ModalRechazo` y `PanelDocumento`.
+- **Resumen con IA:** le llega "Se subió <tipo>" y "<tipo> rechazado: <motivo>", sin el nombre del archivo
+  ni la explicación del rechazo. De paso: el título de la tarea automática "Corregir documento: <archivo>"
+  le llega como "Corregir documento: [archivo]" (antes iba con el nombre del archivo, que a veces trae el
+  de una persona).
+- Revisado con la API simulada en Edge, Safari (WebKit) y Firefox, a 320, 375, 768 y 1440 px, de día y de
+  noche: 48 vistas sin problemas.
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.

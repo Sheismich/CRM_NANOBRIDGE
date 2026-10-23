@@ -86,7 +86,8 @@ export type ContactoConMedio = {
 // cerradas y cambios de estado de prospecto. `detalle` cambia de forma
 // según `tipo`, por eso queda como registro abierto.
 export type TimelineEvento = {
-  tipo: "llamada" | "whatsapp" | "comentario" | "correo_enviado" | "correo_recibido" | "correo_respondido" | "tarea" | "cambio_estado_prospecto";
+  // documento_subido / documento_revisado: 23-oct-2026 (resultado "aprobado" o "rechazado").
+  tipo: "llamada" | "whatsapp" | "comentario" | "correo_enviado" | "correo_recibido" | "correo_respondido" | "tarea" | "cambio_estado_prospecto" | "documento_subido" | "documento_revisado";
   fecha: string;
   responsable_id: number | null;
   canal: string | null;

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { Button } from "../ui/Button";
 import { Tarjeta } from "../ui/Tarjeta";
 import { Icono } from "../ui/Icono";
@@ -17,8 +18,12 @@ const ETIQUETA_TIPO: Record<TimelineEvento["tipo"], string> = {
   correo_recibido: "Respuesta recibida",
   correo_respondido: "Respuesta por correo",
   tarea: "Tarea cerrada",
-  cambio_estado_prospecto: "Cambio de estado del prospecto"
+  cambio_estado_prospecto: "Cambio de estado del prospecto",
+  documento_subido: "Documento subido",
+  documento_revisado: "Documento revisado"
 };
+
+const ES_DOCUMENTO = new Set<TimelineEvento["tipo"]>(["documento_subido", "documento_revisado"]);
 
 // Los que vienen de n8n (envíos/respuestas/cambios de estado) se marcan
 // distinto de lo capturado a mano, para que se note qué hizo una persona.
@@ -33,7 +38,9 @@ const ETIQUETA_RESULTADO: Record<string, string> = {
   automatica: "Respuesta automática",
   ambigua: "Ambigua",
   invalido: "Inválido",
-  reagendar: "Reagendar"
+  reagendar: "Reagendar",
+  aprobado: "Aprobado",
+  rechazado: "Rechazado"
 };
 
 const formatoFecha = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -47,6 +54,10 @@ function textoPrincipal(evento: TimelineEvento): string | null {
   if (evento.tipo === "correo_respondido") return typeof d.texto === "string" ? d.texto : null;
   if (evento.tipo === "cambio_estado_prospecto") return typeof d.motivo === "string" ? d.motivo : null;
   if (evento.tipo === "correo_enviado") return typeof d.numero_contacto === "number" ? `Contacto #${d.numero_contacto} de la secuencia` : null;
+  if (ES_DOCUMENTO.has(evento.tipo)) {
+    const version = typeof d.version === "number" && d.version > 1 ? ` (versión ${d.version})` : "";
+    return [typeof d.tipo_nombre === "string" ? d.tipo_nombre : null, typeof d.nombre === "string" ? `${d.nombre}${version}` : null].filter(Boolean).join(" · ") || null;
+  }
   return typeof d.comentario === "string" ? d.comentario : null;
 }
 
@@ -57,6 +68,7 @@ function textoPrincipal(evento: TimelineEvento): string | null {
 // Solo lo que es una clave se muestra como etiqueta; el texto libre, aparte.
 function claveEtiqueta(evento: TimelineEvento): string | null {
   const clasificacionTarea = evento.tipo === "tarea" && typeof evento.detalle.clasificacion === "string" ? evento.detalle.clasificacion : null;
+  if (evento.tipo === "documento_revisado") return evento.resultado;
   const clave = clasificacionTarea ?? evento.resultado;
   if (clave && clave in ETIQUETA_RESULTADO) return clave;
   if (evento.tipo === "cambio_estado_prospecto") return evento.resultado;
@@ -64,19 +76,20 @@ function claveEtiqueta(evento: TimelineEvento): string | null {
 }
 
 function resultadoLibre(evento: TimelineEvento): string | null {
-  if (!evento.resultado || evento.tipo === "cambio_estado_prospecto" || evento.resultado in ETIQUETA_RESULTADO) return null;
+  if (!evento.resultado || evento.tipo === "cambio_estado_prospecto" || evento.tipo === "documento_revisado" || evento.resultado in ETIQUETA_RESULTADO) return null;
   return evento.resultado;
 }
 
 function claseEtiqueta(clave: string) {
-  if (clave === "interesado") return "bg-ok-bg text-ok";
-  if (clave === "no_interesado" || clave === "baja" || clave === "invalido") return "bg-danger-bg text-danger";
+  if (clave === "interesado" || clave === "aprobado") return "bg-ok-bg text-ok";
+  if (clave === "no_interesado" || clave === "baja" || clave === "invalido" || clave === "rechazado") return "bg-danger-bg text-danger";
   return "bg-soft text-ink-2";
 }
 
 // Historial unificado de la ficha (GET /actividades): lo registrado a mano,
 // los correos y respuestas de la automatización, tareas cerradas y cambios
-// de estado del prospecto, del más reciente al más viejo. Lo automático va
+// de estado del prospecto y documentos (subidos y revisados), del más reciente
+// al más viejo. Lo automático va
 // con un punto cyan; las respuestas, con el color de su clasificación.
 export function HistorialTab({ empresaId, contactos }: { empresaId: number; contactos: { id: number; nombre: string }[] }) {
   const [registrando, setRegistrando] = useState(false);
@@ -114,7 +127,7 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
             const texto = textoPrincipal(evento);
             const clave = claveEtiqueta(evento);
             const libre = resultadoLibre(evento);
-            const punto = clave === "interesado" ? "bg-ok" : clave === "baja" || clave === "no_interesado" ? "bg-danger" : AUTOMATICOS.has(evento.tipo) ? "bg-info" : "bg-navy";
+            const punto = clave === "interesado" || clave === "aprobado" ? "bg-ok" : clave === "baja" || clave === "no_interesado" || clave === "rechazado" ? "bg-danger" : AUTOMATICOS.has(evento.tipo) ? "bg-info" : "bg-navy";
             return (
               <li key={i} className="relative grid grid-cols-[86px_minmax(0,1fr)] gap-3 pb-4 last:pb-0 md:grid-cols-[110px_minmax(0,1fr)]">
                 <span className="pt-0.5 text-[12px] font-bold text-strong">{formatoFecha.format(new Date(evento.fecha))}</span>
@@ -125,10 +138,22 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
                     {AUTOMATICOS.has(evento.tipo) && <span className="rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-bold text-info">Automático</span>}
                     {clave && <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${claseEtiqueta(clave)}`}>{ETIQUETA_RESULTADO[clave] ?? clave}</span>}
                     {evento.tipo === "correo_respondido" && typeof evento.detalle.usuario_nombre === "string" && <span className="text-[12px] text-ink-3">{evento.detalle.usuario_nombre} desde el CRM</span>}
+                    {ES_DOCUMENTO.has(evento.tipo) && typeof evento.detalle.usuario_nombre === "string" && <span className="text-[12px] text-ink-3">{evento.detalle.usuario_nombre}</span>}
                   </div>
                   {texto && <p className="mt-1 whitespace-pre-line text-[13px] text-ink-2">{texto}</p>}
                   {libre && <p className="mt-1 text-xs text-ink-2">Resultado: {libre}</p>}
                   {evento.proxima_accion && <p className="mt-1 text-xs text-ink-3">Próxima acción: {evento.proxima_accion}</p>}
+                  {evento.tipo === "documento_revisado" && typeof evento.detalle.motivo === "string" && (
+                    <p className="mt-1 text-xs text-ink-2">
+                      Motivo: {evento.detalle.motivo}
+                      {typeof evento.detalle.motivo_detalle === "string" && ` · ${evento.detalle.motivo_detalle}`}
+                    </p>
+                  )}
+                  {ES_DOCUMENTO.has(evento.tipo) && (
+                    <Link to={{ search: "?tab=documentos" }} replace className="mt-1.5 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-navy hover:underline">
+                      Ver en Documentos
+                    </Link>
+                  )}
                   {sePuedeResponder(evento) && (
                     <button type="button" onClick={() => setRespondiendo(evento.detalle.respuesta_id as number)} className="mt-1.5 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-navy hover:underline">
                       <Icono nombre="responder" size={14} /> Responder

@@ -50,7 +50,8 @@ function Formulario({ id, onCerrar, onRechazado }: { id: number; onCerrar: () =>
     setError(null);
     try {
       await api.patch(`/api/v1/documentos/${id}/rechazar`, { motivoRechazo: motivo, motivoRechazoDetalle: detalle.trim() });
-      await queryClient.invalidateQueries({ queryKey: ["documentos"] });
+      // También el Historial de la ficha (y su resumen con IA), que enseña los documentos.
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ["documentos"] }), queryClient.invalidateQueries({ queryKey: ["timeline"] })]);
       onRechazado?.();
       onCerrar();
     } catch (err) {
