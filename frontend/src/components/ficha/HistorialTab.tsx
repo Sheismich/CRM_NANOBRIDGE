@@ -106,8 +106,10 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
       color="cyan"
       extra={
         !registrando && (
-          <Button variant="outline" className="px-3 py-1.5 text-[12px]" onClick={() => setRegistrando(true)}>
-            + Anotar lo que pasó
+          // En el celular, el texto largo dejaba el título en "Hi…".
+          <Button variant="outline" className="px-3 py-1.5 text-[12px]" aria-label="Anotar lo que pasó" onClick={() => setRegistrando(true)}>
+            <span className="sm:hidden">+ Anotar</span>
+            <span className="hidden sm:inline">+ Anotar lo que pasó</span>
           </Button>
         )
       }
