@@ -1,9 +1,7 @@
 /* Fuentes del diseño: Anton para números grandes y el logotipo,
-   Montserrat para títulos, Manrope para el resto. Va ANTES que
-   @import "tailwindcss": las reglas @import deben preceder a cualquier
-   otra regla salvo @charset/@layer, o el CSS generado las descarta en
-   silencio. */
-@import url("https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@600;700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap");
+   Montserrat para títulos, Manrope para el resto. Se piden desde
+   index.html (27-oct-2026): con @import aquí el navegador las descubría
+   hasta bajar este CSS, y en 3G llegaban ~1 s más tarde. */
 @import "tailwindcss";
 
 /* dark: aplica con <html data-theme="dark"> (lib/tema.ts), no con la
