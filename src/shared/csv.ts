@@ -31,8 +31,9 @@ export function toCsv(rows: Record<string, unknown>[], headers?: string[]): stri
 // al abrir el CSV en Excel/Sheets (CSV/formula injection, OWASP). El
 // reporte de actividades incluye usuarios.nombre tal cual viene de la BD
 // (hallazgo de code review, 11-sep-2026) -- anteponer un apóstrofo fuerza
-// esos valores a texto plano sin cambiar lo que el usuario ve.
-const FORMULA_TRIGGER = /^[=+\-@]/;
+// esos valores a texto plano sin cambiar lo que el usuario ve. Tabulador y
+// retorno de carro al inicio también, como pide OWASP (27-oct-2026).
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
 
 function escapeCsvValue(value: unknown): string {
   if (value === null || value === undefined) return "";

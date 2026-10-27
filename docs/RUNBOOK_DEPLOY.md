@@ -457,6 +457,26 @@ parches hasta abril de 2027; antes de esa fecha hay que pasar a Node 24.
   guardan 7, y con binary log se puede recuperar a cualquier minuto de los
   últimos 7 días. `gcloud sql backups list --instance=nanobridge-db` mostró
   respaldos SUCCESSFUL.
+- **Restauración probada el 27-oct-2026 (Mich).** El respaldo de las 09:00 UTC
+  se restauró en una instancia temporal y se comparó contra la real: mismas 35
+  tablas, migración 037, y las únicas 3 filas de diferencia eran de después
+  del respaldo (un envío de PT4, su auditoría y la métrica del día). Receta,
+  con lo que tardó cada paso:
+  1. `gcloud sql instances create nanobridge-restore-prueba --database-version=MYSQL_8_0
+     --tier=db-f1-micro --region=us-central1 --storage-size=10 --storage-type=SSD
+     --edition=enterprise --no-backup` (~10 min).
+  2. `gcloud sql backups list --instance=nanobridge-db` y luego
+     `gcloud sql backups restore <ID> --restore-instance=nanobridge-restore-prueba
+     --backup-instance=nanobridge-db` (~20 min). **`--restore-instance` es el destino
+     y se sobreescribe: nunca poner ahí `nanobridge-db`** salvo que de verdad se
+     quiera regresar la base real a ese respaldo.
+  3. Autorizar la IP como en §6 y revisar con el mismo usuario `appuser` (el
+     respaldo trae los usuarios de MySQL). Revocar al terminar.
+  4. `gcloud sql instances delete nanobridge-restore-prueba`.
+  Para un borrado accidental es mejor recuperar a un minuto exacto (binary log, 7
+  días): `gcloud sql instances clone nanobridge-db <nueva> --point-in-time=<UTC>`
+  crea una copia al minuto anterior, sin tocar la real, y de ahí se copian las
+  filas perdidas.
 - ~~Forzar SSL en las conexiones a Cloud SQL~~ Hecho y verificado el
   15-oct-2026: `sslMode: ENCRYPTED_ONLY` (ya estaba así al revisarlo; se
   volvió a aplicar). La API no se afecta (entra por el socket del conector
