@@ -600,6 +600,21 @@ https://claude.ai/artifact/S3eHBNvXWWwDd4SpmqCDfh (privada; se comparte desde su
   la tabla de Desempeño de Reportes se puede deslizar con el teclado y dos títulos ya no saltan de nivel
   (Campañas y columnas de Cotizaciones pasan a `h2`, mismo estilo).
 
+## Pruebas del front (Mich, 27 oct 2026)
+
+`cd frontend && npm test` (vitest, mismo que la API): 30 pruebas de las funciones de `lib/` que hacen
+cálculos, en `src/lib/*.test.ts`. Corren siempre con la hora de México (`test.env.TZ` en `vite.config.ts`),
+sin importar la de la compu.
+
+- `reportes`: rangos de cada periodo contra el mismo tramo del anterior (meses cortos, enero, domingo,
+  29 de febrero), flechas ▲▼, frases de conversión, prospección y desempeño, y la vista Día.
+- `prospectos`: que ningún estado esté en dos tarjetas del embudo, `filtroEstado`, quién se puede mandar a
+  automatización, textos de motivos y el anillo del score.
+- `cotizaciones`: avisos de las tarjetas ("Vence en N días", "Sin respuesta hace N días") y `diasDesde`.
+- `formato`: `compacto` ("$1.28M"), fechas DATE y DATETIME de MySQL en México, `plural` y tamaños.
+
+**Si cambias una de esas funciones, corre `npm test`;** si cambias a propósito un texto, actualiza su prueba.
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.

@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
@@ -21,5 +22,12 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  // Pruebas de las funciones de lib/ (npm test). Con la hora de México, que es
+  // la de los vendedores: los rangos de Reportes y los avisos de fechas dependen de ella.
+  test: {
+    include: ["src/**/*.test.ts"],
+    environment: "node",
+    env: { TZ: "America/Mexico_City" }
   }
 });
