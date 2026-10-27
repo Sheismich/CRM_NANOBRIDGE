@@ -36,7 +36,7 @@ export function HojaCotizacion({ datos: d }: { datos: DatosHoja }) {
         <div className="text-right">
           <b className="block font-heading text-[16px] font-black tracking-[2px] text-[#101733] md:text-[20px]">COTIZACIÓN</b>
           <span className="font-display text-[20px] text-[#2a449b] md:text-[22px]">{d.id ? `#${d.id} · v${d.version}` : `v${d.version}`}</span>
-          <small className="mt-1 block text-[11px] text-[#8a93ad]">
+          <small className="mt-1 block text-[11px] text-[#5f6987]">
             {emitida}
             {d.vigente && ` · vigente al ${formatoFecha.format(fechaLocal(d.vigente))}`}
           </small>
@@ -50,7 +50,7 @@ export function HojaCotizacion({ datos: d }: { datos: DatosHoja }) {
 
       <table className="relative w-full border-collapse text-[12px] md:text-[13px]">
         <thead>
-          <tr className="font-heading text-[10px] font-extrabold uppercase tracking-[1px] text-[#8a93ad]">
+          <tr className="font-heading text-[10px] font-extrabold uppercase tracking-[1px] text-[#5f6987]">
             <th className="border-b border-[#e3e8f2] p-2 text-left">Concepto</th>
             <th className="border-b border-[#e3e8f2] p-2 text-right">Cant.</th>
             <th className="hidden border-b border-[#e3e8f2] p-2 text-right md:table-cell">Precio</th>
@@ -62,7 +62,7 @@ export function HojaCotizacion({ datos: d }: { datos: DatosHoja }) {
             <tr key={i} className="align-top">
               <td className="border-b border-[#eef1f9] px-2 py-2.5">
                 <b>{p.descripcion}</b>
-                {p.detalle && <small className="block text-[11px] text-[#8a93ad]">{p.detalle}</small>}
+                {p.detalle && <small className="block text-[11px] text-[#5f6987]">{p.detalle}</small>}
               </td>
               <td className="whitespace-nowrap border-b border-[#eef1f9] px-2 py-2.5 text-right">{p.cantidad}</td>
               <td className="hidden whitespace-nowrap border-b border-[#eef1f9] px-2 py-2.5 text-right md:table-cell">{formatoMoneda.format(p.precio)}</td>
@@ -88,7 +88,7 @@ export function HojaCotizacion({ datos: d }: { datos: DatosHoja }) {
 function Bloque({ titulo, principal, secundario }: { titulo: string; principal: string; secundario: string | null }) {
   return (
     <div>
-      <small className="block font-heading text-[10px] font-extrabold uppercase tracking-[1.5px] text-[#8a93ad]">{titulo}</small>
+      <small className="block font-heading text-[10px] font-extrabold uppercase tracking-[1.5px] text-[#5f6987]">{titulo}</small>
       <b className="mt-1 block text-[14px] text-[#101733]">{principal}</b>
       {secundario && <span className="text-[12px] text-[#5b6482]">{secundario}</span>}
     </div>

@@ -198,7 +198,7 @@ function TarjetaCampana({
     <section className="tarjeta-blanca flex flex-col overflow-hidden">
       <div className="flex items-start gap-2.5 border-b border-border px-[18px] py-4">
         <div className="min-w-0">
-          <h4 className="font-heading text-[16px] font-extrabold text-strong">{c.nombre}</h4>
+          <h2 className="font-heading text-[16px] font-extrabold text-strong">{c.nombre}</h2>
           <small className="mt-[3px] block text-[12px] text-ink-3">
             {c.activa_hoy ? "Manda hoy" : c.motivo ? ETIQUETA_MOTIVO_CAMPANA[c.motivo] : "No manda hoy"}
             {fechas && ` · ${fechas}`}

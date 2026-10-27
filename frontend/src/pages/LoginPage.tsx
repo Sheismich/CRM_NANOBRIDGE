@@ -54,7 +54,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="login">
+    <main className="login">
       <div className="login-tema" role="group" aria-label="Modo de color">
         <button type="button" aria-pressed={tema === "claro"} title="Día" aria-label="Modo día" onClick={() => elegir("claro")}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
@@ -137,7 +137,7 @@ export function LoginPage() {
       </form>
 
       <div className="login-pie">Conectando la ficción con la realidad</div>
-    </div>
+    </main>
   );
 }
 

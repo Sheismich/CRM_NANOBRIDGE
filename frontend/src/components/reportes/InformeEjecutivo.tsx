@@ -56,7 +56,7 @@ export function InformeEjecutivo({ agentes, className, enFranja = false, respons
   if (enFranja) {
     return (
       <div className={clsx("flex flex-wrap items-center gap-2", className)}>
-        <span className="font-heading text-[11px] font-extrabold uppercase tracking-[1.5px] text-ink-3">Informe ejecutivo</span>
+        <span className="font-heading text-[11px] font-extrabold uppercase tracking-[1.5px] text-ink-3 dark:text-ink-2">Informe ejecutivo</span>
         <select aria-label="Mes del informe" className={`${inputBaseClass} h-9 flex-[1_1_100%] py-1 text-[12.5px] md:w-auto md:flex-none`} value={mes} onChange={(e) => setMes(e.target.value)}>
           {meses.map((m) => (
             <option key={m.valor} value={m.valor}>

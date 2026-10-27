@@ -18,7 +18,7 @@ import { ETIQUETA_ROL } from "./usuario";
 export function BarraSuperiorCelular({ onAbrirMas, onAbrirBuscador }: { onAbrirMas: () => void; onAbrirBuscador: () => void }) {
   const { user } = useAuth();
   return (
-    <div className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-white/8 bg-[#101733] px-4 py-3 text-white md:hidden">
+    <header className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-white/8 bg-[#101733] px-4 py-3 text-white md:hidden">
       <Logo sobreOscuro />
       <div className="ml-auto flex items-center gap-1">
         {/* Buscador general (etapa 5): a pantalla completa en el celular. */}
@@ -32,7 +32,7 @@ export function BarraSuperiorCelular({ onAbrirMas, onAbrirBuscador }: { onAbrirM
           <Avatar nombre={user.nombre} chico />
         </button>
       )}
-    </div>
+    </header>
   );
 }
 

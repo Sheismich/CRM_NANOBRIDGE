@@ -1,8 +1,10 @@
 import { clsx } from "clsx";
 
 // Cuadrito con las iniciales de la empresa (Prospectos, Empresas, la
-// ficha): color fijo por empresa, de la paleta de los prototipos.
-const COLORES = ["#2a449b", "#23bad3", "#5b2d86", "#15905f", "#c57a0a", "#d63a4a", "#4f6bd6"];
+// ficha): color fijo por empresa, de la paleta de los prototipos. Cian, verde
+// y ámbar van un poco más oscuros que en la marca para que la letra blanca
+// llegue a 4.5:1 (revisión de accesibilidad, 27-oct-2026).
+const COLORES = ["#2a449b", "#188091", "#5b2d86", "#138558", "#a56608", "#d63a4a", "#4f6bd6"];
 
 function inicialesEmpresa(nombre: string) {
   const palabras = nombre

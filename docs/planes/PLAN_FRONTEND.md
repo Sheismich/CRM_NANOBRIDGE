@@ -580,6 +580,26 @@ tiempo; antes solo se veían en la pestaña Documentos. Sin migración: `GET /ac
 - Revisado con la API simulada en Edge, Safari (WebKit) y Firefox, a 320, 375, 768 y 1440 px, de día y de
   noche: 48 vistas sin problemas.
 
+## Accesibilidad (Mich, 27 oct 2026)
+
+Revisión con axe-core (WCAG 2.1 AA y buenas prácticas) en 22 vistas (las 13 pantallas, pestañas de la ficha,
+paneles, "Anotar" y el buscador), a 1440 y 375 px, día y noche, contra la API local con datos de prueba.
+Antes: 1,574 elementos en 5 reglas; después: 0. Comparación de antes y después en
+https://claude.ai/artifact/S3eHBNvXWWwDd4SpmqCDfh (privada; se comparte desde su menú).
+
+- **Colores (`index.css`):** de día, `--ink-3` `#8a93ad`→`#5f6987`, `--ok`→`#137b52`, `--danger`→`#c82a3a`,
+  `--warn`→`#995f08`, `--info`→`#0c7687`; de noche, `--ink-3` `#6f7aa3`→`#7883a9`. Login de día: `--l-tx3`
+  →`#5f6987`. Todos llegan a 4.5:1 sobre `card`, `soft`, `bg` y sus fondos `-bg`. **Si agregas un gris o un
+  color de estado, revísalo contra esos fondos.**
+- Cuadritos de empresa con letra blanca (`LogoEmpresa`, `COLORES_EMPRESA` de `lib/documentos.ts`): cian, verde
+  y ámbar más oscuros. Hoja de la cotización: su gris fijo pasa a `#5f6987`.
+- De noche, sobre fondos más claros que la tarjeta (incidencia de la bitácora, resultado marcado del buscador,
+  "Informe ejecutivo" en la franja), el texto chico usa `ink-2`.
+- **De Fabián (base común), con su visto bueno pendiente:** el buscador ya no mete `h3` dentro del `listbox`
+  (el grupo conserva su `aria-label`); la barra azul del celular es `<header>`. Además el login va en `<main>`,
+  la tabla de Desempeño de Reportes se puede deslizar con el teclado y dos títulos ya no saltan de nivel
+  (Campañas y columnas de Cotizaciones pasan a `h2`, mismo estilo).
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.

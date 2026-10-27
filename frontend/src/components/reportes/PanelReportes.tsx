@@ -242,7 +242,8 @@ function Estado({ consulta, vacio, children }: { consulta: { isPending: boolean;
 function TablaDesempeno({ filas }: { filas: DesempenoAgente[] }) {
   const ordenadas = [...filas].sort((a, b) => b.actividades.total - a.actividades.total);
   return (
-    <div className="-mx-4 overflow-x-auto md:-mx-[18px]">
+    // tabIndex: en el celular la tabla se desliza de lado, y así también con las flechas del teclado.
+    <div className="-mx-4 overflow-x-auto md:-mx-[18px]" tabIndex={0} role="region" aria-label="Desempeño por agente">
       <table className="w-full min-w-[520px] border-collapse text-[13px]">
         <thead>
           <tr className="font-heading text-[10px] font-extrabold uppercase tracking-[1px] text-ink-3">

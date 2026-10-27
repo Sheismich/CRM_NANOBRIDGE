@@ -35,14 +35,16 @@
   --strong: #101733;
   --ink: #1b2240;
   --ink-2: #5b6482;
-  --ink-3: #8a93ad;
-  --warn: #c57a0a;
+  /* ink-3, warn, danger, ok e info: oscurecidos el 27-oct-2026 para llegar a 4.5:1
+     de contraste (WCAG AA) sobre card, soft, bg y sus fondos -bg; antes 2.6-3.9. */
+  --ink-3: #5f6987;
+  --warn: #995f08;
   --warn-bg: #fdf1db;
-  --danger: #d63a4a;
+  --danger: #c82a3a;
   --danger-bg: #fde8ea;
-  --ok: #158a5c;
+  --ok: #137b52;
   --ok-bg: #e2f6ec;
-  --info: #0f8ea3;
+  --info: #0c7687;
   --info-bg: #dff5f8;
   --navy-bg: #e8edfb;
   /* Relieve (tarjetas del Inicio aprobado, variante 6 "Mezcla"): fondo
@@ -83,7 +85,7 @@
   --strong: #ffffff;
   --ink: #dfe5f7;
   --ink-2: #9aa3c4;
-  --ink-3: #6f7aa3;
+  --ink-3: #7883a9;
   --warn: #f4c06a;
   --warn-bg: rgba(244, 192, 106, 0.13);
   --danger: #ff7f8c;
@@ -369,7 +371,7 @@ body {
   --l-field: #f6f8fd;
   --l-tx: #151c36;
   --l-strong: #101733;
-  --l-tx3: #8992ad;
+  --l-tx3: #5f6987; /* antes #8992ad: 3.1:1 sobre la tarjeta blanca (27-oct-2026) */
   --l-link: #2a449b;
   --l-sh: 0 1px 0 #e4e8f2, 0 30px 70px -25px rgba(16, 23, 51, 0.25);
   position: relative;

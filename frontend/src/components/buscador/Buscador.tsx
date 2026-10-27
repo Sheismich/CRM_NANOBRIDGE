@@ -132,7 +132,7 @@ function Contenido({ onCerrar }: { onCerrar: () => void }) {
           <div id="buscador-resultados" role="listbox" aria-label="Resultados">
             {grupos.map((g) => (
               <section key={g.grupo} role="group" aria-label={ETIQUETA_GRUPO[g.grupo]} className="pb-1.5">
-                <h3 className="px-3 pb-1 pt-2 text-[11px] font-extrabold uppercase tracking-[0.06em] text-ink-3">{ETIQUETA_GRUPO[g.grupo]}</h3>
+                <div role="presentation" aria-hidden="true" className="px-3 pb-1 pt-2 text-[11px] font-extrabold uppercase tracking-[0.06em] text-ink-3">{ETIQUETA_GRUPO[g.grupo]}</div>
                 {g.filas.map((fila) => {
                   const i = posicion++;
                   return (
@@ -150,7 +150,7 @@ function Contenido({ onCerrar }: { onCerrar: () => void }) {
                       </span>
                       <span className="min-w-0 flex-1">
                         <b className="block truncate text-[14px] font-bold text-strong">{fila.titulo}</b>
-                        {fila.detalle && <small className="block truncate text-[12px] text-ink-3">{fila.detalle}</small>}
+                        {fila.detalle && <small className={clsx("block truncate text-[12px]", i === indiceActivo ? "text-ink-2" : "text-ink-3")}>{fila.detalle}</small>}
                       </span>
                     </div>
                   );

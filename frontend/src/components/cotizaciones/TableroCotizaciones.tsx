@@ -55,13 +55,13 @@ export function TableroCotizaciones({
       >
         {columnas.map((col) => (
           <section key={col.estado} className="flex min-h-[360px] flex-col gap-2.5 rounded-[18px] border border-border bg-soft p-3">
-            <h3 className="flex items-center gap-2 px-1.5 pb-1 pt-1 font-heading text-[13px] font-extrabold text-strong">
+            <h2 className="flex items-center gap-2 px-1.5 pb-1 pt-1 font-heading text-[13px] font-extrabold text-strong">
               <i className={clsx("h-2.5 w-2.5 rounded-full", COLOR_TONO[TONO_ESTADO_COTIZACION[col.estado]])} />
               {col.titulo}
               <em className="ml-auto font-sans text-[12px] font-bold not-italic text-ink-3">
                 {col.cuenta ? `${col.cuenta.cantidad} · ${formatoMonedaEntera.format(col.cuenta.total)}` : "…"}
               </em>
-            </h3>
+            </h2>
             {col.cargando && <div className="px-1.5 text-xs text-ink-3">Cargando…</div>}
             {col.error && <div className="px-1.5 text-xs text-danger">No se pudo cargar.</div>}
             <div className={clsx("flex flex-col gap-2.5", sola && "md:grid md:grid-cols-2 xl:grid-cols-3")}>

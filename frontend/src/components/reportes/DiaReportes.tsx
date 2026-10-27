@@ -318,7 +318,8 @@ function Movimiento({ m, esAdmin }: { m: MovimientoDia; esAdmin: boolean }) {
       </span>
       <div className={clsx("min-w-0 text-[13.5px] text-ink", a.incidencia && "rounded-[12px] bg-danger-bg px-3 py-2")}>
         <p className="leading-snug [&_b]:font-extrabold [&_b]:text-strong">{frase(m)}</p>
-        <small className="mt-0.5 block text-[12px] text-ink-3">
+        {/* Sobre el fondo rojo de una incidencia, ink-3 no llega a 4.5:1 de noche. */}
+        <small className={clsx("mt-0.5 block text-[12px]", a.incidencia ? "text-ink-2" : "text-ink-3")}>
           {[
             m.empresa_id && m.empresa_nombre ? (
               <Link key="e" to={`/empresas/${m.empresa_id}`} className="hover:text-info hover:underline">

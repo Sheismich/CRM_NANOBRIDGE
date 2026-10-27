@@ -58,7 +58,8 @@ export function claseExtension(ext: string) {
 }
 
 // Cuadrito de la empresa: iniciales y un color fijo por empresa.
-const COLORES_EMPRESA = ["bg-[#2a449b]", "bg-[#5b2d86]", "bg-[#c57a0a]", "bg-[#1593ab]", "bg-[#158a5c]", "bg-[#b23a45]"];
+// Ámbar, cian y verde oscurecidos para que la letra blanca llegue a 4.5:1 (27-oct-2026).
+const COLORES_EMPRESA = ["bg-[#2a449b]", "bg-[#5b2d86]", "bg-[#a56608]", "bg-[#127f94]", "bg-[#148358]", "bg-[#b23a45]"];
 export function inicialesEmpresa(nombre: string) {
   const palabras = nombre.replace(/[^\p{L}\p{N} ]/gu, "").split(/\s+/).filter((p) => p.length > 2 || /^\p{Lu}/u.test(p));
   return ((palabras[0]?.[0] ?? "") + (palabras[1]?.[0] ?? "")).toUpperCase() || "··";
