@@ -6,7 +6,7 @@
 //
 // Contra producción: autorizar la IP y leer DATABASE_URL como en RUNBOOK §6, y
 // revocar al terminar. Reglas en DICCIONARIO_DE_DATOS.md (§3-§6).
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -60,8 +60,13 @@ r.giros = await filas("SELECT LOWER(TRIM(giro)) g, COUNT(DISTINCT giro COLLATE u
 r.empresasDuplicadas = await filas(`SELECT ${NOMBRE_EMPRESA} nombre, GROUP_CONCAT(id ORDER BY id) ids, COUNT(*) n FROM empresas WHERE activo = 1 GROUP BY nombre HAVING n > 1 ORDER BY n DESC`);
 
 // --- Contactos
+// Sin medio activo puede ser un error (no tiene ninguno) o lo correcto (pidió su
+// baja y sus medios están en no_contactar): se cuentan aparte.
+const SIN_MEDIO_ACTIVO = "SELECT c.id FROM contactos c JOIN empresas e ON e.id = c.empresa_id WHERE c.activo = 1 AND e.activo = 1 AND NOT EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.estado_contacto = 'activo' AND m.tipo IN ('correo','telefono','whatsapp'))";
+const CON_NO_CONTACTAR = "EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.estado_contacto = 'no_contactar')";
 r.con = {
-  sinMedioActivo: (await filas("SELECT c.id FROM contactos c JOIN empresas e ON e.id = c.empresa_id WHERE c.activo = 1 AND e.activo = 1 AND NOT EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.estado_contacto = 'activo' AND m.tipo IN ('correo','telefono','whatsapp')) ORDER BY c.id")).map((f) => f.id),
+  sinMedioActivo: (await filas(`${SIN_MEDIO_ACTIVO} AND NOT ${CON_NO_CONTACTAR} ORDER BY c.id`)).map((f) => f.id),
+  enBaja: (await filas(`${SIN_MEDIO_ACTIVO} AND ${CON_NO_CONTACTAR} ORDER BY c.id`)).map((f) => f.id),
   sinCorreoActivo: await uno("SELECT COUNT(*) FROM contactos c JOIN empresas e ON e.id = c.empresa_id WHERE c.activo = 1 AND e.activo = 1 AND NOT EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.tipo = 'correo' AND m.estado_contacto = 'activo')"),
   mismoNombreMismaEmpresa: await filas("SELECT empresa_id, GROUP_CONCAT(id ORDER BY id) ids, COUNT(*) n FROM contactos WHERE activo = 1 GROUP BY empresa_id, LOWER(TRIM(nombre)) HAVING n > 1")
 };
@@ -107,16 +112,55 @@ r.prueba = {
   empresasConMediosDePrueba: (await filas(`SELECT DISTINCT c.empresa_id id FROM medios_contacto m JOIN contactos c ON c.id = m.contacto_id WHERE ${ES_PRUEBA_MEDIO} ORDER BY id`)).map((f) => f.id)
 };
 r.migracion = (await filas("SELECT MAX(version) v FROM schema_migrations"))[0].v;
+// Qué es de prueba (para los KPI "sin datos de prueba"): esas empresas, sus
+// contactos, sus medios y sus prospectos, más cualquier medio de prueba.
+const empresasPrueba = [...new Set([...r.prueba.empresas, ...r.prueba.empresasConMediosDePrueba])];
+const enPrueba = empresasPrueba.length ? empresasPrueba.join(",") : "0";
+const prueba = {
+  empresas: new Set(empresasPrueba),
+  contactos: new Set((await filas(`SELECT id FROM contactos WHERE empresa_id IN (${enPrueba})`)).map((f) => f.id)),
+  medios: new Set((await filas(`SELECT m.id FROM medios_contacto m LEFT JOIN contactos c ON c.id = m.contacto_id WHERE ${ES_PRUEBA_MEDIO.replace(/valor_normalizado/g, "m.valor_normalizado")} OR c.empresa_id IN (${enPrueba}) OR m.empresa_id IN (${enPrueba})`)).map((f) => f.id)),
+  prospectos: new Set((await filas(`SELECT p.id FROM prospectos p JOIN contactos c ON c.id = p.contacto_id WHERE c.empresa_id IN (${enPrueba})`)).map((f) => f.id))
+};
+r.realesActivos = {
+  empresas: await uno(`SELECT COUNT(*) FROM empresas WHERE activo = 1 AND id NOT IN (${enPrueba})`),
+  contactos: await uno(`SELECT COUNT(*) FROM contactos c JOIN empresas e ON e.id = c.empresa_id WHERE c.activo = 1 AND e.activo = 1 AND e.id NOT IN (${enPrueba})`),
+  medios: r.totales.medios_contacto - prueba.medios.size,
+  prospectos: r.totales.prospectos - prueba.prospectos.size
+};
 await db.end();
 
 // --- KPI T1.1 y T1.2 (Programa §7; reglas del diccionario)
 const empresasQueNoCumplen = new Set([...r.emp.sinGiro, ...r.emp.sinTamano]);
 const contactosQueNoCumplen = new Set(r.con.sinMedioActivo);
 const mediosQueNoCumplen = new Set([...r.med.correoMalFormado, ...r.med.correoMalNormalizado, ...r.med.telefonoMalNormalizado, ...r.med.telefonoLargoRaro, ...r.med.activoPeroSuprimido]);
-const auditados = r.empresasActivas + r.contactosActivos + r.totales.medios_contacto + r.totales.prospectos;
-const noCumplen = empresasQueNoCumplen.size + contactosQueNoCumplen.size + mediosQueNoCumplen.size + r.pro.estadoInvalido.length + r.pro.enCampanaSinCorreo.length;
 const pct = (a, b) => (b ? `${((a / b) * 100).toFixed(1)}%` : "N/E");
-const duplicadosNoResueltos = r.empresasDuplicadas.reduce((s, d) => s + d.n - 1, 0) + r.con.mismoNombreMismaEmpresa.reduce((s, d) => s + d.n - 1, 0) + r.med.telefonoMismoNumero.length + r.med.gmailMismoBuzon.length + r.pro.variosAbiertosMismaPersona.length + r.borradores.duplicadosSinResolver;
+// Un grupo de duplicados es "de prueba" si todos sus IDs lo son.
+const idsDe = (grupo) => String(grupo.ids).split(",").map(Number);
+const todoEn = (conjunto) => (grupo) => idsDe(grupo).every((id) => conjunto.has(id));
+function kpi(sinPrueba) {
+  const fuera = (conjunto) => (id) => !sinPrueba || !conjunto.has(id);
+  const auditados = sinPrueba ? r.realesActivos.empresas + r.realesActivos.contactos + r.realesActivos.medios + r.realesActivos.prospectos : r.empresasActivas + r.contactosActivos + r.totales.medios_contacto + r.totales.prospectos;
+  const noCumplen =
+    [...empresasQueNoCumplen].filter(fuera(prueba.empresas)).length +
+    [...contactosQueNoCumplen].filter(fuera(prueba.contactos)).length +
+    [...mediosQueNoCumplen].filter(fuera(prueba.medios)).length +
+    [...r.pro.estadoInvalido, ...r.pro.enCampanaSinCorreo].filter(fuera(prueba.prospectos)).length;
+  const grupos = (lista, conjunto) => lista.filter((g) => !sinPrueba || !todoEn(conjunto)(g));
+  const duplicados =
+    grupos(r.empresasDuplicadas, prueba.empresas).reduce((s, d) => s + d.n - 1, 0) +
+    grupos(r.con.mismoNombreMismaEmpresa, prueba.contactos).reduce((s, d) => s + d.n - 1, 0) +
+    grupos(r.med.telefonoMismoNumero, prueba.medios).length +
+    grupos(r.med.gmailMismoBuzon, prueba.medios).length +
+    grupos(r.pro.variosAbiertosMismaPersona, prueba.prospectos).length +
+    r.borradores.duplicadosSinResolver;
+  return { auditados, noCumplen, duplicados, t11: pct(auditados - noCumplen, auditados), t12: pct(auditados - duplicados, auditados) };
+}
+const todo = kpi(false);
+const reales = kpi(true);
+const auditados = todo.auditados;
+const noCumplen = todo.noCumplen;
+const duplicadosNoResueltos = todo.duplicados;
 
 const hoy = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Mexico_City" });
 const fecha = new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City", dateStyle: "long", timeStyle: "short" });
@@ -130,13 +174,15 @@ Solo lectura. Sin datos personales: los números son IDs del CRM. Reglas en \`DI
 
 ## Resumen
 
-| Indicador | Resultado |
-|---|---|
-| **T1.1 · Validez y completitud** (registros que cumplen las reglas / auditados) | **${pct(auditados - noCumplen, auditados)}** (${auditados - noCumplen} de ${auditados}) |
-| **T1.2 · Control de duplicados** (1 − duplicados no resueltos / auditados) | **${pct(auditados - duplicadosNoResueltos, auditados)}** (${duplicadosNoResueltos} posibles duplicados sin resolver) |
-| Empresas activas / contactos activos / medios / prospectos | ${r.empresasActivas} / ${r.contactosActivos} / ${r.totales.medios_contacto} / ${r.totales.prospectos} |
+| Indicador | Toda la base | Sin datos de prueba |
+|---|---|---|
+| **T1.1 · Validez y completitud** (registros que cumplen las reglas / auditados) | **${todo.t11}** (${todo.auditados - todo.noCumplen} de ${todo.auditados}) | **${reales.t11}** (${reales.auditados - reales.noCumplen} de ${reales.auditados}) |
+| **T1.2 · Control de duplicados** (1 − duplicados no resueltos / auditados) | **${todo.t12}** (${todo.duplicados} sin resolver) | **${reales.t12}** (${reales.duplicados} sin resolver) |
+| Empresas activas / contactos activos / medios / prospectos | ${r.empresasActivas} / ${r.contactosActivos} / ${r.totales.medios_contacto} / ${r.totales.prospectos} | ${r.realesActivos.empresas} / ${r.realesActivos.contactos} / ${r.realesActivos.medios} / ${r.realesActivos.prospectos} |
 
 Auditados = empresas activas + contactos activos + medios de contacto + prospectos (población completa, no muestra).
+«Sin datos de prueba» quita las empresas de §5, sus contactos, medios y prospectos, y cualquier medio de prueba.
+Un contacto en baja (sus medios en «no contactar») cumple: no tener medio activo es lo correcto.
 
 ## 1. Totales
 
@@ -150,7 +196,8 @@ ${tabla(["Control", "Casos", "IDs"], [
   fila("Empresas activas sin estado ni ciudad", r.emp.sinUbicacion, "ver Empresas, filtro de región"),
   fila("Empresas activas sin responsable", r.emp.sinResponsable, "Empresas → «Sin asignar»"),
   fila("País con formato inválido", r.emp.paisInvalido, "—"),
-  fila("Contactos activos sin ningún medio activo (correo, teléfono o WhatsApp)", r.con.sinMedioActivo.length, `contactos ${ids(r.con.sinMedioActivo)}`),
+  fila("Contactos activos sin ningún medio (correo, teléfono o WhatsApp)", r.con.sinMedioActivo.length, `contactos ${ids(r.con.sinMedioActivo)}`),
+  [`Contactos en baja (medios en «no contactar»; correcto)`, String(r.con.enBaja.length), r.con.enBaja.length ? `contactos ${ids(r.con.enBaja)}` : "—"],
   fila("Contactos activos sin correo activo (no entran a la automatización)", r.con.sinCorreoActivo, "Contactos → «Sin medio»"),
   fila("Correos con formato inválido", r.med.correoMalFormado.length, `medios ${ids(r.med.correoMalFormado)}`),
   fila("Correos mal normalizados", r.med.correoMalNormalizado.length, `medios ${ids(r.med.correoMalNormalizado)}`),
@@ -201,7 +248,9 @@ ${tabla(["Medio", "Estado", "Cantidad"], r.med.porTipoEstado.map((x) => [x.tipo,
 
 const carpeta = join(AQUI, "auditorias");
 mkdirSync(carpeta, { recursive: true });
-const archivo = join(carpeta, `calidad-${hoy}.md`);
+// Nunca sobrescribe: el reporte del día puede tener conclusiones escritas a mano.
+let archivo = join(carpeta, `calidad-${hoy}.md`);
+for (let n = 2; existsSync(archivo); n++) archivo = join(carpeta, `calidad-${hoy}-${n}.md`);
 writeFileSync(archivo, md);
 console.log(`Reporte: ${archivo}`);
-console.log(`T1.1 ${pct(auditados - noCumplen, auditados)} · T1.2 ${pct(auditados - duplicadosNoResueltos, auditados)} · auditados ${auditados}`);
+console.log(`Toda la base: T1.1 ${todo.t11} · T1.2 ${todo.t12} (${todo.auditados}) | Sin prueba: T1.1 ${reales.t11} · T1.2 ${reales.t12} (${reales.auditados})`);
