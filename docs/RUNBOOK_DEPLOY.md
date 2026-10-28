@@ -615,3 +615,30 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       `gcloud sql users set-password`. Pendiente confirmar que el de host
       vacío sí cambió (`password_last_changed` en `mysql.user`) al probar el SSL.
 - [x] Contraseña de `appuser` rotada (6-oct-2026, revisión `00017-cbm`).
+
+## 11. Avisos si el CRM se cae (Cloud Monitoring, 28-oct-2026)
+
+- **Revisión:** "CRM API /health" (uptime check). Cada 5 minutos, desde varias
+  regiones (Virginia, Oregón, Bélgica…), pide
+  `https://nanobridge-api-165032456965.us-central1.run.app/health` y espera
+  `"status":"ok"` en menos de 30 s (holgura para el arranque en frío).
+- **Alerta:** "CRM caído: la API no responde /health". Si falla desde más de una
+  región durante 5 minutos, manda correo a `pasante.tics001` y `pasante.tics002`
+  (@nano-bridge-mex.com), y otro cuando se recupera. Para cambiar a quién le
+  llega: Cloud Console → Monitoring → Alerting → la alerta → Notifications
+  (al terminar la pasantía, a alguien de planta).
+- **Efecto secundario bueno:** con una petición cada pocos minutos, Cloud Run casi
+  nunca apaga la API, así que el primero que entra en la mañana ya no espera
+  5-10 s (ver `min-instances` en §10). La revisión es gratis en este volumen.
+
+**Si llega el correo:**
+1. Abrir el CRM. Si carga, puede haber sido algo pasajero de Google; si el
+   correo de "se recuperó" llega en unos minutos, no hay más que hacer.
+2. Si no carga: Cloud Run → `nanobridge-api` → **Registros** (el error suele
+   decir si es la base, una variable o el código). `gcloud run revisions list
+   --service=nanobridge-api --region=us-central1` para ver si hubo un despliegue
+   reciente; si sí, regresar el tráfico a la revisión anterior
+   (`gcloud run services update-traffic nanobridge-api --to-revisions=<anterior>=100
+   --region=us-central1`).
+3. Si los registros hablan de la base: Cloud SQL → `nanobridge-db` (que esté
+   RUNNABLE; en Operaciones, si hay mantenimiento). Respaldos y recuperación en §9.
