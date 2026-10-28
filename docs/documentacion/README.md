@@ -20,6 +20,9 @@ Cierre del proyecto: **9 de diciembre de 2026**.
   diccionario desde la base real después de cada migración.
 - [`auditar-datos.mjs`](auditar-datos.mjs): auditoría de calidad de solo lectura; deja un reporte con fecha en
   [`auditorias/`](auditorias/), sin datos personales.
+- [`limpiar-datos-prueba.mjs`](limpiar-datos-prueba.mjs): borra los datos de prueba antes del piloto. Por omisión solo
+  muestra; para borrar exige la lista de empresas (todas reconocidas como de prueba) y una confirmación, y lo hace todo
+  o nada. Probado en la base local el 28-oct; en producción se corre el día del encendido, con T2 (Manual de datos §8).
 
 ## Relacionado
 

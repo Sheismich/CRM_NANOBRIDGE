@@ -107,12 +107,24 @@ La [auditoría del 28-oct](auditorias/calidad-2026-10-28.md) §6 lista las empre
 | | Desactivar desde el CRM | Borrar en la base |
 |---|---|---|
 | Quién | Supervisor o administrador | Responsable técnico (T2), con T1 |
-| Cómo | Ficha → «Desactivar» en cada empresa de prueba | Script revisado, con respaldo previo |
+| Cómo | Ficha → «Desactivar» en cada empresa de prueba | [`limpiar-datos-prueba.mjs`](limpiar-datos-prueba.mjs), con respaldo previo |
 | Resultado | Dejan de verse; sus correos de prueba siguen apartados y su historial queda | Desaparecen del todo; los reportes y la auditoría quedan solo con datos reales |
 | Se puede deshacer | Sí | Solo restaurando el respaldo (RUNBOOK §9) |
 
 Para el piloto conviene **borrar en la base**, para que los reportes y los KPI midan solo datos reales. Hacerlo el día
-del encendido (RUNBOOK §10) y correr la auditoría justo después.
+del encendido (RUNBOOK §10), así:
+
+1. Confirmar que hay respaldo del día (RUNBOOK §9).
+2. Correr el script **sin** `--borrar`: lista las empresas que reconoce como de prueba y cuántas filas se borrarían de
+   cada tabla. Revisar la lista con T2.
+3. Correrlo con `--empresas=<ids>` y `--borrar` (más `LIMPIEZA_CONFIRMO=borrar-datos-de-prueba`). Si alguna empresa no
+   parece de prueba, el script no borra nada; si algo falla a medias, deshace todo.
+4. Correr la auditoría y comprobar que «Datos de prueba» quedó en cero. El registro de la limpieza queda en
+   `auditorias/limpieza-<fecha>.md`.
+
+El script no toca la lista de supresión (una baja nunca se pierde), la bitácora de auditoría, campañas, usuarios ni
+catálogos. Los archivos de documentos de prueba que estén en Google Cloud Storage quedan en el bucket; se pueden borrar
+aparte.
 
 ## 9. Respaldos y a quién acudir
 
