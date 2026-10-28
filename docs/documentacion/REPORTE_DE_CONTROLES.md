@@ -27,7 +27,7 @@ Cómo se comprueba cada control:
 - **Verificación en la base:** la regla la impone MySQL y se leyó de `information_schema` al generar el diccionario.
 - **Prueba manual documentada:** se ejecutó una vez, con fecha, y quedó en el RUNBOOK.
 
-Además hay controles **propuestos que no entran en este corte** (§G). Se listan para que Dirección decida si se agregan.
+Además hay 5 controles **propuestos que no entran en este corte** (§G). Se listan para que Dirección decida si se agregan.
 
 ## A. Integridad en la base
 
@@ -107,6 +107,7 @@ los aprueba, entran al siguiente corte.
 | G-02 | Catálogo de giros (o normalizarlos al capturar) | El giro es texto libre; las plantillas por giro dependen de que se escriba igual | Bajo |
 | G-03 | Teléfonos en formato internacional (E.164) | «442…» y «52442…» cuentan como distintos | Medio |
 | G-04 | Regla de asignación de las empresas que crea la automatización | Hoy llegan sin responsable (19 en la auditoría) | Decisión de Dirección |
+| G-05 | Fusionar dos empresas repetidas desde el CRM (mover sus contactos, medios e historial a una) | Hoy no se puede: un contacto no cambia de empresa y los correos de una empresa desactivada siguen apartados | Medio |
 
 ## Cómo comprobarlo
 

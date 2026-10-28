@@ -105,6 +105,33 @@ r.borradores = {
   pendientesViejos: await uno("SELECT COUNT(*) FROM borradores_captura WHERE estado = 'pendiente_revision' AND creado_en < NOW() - INTERVAL 7 DAY")
 };
 
+// --- Audiencia por campaña (certificación de T1 antes de G5): de los prospectos que
+// esperan correo (en fila o validados), cuántos lo recibirían hoy y por qué no los
+// demás. Mismas reglas que src/shared/listo-para-automatizacion.ts.
+r.audiencia = await filas(`
+  SELECT cp.id, cp.nombre, cp.estado,
+    COUNT(*) total,
+    SUM(NOT (e.activo = 1 AND c.activo = 1)) desactivado,
+    SUM(e.giro IS NULL OR TRIM(e.giro) = '') sin_giro,
+    SUM(e.tamano IS NULL) sin_tamano,
+    SUM(NOT EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.tipo = 'correo' AND m.estado_contacto = 'activo'
+      AND NOT EXISTS (SELECT 1 FROM lista_supresion s WHERE s.tipo = 'correo' AND s.valor_normalizado = m.valor_normalizado))) sin_correo_utilizable,
+    SUM(EXISTS (SELECT 1 FROM prospectos pb WHERE pb.contacto_id = c.id AND pb.estado = 'baja')) en_baja,
+    SUM((SELECT COUNT(*) FROM envios v JOIN prospectos pv ON pv.id = v.prospecto_id WHERE pv.contacto_id = c.id AND v.canal = 'correo' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH) >= 3) maximo_contactos,
+    SUM(e.activo = 1 AND c.activo = 1 AND e.giro IS NOT NULL AND TRIM(e.giro) <> '' AND e.tamano IS NOT NULL
+      AND EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.tipo = 'correo' AND m.estado_contacto = 'activo'
+        AND NOT EXISTS (SELECT 1 FROM lista_supresion s WHERE s.tipo = 'correo' AND s.valor_normalizado = m.valor_normalizado))
+      AND NOT EXISTS (SELECT 1 FROM prospectos pb WHERE pb.contacto_id = c.id AND pb.estado = 'baja')
+      AND (SELECT COUNT(*) FROM envios v JOIN prospectos pv ON pv.id = v.prospecto_id WHERE pv.contacto_id = c.id AND v.canal = 'correo' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH) < 3) listos
+  FROM prospectos p
+  JOIN contactos c ON c.id = p.contacto_id
+  JOIN empresas e ON e.id = c.empresa_id
+  JOIN campanas cp ON cp.id = p.campana_id
+  WHERE p.estado IN ('en_fila', 'validado') AND cp.estado <> 'finalizada'
+  GROUP BY cp.id, cp.nombre, cp.estado
+  ORDER BY cp.id`);
+r.audienciaSinCampana = await uno("SELECT COUNT(*) FROM prospectos WHERE estado IN ('en_fila', 'validado') AND campana_id IS NULL");
+
 // --- Datos de prueba (para limpiar antes del piloto)
 r.prueba = {
   empresas: (await filas("SELECT id FROM empresas WHERE LOWER(nombre_legal) LIKE '%prueba%' OR LOWER(nombre_legal) IN ('no se','no se 2') ORDER BY id")).map((f) => f.id),
@@ -240,7 +267,16 @@ Filas pendientes de revisar con más de 7 días: ${r.borradores.pendientesViejos
 
 ${tabla(["Medio", "Estado", "Cantidad"], r.med.porTipoEstado.map((x) => [x.tipo, x.estado_contacto, String(x.n)]))}
 
-## 5. Datos de prueba (a limpiar antes del piloto)
+## 5. Audiencia por campaña (certificación de T1 antes de G5)
+
+Prospectos que esperan correo (en fila o validados) en campañas no finalizadas, y cuántos lo recibirían hoy.
+Un prospecto puede tener varios motivos; «Listos» cumple todo.
+
+${r.audiencia.length ? tabla(["Campaña", "Estado", "En espera", "Listos", "Desactivado", "Sin giro", "Sin tamaño", "Sin correo utilizable", "En baja", "Ya con 3 correos"], r.audiencia.map((a) => [`${a.id} · ${a.nombre}`, a.estado, String(a.total), `**${a.listos}**`, String(a.desactivado), String(a.sin_giro), String(a.sin_tamano), String(a.sin_correo_utilizable), String(a.en_baja), String(a.maximo_contactos)])) : "No hay prospectos esperando correo en campañas abiertas."}
+
+Prospectos en espera sin campaña: ${r.audienciaSinCampana}.
+
+## 6. Datos de prueba (a limpiar antes del piloto)
 
 - Empresas con «prueba» en el nombre o de prueba conocidas: **${r.prueba.empresas.length}** (${ids(r.prueba.empresas, 30)}).
 - Medios de contacto de prueba (\`.test\`, \`.local\`, \`+prueba\`): **${r.prueba.medios}**, en las empresas ${ids(r.prueba.empresasConMediosDePrueba, 30)}.
