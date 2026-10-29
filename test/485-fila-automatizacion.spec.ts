@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
@@ -395,6 +395,23 @@ describe("fila de automatización", () => {
 
       await db.update(campanas).set({ estado: "activa" }).where(eq(campanas.id, pausada));
       expect((await tomar(randomUUID())).body.data.map((d: { prospecto_id: number }) => d.prospecto_id)).toEqual([p1.id]);
+    });
+
+    // En feriado PT1 corre igual (n8n no conoce los feriados), pero no se le
+    // da a nadie: esperan su lugar para el siguiente día hábil (29-oct-2026).
+    it("en feriado no entrega a nadie y no los marca tomados", async () => {
+      const p = await prospecto();
+      await mandar(adminCookie, [p.id], activa);
+      vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-16T16:00:00Z") });
+      try {
+        const res = await tomar(randomUUID());
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ data: [], cupo_restante: 0, tope_diario_alcanzado: false });
+      } finally {
+        vi.useRealTimers();
+      }
+      expect((await fila(p.id)).filaTomadoEn).toBeNull();
+      await sacar(adminCookie, p.id);
     });
 
     it("uno tomado que en 24 h no avanzó se vuelve a poder tomar", async () => {

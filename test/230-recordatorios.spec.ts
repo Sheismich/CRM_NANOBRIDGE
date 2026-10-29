@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { and, eq } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
@@ -110,6 +110,24 @@ describe("recordatorios: ventanas vencidas con los datos para el correo", () => 
       campana_activa: true,
       es_ultimo_contacto: false
     });
+  });
+
+  // En feriado PT4 corre igual (n8n no conoce los feriados), pero no se
+  // reclama nada: las ventanas siguen abiertas y salen el siguiente día
+  // hábil (29-oct-2026).
+  it("en feriado no entrega recordatorios y la ventana sigue abierta", async () => {
+    const campanaId = await crearCampana("activa");
+    const prospecto = await registrarProspecto({ campanaId });
+    const envioId = await sembrarVencido(prospecto.id);
+
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-16T16:00:00Z") });
+    try {
+      expect(await poll()).toEqual({ data: [], omitidas: [] });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await estadoVentana(envioId)).toBe("abierta");
+    expect((await poll()).data.some((f) => f.envio_id === envioId)).toBe(true);
   });
 
   it("sin campaña: campana_id y campana_activa vienen en null (n8n decide con el modo pruebas)", async () => {

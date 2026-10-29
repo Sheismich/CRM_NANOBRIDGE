@@ -13,7 +13,7 @@ import { buscarPersona } from "../shared/identidad.js";
 import { ESTADOS_PROSPECTO_CERRADO, MAX_CONTACTOS_POR_CICLO, cicloActualDePersona, correoUtilizable } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { HORAS_PARA_RETOMAR_DE_FILA } from "../shared/listo-para-automatizacion.js";
-import { diaSiguiente, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
+import { diaSiguiente, esFeriadoMx, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
 import { env } from "../config/env.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
 import { firmarReplyTo, leerReplyTo, tieneFormaDeReplyTo } from "../shared/reply-to.js";
@@ -410,8 +410,11 @@ export class AutomatizacionService {
   // - Los tomados se quedan en_fila con fila_tomado_en; Validaciones los
   //   mueve a validado/excluido. Si en HORAS_PARA_RETOMAR_DE_FILA no
   //   avanzaron (PT1 se cayó antes), se pueden volver a tomar.
+  // - En feriado no se le da a nadie (n8n no conoce los feriados y corre
+  //   igual): esperan su lugar para el siguiente día hábil.
   async tomarDeFila(input: TomarDeFilaInput) {
     const hoy = fechaMx(new Date());
+    if (esFeriadoMx(hoy)) return { data: [], cupo_restante: 0, tope_diario_alcanzado: false };
     return this.db.transaction(async (tx) => {
       // Primero se bloquea toda la fila (son decenas o cientos de renglones):
       // dos corridas a la vez se forman, y la segunda cuenta el cupo con lo
@@ -911,6 +914,9 @@ export class AutomatizacionService {
   async listarVentanasVencidas(query: VentanasVencidasQuery) {
     // Fecha de México para las reglas de campaña (ver shared/campana-vigente.ts).
     const hoy = fechaMx(new Date());
+    // En feriado no se reclama nada (n8n no conoce los feriados y PT4 corre
+    // igual): las ventanas siguen abiertas y salen el siguiente día hábil.
+    if (esFeriadoMx(hoy)) return { data: [], omitidas: [], tope_diario_alcanzado: false };
     return this.db.transaction(async (tx) => {
       // Tope diario de correos (bloque "antes de encender", 5-oct-2026): solo
       // se entregan los recordatorios que caben hoy. Los que no caben NO se

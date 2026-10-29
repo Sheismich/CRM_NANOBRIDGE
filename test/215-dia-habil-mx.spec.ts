@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diaSiguiente, fechaMx, finSiguienteDiaHabilMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../src/shared/dia-habil.js";
+import { diaSiguiente, esFeriadoMx, fechaMx, finSiguienteDiaHabilMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../src/shared/dia-habil.js";
 
 // La fecha límite de "Contactar prospecto interesado" se calcula en hora de
 // México, no en la del servidor (Cloud Run corre en UTC): un jueves a las
@@ -43,6 +43,47 @@ describe("sumarDiasHabilesMx", () => {
 
   it("sábado 12:00 en México → viernes siguiente 12:00", () => {
     expect(sumarDiasHabilesMx(new Date("2026-10-03T18:00:00Z"), 5).toISOString()).toBe("2026-10-09T18:00:00.000Z");
+  });
+});
+
+// Descansos obligatorios de la Ley Federal del Trabajo, art. 74 (29-oct-2026).
+// Antes solo se brincaban sábado y domingo: el lunes 16-nov PT1 y PT4 habrían
+// mandado correos y las tareas habrían vencido en feriado.
+describe("esFeriadoMx", () => {
+  it.each([
+    ["2027-01-01", "1 de enero"],
+    ["2027-02-01", "primer lunes de febrero"],
+    ["2026-02-02", "primer lunes de febrero (el 1 cae en domingo)"],
+    ["2027-03-15", "tercer lunes de marzo"],
+    ["2027-05-01", "1 de mayo"],
+    ["2026-09-16", "16 de septiembre"],
+    ["2026-11-16", "tercer lunes de noviembre"],
+    ["2026-12-25", "25 de diciembre"],
+    ["2030-10-01", "1 de octubre del cambio de presidente"]
+  ])("%s es feriado (%s)", (fecha) => {
+    expect(esFeriadoMx(fecha)).toBe(true);
+  });
+
+  it.each([
+    ["2026-11-20", "20 de noviembre: se descansa el lunes, no ese día"],
+    ["2027-02-05", "5 de febrero: igual"],
+    ["2026-10-01", "1 de octubre de un año sin cambio de presidente"],
+    ["2026-12-12", "12 de diciembre no es de ley"],
+    ["2026-11-17", "un martes cualquiera"]
+  ])("%s no es feriado (%s)", (fecha) => {
+    expect(esFeriadoMx(fecha)).toBe(false);
+  });
+
+  it("la ventana de 5 días hábiles brinca el feriado: viernes 13-nov → lunes 23-nov, no viernes 20", () => {
+    expect(sumarDiasHabilesMx(new Date("2026-11-13T16:00:00Z"), 5).toISOString()).toBe("2026-11-23T16:00:00.000Z");
+  });
+
+  it("una tarea del viernes 13-nov vence el martes 17, no el lunes feriado", () => {
+    expect(finSiguienteDiaHabilMx(new Date("2026-11-13T16:00:00Z")).toISOString()).toBe("2026-11-18T05:59:59.000Z");
+  });
+
+  it("una tarea del jueves 24-dic vence el lunes 28 (25 es feriado y luego fin de semana)", () => {
+    expect(finSiguienteDiaHabilMx(new Date("2026-12-24T16:00:00Z")).toISOString()).toBe("2026-12-29T05:59:59.000Z");
   });
 });
 

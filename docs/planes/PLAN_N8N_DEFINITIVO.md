@@ -62,7 +62,7 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
        directo a Validaciones; lo que cambió mientras esperaba, Validaciones y `verificarEnvio`
        lo vuelven a revisar.
      - Horario el día de encender: PT4 a las 9:00 y PT1 a las 10:00, de lunes a viernes. Mientras
-       sigan las pruebas, a mano. Feriados: apagarlo a mano (16-nov-2026). Ritmo real esperado:
+       sigan las pruebas, a mano. Feriados: la API no entrega nada ese día (29-oct-2026). Ritmo real esperado:
        unos 6-7 nuevos al día. El primer recordatorio sale al 6.º día hábil.
      - **Hecho y probado en vivo el 16-oct-2026.** API (migración 031,
        `test/485-fila-automatizacion.spec.ts`, revisiones 00030-gq4 y 00031-rww), pantalla de
@@ -331,7 +331,7 @@ todavía no existe.
    - queda **sin asignar**, y un supervisor la reparte con `PATCH /tareas/:id/asignar`;
    - tiene prioridad alta;
    - vence al **fin del siguiente día hábil en hora de México**. La alerta diaria de SLA avisa si
-     nadie la toma. El cálculo no conoce días festivos.
+     nadie la toma. El cálculo brinca los feriados de la LFT art. 74 (29-oct-2026).
 
    La oportunidad **no** se crea en automático: la crea el asesor que toma al interesado
    (PLAN_CRM_DEFINITIVO.md).
@@ -587,7 +587,8 @@ Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no
   ningún contacto** puede arrancar un ciclo nuevo de 3. Lo aplica la API en
   `envios/verificacion`, `POST /envios` y `envios/vencidas`; n8n no necesita lógica extra.
 - Cinco días hábiles de espera entre flujo y seguimiento (también por persona). Se cuentan en el
-  calendario de México, a la misma hora del envío (sin festivos todavía).
+  calendario de México, a la misma hora del envío, brincando feriados (LFT art. 74, 29-oct-2026).
+  En feriado `envios/vencidas` y `fila/tomar` regresan vacío: PT4 y PT1 pueden correr igual.
 - WhatsApp permanece apagado hasta contar con proveedor y reglas aprobadas.
 - Correo entra por webhook del proveedor; no usar polling.
 - **Quién es la misma persona: "el correo manda"** (decidido 2-oct-2026, regla en

@@ -76,15 +76,37 @@ function calendarioMx(instante: Date): Date {
   return new Date(Date.UTC(anio, mes - 1, dia));
 }
 
-// Avanza `fecha` (de calendarioMx) `dias` días hábiles: solo brinca sábado
-// y domingo; no conoce días festivos (16-sep, 20-nov, 25-dic...). Si hace
-// falta, va una tabla de festivos.
+// El `n`-ésimo lunes del mes (1-12) de `anio`, como AAAA-MM-DD.
+function nesimoLunes(anio: number, mes: number, n: number): string {
+  const primero = new Date(Date.UTC(anio, mes - 1, 1));
+  primero.setUTCDate(1 + ((8 - primero.getUTCDay()) % 7) + (n - 1) * 7);
+  return primero.toISOString().slice(0, 10);
+}
+
+/**
+ * Descansos obligatorios de la Ley Federal del Trabajo, art. 74 (29-oct-2026):
+ * se calculan por regla, así no hay tabla que actualizar cada año. No incluye
+ * el día de la jornada electoral (fracción IX: cae en domingo) ni días que la
+ * ley no marca (Jueves y Viernes Santo, 12-dic): si la empresa los descansa,
+ * se agregan aquí.
+ */
+export function esFeriadoMx(fecha: string): boolean {
+  const anio = Number(fecha.slice(0, 4));
+  const mesDia = fecha.slice(5);
+  if (["01-01", "05-01", "09-16", "12-25"].includes(mesDia)) return true;
+  // 1-oct cada seis años, cuando cambia el Ejecutivo Federal (2024, 2030...).
+  if (mesDia === "10-01" && (anio - 2024) % 6 === 0) return true;
+  return fecha === nesimoLunes(anio, 2, 1) || fecha === nesimoLunes(anio, 3, 3) || fecha === nesimoLunes(anio, 11, 3);
+}
+
+// Avanza `fecha` (de calendarioMx) `dias` días hábiles: brinca sábado,
+// domingo y feriados (esFeriadoMx).
 function avanzarDiasHabiles(fecha: Date, dias: number): Date {
   const result = new Date(fecha);
   let sumados = 0;
   while (sumados < dias) {
     result.setUTCDate(result.getUTCDate() + 1);
-    if (result.getUTCDay() !== 0 && result.getUTCDay() !== 6) sumados++;
+    if (result.getUTCDay() !== 0 && result.getUTCDay() !== 6 && !esFeriadoMx(result.toISOString().slice(0, 10))) sumados++;
   }
   return result;
 }

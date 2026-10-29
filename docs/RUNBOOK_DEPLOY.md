@@ -567,8 +567,13 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       horario va en **PT1a** (cambiar su Manual Trigger por un Schedule), no en
       PT1, que ahora solo se ejecuta llamado por PT1a. Mientras sigan las
       pruebas, PT1a se corre a mano.
-- [ ] **Lunes 16-nov-2026 (feriado): apagar PT1 y PT4 a mano.** Ni n8n ni la
-      API conocen los feriados.
+- [ ] **Feriados: ya no hay que apagar nada a mano** cuando esté desplegada la
+      API con `esFeriadoMx` (29-oct-2026): en feriado, `fila/tomar` y
+      `envios/vencidas` regresan vacío y todo sale el siguiente día hábil. Son
+      los de la LFT art. 74 (1-ene, 1er lunes de feb, 3er lunes de mar,
+      1-may, 16-sep, 3er lunes de nov, 25-dic y 1-oct cada 6 años). Si la API
+      sin ese cambio sigue en producción el lunes 16-nov-2026, apagar PT1 y
+      PT4 a mano ese día.
 - Nota, no es error: el primer recordatorio sale al **6.º día hábil**, no al
       5.º. La ventana vence a la misma hora del primer correo (10:05 + 5 días
       hábiles) y PT4 pasa a las 9:00, así que lo toma al día siguiente.
