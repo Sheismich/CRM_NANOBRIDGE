@@ -529,11 +529,12 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       y el **Status PRENDIDO** (apagado, SendGrid ignora la página y muestra
       "Unsubscribe successful" en inglés). Probada con el link de baja de
       +prueba13, que ya estaba dado de baja.
-- [ ] Avisos de B4 y PT2 sin pie de SendGrid: con el Status prendido, a
+- [x] Avisos de B4 y PT2 sin pie de SendGrid: con el Status prendido, a
       todo correo que no diga nada de `subscription_tracking` SendGrid le
-      pega "If you'd like to unsubscribe…". Los nodos que mandan esos avisos
-      en n8n deben llevar `tracking_settings.subscription_tracking.enable:
-      false`. PT1b y la API ya lo controlan correo por correo.
+      pega "If you'd like to unsubscribe…". Revisado el 29-oct-2026: los
+      Code "armar correo de error" (B4) y "armar aviso de respuesta" (PT2)
+      ya mandan `subscription_tracking`, `click_tracking` y `open_tracking`
+      en `enable: false`. PT1b y la API lo controlan correo por correo.
 - [x] Prueba de baja en vivo (8-oct-2026): clic en el link del pie de
       +prueba11 → PT3 (firma válida, evento `unsubscribe`, envío 22) → el
       prospecto 35 quedó en `baja` y su correo en `no_contactar`. Igual con
