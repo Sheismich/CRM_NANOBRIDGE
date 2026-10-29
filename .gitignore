@@ -32,3 +32,5 @@ skills-lock.json
 # no en git, para no hacer pesado el historial.
 docs/diseno/CRM-NANOBRIDGE-pantallas.pdf
 docs/diseno/CRM-NANOBRIDGE-recorrido-pantallas.pdf
+# Figuras del reporte de estadía de Fabián (29-oct-2026): solo locales.
+docs/reporte-estadia/
