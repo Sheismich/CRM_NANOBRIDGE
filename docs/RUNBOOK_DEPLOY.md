@@ -524,14 +524,16 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       Las respuestas desde el CRM también la llevan.
 - [ ] Domicilio de la empresa (lo pasa Carlos): se escribe en Administración →
       Correos de prospección → "Pie de los tres", no en n8n.
-- [ ] Página de baja en español: hoy, al darse de baja, SendGrid muestra
-      "Unsubscribe successful" en inglés y sin diseño. Desde el 22-oct-2026
-      la cuenta actual es la definitiva (abajo), así que se hace ya: Settings →
-      Tracking → Subscription Tracking → Landing Page con HTML propio, pegar
-      `docs/sendgrid/pagina-baja.html`. El Status de esa pantalla se queda
-      APAGADO, o SendGrid pondría su pie en todos los correos (doble en los
-      nuestros y también en los avisos de B4 y PT2). Probar volviendo a dar
-      clic al link de baja de un correo ya dado de baja.
+- [x] Página de baja en español (29-oct-2026): Settings → Tracking →
+      Subscription Tracking → Landing Page con `docs/sendgrid/pagina-baja.html`
+      y el **Status PRENDIDO** (apagado, SendGrid ignora la página y muestra
+      "Unsubscribe successful" en inglés). Probada con el link de baja de
+      +prueba13, que ya estaba dado de baja.
+- [ ] Avisos de B4 y PT2 sin pie de SendGrid: con el Status prendido, a
+      todo correo que no diga nada de `subscription_tracking` SendGrid le
+      pega "If you'd like to unsubscribe…". Los nodos que mandan esos avisos
+      en n8n deben llevar `tracking_settings.subscription_tracking.enable:
+      false`. PT1b y la API ya lo controlan correo por correo.
 - [x] Prueba de baja en vivo (8-oct-2026): clic en el link del pie de
       +prueba11 → PT3 (firma válida, evento `unsubscribe`, envío 22) → el
       prospecto 35 quedó en `baja` y su correo en `no_contactar`. Igual con
