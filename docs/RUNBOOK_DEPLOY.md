@@ -279,6 +279,7 @@ Actualiza esta tabla en cada deploy.
 | 23-oct-2026 | `nanobridge-api-00040-mjn` | `f8aa751` | ninguna | Documentos en el Historial de la ficha: `GET /actividades` trae `documento_subido` y `documento_revisado` (aprobado/rechazado con motivo). Al resumen con IA ya no le llega el nombre del archivo, tampoco por la tarea "Corregir documento: <archivo>". Build desde copia limpia (`git archive`) y deploy desde la compu de Mich. `/health` ok, `/actividades` da 401 sin sesión, siguen `TRUST_PROXY`, `SESSION_COOKIE_NAME`, `CORREO_DRIVER`, `IA_DRIVER`, `GEMINI_MODELO` y `GEMINI_API_KEY`. Front publicado en Firebase el mismo día (incluye el arreglo de Prospectos en celular, `d3ebcec`) |
 | 26-oct-2026 | `nanobridge-api-00041-jbp` | `6626ecf` | ninguna | Dependencias actualizadas por vulnerabilidades conocidas (`npm audit`): zod, multer, body-parser y @nestjs/platform-express (5 avisos altos de denegación de servicio), sin cambio de versión mayor; solo cambian los `package-lock.json`. Queda `uuid` (moderado, vía gaxios de Google Cloud Storage, que solo usa v4 y la falla es en v3/v5/v6). Front con 0 vulnerabilidades. Suite completa con las versiones nuevas antes de subir. `/health` ok, rutas con sesión dan 401 (también subir documento), siguen las 6 variables (`TRUST_PROXY`, `SESSION_COOKIE_NAME`, `CORREO_DRIVER`, `IA_DRIVER`, `GEMINI_MODELO`, `GEMINI_API_KEY`). Front publicado en Firebase el mismo día |
 | 28-oct-2026 | `nanobridge-api-00042-ltr` | `0ac5a42` (código de `4dafb6b`) | ninguna | CSV: también neutraliza valores que empiezan con tabulador o retorno de carro (inyección de fórmulas, OWASP), de la revisión de seguridad del 27-oct. Build desde copia limpia (`git archive`). `/health` ok, rutas con sesión dan 401, siguen las 6 variables. Sin cambios en el front |
+| 29-oct-2026 | `nanobridge-api-00043-w4k` | `8309bb5` | ninguna | Feriados de la LFT art. 74 (`esFeriadoMx`): los días hábiles (ventana de 5 días, vencimiento de tareas) los brincan, y en feriado `fila/tomar` y `envios/vencidas` regresan vacío. Ya no hay que apagar PT1 y PT4 a mano el 16-nov. Desde Cloud Shell con `git checkout 8309bb5`. `/health` ok, `fila/tomar` sin llave da 401, siguen las 6 variables. Sin cambios en el front |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
@@ -567,13 +568,11 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       horario va en **PT1a** (cambiar su Manual Trigger por un Schedule), no en
       PT1, que ahora solo se ejecuta llamado por PT1a. Mientras sigan las
       pruebas, PT1a se corre a mano.
-- [ ] **Feriados: ya no hay que apagar nada a mano** cuando esté desplegada la
-      API con `esFeriadoMx` (29-oct-2026): en feriado, `fila/tomar` y
-      `envios/vencidas` regresan vacío y todo sale el siguiente día hábil. Son
-      los de la LFT art. 74 (1-ene, 1er lunes de feb, 3er lunes de mar,
-      1-may, 16-sep, 3er lunes de nov, 25-dic y 1-oct cada 6 años). Si la API
-      sin ese cambio sigue en producción el lunes 16-nov-2026, apagar PT1 y
-      PT4 a mano ese día.
+- [x] **Feriados: ya no hay que apagar nada a mano** (API `00043-w4k`,
+      29-oct-2026): en feriado, `fila/tomar` y `envios/vencidas` regresan
+      vacío y todo sale el siguiente día hábil. Son los de la LFT art. 74
+      (1-ene, 1er lunes de feb, 3er lunes de mar, 1-may, 16-sep, 3er lunes de
+      nov, 25-dic y 1-oct cada 6 años).
 - Nota, no es error: el primer recordatorio sale al **6.º día hábil**, no al
       5.º. La ventana vence a la misma hora del primer correo (10:05 + 5 días
       hábiles) y PT4 pasa a las 9:00, así que lo toma al día siguiente.
