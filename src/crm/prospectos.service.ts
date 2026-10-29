@@ -10,6 +10,7 @@ import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { parseCsv } from "../shared/csv.js";
 import { decodificarArchivoTexto } from "../shared/texto.js";
 import { buscarPersona } from "../shared/identidad.js";
+import { agregarAlIndice, indiceDeEmpresas, parecidasEn, type EmpresaParecida } from "../shared/empresas-parecidas.js";
 import { CODIGO_PERSONA_EN_BAJA, bloquearPersona, personaEnBaja, personaEnBajaBloqueando } from "../shared/baja-prospecto.js";
 import { ESTADOS_PROSPECTO_CERRADO } from "../shared/ciclo-contacto.js";
 import { campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
@@ -93,7 +94,7 @@ export class ProspectosService {
       { numero: 1, filaOriginal: input as Record<string, unknown>, fila, errores: null }
     ]);
     const visibles = await this.contactosVisibles(user, [borrador!]);
-    return this.toJson(borrador!, visibles);
+    return this.toJson(borrador!, visibles, await indiceDeEmpresas(this.db, user));
   }
 
   // La empresa elegida en el alta manual: tiene que existir, estar activa y,
@@ -369,7 +370,8 @@ export class ProspectosService {
 
     if (rows.length === 0) throw new HttpError(404, "Lote no encontrado");
     const visibles = await this.contactosVisibles(user, rows);
-    return { lote_id: loteId, total: rows.length, filas: rows.map((r) => this.toJson(r, visibles)) };
+    const indice = await indiceDeEmpresas(this.db, user);
+    return { lote_id: loteId, total: rows.length, filas: rows.map((r) => this.toJson(r, visibles, indice)) };
   }
 
   // Confirma que el usuario puede operar sobre este lote antes de dejar que
@@ -394,7 +396,10 @@ export class ProspectosService {
   // Una fila 'duplicado' SIN matchContactoId (coincide con otra fila del
   // mismo lote, que todavía no es un contacto real) no se puede confirmar
   // así: primero hay que confirmar o rechazar la otra fila.
-  async confirmarFila(user: CurrentUser, loteId: string, id: number, usarContactoExistente: boolean) {
+  // empresaElegida (control G-01, 28-oct-2026): para una fila que crearía una
+  // empresa nueva, colgar a la persona de una que ya existe (la parecida que
+  // avisó la pantalla). Mismas reglas que la empresa del alta manual.
+  async confirmarFila(user: CurrentUser, loteId: string, id: number, usarContactoExistente: boolean, empresaElegida?: number) {
     await this.assertLoteOwnership(user, loteId);
     return this.db.transaction(async (tx) => {
       const [borrador] = await tx
@@ -422,6 +427,9 @@ export class ProspectosService {
       let mediosSuprimidos: string[] = [];
       let empresaId: number;
 
+      if (borrador.estado === "duplicado" && empresaElegida !== undefined) {
+        throw new HttpError(409, "Esta persona ya existe en el CRM: se queda en su empresa; confirma sin elegir otra o recházala");
+      }
       if (borrador.estado === "duplicado") {
         if (!usarContactoExistente) {
           throw new HttpError(409, "Esta fila coincide con un contacto existente o con otra fila del archivo; confirma con usar_contacto_existente=true para reutilizarlo, o recházala");
@@ -468,6 +476,8 @@ export class ProspectosService {
         let empresaExistente: number | null = null;
         if (borrador.empresaId !== null) {
           empresaExistente = (await this.empresaParaProspecto(tx, user, borrador.empresaId)).id;
+        } else if (empresaElegida !== undefined) {
+          empresaExistente = (await this.empresaParaProspecto(tx, user, empresaElegida)).id;
         } else if (identidad.empresaDelTelefono !== null) {
           const [empresa] = await tx.select({ propietarioId: empresas.propietarioId }).from(empresas).where(eq(empresas.id, identidad.empresaDelTelefono)).limit(1);
           if (user.rol !== "agente" || empresa?.propietarioId === user.id) empresaExistente = identidad.empresaDelTelefono;
@@ -540,25 +550,45 @@ export class ProspectosService {
     });
   }
 
+  // Control G-01 (29-oct-2026): una fila cuya empresa se llama igual que UNA
+  // sola empresa que ya existe (o que creó otra fila de este mismo lote) se
+  // confirma en ella, para que 5 personas de "Aceros X" no dejen 5 empresas
+  // "Aceros X". Con dos o más parecidas no se adivina: la fila se queda
+  // pendiente para que alguien elija en cuál va.
   async confirmarTodos(user: CurrentUser, loteId: string) {
     await this.assertLoteOwnership(user, loteId);
     const pendientes = await this.db
-      .select({ id: borradoresCaptura.id })
+      .select({ id: borradoresCaptura.id, empresaId: borradoresCaptura.empresaId, empresaNombreLegal: borradoresCaptura.empresaNombreLegal })
       .from(borradoresCaptura)
-      .where(and(eq(borradoresCaptura.loteId, loteId), eq(borradoresCaptura.estado, "pendiente_revision")));
+      .where(and(eq(borradoresCaptura.loteId, loteId), eq(borradoresCaptura.estado, "pendiente_revision")))
+      .orderBy(asc(borradoresCaptura.id));
     if (pendientes.length === 0) throw new HttpError(404, "El lote no tiene filas pendientes de revisión (las 'duplicado' se confirman una por una)");
 
+    const indice = await indiceDeEmpresas(this.db, user);
+    const conocidas = new Set([...indice.values()].flat().map((e) => e.id));
     const resultados: { id: number; ok: boolean; error?: string }[] = [];
-    for (const { id } of pendientes) {
+    let juntadas = 0;
+    for (const fila of pendientes) {
+      const porNombre = fila.empresaId === null && fila.empresaNombreLegal ? fila.empresaNombreLegal : null;
+      const parecidas = porNombre ? parecidasEn(indice, porNombre) : [];
+      if (parecidas.length > 1) {
+        resultados.push({ id: fila.id, ok: false, error: `Hay ${parecidas.length} empresas que se llaman como "${porNombre}": confirma la fila eligiendo en cuál va` });
+        continue;
+      }
       try {
-        const r = await this.confirmarFila(user, loteId, id, false);
+        const r = await this.confirmarFila(user, loteId, fila.id, false, parecidas[0]?.id);
         resultados.push({ id: r.id!, ok: true });
+        if (parecidas.length === 1) juntadas++;
+        if (porNombre && !r.ya_existia && !conocidas.has(r.empresa_id)) {
+          conocidas.add(r.empresa_id);
+          agregarAlIndice(indice, { id: r.empresa_id, nombre_legal: porNombre, nombre_comercial: null, giro: null, tamano: null, region: null, estado: null, ciudad: null, activo: true, creado_en: new Date() });
+        }
       } catch (error) {
-        resultados.push({ id, ok: false, error: error instanceof HttpError ? error.message : "Error inesperado" });
+        resultados.push({ id: fila.id, ok: false, error: error instanceof HttpError ? error.message : "Error inesperado" });
       }
     }
 
-    return { lote_id: loteId, total: resultados.length, confirmados: resultados.filter((r) => r.ok).length, resultados };
+    return { lote_id: loteId, total: resultados.length, confirmados: resultados.filter((r) => r.ok).length, en_empresa_existente: juntadas, resultados };
   }
 
   async rechazarFila(user: CurrentUser, loteId: string, id: number) {
@@ -902,7 +932,7 @@ export class ProspectosService {
     return new Set(propios.map((c) => c.id));
   }
 
-  private toJson(row: BorradorRow, contactosVisibles: Set<number> | null) {
+  private toJson(row: BorradorRow, contactosVisibles: Set<number> | null, indiceEmpresas?: Map<string, EmpresaParecida[]>) {
     const matchAjeno = row.matchContactoId !== null && contactosVisibles !== null && !contactosVisibles.has(row.matchContactoId);
     return {
       id: row.id,
@@ -924,7 +954,13 @@ export class ProspectosService {
       errores: matchAjeno ? [{ campo: "correo/telefono", mensaje: "Esta persona ya está en el CRM en una empresa de otro agente; pídele a un supervisor que confirme la fila" }] : row.errores,
       prospecto_id: row.prospectoId,
       creado_en: row.creadoEn,
-      expira_en: row.expiraEn
+      expira_en: row.expiraEn,
+      // Control G-01: en una fila que crearía una empresa nueva, las que ya
+      // existen con el mismo nombre (se puede confirmar en una de ellas).
+      empresas_parecidas:
+        indiceEmpresas && row.estado === "pendiente_revision" && row.empresaId === null && row.empresaNombreLegal
+          ? parecidasEn(indiceEmpresas, row.empresaNombreLegal, undefined, 3).map((e) => ({ id: e.id, nombre: e.nombre_comercial ?? e.nombre_legal }))
+          : []
     };
   }
 }

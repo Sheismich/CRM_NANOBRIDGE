@@ -152,9 +152,10 @@ export function ImportacionesTab() {
     });
   }
 
-  function confirmarFila(fila: Borrador, usarContactoExistente = false) {
+  // empresaId: confirmar la fila en una empresa parecida que ya existe (G-01).
+  function confirmarFila(fila: Borrador, usarContactoExistente = false, empresaId?: number) {
     void ejecutar(async () => {
-      const res = await api.post<Confirmacion>(`/api/v1/prospectos/importaciones/${loteId}/filas/${fila.id}/confirmar`, { usarContactoExistente });
+      const res = await api.post<Confirmacion>(`/api/v1/prospectos/importaciones/${loteId}/filas/${fila.id}/confirmar`, { usarContactoExistente, empresaId });
       await refrescar();
       const aviso = avisoMediosSuprimidos(res.medios_suprimidos);
       if (aviso) setAviso(`Fila ${fila.fila_numero}: ${aviso}`);
@@ -170,10 +171,11 @@ export function ImportacionesTab() {
 
   function confirmarTodas() {
     void ejecutar(async () => {
-      const res = await api.post<{ total: number; confirmados: number; resultados: { ok: boolean; error?: string }[] }>(`/api/v1/prospectos/importaciones/${loteId}/confirmar-todos`);
+      const res = await api.post<{ total: number; confirmados: number; en_empresa_existente: number; resultados: { ok: boolean; error?: string }[] }>(`/api/v1/prospectos/importaciones/${loteId}/confirmar-todos`);
       await refrescar();
       const fallidas = res.resultados.filter((r) => !r.ok);
-      setAviso(`Se confirmaron ${res.confirmados} de ${res.total}.${fallidas.length ? ` ${fallidas.length} no se pudieron confirmar: ${fallidas[0]?.error}` : ""}`);
+      const juntadas = res.en_empresa_existente ? ` ${res.en_empresa_existente} se agregaron a una empresa que ya existía con el mismo nombre.` : "";
+      setAviso(`Se confirmaron ${res.confirmados} de ${res.total}.${juntadas}${fallidas.length ? ` ${fallidas.length} no se pudieron confirmar: ${fallidas[0]?.error}` : ""}`);
     });
   }
 
@@ -387,14 +389,36 @@ function FilaLote({ lote, elegido, onElegir }: { lote: LoteImportacion; elegido:
 }
 
 // Qué se puede hacer con cada fila, según ProspectosService.confirmarFila():
-// - pendiente: confirmar o rechazar.
+// - pendiente: confirmar o rechazar. Si ya hay empresas con el mismo nombre
+//   (G-01), confirmar en una de ellas o, a propósito, como empresa nueva.
 // - duplicada contra un contacto que ya existe: confirmar reutilizándolo
 //   (usarContactoExistente, nunca por accidente) o rechazar.
 // - duplicada contra otra fila del mismo archivo: no se puede confirmar
 //   hasta resolver la otra; solo rechazar.
 // - rechazada/importada/expirada: nada.
-function AccionesFila({ fila, ocupado, onConfirmar, onRechazar }: { fila: Borrador; ocupado: boolean; onConfirmar: (f: Borrador, usarExistente?: boolean) => void; onRechazar: (f: Borrador) => void }) {
+function AccionesFila({ fila, ocupado, onConfirmar, onRechazar }: { fila: Borrador; ocupado: boolean; onConfirmar: (f: Borrador, usarExistente?: boolean, empresaId?: number) => void; onRechazar: (f: Borrador) => void }) {
   const motivo = fila.errores?.map((e) => e.mensaje).join("; ");
+  const parecidas = fila.empresas_parecidas ?? [];
+  if (fila.estado === "pendiente_revision" && parecidas.length > 0) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs text-ink-2">{parecidas.length === 1 ? "Ya hay una empresa con este nombre." : `Ya hay ${parecidas.length} empresas con este nombre.`}</span>
+        <div className="flex flex-wrap gap-1.5">
+          {parecidas.map((e) => (
+            <Button key={e.id} variant="aprobar" disabled={ocupado} className="px-3 py-1.5" title={`Agregar a esta persona a ${e.nombre}`} onClick={() => onConfirmar(fila, false, e.id)}>
+              Confirmar en {e.nombre}
+            </Button>
+          ))}
+          <Button variant="outline" disabled={ocupado} className="px-3 py-1.5" onClick={() => onConfirmar(fila)}>
+            Es otra empresa
+          </Button>
+          <Button variant="ghost" disabled={ocupado} className="border border-border px-3 py-1.5" onClick={() => onRechazar(fila)}>
+            Rechazar
+          </Button>
+        </div>
+      </div>
+    );
+  }
   if (fila.estado === "pendiente_revision") {
     return (
       <div className="flex gap-1.5">

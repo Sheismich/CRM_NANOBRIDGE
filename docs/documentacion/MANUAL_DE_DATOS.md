@@ -45,6 +45,7 @@ Cada fila sale con su estado:
 | Estado | Qué hacer |
 |---|---|
 | **Por revisar** | Confirmar (entra al CRM) o rechazar. «Confirmar todas las pendientes» las confirma de una vez. |
+| **Por revisar** con «Ya hay una empresa con este nombre» | Si es la misma empresa, «Confirmar en …» (la persona se agrega a esa). Si de verdad es otra, «Es otra empresa». |
 | **Duplicada** contra alguien que ya está en el CRM | La persona ya existe (mismo correo, o mismo teléfono si no trae correo). Confirmar **usando el contacto existente** (se le crea un prospecto nuevo, sin repetir a la persona) o rechazar. |
 | **Duplicada** contra otra fila del mismo archivo | Primero resolver la otra fila; esta solo se puede rechazar. |
 | **Con errores** | El motivo sale en español. Corregir el archivo y volver a importarlo, o rechazar la fila. |
@@ -52,14 +53,17 @@ Cada fila sale con su estado:
 Las filas que nadie confirma **expiran a los 30 días**. Después de cargar una lista, correr la auditoría
 (procedimiento §1) antes de mandarla a automatización.
 
-**Ojo con las empresas:** el CRM reconoce a la **persona** repetida, pero no a la **empresa** repetida por nombre. Si en
-el archivo vienen dos personas de la misma empresa escrita igual, se crea una empresa por cada una, salvo que
-compartan teléfono. Para agregar gente a una empresa que ya existe, usar «+ Nuevo prospecto → Ya existe en el CRM».
+**Empresas con el mismo nombre** (desde el 29-oct-2026): el CRM compara el nombre sin mayúsculas, acentos ni la forma
+jurídica («Moldes del Bajío, S.A. de C.V.» = «moldes del bajio»). «Confirmar todas» junta en una sola empresa a las
+personas cuya empresa se llama igual que **una** que ya existe, o que otra fila del mismo archivo acaba de crear. Si hay
+**dos o más** con ese nombre, la fila se queda «Por revisar» para que alguien elija en cuál va. Un nombre escrito
+distinto («Aceros Norte» y «Aceros del Norte») no se reconoce: eso lo detecta la auditoría.
 
 ## 3. Alta de uno en uno
 
 - **Prospecto nuevo:** Prospectos → «+ Nuevo prospecto». «Empresa nueva» o «Ya existe en el CRM» (busca la empresa y le
-  cuelga a la persona). Mismas reglas que el CSV.
+  cuelga a la persona). Mismas reglas que el CSV. Si al escribir una empresa nueva sale «Ya hay una empresa con este
+  nombre», «Usar esta» la elige. «+ Nueva empresa» avisa igual.
 - **Persona que ya es contacto de una empresa:** en la ficha de la empresa, botón «A prospección» del contacto.
 - **Empresa o contacto sin prospección** (un cliente que llegó por otro lado): Empresas → «+ Nueva empresa», o en la
   ficha, «+ Agregar» contacto.
@@ -71,6 +75,9 @@ compartan teléfono. Para agregar gente a una empresa que ya existe, usar «+ Nu
   «obsoleto» y sigue reservado a esa persona.
 - **Un medio en «no contactar»** (la persona pidió su baja) se muestra pero **no se puede editar ni reactivar**.
 - **Un contacto no se puede mover a otra empresa.** Si quedó en la equivocada, avisar al responsable técnico (ver §9).
+- **Empresa repetida:** un administrador la fusiona desde su ficha → «Fusionar» → elige la que se queda. Se ve lo que se
+  va a mover antes de confirmar. Todo pasa a la que se queda (contactos, prospectos, oportunidades, cotizaciones,
+  documentos, historial y tareas), que toma los datos que le falten, y la repetida queda desactivada.
 - Todo cambio queda en **Administración → Registro de cambios**, con el antes y el después.
 
 ## 5. Desactivar, no borrar
@@ -79,7 +86,8 @@ Empresas, contactos y usuarios se **desactivan**: dejan de aparecer, pero su his
 teléfonos **siguen apartados**, así que no se pueden volver a capturar para otra persona. Por eso:
 
 - Desactivar solo lo que de verdad ya no sirve (empresa cerrada, persona que ya no trabaja ahí).
-- **No desactivar para «limpiar» un duplicado** sin antes revisar con el responsable técnico (procedimiento de auditoría §4).
+- **No desactivar para «limpiar» una empresa repetida:** fusionarla (§4). Para un contacto repetido, revisar con el
+  responsable técnico (procedimiento de auditoría §4).
 
 ## 6. Bajas y lista de supresión
 

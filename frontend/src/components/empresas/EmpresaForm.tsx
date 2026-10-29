@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -8,6 +8,7 @@ import { Button } from "../ui/Button";
 import { Icono } from "../ui/Icono";
 import type { NombreIcono } from "../ui/iconos";
 import { Field, ServerError, inputClass } from "../ui/Field";
+import { AvisoEmpresasParecidas } from "./AvisoEmpresasParecidas";
 import { ApiError, api } from "../../lib/api";
 import type { EmpresaDetalle } from "../../types";
 import { TAMANOS, correoOpcional, sinVacios, soloCambios, telefonoOpcional, textoOpcional, urlOpcional } from "./campos";
@@ -86,11 +87,13 @@ export function EmpresaForm({ empresa, onDone, onCreada, enPanel = false }: { em
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting, dirtyFields }
   } = useForm<AltaInput>({
     resolver: zodResolver(esAlta ? altaSchema : edicionSchema),
     defaultValues: { ...valoresEmpresa(empresa), contactoNombre: "", contactoPuesto: "", contactoCorreo: "", contactoTelefono: "", contactoWhatsapp: "" }
   });
+  const nombreLegal = useWatch({ control, name: "nombreLegal" });
 
   async function onSubmit(values: AltaInput) {
     setServerError(null);
@@ -133,6 +136,11 @@ export function EmpresaForm({ empresa, onDone, onCreada, enPanel = false }: { em
         <Field label="Nombre legal" htmlFor="em-legal" error={errors.nombreLegal?.message}>
           <input id="em-legal" className={inputClass} {...register("nombreLegal")} />
         </Field>
+        {esAlta && (
+          <div className={enPanel ? "empty:hidden md:col-span-2" : "empty:hidden md:col-span-3"}>
+            <AvisoEmpresasParecidas nombre={nombreLegal} />
+          </div>
+        )}
         <Field label="Nombre comercial (opcional)" htmlFor="em-comercial" error={errors.nombreComercial?.message}>
           <input id="em-comercial" className={inputClass} {...register("nombreComercial")} />
         </Field>

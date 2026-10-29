@@ -11,7 +11,8 @@ import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.j
 import { conteosProspectosQuerySchema, desdeContactoInputSchema, importarCsvBodySchema, listBorradoresQuerySchema, listLotesQuerySchema, listProspectosQuerySchema, mandarAutomatizacionInputSchema, prospectoInputSchema } from "./dto/prospecto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
-const confirmarBodySchema = z.object({ usarContactoExistente: z.boolean().default(false) });
+// empresaId: confirmar una fila nueva en una empresa que ya existe (control G-01).
+const confirmarBodySchema = z.object({ usarContactoExistente: z.boolean().default(false), empresaId: z.number().int().positive().optional() });
 
 // CSV en texto plano, no un archivo grande: 2 MB alcanza de sobra para
 // miles de filas y evita el mismo riesgo de RAM que ya documenta
@@ -123,7 +124,7 @@ export class ProspectosController {
   confirmar(@Param("loteId") loteId: string, @Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
     const id = idParamSchema.parse(idParam);
     const input = confirmarBodySchema.parse(body ?? {});
-    return this.prospectosService.confirmarFila(user, loteId, id, input.usarContactoExistente);
+    return this.prospectosService.confirmarFila(user, loteId, id, input.usarContactoExistente, input.empresaId);
   }
 
   @Post("importaciones/:loteId/filas/:id/rechazar")

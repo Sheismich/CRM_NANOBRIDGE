@@ -7,6 +7,7 @@ import { buildAntes, compactConditions, patronLike } from "../shared/drizzle-uti
 import { insertarMediosContacto, buildMedioCandidatos, estadoInicialDeMedio, CODIGO_MEDIO_SUPRIMIDO } from "../shared/medios-contacto.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
+import { indiceDeEmpresas, parecidasEn } from "../shared/empresas-parecidas.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CompanyInput, ContactInput, ListEmpresasQuery, UpdateCompanyInput, UpdateContactInput } from "./dto/empresa.schema.js";
 
@@ -148,6 +149,11 @@ export class EmpresasService {
   //  - sin_actividad_30_dias: ni actividad registrada, ni correo, ni
   //    respuesta en los últimos 30 días (o nunca).
   //  - con_oportunidad_abierta y su valor: oportunidades no cerradas.
+  // Control G-01: empresas activas con el mismo nombre (shared/empresas-parecidas.ts).
+  async parecidas(user: CurrentUser, nombre: string, excluirId?: number) {
+    return { data: parecidasEn(await indiceDeEmpresas(this.db, user), nombre, excluirId) };
+  }
+
   async conteos(user: CurrentUser) {
     const alcance = and(...compactConditions([eq(empresas.activo, true), user.rol === "agente" ? eq(empresas.propietarioId, user.id) : undefined]));
     const hace30 = sql`DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY)`;

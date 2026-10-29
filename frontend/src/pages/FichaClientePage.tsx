@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "../components/layout/AppShell";
 import { ContactoForm } from "../components/empresas/ContactoForm";
 import { EmpresaForm } from "../components/empresas/EmpresaForm";
+import { FusionarEmpresa } from "../components/empresas/FusionarEmpresa";
 import { TAMANOS } from "../components/empresas/campos";
 import { CotizacionesTab } from "../components/ficha/CotizacionesTab";
 import { DocumentosTab } from "../components/ficha/DocumentosTab";
@@ -89,6 +90,8 @@ function FichaCliente({ id }: { id: string }) {
   // DELETE /empresas/:id es solo administrador/supervisor; editar y
   // gestionar contactos lo puede hacer también el agente dueño.
   const esAdminOSupervisor = user?.rol === "administrador" || user?.rol === "supervisor";
+  // Fusionar empresas repetidas (G-05): solo administrador.
+  const esAdmin = user?.rol === "administrador";
   // El nombre del responsable: GET /empresas/:id solo trae su id. Un agente
   // solo abre las suyas; admin y supervisor ven la lista de usuarios.
   const { data: usuarios } = useQuery({
@@ -101,6 +104,7 @@ function FichaCliente({ id }: { id: string }) {
   const [editandoEmpresa, setEditandoEmpresa] = useState(false);
   const [creandoTarea, setCreandoTarea] = useState(false);
   const [confirmarBaja, setConfirmarBaja] = useState(false);
+  const [fusionando, setFusionando] = useState(false);
   const [accionError, setAccionError] = useState<string | null>(null);
 
   async function desactivarEmpresa() {
@@ -164,6 +168,11 @@ function FichaCliente({ id }: { id: string }) {
                 <Button variant="outline" onClick={() => setEditandoEmpresa(true)}>
                   Editar
                 </Button>
+                {esAdmin && (
+                  <Button variant="outline" onClick={() => setFusionando(true)}>
+                    Fusionar
+                  </Button>
+                )}
                 {esAdminOSupervisor && (
                   <Button variant="peligro" onClick={() => setConfirmarBaja(true)}>
                     Desactivar
@@ -286,6 +295,7 @@ function FichaCliente({ id }: { id: string }) {
               </>
             }
           />
+          {esAdmin && <FusionarEmpresa empresa={empresa} abierto={fusionando} onCerrar={() => setFusionando(false)} />}
         </div>
       )}
     </AppShell>

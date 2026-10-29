@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { EmpresasService } from "./empresas.service.js";
+import { FusionEmpresasService } from "./fusion-empresas.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
@@ -9,11 +10,22 @@ import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.j
 import { companyInputSchema, contactInputSchema, listEmpresasQuerySchema, updateCompanySchema, updateContactSchema } from "./dto/empresa.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
+const parecidasQuerySchema = z.object({
+  nombre: z.string().trim().min(1).max(255),
+  excluir: z.coerce.number().int().positive().optional()
+});
+const fusionarBodySchema = z.object({
+  destinoId: z.number().int().positive(),
+  simular: z.boolean().default(false)
+});
 
 @Controller("api/v1/empresas")
 @UseGuards(SessionAuthGuard, RolesGuard)
 export class EmpresasController {
-  constructor(private readonly empresasService: EmpresasService) {}
+  constructor(
+    private readonly empresasService: EmpresasService,
+    private readonly fusionEmpresasService: FusionEmpresasService
+  ) {}
 
   @Get()
   list(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
@@ -25,6 +37,14 @@ export class EmpresasController {
   @Get("conteos")
   conteos(@CurrentUser() user: CurrentUserType) {
     return this.empresasService.conteos(user);
+  }
+
+  // Empresas con el mismo nombre que la que se va a dar de alta (control G-01).
+  // Antes de @Get(":id").
+  @Get("parecidas")
+  parecidas(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
+    const input = parecidasQuerySchema.parse(query);
+    return this.empresasService.parecidas(user, input.nombre, input.excluir);
   }
 
   @Post()
@@ -48,6 +68,17 @@ export class EmpresasController {
     const id = idParamSchema.parse(idParam);
     const input = updateCompanySchema.parse(body);
     return this.empresasService.update(user, id, input);
+  }
+
+  // Fusionar esta empresa (la repetida) en otra (control G-05). Solo
+  // administrador. simular=true dice qué se movería sin tocar nada.
+  @Post(":id/fusionar")
+  @HttpCode(200)
+  @Roles("administrador")
+  fusionar(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    const id = idParamSchema.parse(idParam);
+    const input = fusionarBodySchema.parse(body ?? {});
+    return this.fusionEmpresasService.fusionar(user, id, input.destinoId, input.simular);
   }
 
   // Solo administrador/supervisor -- ver comentario en EmpresasService.deactivate.

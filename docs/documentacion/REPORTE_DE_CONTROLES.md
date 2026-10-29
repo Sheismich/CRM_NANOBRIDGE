@@ -23,7 +23,7 @@ Complementa al [diccionario de datos](DICCIONARIO_DE_DATOS.md) (qué es cada dat
 | **Total** | **37** | **37 (100 %)** |
 
 Cómo se comprueba cada control:
-- **Prueba automática:** archivo de `test/` que corre en cada cambio. Hoy son 94 archivos y 736 pruebas de la API, más 30 del front.
+- **Prueba automática:** archivo de `test/` que corre en cada cambio. Hoy son 98 archivos y 777 pruebas de la API, más 30 del front.
 - **Verificación en la base:** la regla la impone MySQL y se leyó de `information_schema` al generar el diccionario.
 - **Prueba manual documentada:** se ejecutó una vez, con fecha, y quedó en el RUNBOOK.
 
@@ -103,16 +103,16 @@ los aprueba, entran al siguiente corte.
 
 | ID | Propuesta | Por qué | Esfuerzo |
 |---|---|---|---|
-| G-01 | Avisar en la importación cuando el nombre de una empresa se parece a una que ya existe | Hoy las empresas no se deduplican por nombre | Medio |
+| G-01 | Avisar en la importación cuando el nombre de una empresa se parece a una que ya existe | Hoy las empresas no se deduplican por nombre | ✅ **Hecho** 29-oct-2026: `src/shared/empresas-parecidas.ts`, prueba `545-empresas-parecidas` |
 | G-02 | Catálogo de giros (o normalizarlos al capturar) | El giro es texto libre; las plantillas por giro dependen de que se escriba igual | Bajo |
 | G-03 | Teléfonos en formato internacional (E.164) | «442…» y «52442…» cuentan como distintos | Medio |
 | G-04 | Regla de asignación de las empresas que crea la automatización | Hoy llegan sin responsable (19 en la auditoría) | Decisión de Dirección |
-| G-05 | Fusionar dos empresas repetidas desde el CRM (mover sus contactos, medios e historial a una) | Hoy no se puede: un contacto no cambia de empresa y los correos de una empresa desactivada siguen apartados | Medio |
+| G-05 | Fusionar dos empresas repetidas desde el CRM (mover sus contactos, medios e historial a una) | Hoy no se puede: un contacto no cambia de empresa y los correos de una empresa desactivada siguen apartados | ✅ **Hecho** 29-oct-2026: `src/crm/fusion-empresas.service.ts`, prueba `546-fusion-empresas` |
 
 ## Cómo comprobarlo
 
 ```bash
-npm test                          # API: 736 pruebas (necesita la base MySQL de pruebas; ver «Pruebas automatizadas» en el README)
+npm test                          # API: 777 pruebas (necesita la base MySQL de pruebas; ver «Pruebas automatizadas» en el README)
 cd frontend && npm test           # front: 30 pruebas
 node docs/documentacion/auditar-datos.mjs      # auditoría de calidad (ver instrucciones en el archivo)
 ```

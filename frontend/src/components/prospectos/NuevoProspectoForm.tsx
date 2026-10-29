@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { clsx } from "clsx";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,7 @@ import { campanasAsignables, useCampanas } from "../../lib/campanas";
 import { avisoMediosSuprimidos } from "../../lib/medios";
 import type { Borrador, Empresa } from "../../types";
 import { BuscadorEmpresa, EmpresaElegida } from "../empresas/BuscadorEmpresa";
+import { AvisoEmpresasParecidas } from "../empresas/AvisoEmpresasParecidas";
 import { TAMANOS, correoOpcional, sinVacios, telefonoOpcional, textoOpcional, urlOpcional } from "../empresas/campos";
 
 // Mismos límites que prospectoInputSchema (src/crm/dto/prospecto.schema.ts).
@@ -66,6 +67,7 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
     register,
     handleSubmit,
     setError,
+    control,
     formState: { errors, isSubmitting }
   } = useForm<ProspectoInput>({
     resolver: zodResolver(prospectoSchema),
@@ -89,6 +91,7 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
       campanaId: ""
     }
   });
+  const nombreEmpresaNueva = useWatch({ control, name: "empresaNombreLegal" });
 
   async function confirmar(borrador: Borrador, usarContactoExistente: boolean) {
     const res = await api.post<Confirmado>(`/api/v1/prospectos/importaciones/${borrador.lote_id}/filas/${borrador.id}/confirmar`, { usarContactoExistente });
@@ -209,6 +212,15 @@ export function NuevoProspectoForm({ onDone }: { onDone: (prospectoId: number | 
           <Field label="Nombre legal" htmlFor="pr-empresa" error={errors.empresaNombreLegal?.message}>
             <input id="pr-empresa" className={inputClass} {...register("empresaNombreLegal")} />
           </Field>
+        </div>
+        <div className="md:col-span-2 empty:hidden">
+          <AvisoEmpresasParecidas
+            nombre={nombreEmpresaNueva}
+            onUsar={(e) => {
+              setEmpresaElegida(e);
+              setEmpresaExiste(true);
+            }}
+          />
         </div>
         <Field label="Giro (recomendado)" htmlFor="pr-giro" error={errors.empresaGiro?.message}>
           <input id="pr-giro" className={inputClass} {...register("empresaGiro")} />

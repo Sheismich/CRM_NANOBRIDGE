@@ -50,7 +50,7 @@ Una misma persona no debe existir dos veces. La regla es la misma para el alta m
 5. **Contactos y empresas desactivados cuentan** como la misma persona: desactivar no libera su correo ni su teléfono.
 6. **n8n no duplica por reintentos:** todo lo que crea lleva `execution_id` único (prospectos, envíos, respuestas, scoring,
    tareas, incidencias). Si n8n repite una llamada, la API regresa el registro que ya existía.
-7. **Empresas: no hay deduplicación por nombre** ⚠ (ver §8).
+7. **Empresas: la base no deduplica por nombre** ⚠, pero el CRM avisa al capturar y permite fusionar (ver §8).
 
 ## 4. Normalización
 
@@ -120,7 +120,7 @@ Estados cerrados (no reciben más correos): `baja`, `interesado`, `no_interesado
 
 | # | Punto | Impacto | Propuesta |
 |---|---|---|---|
-| 1 | **Empresas sin deduplicación por nombre.** Si la misma empresa llega en dos filas de CSV con personas distintas (y sin teléfono en común), queda dos veces. | Dos fichas para un mismo cliente; afecta T1.2 (duplicados). | Avisar en la revisión del CSV cuando el nombre se parezca a una empresa existente, o revisarlo en la auditoría de datos. |
+| 1 | **Empresas sin deduplicación por nombre.** Si la misma empresa llega en dos filas de CSV con personas distintas (y sin teléfono en común), queda dos veces. | Dos fichas para un mismo cliente; afecta T1.2 (duplicados). | **Hecho el 29-oct-2026** (G-01 y G-05): el alta y la revisión del CSV avisan cuando ya hay una empresa con el mismo nombre (sin distinguir mayúsculas, acentos ni «S.A. de C.V.»); «Confirmar todas» junta las filas cuando hay una sola así; un administrador fusiona dos empresas desde la ficha. Los nombres escritos distinto los sigue reportando la auditoría. |
 | 2 | **`prospectos.estado` es texto libre** en la base; los valores válidos solo están en el código. | Un valor mal escrito no lo detiene la base. | Aceptable mientras todo pase por la API; documentado en §6. |
 | 3 | **`empresas.giro` es texto libre** (sin catálogo). La base compara sin distinguir mayúsculas ni acentos, así que filtros y plantillas por giro tratan «Manufactura» y «manufactura» como el mismo; pero se guarda tal como se escribió y en pantalla (por ejemplo, las opciones del filtro de giro de Empresas) salen las dos formas. Un giro con otra palabra («Industria manufacturera») sí cuenta como otro. | Opciones repetidas en pantallas; plantillas por giro que no aplican si el giro se escribe distinto. | Catálogo de giros, o normalizar al capturar. La auditoría de datos reporta las formas distintas. |
 | 4 | **Región, estado y ciudad** son texto libre. | Filtros y reportes por zona. | Catálogo de estados de México. |

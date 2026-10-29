@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { EmpresasController } from "./empresas.controller.js";
 import { EmpresasService } from "./empresas.service.js";
+import { FusionEmpresasService } from "./fusion-empresas.service.js";
 import { ContactosController } from "./contactos.controller.js";
 import { ContactosService } from "./contactos.service.js";
 import { ActividadesController } from "./actividades.controller.js";
@@ -14,7 +15,7 @@ import { AuthModule } from "../auth/auth.module.js";
 @Module({
   imports: [AuthModule],
   controllers: [EmpresasController, ContactosController, ActividadesController, ProspectosController, CatalogosController],
-  providers: [EmpresasService, ContactosService, ActividadesService, ProspectosService, CatalogosService],
+  providers: [EmpresasService, FusionEmpresasService, ContactosService, ActividadesService, ProspectosService, CatalogosService],
   exports: [ProspectosService, ActividadesService]
 })
 export class CrmModule {}

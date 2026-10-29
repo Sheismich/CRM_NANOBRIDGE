@@ -298,6 +298,9 @@ export type Borrador = {
   match_motivo: "correo" | "telefono" | null;
   errores: { campo: string; mensaje: string }[] | null;
   prospecto_id: number | null;
+  // Control G-01: empresas que ya existen con el mismo nombre (solo en una
+  // fila por revisar que crearía una empresa nueva).
+  empresas_parecidas: { id: number; nombre: string }[];
 };
 
 // GET /prospectos
