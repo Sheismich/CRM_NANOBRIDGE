@@ -301,6 +301,6 @@ export class RespuestasVendedorService {
     const nombre = { nombre: c.contactoNombre, empresa: c.empresaNombre, giro: c.giro };
     const cuando = new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" }).format(c.recibidoEn);
     const cita = c.contenido ? { encabezado: `El ${cuando}, ${c.contactoNombre} escribió:`, contenido: c.contenido } : undefined;
-    return armarCorreo({ asunto: c.asunto, cuerpo: texto }, nombre, await leerPie(this.db), { firma: user.nombre, molde: true, linkDeBaja: true, cita });
+    return armarCorreo({ asunto: c.asunto, cuerpo: texto }, nombre, await leerPie(this.db), { firma: user.nombre, logo: true, linkDeBaja: true, cita });
   }
 }

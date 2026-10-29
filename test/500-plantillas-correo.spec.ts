@@ -69,7 +69,7 @@ describe("armarCorreo (función pura)", () => {
   it("molde (opción A, 22-oct): firma con logo, pie separado, link de baja y cita, en ese orden", () => {
     const correo = armarCorreo({ asunto: "A", cuerpo: "Hola." }, {}, "Domicilio", {
       firma: "Ana <López>",
-      molde: true,
+      logo: true,
       linkDeBaja: true,
       cita: { encabezado: "El 21 de octubre, Daniel escribió:", contenido: "¿Precio?\nGracias" }
     });
@@ -82,26 +82,13 @@ describe("armarCorreo (función pura)", () => {
     expect([...orden].sort((a, b) => a - b)).toEqual(orden);
   });
 
-  // Prospección (29-oct-2026): con el molde de tablas, firma con barra y pie
-  // con línea, Gmail los mandaba a Promociones; antes del 22-oct, en párrafos
-  // sueltos, caían en Principal. Quitar el logo no bastó.
-  it("sin molde (prospección): solo párrafos, sin tablas ni bordes; firma, pie y link de baja en ese orden", () => {
-    const correo = armarCorreo({ asunto: "A", cuerpo: "Hola." }, {}, "Domicilio", { linkDeBaja: true });
-    const h = correo.html;
-    expect(h).not.toContain("<table");
-    expect(h).not.toContain("border");
-    expect(h).not.toContain("<img");
-    expect(h).toContain("<p>NANOBRIDGE<br>nanobridge-mex.com</p>");
-    expect(h).toContain('<p style="color:#6b7280;font-size:12px">Domicilio</p>');
-    expect(h).toContain(`<a href="${ETIQUETA_BAJA}">Darte de baja</a>`);
-    const orden = ["<p>Hola.</p>", "NANOBRIDGE", "Domicilio", ETIQUETA_BAJA].map((t) => h.indexOf(t));
-    expect([...orden].sort((a, b) => a - b)).toEqual(orden);
-  });
-
-  it("sin linkDeBaja no hay etiqueta", () => {
+  it("sin linkDeBaja no hay etiqueta, y sin firma la firma dice solo NANOBRIDGE", () => {
     const correo = armarCorreo({ asunto: "A", cuerpo: "Hola." }, {}, "");
     expect(correo.texto).toBe("Hola.");
     expect(correo.html).not.toContain(ETIQUETA_BAJA);
+    expect(correo.html).not.toContain("<img");
+    expect(correo.html).toContain("NANOBRIDGE");
+    expect(correo.html).toContain("nanobridge-mex.com");
   });
 
   it("detecta variables que no existen", () => {
@@ -252,10 +239,10 @@ describe("plantillas de correo", () => {
     expect(primero.body.correo.asunto).toMatch(/^Propuesta para Plantillas /);
     expect(primero.body.correo.texto).toBe(`Hola Ernesto,\n\nPrimer correo.\n\nNANOBRIDGE · Calle Falsa 123, León, Gto.\n\n¿Ya no quiere recibir estos correos? Darte de baja: ${ETIQUETA_BAJA}`);
     expect(primero.body.correo.html).toContain("<p>Hola Ernesto,</p><p>Primer correo.</p>");
-    // Link de baja en el pie (PT1b le dice a SendGrid que cambie la etiqueta
-    // por la URL) y HTML sencillo, sin el molde: con él, Gmail lo mandaba a
-    // Promociones (29-oct-2026).
-    expect(primero.body.correo.html).not.toContain("<table");
+    // Molde del 22-oct (opción A): link de baja dentro del pie (PT1b le dice
+    // a SendGrid que cambie la etiqueta por la URL) y firma SIN logo: con la
+    // imagen, Gmail lo mandaba a Promociones.
+    expect(primero.body.correo.html).not.toContain("logo-n.png");
     expect(primero.body.correo.html).toContain(`<a href="${ETIQUETA_BAJA}"`);
 
     const [envio] = await db.select().from(envios).where(eq(envios.id, primero.body.id));
