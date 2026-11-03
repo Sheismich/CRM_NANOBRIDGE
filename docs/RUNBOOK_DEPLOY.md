@@ -572,6 +572,12 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       horario va en **PT1a** (cambiar su Manual Trigger por un Schedule), no en
       PT1, que ahora solo se ejecuta llamado por PT1a. Mientras sigan las
       pruebas, PT1a se corre a mano.
+- [x] PT5 (trabajos diarios) corre **todos los días a las 7:00** (hora de
+      `America/Mexico_City`, disparador "Cada día 7 am"), publicado y sin
+      cambios pendientes (revisado el 3-nov-2026). Antes de PT4 y PT1: vence
+      las filas importadas sin confirmar (30 días) y las cotizaciones con
+      cierre pasado, avisa de tareas vencidas y documentos sin revisar, y
+      calcula las métricas del día anterior (`POST /automatizacion/jobs/:nombre`).
 - [x] **Feriados: ya no hay que apagar nada a mano** (API `00043-w4k`,
       29-oct-2026): en feriado, `fila/tomar` y `envios/vencidas` regresan
       vacío y todo sale el siguiente día hábil. Son los de la LFT art. 74
