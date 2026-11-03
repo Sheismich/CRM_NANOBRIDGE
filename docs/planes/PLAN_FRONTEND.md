@@ -615,7 +615,10 @@ sin importar la de la compu.
 
 **Si cambias una de esas funciones, corre `npm test`;** si cambias a propósito un texto, actualiza su prueba.
 
-## Pendiente para Mich: deploy de la API con el borrador sin datos de contacto (Fabián, 3 nov 2026)
+## Borrador sin datos de contacto (Fabián, 3 nov 2026) — ya no es pendiente tuyo
+
+**Cambio del 3-nov en la tarde:** este deploy lo hace Fabián, junto con "Mandar la cotización por
+correo" y la migración 038 (abajo). No lo despliegues tú. Queda la explicación:
 
 Pregunta 6 de OB-04, ya resuelta en código (`17c36e5`, en `main`): el borrador de respuesta con IA
 (`POST /respuestas/:id/borrador-ia`) ahora cambia correos y teléfonos por `[correo]` y `[teléfono]`
@@ -625,13 +628,37 @@ antes de mandar la respuesta del cliente a Gemini, igual que el resumen de la fi
 
 - **Falta el deploy de la API.** Producción (`00044-5fh`, de `92903f8`) todavía no lo trae.
 - **Sin migración y sin cambios en el front:** Firebase no se toca.
-- **Antes de desplegar, corre la suite completa (`npm test` en la raíz).** Después de `17c36e5`
-  solo se corrieron `510` (30/30) y `515` (13/13), además de `tsc` y el lint.
+- Suite completa corrida el 3-nov con esto y con "Mandar la cotización por correo" (abajo): 792/792.
 - Desplegar el commit que esté en `main` en ese momento (incluye `17c36e5`), igual que hiciste con
   `00044-5fh`, y agregar la fila en RUNBOOK §6 ("Qué está en producción"). Para revisar: `/health` ok,
   siguen las 6 variables y `POST /api/v1/respuestas/1/borrador-ia` sin sesión da 401.
 - Cuando quede, en `EVALUACION_DEL_MODELO.md` el uso 3 (borrador) ya puede decir que la respuesta
   del cliente llega sin correos ni teléfonos.
+
+## Mandar la cotización por correo (Fabián, 3 nov 2026)
+
+El vendedor manda la cotización al cliente desde el CRM, con el PDF adjunto. Decisiones de Fabián: el
+Reply-To es el correo del vendedor (la respuesta no entra al CRM), el texto sale listo y se puede cambiar,
+lleva firma con logo y el pie de Administración **sin** "Darte de baja", y la pantalla la hicimos nosotros.
+Backend con **migración 038** (`correos_cotizacion`), pruebas en `test/550-cotizacion-por-correo.spec.ts`.
+
+- **API:** `GET /cotizaciones/:id/correo` (contactos de la empresa con correo, cada uno con `motivo` si no se
+  le puede escribir; `contacto_id` elegido; `asunto`, `texto` y `archivo` listos; `motivo` si la cotización no
+  se puede mandar) y `POST /cotizaciones/:id/correo` `{ contactoId, asunto, texto }`. Solo borrador o enviada
+  (409 `COTIZACION_NO_SE_MANDA`); contacto en no contactar, suprimido o en baja: 409 `CONTACTO_NO_CONTACTAR`;
+  doble clic: 409 `COTIZACION_ENVIANDO`; SendGrid caído: 502. Una en borrador pasa sola a enviada.
+- **Cambio en una pantalla de Mich (`CotizacionPanel.tsx`):** botón "Mandar por correo" (borrador y enviada)
+  que abre `MandarCotizacionCorreo.tsx` (nuevo, en un `Modal`): Para (select con los contactos; los que no se
+  pueden, deshabilitados con su motivo), Asunto, Texto y el nombre del PDF adjunto. Al cambiar de contacto
+  cambia el "Hola <nombre>," si no se tocó (`cambiarSaludo` en `lib/cotizaciones.ts`, con prueba). "Marcar
+  enviada" se queda, ahora `outline`, para las que se mandan por fuera del CRM.
+- **`HistorialTab.tsx`:** evento nuevo `cotizacion_enviada` ("Cotización enviada", "<usuario> desde el CRM",
+  "Cotización #N por correo a <contacto> (<correo>)" y "Ver en Cotizaciones").
+- **Fusión de empresas (G-05):** también mueve `correos_cotizacion` (prueba en `546`).
+- **Para ti (documentación):** volver a generar el diccionario con la migración 038 (tabla nueva
+  `correos_cotizacion`; si un campo sale con ⚠, agregarlo en `generar-diccionario.mjs`).
+- **Ojo, no es de este cambio:** en la compu de Fabián falla `formato.test.ts` > `compacto` (sale `"120k$"`
+  en vez de `"$120K"`): el Node de esa compu formatea distinto. Revisa si en la tuya pasa.
 
 ## 7. Fuera de alcance de este plan
 
