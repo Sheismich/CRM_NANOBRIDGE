@@ -115,6 +115,10 @@ que la API ya tiene listo y probado.
 - **Las reglas del score casi no distinguen por correo:** a la fila solo entran prospectos con correo, así que todos
   suman esos 10 puntos. Lo que separa a unos de otros es el tamaño, el giro y lo que diga Gemini. Conviene revisarlo
   junto con los pesos cuando haya datos (M3).
+- **Un giro que no está en la lista vale 0 puntos.** El score solo reconoce los giros de la tabla de §3, escritos sin
+  acentos ni mayúsculas. Si la lista de Carlos trae giros con otras palabras («Industria manufacturera»), esos
+  prospectos pierden hasta 30 puntos por reglas. Al cargarla, revisar los giros contra esa tabla (la auditoría de datos
+  ya lista los giros en uso) o normalizarlos (control propuesto G-02).
 - **Idioma y estilo:** el modelo lee español informal, pero una respuesta corta o ambigua puede sugerirse mal; por eso
   existe «ambigua» y la revisión humana.
 - **Si Gemini no responde:** el score sale por reglas y la respuesta se clasifica a mano. Nada se queda atorado.
