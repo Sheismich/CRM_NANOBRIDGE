@@ -6,7 +6,7 @@ import { CORREO_SERVICE, type CorreoService } from "../integraciones/correo.type
 import { IA_SERVICE, type IaService } from "../integraciones/ia.types.js";
 import { iaActiva } from "../integraciones/ia-activa.js";
 import { HttpError } from "../shared/http-error.js";
-import { recortarTexto } from "../shared/texto.js";
+import { recortarTexto, sinDatosDeContacto } from "../shared/texto.js";
 import { armarCorreo } from "../shared/plantillas.js";
 import { firmarReplyTo } from "../shared/reply-to.js";
 import { fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
@@ -197,7 +197,7 @@ export class RespuestasVendedorService {
       correoMandado ? `Asunto: ${correoMandado.asunto}\n${correoMandado.texto}` : "(no disponible)",
       "",
       "Lo que contestó el cliente:",
-      c.contenido ?? "(sin texto)"
+      c.contenido ? sinDatosDeContacto(c.contenido) : "(sin texto)"
     ].join("\n");
 
     let resultado: { texto?: unknown };

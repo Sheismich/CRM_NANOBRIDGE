@@ -10,6 +10,18 @@ export function recortarTexto(texto: string, max: number): string {
   return caracteres.length <= max ? texto : caracteres.slice(0, max).join("");
 }
 
+/**
+ * Cambia correos y teléfonos por [correo] y [teléfono] en un texto que va a
+ * la IA (P4.3): la firma de un correo del cliente o un comentario del
+ * vendedor los traen, y la IA no los necesita. Lo usan el resumen de la ficha
+ * y el borrador de respuesta.
+ */
+export function sinDatosDeContacto(texto: string): string {
+  return texto
+    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[correo]")
+    .replace(/\+?\d[\d\s().-]{6,}\d/g, (coincidencia) => (coincidencia.replace(/\D/g, "").length >= 7 ? "[teléfono]" : coincidencia));
+}
+
 const utf8Estricto = new TextDecoder("utf-8", { fatal: true });
 
 /** true si los bytes son UTF-8 válido (sin ningún byte que se volvería "�"). */

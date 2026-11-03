@@ -11,7 +11,7 @@ import { listOportunidadesQuerySchema } from "../comercial/dto/oportunidad.schem
 import { listCotizacionesQuerySchema } from "../comercial/dto/cotizacion.schema.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import { HttpError } from "../shared/http-error.js";
-import { recortarTexto } from "../shared/texto.js";
+import { recortarTexto, sinDatosDeContacto } from "../shared/texto.js";
 import { fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 
@@ -54,13 +54,6 @@ const ESQUEMA = {
 const moneda = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 const dia = (fecha: Date | string | null | undefined) => (fecha ? fechaMx(new Date(fecha)) : null);
 
-// P4.3: nada de correos ni teléfonos, aunque vengan dentro de un texto (la
-// firma de un correo del cliente, un comentario del vendedor).
-export function sinDatosDeContacto(texto: string): string {
-  return texto
-    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[correo]")
-    .replace(/\+?\d[\d\s().-]{6,}\d/g, (coincidencia) => (coincidencia.replace(/\D/g, "").length >= 7 ? "[teléfono]" : coincidencia));
-}
 // La tarea automática de un documento rechazado se llama "Corregir documento:
 // <nombre del archivo>" (documentos.service.ts), y el nombre a veces trae el de
 // una persona ("INE Rosa Peña.pdf"). A la IA le basta con saber que es un archivo.

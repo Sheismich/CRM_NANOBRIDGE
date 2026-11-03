@@ -302,6 +302,20 @@ describe("responder al prospecto desde el CRM", () => {
       expect(pregunta.instrucciones).toMatch(/precios/i);
     });
 
+    // Igual que el resumen de la ficha (P4.3): la firma del cliente trae su
+    // correo y su teléfono, y la IA no los necesita para redactar.
+    it("a la IA no le llegan el correo ni el teléfono que vienen en la respuesta del cliente", async () => {
+      const r = await respuestaDe({ contenido: "Sí me interesa.\n--\nLaura Gómez\nlaura.gomez@cliente.test\nTel. 449 123 4567" });
+      expect((await borrador(admin, r.respuestaId)).status).toBe(201);
+      const pregunta = ia.preguntas.at(-1)!;
+      expect(pregunta.texto).toContain("Sí me interesa.");
+      expect(pregunta.texto).toContain("Laura Gómez");
+      expect(pregunta.texto).not.toContain("laura.gomez@cliente.test");
+      expect(pregunta.texto).not.toContain("449 123 4567");
+      expect(pregunta.texto).toContain("[correo]");
+      expect(pregunta.texto).toContain("[teléfono]");
+    });
+
     it("uso_ia: tal_cual si se manda igual, editado si se cambió", async () => {
       const r1 = await respuestaDe();
       const b1 = (await borrador(admin, r1.respuestaId)).body;
