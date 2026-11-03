@@ -23,7 +23,7 @@ Complementa al [diccionario de datos](DICCIONARIO_DE_DATOS.md) (qué es cada dat
 | **Total** | **37** | **37 (100 %)** |
 
 Cómo se comprueba cada control:
-- **Prueba automática:** archivo de `test/` que corre en cada cambio. Hoy son 98 archivos y 777 pruebas de la API, más 30 del front.
+- **Prueba automática:** archivo de `test/` que corre en cada cambio. Hoy son 99 archivos y 792 pruebas de la API, más 30 del front.
 - **Verificación en la base:** la regla la impone MySQL y se leyó de `information_schema` al generar el diccionario.
 - **Prueba manual documentada:** se ejecutó una vez, con fecha, y quedó en el RUNBOOK.
 
@@ -112,7 +112,7 @@ los aprueba, entran al siguiente corte.
 ## Cómo comprobarlo
 
 ```bash
-npm test                          # API: 777 pruebas (necesita la base MySQL de pruebas; ver «Pruebas automatizadas» en el README)
+npm test                          # API: 792 pruebas (necesita la base MySQL de pruebas; ver «Pruebas automatizadas» en el README)
 cd frontend && npm test           # front: 30 pruebas
 node docs/documentacion/auditar-datos.mjs      # auditoría de calidad (ver instrucciones en el archivo)
 ```

@@ -157,8 +157,8 @@ en vivo con n8n y SendGrid están fechadas en `PLAN_N8N_DEFINITIVO.md`.
 | **Fallas** | La bandeja de salida reintenta, no se atora, no duplica con dos despachadores y espera sin destino | `50-outbox-dispatcher-retry`, `285-outbox-no-se-atora`, `340-outbox-carreras`, `345-outbox-sin-destino` |
 | **Concurrencia** | Dos corridas a la vez no toman el mismo prospecto ni la misma espera, ni mandan dos correos a la misma persona | `485-fila-automatizacion`, `230-recordatorios` |
 
-Resultado al 3-nov-2026: 777 pruebas de la API en 98 archivos. Pasan todas al correrlas por archivo; en una corrida
-completa con la compu cargada, alguna puede pasar de 20 s y marcarse como fallida (ver la bitácora, §7).
+Resultado al 3-nov-2026 (código de `e4ff3b2`, el que está en producción): 792 de 792 pruebas de la API, en 99
+archivos, en una corrida completa.
 
 ## 11. Límites y pendientes
 
