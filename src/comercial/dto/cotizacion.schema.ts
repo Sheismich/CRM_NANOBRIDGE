@@ -117,3 +117,12 @@ export const conteosCotizacionesQuerySchema = z.object({
 });
 export type ConteosCotizacionesQuery = z.infer<typeof conteosCotizacionesQuerySchema>;
 export type CambiarEstadoCotizacionInput = z.infer<typeof cambiarEstadoCotizacionSchema>;
+
+// Mandar la cotización por correo (3-nov-2026). El asunto y el texto vienen
+// listos de GET /cotizaciones/:id/correo y el vendedor los puede cambiar.
+export const mandarCotizacionSchema = z.object({
+  contactoId: z.coerce.number().int().positive(),
+  asunto: z.string().trim().min(1, "Escribe el asunto").max(200),
+  texto: z.string().trim().min(1, "Escribe el texto del correo").max(5000)
+});
+export type MandarCotizacionInput = z.infer<typeof mandarCotizacionSchema>;

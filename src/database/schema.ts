@@ -484,6 +484,26 @@ export const correosRespuesta = mysqlTable("correos_respuesta", {
   index("idx_correos_respuesta_prospecto").on(table.prospectoId, table.estado)
 ]);
 
+// 038: cotizaciones mandadas por correo desde el CRM, con el PDF adjunto.
+export const correosCotizacion = mysqlTable("correos_cotizacion", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  cotizacionId: bigint("cotizacion_id", { mode: "number", unsigned: true }).notNull(),
+  empresaId: bigint("empresa_id", { mode: "number", unsigned: true }).notNull(),
+  contactoId: bigint("contacto_id", { mode: "number", unsigned: true }).notNull(),
+  usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull(),
+  para: varchar("para", { length: 320 }).notNull(),
+  asunto: varchar("asunto", { length: 500 }).notNull(),
+  texto: text("texto").notNull(),
+  estado: mysqlEnum("estado", ["enviando", "enviado", "fallido"]).notNull().default("enviando"),
+  error: varchar("error", { length: 300 }),
+  proveedorId: varchar("proveedor_id", { length: 255 }),
+  creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  enviadoEn: datetime("enviado_en")
+}, (table) => [
+  index("idx_correos_cotizacion_cotizacion").on(table.cotizacionId, table.estado),
+  index("idx_correos_cotizacion_empresa").on(table.empresaId, table.estado)
+]);
+
 // 035: cada pedido a la IA desde el CRM (límite diario y medir si sirve).
 export const usoIa = mysqlTable("uso_ia", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),

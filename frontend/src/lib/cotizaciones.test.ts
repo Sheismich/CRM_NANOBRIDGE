@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CotizacionTablero } from "../types";
-import { avisoCotizacion, diasDesde } from "./cotizaciones";
+import { avisoCotizacion, cambiarSaludo, diasDesde } from "./cotizaciones";
 
 const cotizacion = (datos: Partial<CotizacionTablero>) =>
   ({ estado: "enviada", dias_para_cierre: null, dias_desde_envio: null, fecha_esperada_cierre: null, fecha_envio: null, motivo_rechazo: null, actualizado_en: "2026-10-20T18:00:00.000Z", ...datos }) as CotizacionTablero;
@@ -47,5 +47,18 @@ describe("diasDesde", () => {
     vi.setSystemTime(new Date("2026-10-28T05:30:00Z"));
     expect(diasDesde("2026-10-22")).toBe(5);
     expect(diasDesde("2026-10-27")).toBe(0);
+  });
+});
+
+describe("saludo del correo de la cotización", () => {
+  it("al cambiar de contacto cambia el saludo, si no se tocó", () => {
+    const texto = "Hola Laura Gómez,\n\nLe comparto la cotización #12.";
+    expect(cambiarSaludo(texto, "Laura Gómez", "Pedro Ruiz")).toBe("Hola Pedro Ruiz,\n\nLe comparto la cotización #12.");
+    expect(cambiarSaludo("Hola,\n\nLe comparto.", null, "Pedro Ruiz")).toBe("Hola Pedro Ruiz,\n\nLe comparto.");
+  });
+
+  it("si el vendedor ya cambió el saludo, no lo toca", () => {
+    const texto = "Buenas tardes, Laura.\n\nLe comparto la cotización.";
+    expect(cambiarSaludo(texto, "Laura Gómez", "Pedro Ruiz")).toBe(texto);
   });
 });

@@ -8,8 +8,9 @@ import { Icono } from "../ui/Icono";
 import { Modal } from "../ui/Modal";
 import { Pastilla } from "../ui/Pastilla";
 import { HojaCotizacion } from "./HojaCotizacion";
+import { MandarCotizacionCorreo } from "./MandarCotizacionCorreo";
 import { ApiError, api } from "../../lib/api";
-import { ETIQUETA_ESTADO_COTIZACION, PUEDE_ENVIARSE, PUEDE_RESPONDERSE, PUEDE_VERSIONARSE, TONO_ESTADO_COTIZACION, diasDesde, hojaDeCotizacion, useCotizacion, useMotivosRechazoCotizacion } from "../../lib/cotizaciones";
+import { ETIQUETA_ESTADO_COTIZACION, PUEDE_ENVIARSE, PUEDE_MANDARSE_POR_CORREO, PUEDE_RESPONDERSE, PUEDE_VERSIONARSE, TONO_ESTADO_COTIZACION, diasDesde, hojaDeCotizacion, useCotizacion, useMotivosRechazoCotizacion } from "../../lib/cotizaciones";
 import { formatoMoneda, plural } from "../../lib/formato";
 import type { CotizacionDocumento, MotivoRechazoCotizacion } from "../../types";
 
@@ -25,6 +26,7 @@ export function EncabezadoCotizacion({ id, onNuevaVersion }: { id: number; onNue
   const [error, setError] = useState<string | null>(null);
   const [porAceptar, setPorAceptar] = useState(false);
   const [porRechazar, setPorRechazar] = useState(false);
+  const [porCorreo, setPorCorreo] = useState(false);
 
   async function cambiarEstado(cuerpo: { estado: string; motivoRechazo?: string; motivoRechazoDetalle?: string }) {
     setError(null);
@@ -71,9 +73,15 @@ export function EncabezadoCotizacion({ id, onNuevaVersion }: { id: number; onNue
         <Pastilla>{anterior ? `v${c.version} · reemplaza a v${anterior.version}` : `v${c.version}`}</Pastilla>
       </div>
       <div className="flex flex-wrap gap-1.5">
+        {PUEDE_MANDARSE_POR_CORREO(c.estado) && (
+          <Button className="!px-3 !py-2 !text-[12px]" disabled={guardando} onClick={() => setPorCorreo(true)}>
+            <Icono nombre="correo" size={14} /> Mandar por correo
+          </Button>
+        )}
+        {/* Para las que se mandaron por fuera del CRM (WhatsApp, en persona). */}
         {PUEDE_ENVIARSE(c.estado) && (
-          <Button className="!px-3 !py-2 !text-[12px]" disabled={guardando} onClick={() => void cambiarEstado({ estado: "enviada" })}>
-            <Icono nombre="correo" size={14} /> Marcar enviada
+          <Button variant="outline" className="!px-3 !py-2 !text-[12px]" disabled={guardando} onClick={() => void cambiarEstado({ estado: "enviada" })}>
+            Marcar enviada
           </Button>
         )}
         {PUEDE_RESPONDERSE(c.estado) && (
@@ -96,6 +104,8 @@ export function EncabezadoCotizacion({ id, onNuevaVersion }: { id: number; onNue
         </Button>
       </div>
       <ServerError message={error} />
+
+      <MandarCotizacionCorreo id={c.id} empresaId={c.empresa_id} abierto={porCorreo} onCerrar={() => setPorCorreo(false)} />
 
       <Modal
         abierto={porAceptar}

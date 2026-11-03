@@ -89,6 +89,20 @@ describe("fusionar empresas", () => {
     expect(recibida).toHaveLength(1);
   });
 
+  it("las cotizaciones mandadas por correo pasan a la destino y siguen en su Historial", async () => {
+    const m = marca();
+    const origen = await empresa(admin, { nombreLegal: `Con cotización ${m}` });
+    const destino = await empresa(admin, { nombreLegal: `Sin cotización ${m}` });
+    const [contacto] = await contactosDe(origen);
+    const cot = await api().post("/api/v1/cotizaciones").set("Cookie", admin).send({ empresaId: origen, oportunidadId: await oportunidad(origen), contactoId: contacto, partidas: [{ descripcion: "Servicio", cantidad: 1, precioUnitario: 100 }] });
+    expect(cot.status).toBe(201);
+    expect((await api().post(`/api/v1/cotizaciones/${cot.body.id}/correo`).set("Cookie", admin).send({ contactoId: contacto, asunto: "Cotización", texto: "Hola." })).status).toBe(201);
+
+    expect((await fusionar(admin, origen, { destinoId: destino })).status).toBe(200);
+    const historial = await api().get("/api/v1/actividades").query({ empresaId: destino, limit: 100 }).set("Cookie", admin);
+    expect((historial.body.data as { tipo: string; detalle: { cotizacion_id: number } }[]).some((e) => e.tipo === "cotizacion_enviada" && e.detalle.cotizacion_id === cot.body.id)).toBe(true);
+  });
+
   it("una empresa ya fusionada (desactivada) no se vuelve a fusionar, ni sirve de destino", async () => {
     const m = marca();
     const origen = await empresa(admin, { nombreLegal: `Una ${m}` });

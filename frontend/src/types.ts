@@ -87,7 +87,8 @@ export type ContactoConMedio = {
 // según `tipo`, por eso queda como registro abierto.
 export type TimelineEvento = {
   // documento_subido / documento_revisado: 23-oct-2026 (resultado "aprobado" o "rechazado").
-  tipo: "llamada" | "whatsapp" | "comentario" | "correo_enviado" | "correo_recibido" | "correo_respondido" | "tarea" | "cambio_estado_prospecto" | "documento_subido" | "documento_revisado";
+  // cotizacion_enviada: 3-nov-2026, la cotización mandada por correo desde el CRM.
+  tipo: "llamada" | "whatsapp" | "comentario" | "correo_enviado" | "correo_recibido" | "correo_respondido" | "tarea" | "cambio_estado_prospecto" | "documento_subido" | "documento_revisado" | "cotizacion_enviada";
   fecha: string;
   responsable_id: number | null;
   canal: string | null;
@@ -98,6 +99,20 @@ export type TimelineEvento = {
 
 // GET /respuestas/:id/contestar (etapa 3, 20-oct-2026): lo que hace falta
 // para contestarle al prospecto desde el CRM y si se puede.
+// GET /cotizaciones/:id/correo (3-nov-2026): lo que necesita la ventana de
+// "Mandar por correo". `motivo` (de la cotización o del contacto) dice por
+// qué no se puede.
+export type ContextoCorreoCotizacion = {
+  cotizacion_id: number;
+  estado: EstadoCotizacion;
+  motivo: string | null;
+  contactos: { id: number; nombre: string; correo: string; motivo: string | null }[];
+  contacto_id: number | null;
+  asunto: string;
+  texto: string;
+  archivo: string;
+};
+
 export type ContextoRespuesta = {
   respuesta_id: number;
   prospecto_id: number;

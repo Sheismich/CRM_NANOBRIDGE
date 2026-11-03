@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { actividades, auditoria, catalogoTipoDocumento, contactos, correosRespuesta, documentos, empresas, envios, oportunidades, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
+import { actividades, auditoria, catalogoTipoDocumento, contactos, correosCotizacion, correosRespuesta, cotizaciones, documentos, empresas, envios, oportunidades, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
 import { NOMBRE_MOTIVO_RECHAZO_DOCUMENTO } from "../shared/motivos-rechazo-documento.js";
 import { HttpError } from "../shared/http-error.js";
 import { ACCION_CAMBIO_ESTADO_POR_CLASIFICACION } from "../shared/clasificacion-respuesta.js";
@@ -66,6 +66,20 @@ function correoRespondidoToEvento(row: typeof correosRespuesta.$inferSelect & { 
     resultado: null,
     proxima_accion: null,
     detalle: { correo_respuesta_id: row.id, respuesta_id: row.respuestaId, prospecto_id: row.prospectoId, asunto: row.asunto, texto: row.texto, usuario_nombre: row.usuarioNombre, uso_ia: row.usoIa }
+  };
+}
+
+// Cotización mandada por correo desde el CRM (3-nov-2026). Solo las que
+// salieron, igual que correo_respondido.
+function cotizacionEnviadaToEvento(row: typeof correosCotizacion.$inferSelect & { usuarioNombre: string | null; contactoNombre: string | null; version: number | null }): TimelineEvento {
+  return {
+    tipo: "cotizacion_enviada",
+    fecha: row.enviadoEn ?? row.creadoEn,
+    responsable_id: row.usuarioId,
+    canal: "correo",
+    resultado: null,
+    proxima_accion: null,
+    detalle: { correo_cotizacion_id: row.id, cotizacion_id: row.cotizacionId, version: row.version, contacto_id: row.contactoId, contacto_nombre: row.contactoNombre, para: row.para, asunto: row.asunto, texto: row.texto, usuario_nombre: row.usuarioNombre }
   };
 }
 
@@ -258,6 +272,20 @@ export class ActividadesService {
         .limit(query.limit);
       eventos.push(...filasAuditoria.map(auditoriaToEvento));
     }
+
+    const enviadasCondition = query.contactoId
+      ? and(eq(correosCotizacion.empresaId, query.empresaId), eq(correosCotizacion.contactoId, query.contactoId), eq(correosCotizacion.estado, "enviado"))
+      : and(eq(correosCotizacion.empresaId, query.empresaId), eq(correosCotizacion.estado, "enviado"));
+    const filasCotizaciones = await this.db
+      .select({ correo: correosCotizacion, usuarioNombre: usuarios.nombre, contactoNombre: contactos.nombre, version: cotizaciones.version })
+      .from(correosCotizacion)
+      .leftJoin(usuarios, eq(usuarios.id, correosCotizacion.usuarioId))
+      .leftJoin(contactos, eq(contactos.id, correosCotizacion.contactoId))
+      .leftJoin(cotizaciones, eq(cotizaciones.id, correosCotizacion.cotizacionId))
+      .where(enviadasCondition)
+      .orderBy(desc(correosCotizacion.enviadoEn))
+      .limit(query.limit);
+    eventos.push(...filasCotizaciones.map((f) => cotizacionEnviadaToEvento({ ...f.correo, usuarioNombre: f.usuarioNombre, contactoNombre: f.contactoNombre, version: f.version })));
 
     // Solo tareas cerradas: esto es un registro de lo que YA pasó, no una
     // bandeja de pendientes (para eso está GET /api/v1/tareas).

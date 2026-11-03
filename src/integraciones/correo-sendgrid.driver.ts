@@ -38,6 +38,9 @@ export function cuerpoSendgrid(correo: CorreoSaliente) {
       { type: "text/plain", value: correo.texto },
       { type: "text/html", value: correo.html }
     ],
+    ...(correo.adjuntos?.length
+      ? { attachments: correo.adjuntos.map((a) => ({ filename: a.nombre, type: a.tipo, content: a.contenidoBase64, disposition: "attachment" })) }
+      : {}),
     categories: [correo.categoria],
     tracking_settings: {
       click_tracking: { enable: false, enable_text: false },

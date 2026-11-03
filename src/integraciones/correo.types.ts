@@ -19,7 +19,11 @@ export type CorreoSaliente = {
   // Correos a prospectos: SendGrid cambia ETIQUETA_BAJA (en texto y html)
   // por su link de baja. Los avisos internos no lo llevan.
   linkDeBaja?: boolean;
+  // Archivos adjuntos, p. ej. el PDF de la cotización (3-nov-2026).
+  adjuntos?: Adjunto[];
 };
+
+export type Adjunto = { nombre: string; tipo: string; contenidoBase64: string };
 
 export { ETIQUETA_BAJA } from "../shared/plantillas.js";
 

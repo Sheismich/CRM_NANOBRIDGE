@@ -20,7 +20,8 @@ const ETIQUETA_TIPO: Record<TimelineEvento["tipo"], string> = {
   tarea: "Tarea cerrada",
   cambio_estado_prospecto: "Cambio de estado del prospecto",
   documento_subido: "Documento subido",
-  documento_revisado: "Documento revisado"
+  documento_revisado: "Documento revisado",
+  cotizacion_enviada: "Cotización enviada"
 };
 
 const ES_DOCUMENTO = new Set<TimelineEvento["tipo"]>(["documento_subido", "documento_revisado"]);
@@ -52,6 +53,11 @@ function textoPrincipal(evento: TimelineEvento): string | null {
   if (evento.tipo === "tarea") return typeof d.titulo === "string" ? d.titulo : null;
   if (evento.tipo === "correo_recibido") return typeof d.contenido === "string" ? d.contenido : null;
   if (evento.tipo === "correo_respondido") return typeof d.texto === "string" ? d.texto : null;
+  if (evento.tipo === "cotizacion_enviada") {
+    const version = typeof d.version === "number" && d.version > 1 ? ` v${d.version}` : "";
+    const para = typeof d.contacto_nombre === "string" ? ` a ${d.contacto_nombre}` : "";
+    return `Cotización #${String(d.cotizacion_id)}${version} por correo${para}${typeof d.para === "string" ? ` (${d.para})` : ""}`;
+  }
   if (evento.tipo === "cambio_estado_prospecto") return typeof d.motivo === "string" ? d.motivo : null;
   if (evento.tipo === "correo_enviado") return typeof d.numero_contacto === "number" ? `Contacto #${d.numero_contacto} de la secuencia` : null;
   if (ES_DOCUMENTO.has(evento.tipo)) {
@@ -139,7 +145,7 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
                     <span className="text-[13px] font-bold text-strong">{ETIQUETA_TIPO[evento.tipo] ?? evento.tipo}</span>
                     {AUTOMATICOS.has(evento.tipo) && <span className="rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-bold text-info">Automático</span>}
                     {clave && <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${claseEtiqueta(clave)}`}>{ETIQUETA_RESULTADO[clave] ?? clave}</span>}
-                    {evento.tipo === "correo_respondido" && typeof evento.detalle.usuario_nombre === "string" && <span className="text-[12px] text-ink-3">{evento.detalle.usuario_nombre} desde el CRM</span>}
+                    {(evento.tipo === "correo_respondido" || evento.tipo === "cotizacion_enviada") && typeof evento.detalle.usuario_nombre === "string" && <span className="text-[12px] text-ink-3">{evento.detalle.usuario_nombre} desde el CRM</span>}
                     {ES_DOCUMENTO.has(evento.tipo) && typeof evento.detalle.usuario_nombre === "string" && <span className="text-[12px] text-ink-3">{evento.detalle.usuario_nombre}</span>}
                   </div>
                   {texto && <p className="mt-1 whitespace-pre-line text-[13px] text-ink-2">{texto}</p>}
@@ -154,6 +160,11 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
                   {ES_DOCUMENTO.has(evento.tipo) && (
                     <Link to={{ search: "?tab=documentos" }} replace className="mt-1.5 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-navy hover:underline">
                       Ver en Documentos
+                    </Link>
+                  )}
+                  {evento.tipo === "cotizacion_enviada" && (
+                    <Link to={{ search: "?tab=cotizaciones" }} replace className="mt-1.5 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-navy hover:underline">
+                      Ver en Cotizaciones
                     </Link>
                   )}
                   {sePuedeResponder(evento) && (

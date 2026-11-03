@@ -3,19 +3,23 @@ import type { Response } from "express";
 import { z } from "zod";
 import { contentDispositionAdjunto } from "../shared/content-disposition.js";
 import { CotizacionesService } from "./cotizaciones.service.js";
+import { CorreoCotizacionService } from "./correo-cotizacion.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
-import { cambiarEstadoCotizacionSchema, conteosCotizacionesQuerySchema, crearCotizacionSchema, datosCotizacionSchema, listCotizacionesQuerySchema } from "./dto/cotizacion.schema.js";
+import { cambiarEstadoCotizacionSchema, conteosCotizacionesQuerySchema, crearCotizacionSchema, datosCotizacionSchema, listCotizacionesQuerySchema, mandarCotizacionSchema } from "./dto/cotizacion.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
 @Controller("api/v1/cotizaciones")
 @UseGuards(SessionAuthGuard, RolesGuard)
 export class CotizacionesController {
-  constructor(private readonly cotizacionesService: CotizacionesService) {}
+  constructor(
+    private readonly cotizacionesService: CotizacionesService,
+    private readonly correoCotizacionService: CorreoCotizacionService
+  ) {}
 
   @Get()
   list(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
@@ -58,6 +62,21 @@ export class CotizacionesController {
       "Content-Type": "application/pdf",
       "Content-Disposition": contentDispositionAdjunto(nombreArchivo)
     }).send(contenido);
+  }
+
+  // Mandar la cotización por correo con el PDF adjunto (3-nov-2026). GET da
+  // los contactos con correo y el texto listo; POST la manda.
+  @Get(":id/correo")
+  @Roles("administrador", "supervisor", "agente")
+  contextoCorreo(@Param("id") idParam: string, @CurrentUser() user: CurrentUserType) {
+    return this.correoCotizacionService.contexto(user, idParamSchema.parse(idParam));
+  }
+
+  @Post(":id/correo")
+  @HttpCode(201)
+  @Roles("administrador", "supervisor", "agente")
+  mandarPorCorreo(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    return this.correoCotizacionService.mandar(user, idParamSchema.parse(idParam), mandarCotizacionSchema.parse(body));
   }
 
   @Post(":id/version")

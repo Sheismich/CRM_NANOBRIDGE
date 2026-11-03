@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { actividades, auditoria, borradoresCaptura, contactos, cotizaciones, documentos, empresas, mediosContacto, notificaciones, oportunidades, prospectos, tareas, usoIa } from "../database/schema.js";
+import { actividades, auditoria, borradoresCaptura, contactos, correosCotizacion, cotizaciones, documentos, empresas, mediosContacto, notificaciones, oportunidades, prospectos, tareas, usoIa } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 
@@ -52,6 +52,8 @@ export class FusionEmpresasService {
       await tx.update(tareas).set({ empresaId: destinoId }).where(eq(tareas.empresaId, origenId));
       await tx.update(usoIa).set({ empresaId: destinoId }).where(eq(usoIa.empresaId, origenId));
       await tx.update(borradoresCaptura).set({ empresaId: destinoId }).where(eq(borradoresCaptura.empresaId, origenId));
+      // Las cotizaciones mandadas por correo (038), para que sigan en el Historial.
+      await tx.update(correosCotizacion).set({ empresaId: destinoId }).where(eq(correosCotizacion.empresaId, origenId));
       await tx.update(notificaciones).set({ entidadId: destinoId }).where(and(eq(notificaciones.entidad, "empresa"), eq(notificaciones.entidadId, origenId)));
 
       if (completar.length) {

@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import type { DatosHoja } from "../components/cotizaciones/HojaCotizacion";
 import type { Tono } from "../components/ui/tonos";
-import type { CotizacionDocumento, CotizacionTablero, EstadoCotizacion, MotivoRechazoCotizacion } from "../types";
+import type { ContextoCorreoCotizacion, CotizacionDocumento, CotizacionTablero, EstadoCotizacion, MotivoRechazoCotizacion } from "../types";
 import { api } from "./api";
 import { fechaLocal, formatoDiaMes } from "./formato";
 
@@ -102,6 +102,39 @@ export function useCotizacion(id: number) {
     queryKey: ["cotizacion", id],
     queryFn: () => api.get<CotizacionDocumento>(`/api/v1/cotizaciones/${id}`)
   });
+}
+
+// Mandar la cotización por correo (3-nov-2026). staleTime 0: los contactos y
+// su supresión pueden cambiar entre una vez y otra.
+export function useContextoCorreoCotizacion(id: number | null) {
+  return useQuery({
+    queryKey: ["cotizacion", id, "correo"],
+    queryFn: () => api.get<ContextoCorreoCotizacion>(`/api/v1/cotizaciones/${id}/correo`),
+    enabled: id !== null,
+    staleTime: 0
+  });
+}
+
+export async function mandarCotizacionPorCorreo(queryClient: QueryClient, id: number, empresaId: number, cuerpo: { contactoId: number; asunto: string; texto: string }) {
+  const res = await api.post<{ id: number; estado: "enviado"; cotizacion_estado: EstadoCotizacion }>(`/api/v1/cotizaciones/${id}/correo`, cuerpo);
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["cotizacion", id] }),
+    queryClient.invalidateQueries({ queryKey: ["cotizaciones"] }),
+    queryClient.invalidateQueries({ queryKey: ["timeline", empresaId] })
+  ]);
+  return res;
+}
+
+// Se puede mandar por correo una en borrador (pasa a enviada) o una ya
+// enviada (otra vez, o a otro contacto). Mismo criterio que la API.
+export const PUEDE_MANDARSE_POR_CORREO = (estado: EstadoCotizacion) => estado === "borrador" || estado === "enviada";
+
+// "Hola <nombre>," del texto listo: al cambiar de contacto se cambia el
+// saludo, si el vendedor no lo tocó.
+export function cambiarSaludo(texto: string, antes: string | null, despues: string | null) {
+  const viejo = antes ? `Hola ${antes},` : "Hola,";
+  const nuevo = despues ? `Hola ${despues},` : "Hola,";
+  return texto.startsWith(viejo) ? nuevo + texto.slice(viejo.length) : texto;
 }
 
 export function hojaDeCotizacion(c: CotizacionDocumento): DatosHoja {
