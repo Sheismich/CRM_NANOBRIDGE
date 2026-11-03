@@ -74,10 +74,17 @@ describe("administración: último acceso y auditoría solo admin", () => {
 
   it("la lista y la ficha de usuarios traen el último acceso", async () => {
     const agente = await agenteNuevo();
-    const lista = await api().get("/api/v1/usuarios").set("Cookie", adminCookie).query({ limit: 100, rol: "agente" });
-    expect(lista.status).toBe(200);
-    const fila = lista.body.data.find((u: { id: number }) => u.id === agente.id);
-    expect(fila.ultimo_acceso_en).not.toBeNull();
+    // La lista va por id y la base de pruebas es compartida: con la suite
+    // completa ya hay más de 100 agentes, así que se busca página por página.
+    let fila: { id: number; ultimo_acceso_en: string | null } | undefined;
+    for (let page = 1; !fila; page++) {
+      const lista = await api().get("/api/v1/usuarios").set("Cookie", adminCookie).query({ limit: 100, rol: "agente", page });
+      expect(lista.status).toBe(200);
+      if (lista.body.data.length === 0) break;
+      fila = lista.body.data.find((u: { id: number }) => u.id === agente.id);
+    }
+    expect(fila).toBeDefined();
+    expect(fila!.ultimo_acceso_en).not.toBeNull();
 
     const ficha = await api().get(`/api/v1/usuarios/${agente.id}`).set("Cookie", adminCookie);
     expect(ficha.body.ultimo_acceso_en).not.toBeNull();
