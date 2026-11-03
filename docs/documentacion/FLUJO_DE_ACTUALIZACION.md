@@ -27,7 +27,7 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
 | **PT2a · sugerencia de IA** (n8n) | Propone una clasificación para cada respuesta; una persona la confirma | Lo llama PT2 | Construido el 19-oct (modo sugerencia) |
 | **PT3 · eventos de SendGrid** (n8n) | Bajas por link, quejas de spam y rebotes | Cada evento de SendGrid | Probado en vivo (baja del 8-oct) |
 | **PT4 · recordatorios** (n8n) | Manda los correos 2 y 3 al vencer la espera de 5 días hábiles, o marca inactivo al que ya recibió 3 | Lunes a viernes a las 10:00 | Publicado el 19-oct, con `MODO_PRUEBAS` |
-| **PT5 · trabajos diarios** (n8n) | Llama a la API para los trabajos de cada día: vencer las filas importadas sin confirmar (30 días) y las cotizaciones con cierre pasado, avisar de tareas vencidas y de documentos sin revisar, y calcular las métricas del día anterior | Una vez al día | La API está lista (`POST /automatizacion/jobs/:nombre`, prueba `290-jobs-por-endpoint`) y el código lo da por existente desde el 12-oct. **Por confirmar con T2** su horario: el repositorio no lo registra |
+| **PT5 · trabajos diarios** (n8n) | Llama a la API para los trabajos de cada día: vencer las filas importadas sin confirmar (30 días) y las cotizaciones con cierre pasado, avisar de tareas vencidas y de documentos sin revisar, y calcular las métricas del día anterior | Todos los días a las 7:00 (hora de México) | Publicado (confirmado por T2 el 3-nov; RUNBOOK §10). API: `POST /automatizacion/jobs/:nombre`, prueba `290-jobs-por-endpoint` |
 | **B4 · Error Workflow global** (n8n) | Registra en la API cualquier falla de un flujo y avisa por correo | Cuando algo falla | Publicado y probado el 23-sep |
 | **Bandeja de salida** (API) | Avisa a n8n de lo que pasa en el CRM (tarea cerrada, prospecto clasificado…) | Cada 15 s mientras la API está despierta | Lista; **espera a B3** (ver §9) |
 
@@ -63,7 +63,7 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
 | Empresa con el mismo nombre que una existente | Desde el 3-nov la pantalla avisa y deja confirmar la fila en esa empresa; «Confirmar todas» la junta si hay **una sola** con ese nombre (`G-01`) | Mismo borrador | Quien confirma |
 | Prospecto a automatización | Sigue siendo el mismo registro: solo cambia a `en_fila` | — | Administrador o supervisor (botón) |
 
-Lo que no se confirma expira a los 30 días, cuando corre el trabajo diario de PT5 (§2). PT1 **ya no crea prospectos** (desde el 16-oct): solo trabaja con los que
+Lo que no se confirma expira a los 30 días; lo vence PT5 cada mañana (§2). PT1 **ya no crea prospectos** (desde el 16-oct): solo trabaja con los que
 le entrega la fila, así que la base tiene una sola lista de prospectos y todo entra con revisión humana.
 
 ## 5. Cambio: qué actualiza la automatización
@@ -166,10 +166,7 @@ completa con la compu cargada, alguna puede pasar de 20 s y marcarse como fallid
   Encender es una decisión de G5, con la lista de encendido del RUNBOOK (§10).
 - **B3 no existe todavía:** n8n no recibe los avisos del CRM (tarea cerrada, prospecto clasificado). No afecta al
   recorrido del §3, porque la API aplica sus decisiones sola; los avisos esperan sin perderse.
-- **PT1a corre a mano.** El día de encender se cambia a horario (10:00, lunes a viernes).
-- **PT5: confirmar su horario con T2** y anotarlo en el RUNBOOK. Si no corre, las filas importadas no expiran, las
-  tareas vencidas no avisan, las cotizaciones no se vencen solas y faltan las métricas del día.
-- **Las respuestas se clasifican a mano.** La IA solo sugiere. Pasar a modo directo es una decisión aparte, cuando la
+- **PT1a corre a mano.** El día de encender se cambia a horario (10:00, lunes a viernes).- **Las respuestas se clasifican a mano.** La IA solo sugiere. Pasar a modo directo es una decisión aparte, cuando la
   IA demuestre que acierta (lo mide la evaluación del modelo, OB-04).
 - **Un «Retry» manual en n8n** crea otra ejecución con otro `execution_id`: puede repetir una fila de calificación o
   de bitácora, que es inofensivo; lo que importa (un correo doble) lo bloquea la política de contactos por persona.

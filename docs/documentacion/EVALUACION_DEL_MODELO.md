@@ -2,11 +2,11 @@
 
 **Entregable:** red neuronal evaluada (OB-04), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026). **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n) y Dirección General.
-**Versión:** 0.9 · borrador con pendientes · 3 de noviembre de 2026.
+**Versión:** 1.0 · 3 de noviembre de 2026 (la 0.9 del mismo día dejaba pendientes que T2 contestó ese día).
 
 Este documento dice qué modelo usa el proyecto, para qué, con qué datos, quién revisa lo que propone, cómo se mide
-si funciona y qué resultados hay hoy. Todo lo marcado **⏳ T2** lo tiene que confirmar Fabián: no está escrito en el
-repositorio y aquí no se supone.
+si funciona y qué resultados hay hoy. Lo que viene de n8n (fórmula, modelo, prompt, horarios) lo confirmó T2 el
+3-nov; el detalle de PT1 está en [`docs/n8n/pt1-scoring/`](../n8n/pt1-scoring/README.md).
 
 ## 1. Qué modelo es
 
@@ -16,8 +16,8 @@ ya entrenada), por medio de su API y en el plan de pago (Google no usa los datos
 
 | # | Uso | Quién lo llama | Qué propone la IA | Quién decide | Modelo y versión | Estado |
 |---|---|---|---|---|---|---|
-| 1 | **Calificar al prospecto** (score 0-100, prioridad y confianza) | n8n, PT1 | El score de cada prospecto antes del primer correo | Nadie lo revisa uno por uno: el score ordena y prioriza, no decide a quién se le escribe | ⏳ T2 | Probado en vivo (16-oct) |
-| 2 | **Sugerir la clasificación de una respuesta** (interesado, no interesado, baja, automática, ambigua) | n8n, PT2a | Una clasificación, su confianza (0-100) y el motivo | **Una persona**, en la cola de clasificación | ⏳ T2 (el mismo que PT1) | Publicado y probado en vivo (19-oct) |
+| 1 | **Calificar al prospecto** (score 0-100, prioridad y confianza) | n8n, PT1 | El score de cada prospecto antes del primer correo | Nadie lo revisa uno por uno: el score ordena y prioriza, no decide a quién se le escribe | `gemini-3.6-flash` | Probado en vivo (16-oct) |
+| 2 | **Sugerir la clasificación de una respuesta** (interesado, no interesado, baja, automática, ambigua) | n8n, PT2a | Una clasificación, su confianza (0-100) y el motivo | **Una persona**, en la cola de clasificación | `gemini-3.6-flash` | Publicado y probado en vivo (19-oct) |
 | 3 | **Borrador de respuesta** al prospecto | CRM, botón en «Responder» | Un borrador del correo | **El vendedor**: lo edita o lo descarta y él lo manda | `gemini-3.8-flash` | En producción desde el 21-oct |
 | 4 | **Resumen de la ficha** de una empresa | CRM, «Resumir con IA» | Un resumen del historial | **El vendedor** lo lee; no cambia nada en la base | `gemini-3.8-flash` | En producción desde el 21-oct |
 
@@ -25,21 +25,30 @@ Dirección aprobó los usos 2 a 4 (el 19 y el 21-oct), con el aviso de privacida
 
 ## 2. Con qué datos trabaja
 
-**Regla:** en el score, la clasificación y el resumen, a Gemini no le llegan correos, teléfonos ni documentos (control
-`D-07` del reporte de controles). El borrador de respuesta es la excepción, decidida en P3.7
-(`docs/planes/PREGUNTAS_ETAPAS_3_4_5.md`) y aprobada por Dirección el 21-oct con el aviso de privacidad.
+**Regla:** a Gemini no le llegan correos, teléfonos ni documentos (control `D-07` del reporte de controles). En el
+borrador de respuesta, la limpieza se agregó el 3-nov y entra a producción con el siguiente deploy de la API; hasta
+entonces la respuesta del cliente le llega completa, como se decidió en P3.7 (`docs/planes/PREGUNTAS_ETAPAS_3_4_5.md`).
 
 | Uso | Qué le llega | Qué se quita antes |
 |---|---|---|
-| 1 · Score | Datos de la empresa y del puesto (giro, tamaño, región, puesto…); la API se los entrega a n8n sin correo ni teléfono | ⏳ T2: el texto exacto que arma n8n. Conviene copiar el prompt al repositorio, como ya se hizo con PT2a |
+| 1 · Score | **Solo giro, tamaño y región** | Todo lo demás: ni nombre, ni empresa, ni correo, ni teléfono. Prompt en [`docs/n8n/pt1-scoring/`](../n8n/pt1-scoring/README.md) |
 | 2 · Clasificación | Solo el texto de la respuesta, sin nombre ni empresa | Firma, correo citado, correos, enlaces, teléfonos y el nombre de la persona y de la empresa (código en `docs/n8n/pt2a-sugerencia-ia/`) |
-| 3 · Borrador | Nombre del vendedor, nombre del cliente y de su empresa, giro, el correo que se le mandó y **su respuesta tal como llegó** | Montos y cotizaciones. **No se quitan** los correos o teléfonos que vengan dentro de la respuesta, por ejemplo en la firma (`510-responder-prospecto`) |
+| 3 · Borrador | Nombre del vendedor, nombre del cliente y de su empresa, giro, el correo que se le mandó y su respuesta | Montos y cotizaciones; desde el 3-nov, también los correos y teléfonos que vengan en la respuesta, que se cambian por `[correo]` y `[teléfono]` con la misma función del resumen (`sinDatosDeContacto`, `src/shared/texto.ts`) |
 | 4 · Resumen | Historial de la empresa (actividades, oportunidades, tareas) | Correos, teléfonos y nombres de archivo (`515-resumen-ficha`, `530-historial-documentos`) |
 
 ## 3. Revisión humana
 
-- **Score:** si Gemini falla, el score sale de reglas (0 a 100) y queda la incidencia `gemini_agotado`; nadie sale
-  castigado. El score combina Gemini (peso 60 %) con reglas. ⏳ T2: la fórmula de las reglas y cómo se combinan.
+- **Score:** se combina con reglas, que valen hasta 100 puntos:
+
+  | Dato | Puntos |
+  |---|---|
+  | Tamaño | grande 40 · mediana 30 · pequeña 20 · micro 10 |
+  | Giro | tecnología 30 · manufactura y logística 25 · financiero y servicios 20 · salud, construcción y agroindustria 15 · comercio y educación 10 · otro 5 |
+  | Tiene correo · tiene teléfono · tiene región | +10 cada uno |
+
+  **Score final = redondeo de (reglas × 0.4 + Gemini × 0.6).** Los pesos están marcados como provisionales. Si Gemini
+  falla después de 4 intentos o contesta algo inválido, el score es 100 % reglas y queda la incidencia
+  `gemini_agotado`; nadie sale castigado. **Prioridad:** alta con 70 o más, media de 40 a 69, baja con menos de 40.
 - **Clasificación:** la IA está en **modo sugerencia**. Cada respuesta entra a la cola y una persona la confirma o la
   cambia. La API guarda la sugerencia aparte (`clasificacion_sugerida`, `confianza_sugerida`, `motivo_sugerencia`) y
   no cambia estados, ni suprime, ni cierra tareas por ella. Pasar a **modo directo** es una decisión aparte de
@@ -49,9 +58,9 @@ Dirección aprobó los usos 2 a 4 (el 19 y el 21-oct), con el aviso de privacida
 
 ## 4. Cómo se mide
 
-**Métrica aprobada en G3: ⏳ T2.** El programa pide evaluar el modelo con la métrica que se aprobó en G3, y en el
-repositorio no está escrita. Mientras se confirma, estas son las métricas que se pueden calcular **con lo que la base
-ya guarda**, sin agregar nada:
+**En G3 no se aprobó ninguna métrica por escrito** (confirmado por T2 el 3-nov). Se adoptan estas cinco: las propuso
+T1, T2 las aceptó el 3-nov y revisó que se calculan **con lo que la base ya guarda**, sin agregar nada. Falta
+registrar la decisión de Dirección (bitácora, §5).
 
 | ID | Métrica | Cómo se calcula | Uso |
 |---|---|---|---|
@@ -99,23 +108,25 @@ que la API ya tiene listo y probado.
 
 - **Pocos datos:** el piloto es corto y de bajo volumen; los resultados serán indicativos.
 - **El modelo cambia:** Google retira versiones (pasó con `gemini-2.5-flash`). Un cambio de versión puede cambiar las
-  respuestas; hay que anotar la versión en cada evaluación. ⏳ T2: qué versión usa n8n.
-- **Depende del prompt:** el de PT2a está en el repositorio; el de PT1, no (⏳ T2).
+  respuestas; hay que anotar la versión en cada evaluación. Hoy hay dos: n8n usa `gemini-3.6-flash` y el CRM,
+  `gemini-3.8-flash`.
+- **Depende del prompt:** los de PT1 y PT2a están en el repositorio (`docs/n8n/`). Si se cambian en n8n, se cambian ahí
+  también.
+- **Las reglas del score casi no distinguen por correo:** a la fila solo entran prospectos con correo, así que todos
+  suman esos 10 puntos. Lo que separa a unos de otros es el tamaño, el giro y lo que diga Gemini. Conviene revisarlo
+  junto con los pesos cuando haya datos (M3).
 - **Idioma y estilo:** el modelo lee español informal, pero una respuesta corta o ambigua puede sugerirse mal; por eso
   existe «ambigua» y la revisión humana.
 - **Si Gemini no responde:** el score sale por reglas y la respuesta se clasifica a mano. Nada se queda atorado.
-- **Datos de contacto en el borrador:** la respuesta del cliente llega a Gemini completa, con su firma. Está aprobado,
-  pero se podría aplicar la misma limpieza que en PT2a (quitar correos, teléfonos y firma) sin perder calidad en el
-  borrador. Decisión de T1 y T2.
+- **Datos de contacto en el borrador:** resuelto en el código el 3-nov (§2). Hasta el siguiente deploy de la API, la
+  respuesta del cliente le sigue llegando completa a Gemini.
 
-## 8. Pendientes para T2
+## 8. Pendientes
 
-1. La métrica aprobada en G3 (o confirmar que no se aprobó ninguna y que se usan las de §4).
-2. La fórmula del score: las reglas y cómo se combinan con Gemini (60 %).
-3. El modelo y la versión que usan PT1 y PT2a.
-4. El prompt de PT1, copiado a `docs/n8n/` como el de PT2a.
-5. Si ya hay resultados de alguna revisión hecha a mano, para agregarlos a §5.
-6. Si el borrador de respuesta debe limpiar correos y teléfonos como PT2a (§7).
+1. **Deploy de la API** con la limpieza del borrador (T2).
+2. **Registrar con Dirección** las cinco métricas de §4 y el criterio para pasar a modo directo (§6).
+3. **Revisar los pesos del score** (40 % reglas, 60 % Gemini) con los datos del piloto (M3).
+4. **Resultados sobre muestra:** salen del piloto y van en el reporte OB-06 (§5).
 
 ## Relacionado
 
