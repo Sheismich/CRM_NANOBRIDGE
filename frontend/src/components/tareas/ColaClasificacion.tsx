@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { Icono } from "../ui/Icono";
+import { ResponderCorreo } from "../respuestas/ResponderCorreo";
 import { ServerError, inputBaseClass, inputClass } from "../ui/Field";
 import { ApiError, api } from "../../lib/api";
 import { formatoFechaHora } from "../../lib/formato";
@@ -16,7 +18,7 @@ import type { Clasificacion, TareaClasificacion } from "../../types";
 // suprime todos los medios del contacto y "reagendar" crea un seguimiento.
 
 const OPCIONES: { clave: Clasificacion; ayuda: string }[] = [
-  { clave: "interesado", ayuda: "Quiere saber más: el prospecto pasa a interesado y se crea una tarea sin asignar para contactarlo." },
+  { clave: "interesado", ayuda: "Quiere saber más: el prospecto pasa a interesado y se crea una tarea para contactarlo (sin asignar, o para quien le toque si el reparto automático está prendido). Al clasificar puedes contestarle de una vez." },
   { clave: "no_interesado", ayuda: "Respondió que no, sin pedir que no le escriban." },
   { clave: "baja", ayuda: "Pidió que no lo contacten. Se suprimen TODOS sus medios de contacto y no se le vuelve a escribir." },
   { clave: "invalido", ayuda: "El contacto no sirve (persona equivocada, dejó la empresa…): se descarta el prospecto." },
@@ -27,12 +29,30 @@ export function ColaClasificacion() {
   const [page, setPage] = useState(1);
   // Arriba de la cola y no en la tarjeta: al refrescar, la tarjeta ya
   // clasificada (por quien sea) desaparece y se llevaría el mensaje.
-  const [aviso, setAviso] = useState<{ texto: string; tono: "ok" | "warn" } | null>(null);
+  // respuestaId: "Responder ahora" después de un interesado (3-nov-2026).
+  const [aviso, setAviso] = useState<{ texto: string; tono: "ok" | "warn"; respuestaId?: number } | null>(null);
+  const [respondiendo, setRespondiendo] = useState<number | null>(null);
   const { data, isPending, isError } = useColaClasificacion(page);
 
   return (
     <div className="flex flex-col gap-4">
-      {aviso && <div className={`rounded-[9px] px-3.5 py-2.5 text-[13px] ${aviso.tono === "ok" ? "bg-ok-bg text-ok" : "bg-warn-bg text-warn"}`}>{aviso.texto}</div>}
+      {aviso && (
+        <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[9px] px-3.5 py-2.5 text-[13px] ${aviso.tono === "ok" ? "bg-ok-bg text-ok" : "bg-warn-bg text-warn"}`}>
+          <span className="min-w-0 flex-1">{aviso.texto}</span>
+          {aviso.respuestaId !== undefined && (
+            <Button className="!px-3 !py-1.5 !text-[12px]" onClick={() => setRespondiendo(aviso.respuestaId!)}>
+              <Icono nombre="correo" size={14} /> Responder ahora
+            </Button>
+          )}
+        </div>
+      )}
+      <ResponderCorreo
+        respuestaId={respondiendo}
+        onCerrar={() => {
+          setRespondiendo(null);
+          setAviso(null);
+        }}
+      />
       {isPending && <div className="text-sm text-ink-2">Cargando…</div>}
       {isError && <div className="text-sm text-danger">No se pudo cargar la cola de clasificación.</div>}
       {data && data.data.length === 0 && (
@@ -41,7 +61,7 @@ export function ColaClasificacion() {
           <div className="max-w-md text-[13px] text-ink-3">Aquí llegan las respuestas de los prospectos para que una persona confirme su clasificación.</div>
         </Card>
       )}
-      {data?.data.map((t) => <ItemCola key={t.id} tarea={t} onAviso={(texto, tono) => setAviso({ texto, tono })} />)}
+      {data?.data.map((t) => <ItemCola key={t.id} tarea={t} onAviso={(texto, tono, respuestaId) => setAviso({ texto, tono, respuestaId })} />)}
       {data && (page > 1 || data.data.length === LIMITE_COLA) && (
         <div className="flex items-center justify-end gap-2">
           <Button variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
@@ -89,7 +109,7 @@ function ahoraLocal() {
   return d.toISOString().slice(0, 16);
 }
 
-function ItemCola({ tarea, onAviso }: { tarea: TareaClasificacion; onAviso: (texto: string, tono: "ok" | "warn") => void }) {
+function ItemCola({ tarea, onAviso }: { tarea: TareaClasificacion; onAviso: (texto: string, tono: "ok" | "warn", respuestaId?: number) => void }) {
   const queryClient = useQueryClient();
   const [elegida, setElegida] = useState<Clasificacion | null>(null);
   const [comentario, setComentario] = useState("");
@@ -114,11 +134,14 @@ function ItemCola({ tarea, onAviso }: { tarea: TareaClasificacion; onAviso: (tex
       });
       await queryClient.invalidateQueries({ queryKey: ["tareas"] });
       // "interesado" crea en el backend una tarea "Contactar prospecto
-      // interesado" (seguimiento, alta, sin asignar, vence al final del
-      // siguiente día hábil) para que un supervisor la reparta
-      // (TareasService.crearTareaDeInteresado).
-      const extra = elegida === "interesado" ? " Se creó la tarea «Contactar prospecto interesado», sin asignar y con vencimiento al final del siguiente día hábil; repártela desde la Bandeja." : "";
-      onAviso(`${tarea.empresa_nombre ?? "Tarea " + tarea.id}: clasificada como ${ETIQUETA_CLASIFICACION[elegida].toLowerCase()}.${extra}`, "ok");
+      // interesado" (seguimiento, alta, vence al final del siguiente día
+      // hábil), sin asignar o para quien le toque si el reparto automático
+      // está prendido (TareasService.crearTareaDeInteresado). Si la respuesta
+      // llegó por correo, el aviso ofrece contestar de una vez: quien
+      // contesta una sin asignar se queda con ella (3-nov-2026).
+      const extra = elegida === "interesado" ? " Se creó la tarea «Contactar prospecto interesado», con vencimiento al final del siguiente día hábil." : "";
+      const responder = elegida === "interesado" && tarea.respuesta?.canal === "correo" ? tarea.respuesta.id : undefined;
+      onAviso(`${tarea.empresa_nombre ?? "Tarea " + tarea.id}: clasificada como ${ETIQUETA_CLASIFICACION[elegida].toLowerCase()}.${extra}`, "ok", responder);
     } catch (err) {
       // Se compara contra el code, no contra el texto del mensaje. La
       // cola se refresca abajo y esta tarjeta desaparece; por eso el

@@ -14,6 +14,7 @@ import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { CODIGO_PERSONA_EN_BAJA, personaEnBajaBloqueando } from "../shared/baja-prospecto.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
 import { vendedorDeLaConversacion } from "../shared/conversacion.js";
+import { guardarReparto, repartirInteresado, verReparto, type RepartoInteresadosInput } from "./reparto-interesados.js";
 import { adminsYSupervisores, enlaceTarea, lineaDeTarea, nombreEmpresa, notificar, responsableOEquipo } from "../notificaciones/notificar.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CrearTareaInput, ClasificarTareaInput } from "./dto/tarea.schema.js";
@@ -366,6 +367,16 @@ export class TareasService {
   // "sistema" ni a un usuario desactivado), y solo mientras siga abierta.
   // Misma revalidación del estado dentro del UPDATE que cerrar(): si otra
   // persona la cerró entre la lectura y la escritura, no se reasigna.
+  // Reparto automático de interesados (Administración, 3-nov-2026): ver
+  // reparto-interesados.ts.
+  verRepartoInteresados() {
+    return verReparto(this.db);
+  }
+
+  guardarRepartoInteresados(user: CurrentUser, input: RepartoInteresadosInput) {
+    return guardarReparto(this.db, user, input);
+  }
+
   async asignar(user: CurrentUser, id: number, responsableId: number) {
     const row = await this.findAssignable(user, id);
     const responsable = await responsableAsignable(this.db, responsableId);
@@ -707,7 +718,12 @@ export class TareasService {
       prioridad: "alta",
       fecha_limite: finSiguienteDiaHabilMx(new Date()).toISOString()
     }, tx);
-    if (tarea.id !== null && !tarea.ya_existia) await this.avisarInteresado(tx, tarea.id, input, contenido);
+    if (tarea.id !== null && !tarea.ya_existia) {
+      // Reparto automático (3-nov-2026), si está prendido en Administración.
+      const [creada] = await tx.select({ empresaId: tareas.empresaId }).from(tareas).where(eq(tareas.id, tarea.id)).limit(1);
+      const asignadoId = await repartirInteresado(tx, { tareaId: tarea.id, empresaId: creada?.empresaId ?? null, actorId: input.origen.usuarioId });
+      await this.avisarInteresado(tx, tarea.id, input, contenido, asignadoId);
+    }
     return tarea.id;
   }
 
@@ -725,8 +741,10 @@ export class TareasService {
   // La tarea nace sin asignar y un agente no ve las tareas sin asignar: el
   // aviso va a quienes la reparten (admins y supervisores). Si la empresa
   // ya es de un agente, a él también, con la liga a la ficha (decisión del
-  // 19-oct-2026). Con correo; nunca a quien lo clasificó.
-  private async avisarInteresado(tx: DrizzleTx, tareaId: number, input: ClasificacionDeRespuesta, contenido: string | null) {
+  // 19-oct-2026). Con correo; nunca a quien lo clasificó. Si el reparto ya
+  // se la dio a alguien (3-nov-2026), a esa persona le llega con la liga a
+  // su tarea, y a los demás con la de "todas".
+  private async avisarInteresado(tx: DrizzleTx, tareaId: number, input: ClasificacionDeRespuesta, contenido: string | null, asignadoId: number | null = null) {
     const [contexto] = await tx
       .select({
         empresaId: empresas.id,
@@ -753,6 +771,11 @@ export class TareasService {
       conCorreo: true
     };
     const actorId = input.origen.usuarioId;
+    if (asignadoId !== null) {
+      await notificar(tx, [asignadoId], { ...aviso, cuerpo: `Te tocó a ti.\n${aviso.cuerpo}`, enlace: enlaceTarea(tareaId) }, actorId);
+      await notificar(tx, (await adminsYSupervisores(tx)).filter((id) => id !== asignadoId), { ...aviso, enlace: enlaceTarea(tareaId, "todas") }, actorId);
+      return;
+    }
     await notificar(tx, await adminsYSupervisores(tx), { ...aviso, enlace: enlaceTarea(tareaId, "sin_asignar") }, actorId);
     if (contexto.propietarioId !== null && contexto.rolPropietario === "agente") {
       await notificar(tx, [contexto.propietarioId], { ...aviso, enlace: `/empresas/${contexto.empresaId}` }, actorId);

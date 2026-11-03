@@ -6,6 +6,7 @@ import { ProblemasAbiertos } from "../components/admin/ProblemasAbiertos";
 import { RegistroCambios, type FiltrosRegistro } from "../components/admin/RegistroCambios";
 import { EquipoRoles } from "../components/admin/EquipoRoles";
 import { CorreosProspeccion } from "../components/admin/CorreosProspeccion";
+import { RepartoInteresados } from "../components/admin/RepartoInteresados";
 import { IntegracionAdmin } from "../components/admin/IntegracionAdmin";
 import { UsuariosAdmin } from "../components/admin/UsuariosAdmin";
 import { Button } from "../components/ui/Button";
@@ -20,7 +21,8 @@ import { useAuth } from "../lib/auth-context";
 // 11-oct): centro de control. Todo lo de /admin (estado del sistema,
 // problemas agrupados, registro de cambios y su exportación) es solo del
 // administrador; el supervisor ve "Equipo y roles" sin editar. Los dos
-// editan los "Correos de prospección" (19-oct-2026). La pestaña
+// editan los "Correos de prospección" (19-oct-2026) y el "Reparto de
+// interesados" (3-nov-2026). La pestaña
 // Auditoría cruda desapareció: la reemplaza el Registro de cambios.
 // ?tab=integracion abre el detalle técnico de avisos y procesos fallidos
 // ("Ver los N" de un problema).
@@ -112,6 +114,7 @@ export function AdministracionPage() {
         <div className="flex min-w-0 flex-col gap-4">
           <EquipoRoles puedeEditar={esAdmin} onAdministrar={() => setUsuariosAbierto(true)} />
           <CorreosProspeccion />
+          <RepartoInteresados />
         </div>
       </div>
 

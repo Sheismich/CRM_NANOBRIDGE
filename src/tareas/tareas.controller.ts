@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { TareasService } from "./tareas.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
@@ -7,6 +7,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { asignarTareaSchema, cerrarTareaSchema, crearTareaSchema, listTareasQuerySchema, reprogramarTareaSchema } from "./dto/tarea.schema.js";
+import { repartoInteresadosSchema } from "./reparto-interesados.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -34,6 +35,20 @@ export class TareasController {
   @Get("conteos")
   conteos(@CurrentUser() user: CurrentUserType) {
     return this.tareasService.conteosMiDia(user);
+  }
+
+  // Reparto automático de "Contactar prospecto interesado" (3-nov-2026).
+  // Antes de ":id", igual que "conteos".
+  @Get("reparto-interesados")
+  @Roles("administrador", "supervisor")
+  repartoInteresados() {
+    return this.tareasService.verRepartoInteresados();
+  }
+
+  @Put("reparto-interesados")
+  @Roles("administrador", "supervisor")
+  guardarRepartoInteresados(@Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    return this.tareasService.guardarRepartoInteresados(user, repartoInteresadosSchema.parse(body));
   }
 
   @Get(":id")

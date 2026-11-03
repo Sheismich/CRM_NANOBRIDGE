@@ -115,7 +115,7 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
 **Descartado, ya revisado:**
 - PT1 no adivina correos: solo limpia espacios y mayúsculas, y si sigue mal crea tarea.
 - Si Gemini falla, el puntaje es el de reglas (0-100); nadie sale castigado.
-- Asignar el "interesado" al dueño de la empresa: no aplica, las empresas de n8n nacen sin dueño.
+- Asignar el "interesado" al dueño de la empresa: no aplica, las empresas de n8n nacen sin dueño. **Retomado el 3-nov-2026** como reparto automático por turnos (lista e interruptor en Administración, `src/tareas/reparto-interesados.ts`); si la empresa ya es de un agente activo, sí va con él.
 
 ## B0 Cerrar Parte 1
 

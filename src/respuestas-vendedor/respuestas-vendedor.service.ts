@@ -269,10 +269,20 @@ export class RespuestasVendedorService {
 
     // P3.8: casilla "Marcar la tarea como hecha". Si no se puede (ya la
     // cerraron, o es de otra persona), el correo ya salió: solo se avisa.
+    // "Responder ahora" desde la cola (3-nov-2026): quien contesta una que
+    // seguía sin asignar se queda con ella.
     let tareaCerrada = false;
-    if (input.cerrar_tarea && c.tarea && c.tarea.estado !== "cerrada" && c.tarea.estado !== "cancelada") {
+    const tareaAbierta = c.tarea && c.tarea.estado !== "cerrada" && c.tarea.estado !== "cancelada" ? c.tarea : null;
+    if (tareaAbierta && tareaAbierta.responsableId === null) {
       try {
-        await this.tareasService.cerrar(user, c.tarea.id, RESULTADO_TAREA);
+        await this.tareasService.asignar(user, tareaAbierta.id, user.id);
+      } catch (error) {
+        if (!(error instanceof HttpError)) throw error;
+      }
+    }
+    if (input.cerrar_tarea && tareaAbierta) {
+      try {
+        await this.tareasService.cerrar(user, tareaAbierta.id, RESULTADO_TAREA);
         tareaCerrada = true;
       } catch (error) {
         if (!(error instanceof HttpError)) throw error;

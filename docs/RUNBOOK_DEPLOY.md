@@ -598,6 +598,9 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       prueba "NO SE", "NO SE 2").
 - [ ] Domicilio de la empresa en el remitente de SendGrid (hoy el remitente
       de pruebas tiene el de la casa de Fabián).
+- [ ] Prender el **reparto de interesados** (Administración → "Reparto de interesados", 3-nov-2026)
+      cuando el equipo de ventas ya esté dado de alta: marcar a quiénes reciben y "Repartir solo".
+      Empieza apagado a propósito, para que ningún interesado real le caiga a una cuenta de prueba.
 - [ ] Cambiar `DESTINOS` de los avisos (hoy el Gmail de Fabián): en B4 ("armar correo de error") a
       quien atienda los errores, y en PT2 ("armar aviso de respuesta") al supervisor que clasifica.
 - [x] **IA en la API (etapas 3 y 4: "Redactar con IA" y "Resumir con IA").**

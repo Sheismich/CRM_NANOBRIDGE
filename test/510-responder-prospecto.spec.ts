@@ -193,6 +193,25 @@ describe("responder al prospecto desde el CRM", () => {
     expect(tarea).toEqual({ estado: "cerrada", resultado: "Respondido por correo desde el CRM" });
   });
 
+  // "Responder ahora" desde la cola (3-nov-2026): quien contesta un
+  // interesado sin asignar se queda con la tarea, y se cierra.
+  it("si la tarea estaba sin asignar, queda asignada a quien contestó (y cerrada)", async () => {
+    const r = await respuestaDe();
+    const [antes] = await db.select({ responsableId: tareas.responsableId }).from(tareas).where(eq(tareas.id, r.tareaInteresadoId!));
+    expect(antes!.responsableId).toBeNull();
+    expect((await contestar(supervisor, r.respuestaId, { texto: "Le marco mañana.", cerrar_tarea: true })).status).toBe(201);
+    const [despues] = await db.select({ responsableId: tareas.responsableId, estado: tareas.estado }).from(tareas).where(eq(tareas.id, r.tareaInteresadoId!));
+    expect(despues).toEqual({ responsableId: supervisorId, estado: "cerrada" });
+  });
+
+  it("si la tarea ya era de otra persona, se cierra pero no cambia de responsable", async () => {
+    const r = await respuestaDe();
+    expect((await api().patch(`/api/v1/tareas/${r.tareaInteresadoId}/asignar`).set("Cookie", admin).send({ responsableId: agenteId })).status).toBe(200);
+    expect((await contestar(supervisor, r.respuestaId, { texto: "Le marco mañana.", cerrar_tarea: true })).status).toBe(201);
+    const [despues] = await db.select({ responsableId: tareas.responsableId }).from(tareas).where(eq(tareas.id, r.tareaInteresadoId!));
+    expect(despues!.responsableId).toBe(agenteId);
+  });
+
   describe("permisos (P3.2)", () => {
     it("un agente ajeno no la ve (404); el dueño de la empresa sí puede", async () => {
       const r = await respuestaDe();

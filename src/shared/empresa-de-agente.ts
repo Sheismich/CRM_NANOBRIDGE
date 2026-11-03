@@ -36,15 +36,19 @@ export async function responsableAsignable(db: DrizzleDb | DrizzleTx, responsabl
 // agentes: un supervisor ya ve todo, y si la empresa quedara a su nombre
 // ningún agente podría verla.
 //
+// El reparto automático de interesados (tareas/reparto-interesados.ts, 3-nov-
+// 2026) cuenta como asignación de un supervisor: lo configuró uno en
+// Administración. Ahí `actor.id` es quien clasificó, o null si fue n8n.
+//
 // Lee la empresa con FOR UPDATE dentro de la transacción del llamador: dos
 // asignaciones al mismo tiempo a agentes distintos dejan un solo dueño y una
 // sola auditoría.
 export async function darEmpresaAlAgente(
   tx: DrizzleTx,
-  datos: { empresaId: number; responsable: Responsable; actor: CurrentUser; origen: { tarea_id: number } | { oportunidad_id: number } }
+  datos: { empresaId: number; responsable: Responsable; actor: CurrentUser | { id: number | null; rol: "reparto" }; origen: { tarea_id: number } | { oportunidad_id: number } }
 ): Promise<boolean> {
   const { empresaId, responsable, actor, origen } = datos;
-  if (actor.rol !== "administrador" && actor.rol !== "supervisor") return false;
+  if (actor.rol !== "administrador" && actor.rol !== "supervisor" && actor.rol !== "reparto") return false;
   if (responsable.rol !== "agente" || !responsable.activo) return false;
 
   const [empresa] = await tx.select({ propietarioId: empresas.propietarioId }).from(empresas).where(and(eq(empresas.id, empresaId), eq(empresas.activo, true))).limit(1).for("update");
