@@ -26,8 +26,8 @@ Dirección aprobó los usos 2 a 4 (el 19 y el 21-oct), con el aviso de privacida
 ## 2. Con qué datos trabaja
 
 **Regla:** a Gemini no le llegan correos, teléfonos ni documentos (control `D-07` del reporte de controles). En el
-borrador de respuesta, la limpieza se agregó el 3-nov y entra a producción con el siguiente deploy de la API; hasta
-entonces la respuesta del cliente le llega completa, como se decidió en P3.7 (`docs/planes/PREGUNTAS_ETAPAS_3_4_5.md`).
+borrador de respuesta, la limpieza está en producción desde el 3-nov (`nanobridge-api-00045-dfv`); antes, la respuesta
+del cliente le llegaba completa, como se decidió en P3.7 (`docs/planes/PREGUNTAS_ETAPAS_3_4_5.md`).
 
 | Uso | Qué le llega | Qué se quita antes |
 |---|---|---|
@@ -122,15 +122,13 @@ que la API ya tiene listo y probado.
 - **Idioma y estilo:** el modelo lee español informal, pero una respuesta corta o ambigua puede sugerirse mal; por eso
   existe «ambigua» y la revisión humana.
 - **Si Gemini no responde:** el score sale por reglas y la respuesta se clasifica a mano. Nada se queda atorado.
-- **Datos de contacto en el borrador:** resuelto en el código el 3-nov (§2). Hasta el siguiente deploy de la API, la
-  respuesta del cliente le sigue llegando completa a Gemini.
+- **Datos de contacto en el borrador:** resuelto y en producción el 3-nov (§2).
 
 ## 8. Pendientes
 
-1. **Deploy de la API** con la limpieza del borrador (T2).
-2. **Registrar con Dirección** las cinco métricas de §4 y el criterio para pasar a modo directo (§6).
-3. **Revisar los pesos del score** (40 % reglas, 60 % Gemini) con los datos del piloto (M3).
-4. **Resultados sobre muestra:** salen del piloto y van en el reporte OB-06 (§5).
+1. **Registrar con Dirección** las cinco métricas de §4 y el criterio para pasar a modo directo (§6).
+2. **Revisar los pesos del score** (40 % reglas, 60 % Gemini) con los datos del piloto (M3).
+3. **Resultados sobre muestra:** salen del piloto y van en el reporte OB-06 (§5).
 
 ## Relacionado
 

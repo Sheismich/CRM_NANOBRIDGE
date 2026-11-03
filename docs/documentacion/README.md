@@ -13,6 +13,7 @@ Cierre del proyecto: **9 de diciembre de 2026**.
 | [Auditoría de calidad · 28-oct](auditorias/calidad-2026-10-28.md) | Línea base de validez y duplicados (KPI T1.1 y T1.2) con conclusiones y acciones | Semana 9 · G4 | ✅ |
 | [Procedimiento de auditoría y actualización](PROCEDIMIENTO_AUDITORIA.md) | Cuándo y cómo auditar, qué hacer con cada hallazgo, qué hacer tras una migración | Semana 11 | ✅ v1.0 (adelantado) |
 | [Manual de datos](MANUAL_DE_DATOS.md) | Cómo cargar, revisar, corregir y mantener los datos en el CRM | OB-07 · cierre | ✅ v1.0 (adelantado) |
+| [Flujo de campaña](FLUJO_DE_CAMPANA.md) | Lo que Dirección necesita para autorizar el piloto: audiencia, mensaje, límites, exclusiones, registros, vigilancia y cómo se detiene | OB-05 · G5 | 🟡 v0.5 (3-nov): se completa con la lista de Carlos |
 | Certificación de audiencia | Cuántos prospectos de cada campaña recibirían correo y por qué no los demás | Semana 13 · G5 | Sale sola en cada auditoría (§5); se presenta en G5 |
 | Monitoreo durante el piloto | Integridad de la base cada día de la campaña | Semana 14 | Auditoría diaria (procedimiento §1) |
 | Reporte final de T1 | KPI acumulados, pendientes y transferencia | Cierre (9-dic) | Pendiente |

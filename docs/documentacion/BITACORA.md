@@ -22,7 +22,7 @@ Junta en un solo lugar lo que pide el programa de 16 semanas, lo que ya existe y
 - El sistema está construido y funcionando en modo de pruebas: 326 cambios guardados (234 de Fabián, 91 de Daniela, 1 inicial), 13 pantallas y 807 pruebas automáticas (777 del servidor y 30 de las pantallas). En la corrida del 3-nov pasaron 805; las 2 que fallaron se revisan en §7.
 - En producción desde el 3-nov: servidor `00044-5fh` y pantallas en Firebase, con el aviso y la fusión de empresas repetidas (G-01 y G-05).
 - Datos: listos para G4. Hay diccionario, reporte de controles, auditoría de calidad (línea base sobre datos de ejemplo), procedimiento de auditoría y manual de datos.
-- Automatización: el sistema funciona. Desde el 3-nov Daniela se encarga de toda la documentación, también la de automatización. El 3-nov quedaron el flujo de actualización (OB-03) y la evaluación del modelo (OB-04 v1.0, con la fórmula, el modelo y el prompt que confirmó Fabián; los resultados sobre muestra salen del piloto). Falta el flujo de campaña (OB-05, de G5).
+- Automatización: el sistema funciona. Desde el 3-nov Daniela se encarga de toda la documentación, también la de automatización. El 3-nov quedaron el flujo de actualización (OB-03) y la evaluación del modelo (OB-04 v1.0, con la fórmula, el modelo y el prompt que confirmó Fabián; los resultados sobre muestra salen del piloto). El flujo de campaña (OB-05, para G5) está en borrador v0.5: se completa con la lista de Carlos.
 - Lo que sigue: cargar la lista real de Carlos (semana 12), certificar la audiencia (G5, 23 al 27 de nov), pedir autorización escrita de Dirección y correr el piloto (30 nov al 4 dic).
 
 ## 2. Avance semana por semana
@@ -56,7 +56,7 @@ Estado: Hecho = existe lo que pedía el programa. Parcial = el trabajo está hec
 | OB-02 | Base maestra controlada | v0.1 · v1.0 | 25-sep · 28-oct | Esquema y plan de pruebas (S3_ESQUEMA…, 14-sep); documento G2 (25-sep); REPORTE_DE_CONTROLES.md (28-oct; el 29-oct se marcan como hechos G-01 y G-05, que estaban propuestos fuera de este corte); auditoría calidad-2026-10-28; reporte de calidad de la lista de Carlos (Word, 28-oct) | Daniela | Listo para G4 |
 | OB-03 | Flujo de actualización | v1.0 | 3-nov-2026 | docs/documentacion/FLUJO_DE_ACTUALIZACION.md: alta, cambio, rechazo, registro, reversión, fallas y las pruebas de cada caso. Se apoya en PLAN_N8N_DEFINITIVO.md y en el código | Daniela (con los flujos de Fabián) | Listo para G4 |
 | OB-04 | Red neuronal evaluada | v1.0 | 3-nov-2026 | docs/documentacion/EVALUACION_DEL_MODELO.md: los 4 usos de Gemini con su modelo, datos que recibe, revisión humana, fórmula del score, 5 métricas (en G3 no se aprobó ninguna), pruebas hechas y plan para medir en el piloto. Prompt y fórmula de PT1 en docs/n8n/pt1-scoring/ | Daniela (con los datos de Fabián) | Listo para G4; resultados sobre muestra en el piloto |
-| OB-05 | Flujo de campaña | — | — | PT1 a PT4 en n8n, plantillas editables, lista de encendido (RUNBOOK §10). Falta el documento "listo para decisión" de G5 | Daniela (con los flujos de Fabián) | Falta documento |
+| OB-05 | Flujo de campaña | v0.5 | 3-nov-2026 | docs/documentacion/FLUJO_DE_CAMPANA.md: las 10 decisiones que se piden en G5, audiencia, mensaje, límites, exclusiones, registros y vigilancia, modo de prueba, lista de encendido y cómo se detiene | Daniela (con los flujos de Fabián) | Borrador; v1.0 con la audiencia certificada (semana 12) |
 | OB-06 | Piloto y reporte | — | — | Se genera entre el 30 de nov y el 11 de dic | Fabián y Daniela | Pendiente |
 | OB-07 | Paquete final y transferencia | — | — | Se arma en la semana 16, con el inventario de la semana 15 | Equipo | Pendiente |
 | Apoyo | Procedimiento de auditoría y actualización | v1.0 | 28-oct-2026 | docs/documentacion/PROCEDIMIENTO_AUDITORIA.md | Daniela | Hecho |
@@ -72,7 +72,7 @@ Revisión y decisión de Dirección: Por registrar para todos los entregables. E
 | # | Documento | Gate | Dueño | Cuándo | Qué lleva |
 |---|---|---|---|---|---|
 | 1 | Resultados del modelo sobre muestra (OB-04) | OB-06 | Daniela, con los datos de Fabián | 11-dic | El documento v1.0 quedó el 3-nov; faltan los resultados de las 5 métricas, que salen del piloto, y registrar las métricas con Dirección. |
-| 2 | Flujo de campaña (OB-05) | G5 | Daniela | Semana 13 | Audiencia, plantilla aprobada, límites, exclusiones, registros y modo de prueba. (OB-03 quedó el 3-nov.) |
+| 2 | Flujo de campaña (OB-05): de v0.5 a v1.0 | G5 | Daniela | Semana 12-13 | Certificación de audiencia, textos aprobados, domicilio, decisiones abiertas del §1 y pruebas en vivo que faltan (§10 del documento). |
 | 3 | Confirmación escrita de la fecha de cierre | Ya | Dirección | Esta semana | El equipo trabaja contra el 9 de diciembre; el PDF del programa dice el 18. Que Dirección lo confirme por escrito, porque cambia cuándo vencen los puntos 9 a 13. |
 | 4 | Evidencia de prepiloto y lista de ajustes | Semana 12 | Datos y Automatización | 16 al 20 nov | Lista de Carlos limpia y cargada, auditoría después de la carga, piloto interno sin envíos externos y ajustes pendientes. |
 | 5 | Certificación de audiencia | G5 | Datos | 23 al 27 nov | Cuántos prospectos de cada campaña recibirían correo y por qué no los demás. Sale de la auditoría de datos después de cargar la lista. |
@@ -104,7 +104,8 @@ El programa pide registrar todo cambio de requisito, fecha, alcance, dato de ent
 | 29-oct-2026 | Los días hábiles consideran los feriados de la ley federal del trabajo. | Fabián | Cambia cuándo vencen las ventanas de espera y salen los recordatorios; ya no hay que apagar PT1 y PT4 a mano el 16-nov. | Fabián | 8309bb5 · en producción el 29-oct (00043-w4k) | Por registrar |
 | 29-oct-2026 | Aviso de empresas con el mismo nombre al importar y dar de alta, y fusión de empresas repetidas desde la ficha, solo administrador (controles G-01 y G-05). | Hallazgo del diccionario (§8, punto 1) | Menos empresas duplicadas. | Daniela | 4a19c79 · en producción el 3-nov (00044-5fh) | Por registrar |
 | 3-nov-2026 | Métricas del modelo: en G3 no se aprobó ninguna; se adoptan las 5 de OB-04 §4 (acuerdo IA-persona, bajas no vistas, prioridad contra respuesta, disponibilidad y uso del borrador). | Daniela y Fabián | Define cómo se evalúa el modelo en el piloto. | Daniela | EVALUACION_DEL_MODELO.md | Por registrar |
-| 3-nov-2026 | El borrador de respuesta con IA quita correos y teléfonos antes de mandar el texto a Gemini (antes le llegaba completo, según P3.7). | Revisión de OB-04 | Menos datos de contacto a Gemini. | Fabián | src/shared/texto.ts (sinDatosDeContacto) | Por registrar |
+| 3-nov-2026 | El borrador de respuesta con IA quita correos y teléfonos antes de mandar el texto a Gemini (antes le llegaba completo, según P3.7). | Revisión de OB-04 | Menos datos de contacto a Gemini. | Fabián | 17c36e5 · en producción el 3-nov (00045-dfv) | Por registrar |
+| 3-nov-2026 | El vendedor puede mandar la cotización por correo desde el CRM, con el PDF adjunto. No cuenta como envío de prospección (no suma al límite de 3 ni lleva link de baja) y la respuesta del cliente le llega directo al vendedor. | Fabián | Alcance nuevo de la etapa comercial. | Fabián | cdeb4aa · migración 038 · en producción el 3-nov (00045-dfv) | Por registrar |
 | 29-oct-2026 | «Confirmar todas» en la importación: si la empresa de una fila se llama igual que **una sola** empresa que ya existe (o que creó otra fila del mismo archivo), la persona se agrega a esa empresa; con dos o más, la fila se queda por revisar. Antes cada fila creaba su propia empresa. | Daniela | Un archivo con varias personas de la misma empresa deja una sola empresa. La comparación ignora mayúsculas, acentos y la forma jurídica; un nombre escrito distinto no se reconoce (lo reporta la auditoría). | Daniela | 4a19c79 · test/545-empresas-parecidas | Por registrar |
 
 ## 6. Registro cronológico
@@ -140,7 +141,8 @@ Hitos del trabajo, con su evidencia. El historial completo está en el repositor
 | 26 y 27-oct | Dependencias con vulnerabilidades actualizadas, accesibilidad, pruebas del front y restauración de respaldo probada. | Daniela | 4dafb6b |
 | 28-oct | Documentación de datos: diccionario, reporte de controles, auditoría de calidad, procedimiento de auditoría, manual de datos y script de limpieza. | Daniela | a53e87d · 5266298 |
 | 29-oct | Feriados en los días hábiles, ya en producción (00043-w4k); aviso y fusión de empresas repetidas; página de baja con logo. Se prueba un correo de prospección en HTML sencillo contra Promociones y se revierte el mismo día, sin desplegar. | Fabián y Daniela | 8309bb5 · 4a19c79 · 8af7a23 · bd1f13f · 92903f8 |
-| 3-nov | Se corren las 807 pruebas (805 pasan). En producción el aviso y la fusión de empresas repetidas: servidor 00044-5fh y pantallas en Firebase. Se arma esta bitácora. | Daniela | Resumen_de_pruebas_NANOBRIDGE.docx · RUNBOOK (tabla de producción) |
+| 3-nov | Se corren las 807 pruebas (805 pasan). En producción el aviso y la fusión de empresas repetidas: servidor 00044-5fh y pantallas en Firebase. Se arma esta bitácora. Flujo de actualización (OB-03) y evaluación del modelo (OB-04 v1.0) con las respuestas de Fabián. | Daniela | Resumen_de_pruebas_NANOBRIDGE.docx · RUNBOOK (tabla de producción) · 99c7d60 · b3524b9 |
+| 3-nov | Mandar la cotización por correo con el PDF adjunto (migración 038) y borrador con IA sin correos ni teléfonos, en producción: servidor 00045-dfv y pantallas en Firebase. | Fabián | cdeb4aa · 17c36e5 · e4ff3b2 |
 
 ## 7. Decisiones y riesgos abiertos
 
@@ -151,8 +153,8 @@ Hitos del trabajo, con su evidencia. El historial completo está en el repositor
 | Correos de prospección en Promociones de Gmail | Desde el molde del 22-oct caen en Promociones. Quitar el logo no bastó y el HTML sencillo se probó y se revirtió el 29-oct. Pega directo en las respuestas del piloto. | Fabián |
 | Tamaño de empresa | La lista de Carlos no lo trae y sin él ninguna empresa entra a la automatización. | Carlos y Daniela |
 | Evaluación del modelo | OB-04 v1.0 listo, pero sin resultados sobre muestra: la base es de ejemplo y los resultados saldrán del piloto, con pocos casos. Las 5 métricas no las ha aprobado Dirección. | Dirección |
-| Datos de contacto en el borrador de respuesta con IA | Resuelto en el código el 3-nov (Fabián): correos y teléfonos se cambian por [correo] y [teléfono]. Falta desplegarlo. | Fabián |
 | Webhook B3 y N8N_WEBHOOK_URL | Sin configurar. Mientras tanto los avisos del outbox esperan sin enviarse. | Fabián |
+| Recordatorios fuera del piloto | Con el cierre el 9-dic, solo los correos del 30-nov y del 1-dic alcanzan su primer recordatorio (8 y 9-dic) y ningún segundo recordatorio cae dentro del proyecto. El piloto mide sobre todo la respuesta al primer correo (OB-05 §4). | Dirección |
 | Pruebas en vivo pendientes | Respuesta automática (fuera de oficina), correo sin firma, rebote, responder desde el CRM y «Resumir con IA» con Gemini real. | Fabián y Daniela |
 | Primera carga lenta | Con la API dormida, el primero que entra espera de 8 a 9 s. Se quita con `min-instances=1`, que tiene costo. | Fabián o Carlos |
 | Correos de área y teléfonos sin código de país | 9 de 25 correos de la lista son de área (info@, ventas@) y los teléfonos no se reconocen con y sin +52. | Carlos y equipo |
