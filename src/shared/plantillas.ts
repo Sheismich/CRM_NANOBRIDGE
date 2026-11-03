@@ -158,14 +158,16 @@ function molde(partes: { cuerpo: string; firma?: string; logo: boolean; pie: str
     ? `<tr><td style="padding:18px 0 0;${FUENTE}"><p style="margin:0 0 6px;font-size:12px;color:#7b8794">${escaparHtml(partes.cita.encabezado)}</p>` +
       `<blockquote style="margin:0 0 0 4px;padding-left:12px;border-left:3px solid #d1d5db;color:#52606d;font-size:14px">${escaparHtml(partes.cita.contenido).replace(/\n/g, "<br>")}</blockquote></td></tr>`
     : "";
+  // lang="es": Gmail ofrecía traducir del inglés un correo en español (3-nov-2026).
   return (
+    `<div lang="es" dir="ltr">` +
     `<table ${TABLA} width="100%" style="background:#ffffff"><tr><td style="padding:16px 24px">` +
     `<table ${TABLA} width="100%" style="max-width:600px">` +
     `<tr><td style="${FUENTE};font-size:15px;line-height:1.6;color:#1f2933">${partes.cuerpo}</td></tr>` +
     `<tr><td style="padding:6px 0 20px">${firma}</td></tr>` +
     pie +
     cita +
-    `</table></td></tr></table>`
+    `</table></td></tr></table></div>`
   );
 }
 

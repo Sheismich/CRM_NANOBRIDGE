@@ -181,7 +181,7 @@ describe("responder al prospecto desde el CRM", () => {
     // Ya traía "RE:": no se le pone otro.
     expect(enviado.asunto).toBe("RE: Propuesta para Moldes");
     // SendGrid recibe las cabeceras.
-    expect(cuerpoSendgrid(enviado).headers).toEqual({ "In-Reply-To": "<abc123@mail.gmail.com>", References: "<abc123@mail.gmail.com>" });
+    expect(cuerpoSendgrid(enviado).headers).toEqual({ "Content-Language": "es", "In-Reply-To": "<abc123@mail.gmail.com>", References: "<abc123@mail.gmail.com>" });
   });
 
   it("cerrar_tarea cierra la tarea 'Contactar prospecto interesado'", async () => {

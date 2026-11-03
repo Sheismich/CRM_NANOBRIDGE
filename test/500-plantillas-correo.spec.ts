@@ -91,6 +91,11 @@ describe("armarCorreo (función pura)", () => {
     expect(correo.html).toContain("nanobridge-mex.com");
   });
 
+  // Gmail decía "Parece que este mensaje está en inglés" (3-nov-2026).
+  it("el html dice que el correo está en español", () => {
+    expect(armarCorreo({ asunto: "A", cuerpo: "Hola." }, {}, "").html).toMatch(/^<div lang="es" dir="ltr">/);
+  });
+
   it("detecta variables que no existen", () => {
     expect(variablesDesconocidas("Hola {{nombre}} de {{ empresa }}")).toEqual([]);
     expect(variablesDesconocidas("Hola {{apellido}} y {{Nombre}}")).toEqual(["apellido", "Nombre"]);
