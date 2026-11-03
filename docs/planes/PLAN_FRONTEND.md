@@ -615,6 +615,24 @@ sin importar la de la compu.
 
 **Si cambias una de esas funciones, corre `npm test`;** si cambias a propósito un texto, actualiza su prueba.
 
+## Pendiente para Mich: deploy de la API con el borrador sin datos de contacto (Fabián, 3 nov 2026)
+
+Pregunta 6 de OB-04, ya resuelta en código (`17c36e5`, en `main`): el borrador de respuesta con IA
+(`POST /respuestas/:id/borrador-ia`) ahora cambia correos y teléfonos por `[correo]` y `[teléfono]`
+antes de mandar la respuesta del cliente a Gemini, igual que el resumen de la ficha.
+`sinDatosDeContacto` pasó de `resumen-ficha.service.ts` a `src/shared/texto.ts`. Prueba nueva en
+`test/510-responder-prospecto.spec.ts` ("a la IA no le llegan el correo ni el teléfono…").
+
+- **Falta el deploy de la API.** Producción (`00044-5fh`, de `92903f8`) todavía no lo trae.
+- **Sin migración y sin cambios en el front:** Firebase no se toca.
+- **Antes de desplegar, corre la suite completa (`npm test` en la raíz).** Después de `17c36e5`
+  solo se corrieron `510` (30/30) y `515` (13/13), además de `tsc` y el lint.
+- Desplegar el commit que esté en `main` en ese momento (incluye `17c36e5`), igual que hiciste con
+  `00044-5fh`, y agregar la fila en RUNBOOK §6 ("Qué está en producción"). Para revisar: `/health` ok,
+  siguen las 6 variables y `POST /api/v1/respuestas/1/borrador-ia` sin sesión da 401.
+- Cuando quede, en `EVALUACION_DEL_MODELO.md` el uso 3 (borrador) ya puede decir que la respuesta
+  del cliente llega sin correos ni teléfonos.
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.
