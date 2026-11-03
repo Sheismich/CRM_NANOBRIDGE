@@ -25,6 +25,7 @@ solo lo que hace falta para decidir.
 | 8 | **Correos de área** (`info@`, `ventas@`): 9 de los 25 de la lista | Incluirlos o excluirlos | ⏳ Decidir |
 | 9 | **Quién recibe los avisos** de respuestas (PT2) y de fallas (B4) | Hoy llegan al Gmail de Fabián; cambiarlos al supervisor que clasifica y a quien atienda las fallas | ⏳ Decidir nombres |
 | 10 | **Cuenta de SendGrid** pagada, con Inbound Parse incluido | Plan de pago con la tarjeta de la empresa, antes del 24-nov | ⏳ Pago de Dirección |
+| 11 | **Quién atiende a los interesados** | Reparto automático entre el equipo de ventas (2 o 3 personas), elegidas en Administración → «Reparto de interesados» (§6). Hoy está apagado | ⏳ Dar de alta al equipo y elegir la lista |
 
 ## 2. Audiencia
 
@@ -64,6 +65,8 @@ ya con 3 correos). Esa tabla, corrida después de cargar la lista, es la certifi
   cada respuesta se liga a su prospecto y detiene sus recordatorios.
 - **Remitente:** desde el subdominio `contacto.nano-bridge-mex.com`, verificado en SendGrid desde el 29-sep, para no
   afectar la reputación del correo normal de la empresa.
+- **Idioma:** los correos van marcados como español desde el 3-nov (`00046-vrm`); antes Gmail ofrecía traducirlos
+  del inglés.
 
 **Riesgo abierto:** los correos de prueba caen en la pestaña **Promociones** de Gmail desde el molde del 22-oct.
 Quitar el logo no bastó y el HTML sencillo se probó y se revirtió el 29-oct. Una persona que no ve el correo no
@@ -122,7 +125,13 @@ procesos fallidos). Nada de esto se borra.
 - **Avisos automáticos:** B4 avisa por correo de cualquier falla de un flujo, y Cloud Monitoring avisa si la API se
   cae (revisión cada 5 minutos).
 - **Respuestas:** cada una cae en la cola de clasificación; una persona la clasifica (la IA solo sugiere). Un
-  «interesado» crea una tarea para un vendedor, que vence al final del siguiente día hábil.
+  «interesado» crea la tarea «Contactar prospecto interesado», que vence al final del siguiente día hábil. Desde la
+  cola, «Responder ahora» deja contestarle de inmediato, y quien lo hace se queda con la tarea.
+- **Reparto de interesados** (en producción desde el 3-nov, `00046-vrm`, **apagado**): prendido, la tarea le toca al
+  vendedor de la lista con menos interesados abiertos; si empatan, al que lleva más tiempo sin recibir uno. Si la
+  empresa ya es de un vendedor activo, va con él. Quien la recibe queda como responsable de la empresa y le llega el
+  aviso. Apagado, la tarea queda sin asignar y un supervisor la reparte. Empieza apagado a propósito, para que ningún
+  interesado real le caiga a una cuenta de prueba.
 - **Métricas del modelo** M1 a M5 ([evaluación del modelo](EVALUACION_DEL_MODELO.md), §4), para el reporte del piloto.
 
 ## 7. Modo de prueba
@@ -153,6 +162,7 @@ encender, después de la autorización. Resumen al 3-nov:
 | Datos de ejemplo borrados y lista de Carlos cargada | ⏳ Semana 12 |
 | Pruebas en vivo que faltan (fuera de oficina, sin firma, rebote) | ⏳ T2 |
 | Avisos de PT2 y B4 a las personas correctas | ⏳ Decidir nombres |
+| Equipo de ventas dado de alta y reparto de interesados prendido | ⏳ Antes de encender |
 | Tope diario a 20 | ⏳ El día de encender |
 | Horario de PT1a (y PT4, si se mueve a las 9:00) | ⏳ El día de encender |
 | Apagar `MODO_PRUEBAS` en PT1 y PT4 | ⏳ Lo último, el día de encender |
@@ -173,3 +183,4 @@ encender, después de la autorización. Resumen al 3-nov:
 3. Las decisiones abiertas del §1.
 4. Las pruebas en vivo que faltan (§7).
 5. Qué se hará con lo de Promociones (§3).
+6. La lista del reparto de interesados (§1, decisión 11).
