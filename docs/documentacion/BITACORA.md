@@ -85,7 +85,7 @@ Revisión y decisión de Dirección: Por registrar para todos los entregables. E
 | 12 | Reporte final de Datos | G6 | Daniela | Semana 15 o 16 | Indicadores acumulados T1.1 a T1.3, pendientes y transferencia. La carpeta de documentación lo marca como pendiente. |
 | 13 | Paquete final y transferencia operativa (OB-07) | G6 | Equipo | Semana 16 | Índice de todo lo anterior, quién tiene qué acceso, respaldos y quién mantiene cada parte. |
 | 14 | Entregables de las semanas 5, 7 y 8 sin documento propio | — | Equipo y Dirección | Esta semana | Reporte de carga, paquete PDR y base v0.8. Confirmar con Dirección si se aceptaron con lo que hay o si piden un documento. |
-| 15 | Actas y tablero semanal de compromisos | Continuo | Equipo | Cada semana | Lo pide el KPI C4. No hay actas en el repositorio. |
+| 15 | Actas y tablero semanal de compromisos | Continuo | Equipo | Cada semana | Lo pide el KPI C4. La primera es la del G4 (docs/documentacion/actas/2026-11-G4.md, para llenar en la junta); sirve de plantilla para las demás. |
 
 ## 5. Control de cambios
 
