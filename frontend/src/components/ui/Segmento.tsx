@@ -4,7 +4,8 @@ import { clsx } from "clsx";
 // Selector de segmentos del rediseño: las pestañas de Prospectos
 // (Prospectos · Importaciones · Campañas) y el "Lista | Tarjetas" de
 // Empresas y Contactos. `cuenta` es el numerito de la derecha. En el
-// celular ocupa todo el ancho y reparte las opciones.
+// celular ocupa todo el ancho y reparte las opciones; `corto` es el nombre
+// que se ve ahí si el normal no cabe (el lector de pantalla lee el normal).
 export function Segmento<T extends string>({
   opciones,
   valor,
@@ -12,7 +13,7 @@ export function Segmento<T extends string>({
   etiqueta,
   className
 }: {
-  opciones: { id: T; texto: ReactNode; cuenta?: number }[];
+  opciones: { id: T; texto: ReactNode; corto?: string; cuenta?: number }[];
   valor: T;
   onCambiar: (id: T) => void;
   etiqueta: string;
@@ -34,7 +35,16 @@ export function Segmento<T extends string>({
               activa ? "bg-card text-strong shadow-[0_1px_3px_rgba(0,0,0,0.12)]" : "text-ink-2 hover:text-strong"
             )}
           >
-            {o.texto}
+            {o.corto ? (
+              <>
+                <span aria-hidden="true" className="md:hidden">
+                  {o.corto}
+                </span>
+                <span className="sr-only md:not-sr-only">{o.texto}</span>
+              </>
+            ) : (
+              o.texto
+            )}
             {o.cuenta !== undefined && <span className={clsx("mono rounded-full px-1.5 text-[11px]", activa ? "bg-cyan text-navy-ink" : "bg-border text-ink-2")}>{o.cuenta}</span>}
           </button>
         );
