@@ -2,12 +2,17 @@
 
 export const formatoMonedaEntera = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 export const formatoMoneda = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
-const formatoCompacto = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", maximumFractionDigits: 0 });
-const formatoMillones = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", maximumFractionDigits: 2 });
-// "$120K" / "$1.28M", como los prototipos (Intl pone "$120 k"). Los millones
-// llevan hasta dos decimales: "$1M" escondía casi 300 mil. Oportunidades,
-// Cotizaciones y Reportes.
-export const compacto = { format: (n: number) => (Math.abs(n) >= 1_000_000 ? formatoMillones : formatoCompacto).format(n).replace(/\s/g, "").replace(/k$/, "K") };
+// "$120K" / "$1.28M", como los prototipos. Se arma a mano porque Intl cambia
+// según el entorno ("$120 k", "120k$"). Los millones llevan hasta dos
+// decimales: "$1M" escondía casi 300 mil. Oportunidades, Cotizaciones y Reportes.
+function compactoTexto(n: number) {
+  const cantidad = Math.abs(n);
+  const signo = n < 0 ? "-" : "";
+  if (cantidad >= 999_500) return `${signo}$${Math.round(cantidad / 10_000) / 100}M`;
+  if (cantidad >= 999.5) return `${signo}$${Math.round(cantidad / 1_000)}K`;
+  return `${signo}$${Math.round(cantidad)}`;
+}
+export const compacto = { format: compactoTexto };
 export const formatoFecha = new Intl.DateTimeFormat("es-MX", { dateStyle: "medium" });
 // "3 oct": tarjetas de los tableros.
 export const formatoDiaMes = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short" });

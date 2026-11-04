@@ -7,6 +7,12 @@ describe("formatos", () => {
     expect(compacto.format(1_280_000)).toBe("$1.28M");
     expect(compacto.format(1_000_000)).toBe("$1M");
     expect(compacto.format(950)).toBe("$950");
+    expect(compacto.format(0)).toBe("$0");
+    expect(compacto.format(999_499)).toBe("$999K");
+    expect(compacto.format(999_500)).toBe("$1M");
+    expect(compacto.format(1_500)).toBe("$2K");
+    expect(compacto.format(-120_000)).toBe("-$120K");
+    expect(compacto.format(-1_280_000)).toBe("-$1.28M");
   });
 
   it("fechaLocal: una columna DATE es ese día en México, no el anterior", () => {
