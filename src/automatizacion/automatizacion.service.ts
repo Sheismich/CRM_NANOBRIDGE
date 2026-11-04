@@ -1441,11 +1441,6 @@ export class AutomatizacionService {
     // concurrentes para la misma respuesta (distinto execution_id) pasaban
     // ambos, y el segundo pisaba en silencio al primero (hallazgo de code
     // review, 14-sep-2026).
-    //
-    // A diferencia de la manual, no encola prospecto_clasificado: ese
-    // evento es un aviso PARA n8n, y aquí quien clasificó es n8n. Además,
-    // mientras N8N_WEBHOOK_URL no exista, cada evento termina en
-    // procesos_fallidos: uno por respuesta llenaría esa bandeja de ruido.
     return this.db.transaction(async (tx) => {
       let aplicada: Awaited<ReturnType<TareasService["aplicarClasificacionDeRespuesta"]>>;
       try {

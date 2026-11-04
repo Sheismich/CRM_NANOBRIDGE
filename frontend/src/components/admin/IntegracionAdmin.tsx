@@ -1,177 +1,19 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "../ui/Button";
 import { Card, SectionTitle } from "../ui/Card";
 import { ServerError, inputBaseClass } from "../ui/Field";
 import { Paginacion } from "../ui/Paginacion";
 import { ApiError, api } from "../../lib/api";
 import { formatoFechaHora } from "../../lib/formato";
-import type { EventoPendiente, Paginated, ProcesoFallido } from "../../types";
+import type { Paginated, ProcesoFallido } from "../../types";
 
-// Monitoreo de la integración con n8n (solo administrador): sirve para saber
-// si n8n está recibiendo lo que el CRM le manda (PLAN_FRONTEND.md §5).
-// - Eventos pendientes: la cola outbox que el despachador entrega a n8n.
-//   Un evento "fallido" agotó sus reintentos; "Reintentar" lo regresa a
-//   pendiente (PLAN_CRM #5).
-// - Procesos fallidos: errores que reportó n8n o el despachador, con su
-//   triage abierto → en revisión → resuelto (PLAN_N8N B4). Cambiar el
-//   estado NO reintenta nada.
+// Procesos fallidos (solo administrador): errores que reportó n8n, con su
+// triage abierto → en revisión → resuelto. Cambiar el estado NO reintenta nada.
 
 const LIMIT = 25;
 
 export function IntegracionAdmin() {
-  return (
-    <div className="flex flex-col gap-5">
-      <EventosPendientes />
-      <ProcesosFallidos />
-    </div>
-  );
-}
-
-const CLASE_ESTADO_EVENTO: Record<EventoPendiente["estado"], string> = {
-  pendiente: "bg-warn-bg text-warn",
-  procesando: "bg-bg text-ink-2",
-  enviado: "bg-ok-bg text-ok",
-  fallido: "bg-danger-bg text-danger"
-};
-
-function EventosPendientes() {
-  const queryClient = useQueryClient();
-  const [estado, setEstado] = useState<EventoPendiente["estado"] | "">("fallido");
-  const [page, setPage] = useState(1);
-  const [abiertoId, setAbiertoId] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<{ texto: string; tono: "ok" | "warn" } | null>(null);
-  const [ocupado, setOcupado] = useState(false);
-
-  const filtros = { estado: estado || undefined, page, limit: LIMIT };
-  const { data, isPending, isError } = useQuery({
-    queryKey: ["eventos-pendientes", filtros],
-    queryFn: () => api.get<Paginated<EventoPendiente>>("/api/v1/eventos-pendientes", filtros)
-  });
-
-  async function ejecutar(accion: () => Promise<{ texto: string; tono: "ok" | "warn" } | void>) {
-    setError(null);
-    setAviso(null);
-    setOcupado(true);
-    try {
-      const resultado = await accion();
-      if (resultado) setAviso(resultado);
-      await queryClient.invalidateQueries({ queryKey: ["eventos-pendientes"] });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
-    } finally {
-      setOcupado(false);
-    }
-  }
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
-        <div>
-          <SectionTitle>Eventos hacia n8n</SectionTitle>
-          <div className="-mt-2.5 text-xs text-ink-3">Lo que el CRM le avisa a n8n (tarea cerrada, prospecto clasificado…). Un evento fallido agotó sus reintentos automáticos.</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <select aria-label="Estado del evento" className={`${inputBaseClass} w-auto`} value={estado} onChange={(e) => {
-              setPage(1);
-              setEstado(e.target.value as EventoPendiente["estado"] | "");
-            }}>
-            <option value="fallido">Fallidos</option>
-            <option value="pendiente">Pendientes</option>
-            <option value="procesando">Procesando</option>
-            <option value="enviado">Enviados</option>
-            <option value="">Todos</option>
-          </select>
-          <Button
-            variant="ghost"
-            className="border border-border px-3 py-2 text-xs"
-            disabled={ocupado}
-            title="Entrega ahora los pendientes sin esperar al siguiente ciclo automático"
-            onClick={() =>
-              void ejecutar(async () => {
-                const r = await api.post<{ procesados: number; sin_destino?: true }>("/api/v1/eventos-pendientes/despachar");
-                // Sin N8N_WEBHOOK_URL el backend no despacha: los eventos
-                // esperan en "pendiente" y salen solos cuando exista (B3).
-                if (r.sin_destino) return { texto: "n8n todavía no tiene a dónde recibir avisos. Los eventos se quedan pendientes y se entregan cuando se configure.", tono: "warn" };
-                return { texto: `Despacho manual: ${r.procesados} evento(s) procesado(s).`, tono: "ok" };
-              })
-            }
-          >
-            Despachar ahora
-          </Button>
-        </div>
-      </div>
-      <div className="flex flex-col gap-2 px-5 pt-3">
-        <ServerError message={error} />
-        {aviso && <div className={`rounded-[9px] px-3.5 py-2.5 text-[13px] ${aviso.tono === "warn" ? "bg-warn-bg text-warn" : "bg-ok-bg text-ok"}`}>{aviso.texto}</div>}
-      </div>
-
-      {isPending && <div className="p-5 text-sm text-ink-2">Cargando…</div>}
-      {isError && <div className="p-5 text-sm text-danger">No se pudieron cargar los eventos.</div>}
-      {data && data.data.length === 0 && <div className="p-5 text-sm text-ink-3">{estado === "fallido" ? (aviso?.tono === "warn" ? "No hay eventos fallidos." : "No hay eventos fallidos: n8n está recibiendo todo.") : "No hay eventos con ese estado."}</div>}
-      {data && data.data.length > 0 && (
-        <div className="tabla-scroll"><table className="mt-3 w-full border-collapse">
-          <thead>
-            <tr className="bg-bg">
-              {["Creado", "Tipo", "Entidad", "Estado", "Intentos", "Último error", ""].map((h) => (
-                <th key={h} className="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-ink-2">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.data.map((ev) => (
-              <Fragment key={ev.id}>
-                <tr className={`cursor-pointer border-t border-border hover:bg-bg ${abiertoId === ev.id ? "bg-bg" : ""}`} onClick={() => setAbiertoId(abiertoId === ev.id ? null : ev.id)}>
-                  <td className="whitespace-nowrap px-4 py-3 text-[13px] text-ink-2">{formatoFechaHora.format(new Date(ev.creado_en))}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{ev.tipo}</td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">
-                    {ev.entidad_tipo} #{ev.entidad_id}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${CLASE_ESTADO_EVENTO[ev.estado]}`}>{ev.estado}</span>
-                  </td>
-                  <td className="px-4 py-3 text-[13px] text-ink-2">{ev.intentos}</td>
-                  <td className="max-w-xs truncate px-4 py-3 text-xs text-danger" title={ev.ultimo_error ?? undefined}>
-                    {ev.ultimo_error ?? <span className="text-ink-3">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {ev.estado === "fallido" && (
-                      <Button
-                        variant="outline"
-                        className="px-3 py-1.5"
-                        disabled={ocupado}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void ejecutar(async () => {
-                            await api.post(`/api/v1/eventos-pendientes/${ev.id}/reintentar`);
-                            return { texto: `Evento ${ev.id} regresó a pendiente; se entregará en el siguiente ciclo.`, tono: "ok" };
-                          });
-                        }}
-                      >
-                        Reintentar
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-                {abiertoId === ev.id && (
-                  <FilaDetalle columnas={7}>
-                    <Dato etiqueta="UUID">{ev.evento_uuid}</Dato>
-                    {ev.proximo_intento_en && <Dato etiqueta="Próximo intento">{formatoFechaHora.format(new Date(ev.proximo_intento_en))}</Dato>}
-                    {ev.ultimo_error && <Dato etiqueta="Último error">{ev.ultimo_error}</Dato>}
-                    <Json valor={ev.payload} />
-                  </FilaDetalle>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table></div>
-      )}
-      {data && <Paginacion page={page} limit={LIMIT} cantidad={data.data.length} onPage={setPage} />}
-    </Card>
-  );
+  return <ProcesosFallidos />;
 }
 
 const ETIQUETA_TRIAGE: Record<ProcesoFallido["estado"], string> = { abierto: "Abierto", en_revision: "En revisión", resuelto: "Resuelto" };

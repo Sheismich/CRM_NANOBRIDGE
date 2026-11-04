@@ -14,10 +14,8 @@ process.env.DATABASE_URL = DATABASE_URL;
 // superRefine) -- valores fijos de prueba, sin relación con ningún secreto
 // real.
 process.env.CRM_CALLBACK_API_KEY = "test_crm_callback_api_key_0001";
-process.env.WEBHOOK_ENTRADA_API_KEY = "test_webhook_entrada_api_key_0002";
 process.env.REPLY_TO_SIGNING_SECRET = "test_reply_to_signing_secret_000000004";
 process.env.REPLY_TO_DOMAIN = "respuestas.contacto.nano-bridge-mex.com";
-process.env.N8N_WEBHOOK_URL = "";
 process.env.CORS_ORIGINS = "";
 process.env.TRUST_PROXY = "false";
 // Muy alto para que el tope diario de correos no le estorbe a la suite
@@ -45,13 +43,4 @@ process.env.CRM_URL = "https://crm.test";
 process.env.PORT = "3000";
 process.env.SESSION_COOKIE_NAME = "nanobridge_session";
 process.env.SESSION_TTL_HOURS = "12";
-// Una hora, no el default de 15s: OutboxDispatcherService corre por
-// @Interval() en CUALQUIER app de pruebas creada (nada en create-app.ts lo
-// desactiva), así que con el intervalo real de producción, ese timer de
-// fondo podía dispararse solo a mitad de una prueba que maneja
-// eventos_pendientes a mano (ej. 50-outbox-dispatcher-retry.spec.ts) y
-// adelantar/reprocesar el mismo evento fuera de secuencia -- hallazgo de
-// code-review, 15-sep-2026. Una hora es más que cualquier corrida real de
-// la suite, así que en la práctica nunca dispara durante las pruebas.
-process.env.OUTBOX_DISPATCH_INTERVAL_MS = String(60 * 60 * 1000);
 process.env.STORAGE_MAX_FILE_SIZE_MB = "25";

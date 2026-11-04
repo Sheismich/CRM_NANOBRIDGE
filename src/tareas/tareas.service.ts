@@ -9,7 +9,6 @@ import { recortarTexto } from "../shared/texto.js";
 import { diaAnterior, diaSiguiente, fechaMx, finSiguienteDiaHabilMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
-import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { CODIGO_PERSONA_EN_BAJA, personaEnBajaBloqueando } from "../shared/baja-prospecto.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
@@ -91,10 +90,7 @@ export const CODIGO_TAREA_REASIGNADA = "TAREA_REASIGNADA";
 export class TareasService {
   private readonly logger = new Logger(TareasService.name);
 
-  constructor(
-    @Inject(DRIZZLE) private readonly db: DrizzleDb,
-    private readonly outboxService: OutboxService
-  ) {}
+  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
 
   // La bandeja de tareas: el agente solo ve lo suyo (PLAN_CRM_DEFINITIVO.md
   // "El agente ve sus empresas, contactos, tareas y oportunidades
@@ -434,9 +430,6 @@ export class TareasService {
     });
   }
 
-  // Cerrar una tarea genera un evento en eventos_pendientes (patrón outbox
-  // obligatorio, PLAN_CRM_DEFINITIVO.md #5): nunca se llama a n8n desde aquí
-  // directamente, solo se encola el evento en la misma transacción.
   async cerrar(user: CurrentUser, id: number, resultado: string) {
     const row = await this.findAssignable(user, id, CODIGO_TAREA_CERRADA);
     // Una tarea de clasificación cerrada por aquí quedaba "resuelta" sin
@@ -449,7 +442,7 @@ export class TareasService {
     await this.db.transaction(async (tx) => {
       // findAssignable ya validó el estado, pero fuera de cualquier
       // bloqueo -- dos PATCH concurrentes sobre la misma tarea podían
-      // pasar ambos el guard y duplicar el evento de outbox. Revalidar
+      // pasar ambos el guard y cerrarla dos veces. Revalidar
       // dentro del propio UPDATE (WHERE ... AND estado NOT IN (...)) y
       // chequear affectedRows cierra la carrera (hallazgo de code review,
       // 10-sep-2026).
@@ -473,13 +466,6 @@ export class TareasService {
         }
         throw new HttpError(409, "La tarea ya está cerrada", CODIGO_TAREA_CERRADA);
       }
-
-      await this.outboxService.enqueue(tx, {
-        tipo: "tarea_cerrada",
-        entidadTipo: "tarea",
-        entidadId: id,
-        payload: { tarea_id: id, tipo: row.tipo, resultado, cerrada_por: user.id }
-      });
 
       await tx.insert(auditoria).values({
         usuarioId: user.id,
@@ -783,10 +769,7 @@ export class TareasService {
   }
 
   // La decisión de la persona se aplica aquí mismo, en una sola transacción
-  // (antes solo se cerraba la tarea y se encolaba el evento, y nada la
-  // aplicaba: n8n no tenía cómo -- hallazgo de revisión, 24-sep-2026); ver
-  // aplicarClasificacionDeRespuesta. El evento prospecto_clasificado sigue
-  // saliendo, solo como aviso.
+  // (ver aplicarClasificacionDeRespuesta).
   async clasificar(user: CurrentUser, id: number, input: ClasificarTareaInput) {
     const row = await this.findAssignable(user, id, CODIGO_RESPUESTA_YA_CLASIFICADA);
     if (row.tipo !== "clasificacion") {
@@ -821,13 +804,6 @@ export class TareasService {
         origen: { descripcion: `clasificación manual, tarea ${id}`, executionId: null, usuarioId: user.id },
         guarda: "pendiente_o_ambigua",
         tareaClasificacionId: id
-      });
-
-      await this.outboxService.enqueue(tx, {
-        tipo: "prospecto_clasificado",
-        entidadTipo: "prospecto",
-        entidadId: prospectoId,
-        payload: { tarea_id: id, prospecto_id: prospectoId, respuesta_id: row.respuestaId, clasificacion: input.clasificacion, comentario: input.comentario ?? null, clasificado_por: user.id, tarea_seguimiento_id: tareaSeguimientoId }
       });
 
       await tx.insert(auditoria).values({
@@ -932,16 +908,10 @@ export class TareasService {
 
   // "Alertas de tareas SLA vencidas" (PLAN_API_DEFINITIVO.md, "Jobs
   // internos"; ya anticipado en el comentario de createFromAutomation
-  // arriba: "alerta con SLA para el Equipo CRM"). Mismo criterio que
-  // DocumentosService.alertarDocumentosPendientes -- ver comentario ahí y
-  // en 019_alertas_sla.sql: @Interval fijo diario, sin endpoint de disparo
-  // manual, encola en eventos_pendientes en vez de llamar a n8n directo, y
-  // alertado_en evita reencolar la misma tarea cada día. fecha_limite es
-  // NULLABLE -- una tarea sin fecha límite nunca puede "vencer", y
+  // arriba: "alerta con SLA para el Equipo CRM"). alertado_en evita avisar
+  // dos veces la misma tarea. fecha_limite es NULLABLE -- una tarea sin fecha límite nunca puede "vencer", y
   // lt(tareas.fechaLimite, ...) ya la excluye sola (NULL < X es falso en
-  // SQL, no hace falta un isNotNull aparte).
-  // Lo dispara n8n cada día (POST /automatizacion/jobs/..., B5 del plan de
-  // fixes, 2-oct-2026): con @Interval(24h) nunca corría en Cloud Run.
+  // SQL, no hace falta un isNotNull aparte). Lo dispara PT5 cada día.
   async alertarTareasSlaVencidas() {
     const candidatas = await this.db
       .select({ id: tareas.id, tipo: tareas.tipo, titulo: tareas.titulo, empresaId: tareas.empresaId, responsableId: tareas.responsableId, fechaLimite: tareas.fechaLimite })
@@ -955,16 +925,10 @@ export class TareasService {
 
     let alertadas = 0;
     for (const tarea of candidatas) {
-      const encolado = await this.db.transaction(async (tx) => {
+      const avisada = await this.db.transaction(async (tx) => {
         const [result] = await tx.update(tareas).set({ alertadoEn: sql`CURRENT_TIMESTAMP` }).where(and(eq(tareas.id, tarea.id), isNull(tareas.alertadoEn)));
         if (result.affectedRows === 0) return false;
 
-        await this.outboxService.enqueue(tx, {
-          tipo: "tarea_sla_vencida",
-          entidadTipo: "tarea",
-          entidadId: tarea.id,
-          payload: { tarea_id: tarea.id, tipo: tarea.tipo, responsable_id: tarea.responsableId, fecha_limite: tarea.fechaLimite }
-        });
         // Al responsable; sin responsable (o si ya no está), a quienes
         // reparten. Con correo (etapa 2 de las mejoras, 19-oct-2026).
         const { ids, delEquipo } = await responsableOEquipo(tx, tarea.responsableId);
@@ -979,7 +943,7 @@ export class TareasService {
         });
         return true;
       });
-      if (encolado) alertadas++;
+      if (avisada) alertadas++;
     }
 
     if (alertadas > 0) this.logger.log(`${alertadas} tarea(s) con SLA vencido alertada(s)`);

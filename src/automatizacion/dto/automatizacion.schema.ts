@@ -6,7 +6,7 @@ import { recortarTexto } from "../../shared/texto.js";
 
 // Un dato opcional que manda n8n y que nunca debe hacer fallar el registro
 // (revisión de Fabián, 21-oct-2026): "", solo espacios o null cuentan como
-// "no vino" (mismo criterio que N8N_WEBHOOK_URL en env.ts) y lo largo se
+// "no vino" y lo largo se
 // recorta a lo que mide la columna en vez de responder 400.
 const textoOpcionalRecortado = (max: number) =>
   z.preprocess((v) => {

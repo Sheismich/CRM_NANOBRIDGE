@@ -6,7 +6,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, empresas, eventosPendientes, tareas } from "../src/database/schema.js";
+import { auditoria, empresas, tareas } from "../src/database/schema.js";
 import { TareasService } from "../src/tareas/tareas.service.js";
 
 // Mismo valor fijado en test/setup/setup-env.ts.
@@ -201,10 +201,6 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       expect(res.body.resultado).toBe("cliente confirmó la cita");
       expect(res.body.cerrada_en).not.toBeNull();
 
-      const [evento] = await db.select().from(eventosPendientes).where(and(eq(eventosPendientes.tipo, "tarea_cerrada"), eq(eventosPendientes.entidadId, id)));
-      expect(evento).toBeDefined();
-      expect((evento!.payload as { tarea_id: number }).tarea_id).toBe(id);
-
       const [audit] = await db.select().from(auditoria).where(and(eq(auditoria.entidad, "tarea"), eq(auditoria.entidadId, id), eq(auditoria.accion, "cerrar")));
       expect(audit).toBeDefined();
     });
@@ -218,7 +214,7 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
 
       // 'cancelada' no lo fija ningún endpoint hoy (ver comentario en
       // tareas.service.ts) -- se simula escribiendo directo, mismo criterio
-      // que "adelantar el reloj" en 50-outbox-dispatcher-retry.spec.ts.
+      // que "adelantar el reloj" en otras pruebas.
       const idCancelada = await crearTarea(adminCookie, { titulo: "Tarea cancelada", responsableId: agente1.id });
       await db.update(tareas).set({ estado: "cancelada" }).where(eq(tareas.id, idCancelada));
       expect((await cerrar(agente1.cookie, idCancelada)).status).toBe(409);
@@ -299,11 +295,6 @@ describe("tareas: bandeja, cierre y cola de clasificación", () => {
       expect(res.status).toBe(200);
       expect(res.body.estado).toBe("cerrada");
       expect(res.body.clasificacion).toBe("no_interesado");
-
-      const [evento] = await db.select().from(eventosPendientes).where(and(eq(eventosPendientes.tipo, "prospecto_clasificado"), eq(eventosPendientes.entidadId, prospectoId)));
-      expect(evento).toBeDefined();
-      expect((evento!.payload as { tarea_id: number; clasificacion: string }).tarea_id).toBe(id);
-      expect((evento!.payload as { clasificacion: string }).clasificacion).toBe("no_interesado");
 
       const [audit] = await db.select().from(auditoria).where(and(eq(auditoria.entidad, "tarea"), eq(auditoria.entidadId, id), eq(auditoria.accion, "clasificar")));
       expect(audit).toBeDefined();

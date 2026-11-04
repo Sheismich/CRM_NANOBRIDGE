@@ -313,11 +313,8 @@ export const tareas = mysqlTable("tareas", {
   index("idx_tareas_respuesta").on(table.respuestaId)
 ]);
 
-// eventoUuid (020_eventos_pendientes_uuid.sql): clave de idempotencia hacia
-// los webhooks de n8n (B3) -- se manda en el payload de deliver() para que
-// n8n pueda deduplicar si un reintento reenvía un evento ya entregado.
-// Nombrada evento_uuid (no evento_id) para no chocar con
-// procesosFallidos.eventoId, que es una FK BIGINT con significado distinto.
+// Sin uso desde que se retiró el outbox (nov-2026): nadie escribe aquí. Se
+// conserva por las filas viejas y la FK de procesos_fallidos.evento_id.
 export const eventosPendientes = mysqlTable("eventos_pendientes", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   eventoUuid: char("evento_uuid", { length: 36 }).notNull(),

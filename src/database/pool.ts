@@ -8,7 +8,7 @@ export const pool = mysql.createPool(env.DATABASE_URL);
 // dos lados solo coinciden si la sesión de MySQL está en UTC. Cloud SQL y el
 // contenedor de pruebas ya lo están por defecto, pero un MySQL instalado en
 // Windows/Linux toma la zona del sistema operativo (ej. UTC-6 en México) y
-// todos los reintentos del outbox, alertas SLA y métricas diarias quedaban
+// las alertas SLA y métricas diarias quedaban
 // desfasados esas horas (visto en 18-sep-2026 al correr la suite contra el
 // MySQL local). mysql2 encola los comandos de cada conexión en orden, así
 // que este SET corre antes que cualquier query que use esa conexión.

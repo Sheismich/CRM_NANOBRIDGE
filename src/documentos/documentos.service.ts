@@ -9,14 +9,13 @@ import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { env } from "../config/env.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
-import { OutboxService } from "../outbox/outbox.service.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { finSiguienteDiaHabilMx } from "../shared/dia-habil.js";
 import { MOTIVOS_RECHAZO_DOCUMENTO, NOMBRE_MOTIVO_RECHAZO_DOCUMENTO } from "../shared/motivos-rechazo-documento.js";
 import { STORAGE_SERVICE } from "./storage/storage.constants.js";
 import type { StorageService } from "./storage/storage.types.js";
 import { contenidoEsDelTipo, nombreDeDescarga } from "./tipo-de-archivo.js";
-import { enlaceTarea, notificar } from "../notificaciones/notificar.js";
+import { adminsYSupervisores, enlaceTarea, nombreEmpresa, notificar } from "../notificaciones/notificar.js";
 import { EXTENSION_POR_MIME, TIPOS_MIME_PERMITIDOS, type CambiarEstadoDocumentoInput, type CambiarObligatorioInput, type ListDocumentosQuery, type LoteDocumentosQuery, type ModoDescarga, type NuevaVersionDocumentoInput, type RechazarDocumentoInput, type RevisarDocumentoInput, type SubirDocumentoInput } from "./dto/documento.schema.js";
 
 /** Subconjunto de Express.Multer.File que de verdad usa el servicio (memoryStorage: sin destination/filename/path). */
@@ -86,8 +85,7 @@ export class DocumentosService {
 
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDb,
-    @Inject(STORAGE_SERVICE) private readonly storageService: StorageService,
-    private readonly outboxService: OutboxService
+    @Inject(STORAGE_SERVICE) private readonly storageService: StorageService
   ) {}
 
   // Scoping (PLAN_CRM_DEFINITIVO.md no lo detalla para este módulo; se
@@ -788,17 +786,8 @@ export class DocumentosService {
 
   // "Revisión de documentos pendientes" (PLAN_API_DEFINITIVO.md, "Jobs
   // internos"): documentos vigentes con más de DIAS_PENDIENTE_REVISION días
-  // sin que nadie los marque revisados. @Interval fijo diario, mismo
-  // criterio que ProspectosService.limpiarBorradoresVencidos -- sin
-  // endpoint de disparo manual, porque es housekeeping y no algo que
-  // alguien necesite forzar a mano (a diferencia del despachador de
-  // outbox o del job de métricas). No llama a n8n directamente: encola un
-  // evento en eventos_pendientes (mismo patrón outbox que
-  // TareasService.cerrar/clasificar) para que n8n decida el canal real de
-  // aviso. alertado_en evita reencolar el mismo documento cada día -- ver
-  // comentario en 019_alertas_sla.sql.
-  // Lo dispara n8n cada día (POST /automatizacion/jobs/..., B5 del plan de
-  // fixes, 2-oct-2026): con @Interval(24h) nunca corría en Cloud Run.
+  // sin que nadie los marque revisados: avisa a administradores y supervisores.
+  // alertado_en evita avisar dos veces el mismo documento. Lo dispara PT5 cada día.
   async alertarDocumentosPendientes() {
     const candidatos = await this.db
       .select({ id: documentos.id, empresaId: documentos.empresaId, nombreOriginal: documentos.nombreOriginal, creadoEn: documentos.creadoEn })
@@ -816,22 +805,25 @@ export class DocumentosService {
 
     let alertados = 0;
     for (const documento of candidatos) {
-      const encolado = await this.db.transaction(async (tx) => {
+      const avisado = await this.db.transaction(async (tx) => {
         // CAS: mismo criterio que cualquier otro UPDATE-y-efecto-colateral
         // de este proyecto (nuevaVersion, cambiarEstado, tareas.cerrar) --
         // cierra la carrera teórica de dos corridas del job solapándose.
         const [result] = await tx.update(documentos).set({ alertadoEn: sql`CURRENT_TIMESTAMP` }).where(and(eq(documentos.id, documento.id), isNull(documentos.alertadoEn)));
         if (result.affectedRows === 0) return false;
 
-        await this.outboxService.enqueue(tx, {
-          tipo: "documento_pendiente_revision",
-          entidadTipo: "documento",
+        await notificar(tx, await adminsYSupervisores(tx), {
+          tipo: "documento_sin_revisar",
+          titulo: `Documento sin revisar: ${documento.nombreOriginal}`,
+          cuerpo: await nombreEmpresa(tx, documento.empresaId),
+          enlace: "/documentos",
+          entidad: "documento",
           entidadId: documento.id,
-          payload: { documento_id: documento.id, empresa_id: documento.empresaId, nombre_original: documento.nombreOriginal, creado_en: documento.creadoEn }
+          conCorreo: true
         });
         return true;
       });
-      if (encolado) alertados++;
+      if (avisado) alertados++;
     }
 
     if (alertados > 0) this.logger.log(`${alertados} documento(s) pendiente(s) de revisión alertados`);

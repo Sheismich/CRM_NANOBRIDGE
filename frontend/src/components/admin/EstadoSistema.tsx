@@ -11,7 +11,7 @@ import { plural } from "../../lib/formato";
 import type { SaludSistema } from "../../types";
 
 // Franja "Estado del sistema" de Administración (capturas
-// administracion-centro-control*.png): los 4 servicios con su semáforo. El
+// administracion-centro-control*.png): los servicios con su semáforo. El
 // que necesita atención se ilumina en ámbar. "Responde en" de la API lo
 // mide esta pantalla (lo que tarda GET /admin/salud); el de la base lo mide
 // el backend con un SELECT 1. Se revisa solo cada minuto.
@@ -28,19 +28,17 @@ export function EstadoSistema() {
   });
   const segundos = useSegundosDesde(salud.dataUpdatedAt);
   const s = salud.data?.datos;
-  const n8n = s?.avisos_n8n;
   const correos = s?.correos;
-  const porConfigurar = s?.resumen?.por_configurar ?? 0;
   const problemas = s?.resumen?.problemas_abiertos ?? 0;
   const baseCaida = s?.base_datos.estado === "error";
-  const titulo = !s ? "Revisando…" : baseCaida ? "La base de datos no responde" : porConfigurar + problemas === 0 ? "Todo en orden" : "Casi todo en orden";
+  const titulo = !s ? "Revisando…" : baseCaida ? "La base de datos no responde" : problemas === 0 ? "Todo en orden" : "Casi todo en orden";
   const subtitulo = !s
     ? ""
     : baseCaida
       ? "La API funciona, pero no alcanza la base de datos. Nada se guarda hasta que vuelva."
-      : porConfigurar + problemas === 0
-        ? "Ningún pendiente de configuración ni problemas abiertos."
-        : `Hay ${[porConfigurar > 0 && plural(porConfigurar, "cosa por configurar", "cosas por configurar"), problemas > 0 && plural(problemas, "problema abierto", "problemas abiertos")].filter(Boolean).join(" y ")}.`;
+      : problemas === 0
+        ? "Ningún problema abierto."
+        : `Hay ${plural(problemas, "problema abierto", "problemas abiertos")}.`;
 
   return (
     <section className="franja px-4 py-5 md:px-7 md:py-6">
@@ -63,7 +61,7 @@ export function EstadoSistema() {
         )}
       </div>
       {salud.isError && <p className="relative z-[1] mt-4 text-[13px] text-[#ffb1b9]">No se pudo revisar el estado. Se vuelve a intentar en un minuto.</p>}
-      <div className="relative z-[1] mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="relative z-[1] mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Servicio icono="servidor" titulo="API del CRM" sub={s?.api.revision ? `revisión ${s.api.revision.replace(/^nanobridge-api-/, "")} · Cloud Run` : "Cloud Run"} etiqueta="Responde en" valor={salud.data ? `${salud.data.respondeMs} ms` : "…"} pie="Funcionando" ok />
         <Servicio
           icono={"M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3z M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6 M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"}
@@ -73,27 +71,6 @@ export function EstadoSistema() {
           valor={s ? (s.base_datos.responde_ms != null ? `${s.base_datos.responde_ms} ms` : "—") : "…"}
           pie={baseCaida ? "No responde" : "Respaldo diario activo"}
           ok={!baseCaida}
-        />
-        <Servicio
-          icono={"M4 4v6h6 M20 20v-6h-6 M5.5 15a7 7 0 0 0 12.2 2.5L20 14 M4 10l2.3-3.5A7 7 0 0 1 18.5 9"}
-          titulo="Avisos a n8n"
-          sub="eventos hacia la automatización"
-          etiqueta="En espera"
-          valor={n8n ? plural(n8n.en_espera, "aviso", "avisos") : "…"}
-          ok={n8n?.estado !== "atencion"}
-          pie={
-            !n8n ? (
-              "…"
-            ) : !n8n.configurado ? (
-              <>
-                Falta la dirección <code className="rounded-[6px] bg-white/12 px-1.5 py-0.5 text-[10px] font-bold text-white">N8N_WEBHOOK_URL</code>
-              </>
-            ) : n8n.fallidos > 0 ? (
-              plural(n8n.fallidos, "aviso falló", "avisos fallaron")
-            ) : (
-              "Todo salió"
-            )
-          }
         />
         <Servicio
           icono="correo"

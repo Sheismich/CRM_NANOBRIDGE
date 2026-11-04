@@ -601,13 +601,7 @@ export class ProspectosService {
   }
 
   // Limpieza de borradores vencidos (PLAN_API_DEFINITIVO.md, "Jobs
-  // internos"): corre una vez al día, igual de espíritu que
-  // OutboxDispatcherService pero con @Interval fijo en vez de env var --
-  // no hay ningún caso de negocio que requiera ajustarlo en runtime, a
-  // diferencia del despachador de outbox (ese sí necesita tunearse según
-  // la disponibilidad real de n8n).
-  // Lo dispara n8n cada día (POST /automatizacion/jobs/..., B5 del plan de
-  // fixes, 2-oct-2026): con @Interval(24h) nunca corría en Cloud Run.
+  // internos"). Lo dispara PT5 cada día (POST /automatizacion/jobs/...).
   async limpiarBorradoresVencidos() {
     const [result] = await this.db
       .update(borradoresCaptura)

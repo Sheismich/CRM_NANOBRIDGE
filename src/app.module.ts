@@ -1,10 +1,9 @@
 import { Module } from "@nestjs/common";
-import { ScheduleModule } from "@nestjs/schedule";
 import { DatabaseModule } from "./database/database.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { CrmModule } from "./crm/crm.module.js";
 import { TareasModule } from "./tareas/tareas.module.js";
-import { OutboxModule } from "./outbox/outbox.module.js";
+import { ProcesosFallidosModule } from "./procesos-fallidos/procesos-fallidos.module.js";
 import { AutomatizacionModule } from "./automatizacion/automatizacion.module.js";
 import { ComercialModule } from "./comercial/comercial.module.js";
 import { ReportesModule } from "./reportes/reportes.module.js";
@@ -21,9 +20,7 @@ import { BuscadorModule } from "./buscador/buscador.module.js";
 import { HealthController } from "./health/health.controller.js";
 
 @Module({
-  // ScheduleModule.forRoot() habilita @Interval() en OutboxDispatcherService
-  // (el despachador del patrón outbox corre solo, sin cron externo).
-  imports: [ScheduleModule.forRoot(), DatabaseModule, AuthModule, CrmModule, TareasModule, OutboxModule, AutomatizacionModule, ComercialModule, ReportesModule, DocumentosModule, UsuariosModule, CampanasModule, PlantillasModule, NotificacionesModule, RespuestasVendedorModule, ResumenFichaModule, JobsModule, AdminModule, BuscadorModule],
+  imports: [DatabaseModule, AuthModule, CrmModule, TareasModule, ProcesosFallidosModule, AutomatizacionModule, ComercialModule, ReportesModule, DocumentosModule, UsuariosModule, CampanasModule, PlantillasModule, NotificacionesModule, RespuestasVendedorModule, ResumenFichaModule, JobsModule, AdminModule, BuscadorModule],
   controllers: [HealthController]
 })
 export class AppModule {}

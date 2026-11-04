@@ -1,8 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, gte, gt, inArray, isNotNull, lt, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, campanas, contactos, documentos, empresas, envios, eventosPendientes, procesosFallidos, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
+import { auditoria, campanas, contactos, documentos, empresas, envios, procesosFallidos, prospectos, respuestas, tareas, usuarios } from "../database/schema.js";
 import { toCsv } from "../shared/csv.js";
 import { diaSiguiente, horaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
@@ -35,7 +35,7 @@ const TAREA_ABIERTA = ["pendiente", "en_progreso"] as const;
 // Reportes · Día = bitácora (Fabián lo aprobó el 11-oct-2026; punto 52):
 // todo lo que pasó en el CRM un día de México, en orden de hora. Sale de
 // tablas que ya existen -- auditoría (quién cerró, tomó, subió, aprobó),
-// tareas, envíos, respuestas, procesos fallidos y outbox --, sin tabla nueva.
+// tareas, envíos, respuestas y procesos fallidos --, sin tabla nueva.
 // Separación acordada: esto es el TRABAJO del día; el "Registro de cambios"
 // de Administración es el CONTROL (quién movió qué).
 //
@@ -83,7 +83,7 @@ export class ReporteDiaService {
     const empresaNombre = sql<string | null>`COALESCE(${empresas.nombreComercial}, ${empresas.nombreLegal})`;
     const responsable = alias(usuarios, "responsable");
 
-    const [filasEnvios, filasRespuestas, filasBajas, filasCreadas, filasAuditTareas, filasVencian, filasDocs, filasFallos, filasReintentos, [cerradas]] = await Promise.all([
+    const [filasEnvios, filasRespuestas, filasBajas, filasCreadas, filasAuditTareas, filasVencian, filasDocs, filasFallos, [cerradas]] = await Promise.all([
       this.db
         .select({ fecha: envios.enviadoEn, numeroContacto: envios.numeroContacto, campanaId: prospectos.campanaId, campanaNombre: campanas.nombre })
         .from(envios)
@@ -132,11 +132,6 @@ export class ReporteDiaService {
         .leftJoin(empresas, eq(empresas.id, documentos.empresaId))
         .where(and(eq(auditoria.entidad, "documento"), inArray(auditoria.accion, ["subir", "nueva_version", "aprobar", "rechazar", "revisar"]), delDia(auditoria.creadoEn))),
       this.db.select({ id: procesosFallidos.id, fecha: procesosFallidos.creadoEn, tipo: procesosFallidos.tipo, workflow: procesosFallidos.workflow, nodo: procesosFallidos.nodo, mensaje: procesosFallidos.mensaje }).from(procesosFallidos).where(delDia(procesosFallidos.creadoEn)),
-      // Avisos que llegaron a n8n después de fallar: no queda cada intento,
-      // solo cuántos llevó y cuándo salió.
-      this.db.select({ id: eventosPendientes.id, fecha: eventosPendientes.actualizadoEn, tipo: eventosPendientes.tipo, intentos: eventosPendientes.intentos })
-        .from(eventosPendientes)
-        .where(and(eq(eventosPendientes.estado, "enviado"), gt(eventosPendientes.intentos, 1), delDia(eventosPendientes.actualizadoEn))),
       this.db.select({ n: sql<number>`COUNT(*)` }).from(tareas)
         .where(and(eq(tareas.estado, "cerrada"), isNotNull(tareas.cerradaEn), delDia(tareas.cerradaEn), usuarioId ? eq(tareas.responsableId, usuarioId) : undefined))
     ]);
@@ -179,19 +174,14 @@ export class ReporteDiaService {
       }
     }
 
-    // procesos_fallidos junta dos cosas distintas: un workflow de n8n que
-    // falló (lo reporta el Error Workflow B4) y un aviso de la API a n8n
-    // que agotó sus reintentos (outbox).
+    // procesos_fallidos: un workflow de n8n que falló (lo reporta el Error
+    // Workflow) o una fila vieja del outbox ya retirado.
     for (const f of filasFallos) {
       const texto = f.tipo === TIPO_ERROR_WORKFLOW
         ? `falló ${f.workflow ? `el workflow ${f.workflow}` : "un workflow"} de n8n${f.nodo ? ` (nodo ${f.nodo})` : ""}`
         : `falló un aviso a n8n: ${f.mensaje}`;
       movimientos.push({ tipo: "sistema", subtipo: "fallo", fecha: f.fecha, usuario_id: null, usuario_nombre: null, empresa_id: null, empresa_nombre: null, entidad: { tipo: "proceso_fallido", id: f.id }, workflow: f.workflow, nodo: f.nodo, texto });
     }
-    for (const f of filasReintentos) {
-      movimientos.push({ tipo: "sistema", subtipo: "reintento_ok", fecha: f.fecha, usuario_id: null, usuario_nombre: null, empresa_id: null, empresa_nombre: null, entidad: { tipo: "evento", id: f.id }, texto: `un aviso a n8n (${f.tipo}) llegó bien al intento ${f.intentos}` });
-    }
-
     for (const f of filasDocs) {
       const subtipo = { subir: "subido", nueva_version: "nueva_version", aprobar: "aprobado", rechazar: "rechazado", revisar: "aprobado" }[f.accion] ?? f.accion;
       const texto = {

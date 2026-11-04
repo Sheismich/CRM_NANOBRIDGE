@@ -7,7 +7,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, contactos, eventosPendientes, incidencias, mediosContacto, prospectos, respuestas, tareas } from "../src/database/schema.js";
+import { auditoria, contactos, incidencias, mediosContacto, prospectos, respuestas, tareas } from "../src/database/schema.js";
 import { CLASIFICACIONES_RESPUESTA } from "../src/shared/clasificaciones.js";
 import { recortarTexto } from "../src/shared/texto.js";
 
@@ -341,14 +341,6 @@ describe("respuestas: clasificación automática y manual", () => {
 
       const [fila] = await db.select({ comentario: respuestas.comentario }).from(respuestas).where(eq(respuestas.id, respuestaId));
       expect(fila!.comentario).toBe(`${"a".repeat(499)}😀`);
-    });
-
-    it("el evento a n8n sigue saliendo como aviso, ahora con la respuesta", async () => {
-      const { prospecto, respuestaId, tareaId } = await tareaDeRespuestaAmbigua();
-      await clasificarManual(tareaId, { clasificacion: "no_interesado" });
-
-      const [evento] = await db.select().from(eventosPendientes).where(and(eq(eventosPendientes.tipo, "prospecto_clasificado"), eq(eventosPendientes.entidadId, prospecto.id)));
-      expect((evento!.payload as { respuesta_id: number }).respuesta_id).toBe(respuestaId);
     });
 
     it("dos clasificaciones simultáneas de la misma tarea: solo una se aplica", async () => {

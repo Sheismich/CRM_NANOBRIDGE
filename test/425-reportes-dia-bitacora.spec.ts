@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, campanas, contactos, documentos, envios, eventosPendientes, procesosFallidos, prospectos, respuestas, tareas } from "../src/database/schema.js";
+import { auditoria, campanas, contactos, documentos, envios, procesosFallidos, prospectos, respuestas, tareas } from "../src/database/schema.js";
 
 const API_KEY = "test_crm_callback_api_key_0001";
 
@@ -76,10 +76,8 @@ describe("reportes: el día (bitácora)", () => {
     const [d] = await db.insert(documentos).values({ empresaId: (await db.select({ empresaId: contactos.empresaId }).from(prospectos).innerJoin(contactos, eq(contactos.id, prospectos.contactoId)).where(eq(prospectos.id, p1)))[0]!.empresaId, version: 1, nombreOriginal: "INE representante.jpg", mimeType: "image/jpeg", tamanoBytes: 10, storageDriver: "local", storageKey: `x/${randomUUID()}`, subidoPor: agenteA });
     await db.insert(auditoria).values({ usuarioId: agenteA, entidad: "documento", entidadId: d.insertId, accion: "subir", despues: { nombre_original: "INE representante.jpg" }, creadoEn: a("12:30") });
 
-    // Sistema: un aviso a n8n que falló a las 14:02 y otro que llegó al
-    // tercer intento a las 14:10.
+    // Sistema: un aviso a n8n que falló a las 14:02.
     await db.insert(procesosFallidos).values({ tipo: "outbox", payload: {}, mensaje: "n8n no respondió a tiempo", creadoEn: a("14:02") });
-    await db.insert(eventosPendientes).values({ eventoUuid: randomUUID(), tipo: "tarea_cerrada", entidadTipo: "tarea", entidadId: t1.insertId, payload: {}, estado: "enviado", intentos: 3, creadoEn: a("14:00"), actualizadoEn: a("14:10") });
   });
 
   afterAll(async () => {
@@ -108,11 +106,10 @@ describe("reportes: el día (bitácora)", () => {
   it("la bitácora trae todo en orden de hora, lo más tarde primero", async () => {
     const res = await dia(adminCookie, { limit: 100 });
     const { total, data } = res.body.bitacora;
-    expect(total).toBe(13);
+    expect(total).toBe(12);
     expect(data.map((e: { tipo: string; subtipo: string }) => `${e.tipo}:${e.subtipo}`)).toEqual([
       "tareas:cerrada", // 18:10
       "tareas:tomada", // 16:20
-      "sistema:reintento_ok", // 14:10
       "sistema:fallo", // 14:02
       "documentos:subido", // 12:30
       "tareas:vencida", // 12:09
@@ -136,10 +133,10 @@ describe("reportes: el día (bitácora)", () => {
     const tareasDelDia = await dia(adminCookie, { tipo: "tareas" });
     expect(tareasDelDia.body.bitacora.total).toBe(6);
     const sistema = await dia(adminCookie, { tipo: "sistema" });
-    expect(sistema.body.bitacora.data.map((e: { subtipo: string }) => e.subtipo)).toEqual(["reintento_ok", "fallo"]);
+    expect(sistema.body.bitacora.data.map((e: { subtipo: string }) => e.subtipo)).toEqual(["fallo"]);
     const pagina3 = await dia(adminCookie, { limit: 5, page: 3 });
-    expect(pagina3.body.bitacora).toEqual(expect.objectContaining({ total: 13, page: 3, limit: 5 }));
-    expect(pagina3.body.bitacora.data).toHaveLength(3);
+    expect(pagina3.body.bitacora).toEqual(expect.objectContaining({ total: 12, page: 3, limit: 5 }));
+    expect(pagina3.body.bitacora.data).toHaveLength(2);
   });
 
   it("por persona: primera y última acción, cerradas, tomadas y vencidas, más la automatización", async () => {
@@ -175,7 +172,7 @@ describe("reportes: el día (bitácora)", () => {
     // Sin el BOM que pone toCsv para Excel.
     const lineas = csv.text.replace(/^﻿/, "").trim().split(/\r?\n/);
     expect(lineas[0]).toBe("hora,tipo,quien,que,empresa");
-    expect(lineas).toHaveLength(14);
+    expect(lineas).toHaveLength(13);
     expect(lineas[1]).toMatch(/^18:10,tareas,Agente de prueba,/);
     expect(csv.text).toContain("Automatización");
   });

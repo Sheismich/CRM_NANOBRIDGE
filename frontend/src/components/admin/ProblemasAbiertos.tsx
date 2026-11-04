@@ -9,9 +9,8 @@ import { plural } from "../../lib/formato";
 import type { GrupoProblemas } from "../../types";
 
 // "Problemas abiertos agrupados por causa" (punto 39): cada grupo es una
-// misma causa. Los avisos de la API a n8n se pueden reintentar todos
-// juntos; las fallas dentro de un workflow de n8n solo se marcan resueltas
-// (el arreglo es en n8n). "Ver los N" abre el detalle técnico de siempre.
+// misma causa. Se marcan resueltas: el arreglo es en n8n. "Ver los N" abre el
+// detalle técnico de siempre.
 
 const COLOR_GRUPO: Record<GrupoProblemas["tipo"], string> = {
   aviso_api: "bg-warn-bg text-warn",
@@ -19,7 +18,7 @@ const COLOR_GRUPO: Record<GrupoProblemas["tipo"], string> = {
   otro: "bg-soft text-ink-2"
 };
 
-type Mensaje = { texto: string; tono: "ok" | "warn" | "danger" };
+type Mensaje = { texto: string; tono: "ok" | "danger" };
 
 export function ProblemasAbiertos({ onVerDetalle }: { onVerDetalle: () => void }) {
   const queryClient = useQueryClient();
@@ -31,23 +30,12 @@ export function ProblemasAbiertos({ onVerDetalle }: { onVerDetalle: () => void }
     queryFn: () => api.get<{ grupos: GrupoProblemas[] }>("/api/v1/admin/problemas", { estado: estado || undefined })
   });
 
-  async function actuar(clave: string, que: "reintentar" | "resolver" | "despachar") {
+  async function resolver(clave: string) {
     setOcupado(clave);
     setMensaje(null);
     try {
-      if (que === "despachar") {
-        const r = await api.post<{ procesados: number; sin_destino?: true }>("/api/v1/eventos-pendientes/despachar");
-        setMensaje(r.sin_destino ? { texto: "n8n todavía no tiene a dónde recibir avisos: los avisos se quedan en espera y salen cuando se configure la dirección.", tono: "warn" } : { texto: `${plural(r.procesados, "aviso salió", "avisos salieron")} hacia n8n.`, tono: "ok" });
-      } else if (que === "reintentar") {
-        const r = await api.post<{ reintentados: number; resueltos: number; sin_destino?: true }>("/api/v1/admin/problemas/reintentar", { clave });
-        setMensaje({
-          texto: `${plural(r.reintentados, "aviso volvió", "avisos volvieron")} a la cola.${r.sin_destino ? " Ojo: n8n todavía no tiene dirección, así que esperan ahí hasta que se configure." : ""}`,
-          tono: r.sin_destino ? "warn" : "ok"
-        });
-      } else {
-        const r = await api.post<{ resueltos: number }>("/api/v1/admin/problemas/resolver", { clave });
-        setMensaje({ texto: `${plural(r.resueltos, "problema marcado", "problemas marcados")} como resuelto${r.resueltos === 1 ? "" : "s"}.`, tono: "ok" });
-      }
+      const r = await api.post<{ resueltos: number }>("/api/v1/admin/problemas/resolver", { clave });
+      setMensaje({ texto: `${plural(r.resueltos, "problema marcado", "problemas marcados")} como resuelto${r.resueltos === 1 ? "" : "s"}.`, tono: "ok" });
       await queryClient.invalidateQueries({ queryKey: ["admin"] });
     } catch (err) {
       setMensaje({ texto: err instanceof ApiError ? err.message : "No se pudo conectar con el servidor", tono: "danger" });
@@ -66,12 +54,9 @@ export function ProblemasAbiertos({ onVerDetalle }: { onVerDetalle: () => void }
           <option value="">Abiertos</option>
           <option value="resuelto">Resueltos</option>
         </select>
-        <Button variant="outline" disabled={ocupado !== null} onClick={() => void actuar("", "despachar")} title="Manda ya los avisos que esperan en la cola">
-          Despachar ahora
-        </Button>
       </header>
       {mensaje && (
-        <p className={clsx("border-b border-border px-5 py-2.5 text-[13px]", mensaje.tono === "ok" ? "bg-ok-bg text-ok" : mensaje.tono === "warn" ? "bg-warn-bg text-warn" : "bg-danger-bg text-danger")}>{mensaje.texto}</p>
+        <p className={clsx("border-b border-border px-5 py-2.5 text-[13px]", mensaje.tono === "ok" ? "bg-ok-bg text-ok" : "bg-danger-bg text-danger")}>{mensaje.texto}</p>
       )}
       {isPending && <p className="p-5 text-[13px] text-ink-3">Cargando…</p>}
       {isError && <p className="p-5 text-[13px] text-danger">No se pudieron cargar los problemas.</p>}
@@ -95,16 +80,9 @@ export function ProblemasAbiertos({ onVerDetalle }: { onVerDetalle: () => void }
                 <Button variant="outline" onClick={onVerDetalle}>
                   Ver {g.cantidad === 1 ? "detalle" : `los ${g.cantidad}`}
                 </Button>
-                {g.acciones.includes("reintentar") && (
-                  <Button disabled={ocupado !== null} onClick={() => void actuar(g.clave, "reintentar")}>
-                    {ocupado === g.clave ? "…" : g.cantidad === 1 ? "Reintentar" : "Reintentar todos"}
-                  </Button>
-                )}
-                {g.acciones.includes("resolver") && !g.acciones.includes("reintentar") && (
-                  <Button variant="outline" disabled={ocupado !== null} onClick={() => void actuar(g.clave, "resolver")}>
-                    {ocupado === g.clave ? "…" : g.cantidad === 1 ? "Marcar resuelto" : "Marcar resueltos"}
-                  </Button>
-                )}
+                <Button variant="outline" disabled={ocupado !== null} onClick={() => void resolver(g.clave)}>
+                  {ocupado === g.clave ? "…" : g.cantidad === 1 ? "Marcar resuelto" : "Marcar resueltos"}
+                </Button>
               </div>
             )}
           </li>

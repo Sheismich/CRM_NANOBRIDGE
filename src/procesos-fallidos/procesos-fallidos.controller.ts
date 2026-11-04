@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
-import { OutboxService } from "./outbox.service.js";
+import { ProcesosFallidosService } from "./procesos-fallidos.service.js";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard.js";
 import { RolesGuard } from "../auth/guards/roles.guard.js";
 import { Roles } from "../auth/decorators/roles.decorator.js";
@@ -10,18 +10,17 @@ import { actualizarEstadoProcesoFallidoSchema, listProcesosFallidosQuerySchema }
 
 const idParamSchema = z.coerce.number().int().positive();
 
-// Mismo criterio que EventosPendientesController: herramienta operativa,
-// solo administrador.
+// Herramienta operativa: solo administrador.
 @Controller("api/v1/procesos-fallidos")
 @UseGuards(SessionAuthGuard, RolesGuard)
 @Roles("administrador")
 export class ProcesosFallidosController {
-  constructor(private readonly outboxService: OutboxService) {}
+  constructor(private readonly procesosFallidosService: ProcesosFallidosService) {}
 
   @Get()
   list(@Query() query: Record<string, unknown>) {
     const { page, limit, estado, tipo } = listProcesosFallidosQuerySchema.parse(query);
-    return this.outboxService.listProcesosFallidos(estado, tipo, page, limit);
+    return this.procesosFallidosService.listar(estado, tipo, page, limit);
   }
 
   @Patch(":id/estado")
@@ -29,7 +28,7 @@ export class ProcesosFallidosController {
   async actualizarEstado(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() actor: CurrentUserType) {
     const id = idParamSchema.parse(idParam);
     const { estado } = actualizarEstadoProcesoFallidoSchema.parse(body);
-    await this.outboxService.actualizarEstadoProcesoFallido(actor, id, estado);
+    await this.procesosFallidosService.actualizarEstado(actor, id, estado);
     return { id, estado };
   }
 }

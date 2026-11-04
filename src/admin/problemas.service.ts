@@ -2,27 +2,20 @@ import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { desc, eq, inArray } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { eventosPendientes, procesosFallidos } from "../database/schema.js";
+import { procesosFallidos } from "../database/schema.js";
 import { TIPO_ERROR_WORKFLOW } from "../automatizacion/automatizacion.service.js";
-import { OutboxService } from "../outbox/outbox.service.js";
-import { env } from "../config/env.js";
+import { ProcesosFallidosService } from "../procesos-fallidos/procesos-fallidos.service.js";
 import { HttpError } from "../shared/http-error.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 
-// "Problemas abiertos agrupados por causa" de Administración (12-oct-2026;
-// punto 39). Hoy se reintenta y se resuelve uno por uno; la pantalla los
-// junta para actuar sobre todos los de la misma causa:
-// - aviso_api: un aviso de la API a n8n (evento del outbox) que agotó sus
-//   reintentos -- deja su proceso fallido con evento_id. Se agrupan por el
-//   mismo error. Se pueden reintentar (vuelven a la cola) o marcar resueltos.
-// - workflow_n8n: una falla dentro de un workflow de n8n que avisó el Error
-//   Workflow (B4). Se agrupan por workflow + nodo. SOLO se marcan resueltas:
-//   aquí no hay nada que reintentar, el arreglo es en n8n (Fabián, 12-oct).
-// - otro: cualquier otro proceso fallido sin evento (no debería haber), por
-//   tipo + error, solo para resolver.
-// Cada grupo lleva una clave estable (la causa en hash) para que la
-// pantalla diga "reintentar los de esta causa" sin mandar la lista de ids;
-// se actúa sobre lo que siga abierto con esa causa en ese momento.
+// "Problemas abiertos agrupados por causa" de Administración: junta los
+// procesos fallidos para resolver de una vez los de la misma causa.
+// - workflow_n8n: una falla que avisó el Error Workflow, por workflow + nodo.
+// - aviso_api: filas viejas del outbox retirado (tienen evento_id), por error.
+// - otro: cualquier otro proceso fallido, por tipo + error.
+// Todos solo se marcan resueltos: el arreglo es en n8n.
+// Cada grupo lleva una clave estable (la causa en hash) para que la pantalla
+// no mande la lista de ids; se actúa sobre lo que siga abierto en ese momento.
 
 type TipoGrupo = "aviso_api" | "workflow_n8n" | "otro";
 type EstadoProblema = "abierto" | "en_revision" | "resuelto";
@@ -37,7 +30,6 @@ export interface GrupoProblemas {
   tipos_evento: { tipo: string; cantidad: number }[];
   desde: Date;
   hasta: Date;
-  acciones: ("reintentar" | "resolver")[];
 }
 
 type Fila = typeof procesosFallidos.$inferSelect;
@@ -58,7 +50,7 @@ const ABIERTOS: EstadoProblema[] = ["abierto", "en_revision"];
 export class ProblemasService {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDb,
-    private readonly outboxService: OutboxService
+    private readonly procesosFallidosService: ProcesosFallidosService
   ) {}
 
   private filas(estados: EstadoProblema[]) {
@@ -85,8 +77,7 @@ export class ProblemasService {
             nodo: fila.nodo,
             tipos_evento: [],
             desde: fila.creadoEn,
-            hasta: fila.creadoEn,
-            acciones: tipo === "aviso_api" ? ["reintentar", "resolver"] : ["resolver"]
+            hasta: fila.creadoEn
           },
           tipos: new Map()
         };
@@ -105,43 +96,18 @@ export class ProblemasService {
   private async miembros(clave: string) {
     const filas = (await this.filas(ABIERTOS)).filter((fila) => causa(fila).clave === clave);
     if (filas.length === 0) throw new HttpError(404, "Ya no hay problemas abiertos con esa causa");
-    return { filas, tipo: causa(filas[0]!).tipo };
-  }
-
-  // "Reintentar todos": solo avisos de la API. Cada evento que siga fallido
-  // vuelve a la cola igual que con el botón de uno (OutboxService), y su
-  // problema se cierra; todo en una transacción y cada fila auditada.
-  async reintentar(actor: CurrentUser, clave: string) {
-    const { filas, tipo } = await this.miembros(clave);
-    if (tipo !== "aviso_api") {
-      throw new HttpError(409, "Las fallas de un workflow de n8n no se reintentan desde aquí: se arreglan en n8n y se marcan resueltas");
-    }
-    let reintentados = 0;
-    await this.db.transaction(async (tx) => {
-      for (const fila of filas) {
-        const [proceso] = await tx.select({ id: procesosFallidos.id, estado: procesosFallidos.estado }).from(procesosFallidos).where(eq(procesosFallidos.id, fila.id)).limit(1).for("update");
-        if (!proceso || !ABIERTOS.includes(proceso.estado)) continue;
-        const [evento] = await tx.select().from(eventosPendientes).where(eq(eventosPendientes.id, fila.eventoId!)).limit(1).for("update");
-        if (evento?.estado === "fallido") {
-          await this.outboxService.reintentarEnTx(tx, actor, evento);
-          reintentados++;
-        }
-        await this.outboxService.cambiarEstadoProcesoEnTx(tx, actor, proceso, "resuelto");
-      }
-    });
-    // Igual que "Despachar ahora": sin dirección de n8n quedan esperando.
-    return env.N8N_WEBHOOK_URL ? { reintentados, resueltos: filas.length } : { reintentados, resueltos: filas.length, sin_destino: true };
+    return filas;
   }
 
   // "Marcar resueltos": cualquier grupo. Cada fila auditada.
   async resolver(actor: CurrentUser, clave: string) {
-    const { filas } = await this.miembros(clave);
+    const filas = await this.miembros(clave);
     let resueltos = 0;
     await this.db.transaction(async (tx) => {
       for (const fila of filas) {
         const [proceso] = await tx.select({ id: procesosFallidos.id, estado: procesosFallidos.estado }).from(procesosFallidos).where(eq(procesosFallidos.id, fila.id)).limit(1).for("update");
         if (!proceso || !ABIERTOS.includes(proceso.estado)) continue;
-        await this.outboxService.cambiarEstadoProcesoEnTx(tx, actor, proceso, "resuelto");
+        await this.procesosFallidosService.cambiarEstadoProcesoEnTx(tx, actor, proceso, "resuelto");
         resueltos++;
       }
     });

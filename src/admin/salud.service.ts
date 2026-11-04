@@ -1,8 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { envios, eventosPendientes } from "../database/schema.js";
-import { env } from "../config/env.js";
+import { envios } from "../database/schema.js";
 import { diaSiguiente, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
 import { ProblemasService } from "./problemas.service.js";
 
@@ -13,7 +12,6 @@ import { ProblemasService } from "./problemas.service.js";
 //   contestar lo mide la pantalla.
 // - Base de datos: cuánto tarda un SELECT 1. El respaldo diario es
 //   configuración de Cloud SQL: lo dice la pantalla como texto fijo.
-// - Avisos a n8n: cuántos esperan, cuántos fallaron y si hay a dónde mandarlos.
 // - Correos: cuántos van hoy (día de México) y cuándo salió el último.
 
 @Injectable()
@@ -35,34 +33,23 @@ export class SaludService {
         revisado_en: new Date().toISOString(),
         api: this.api(),
         base_datos: { estado: "error" as const, responde_ms: null },
-        avisos_n8n: null,
         correos: null,
-        por_configurar: this.porConfigurar(),
         resumen: null
       };
     }
 
     const hoy = fechaMx(new Date());
-    const [[espera], [fallidos], [correos], grupos] = await Promise.all([
-      this.db.select({ n: sql<number>`COUNT(*)` }).from(eventosPendientes).where(eq(eventosPendientes.estado, "pendiente")),
-      this.db.select({ n: sql<number>`COUNT(*)` }).from(eventosPendientes).where(eq(eventosPendientes.estado, "fallido")),
+    const [[correos], grupos] = await Promise.all([
       this.db.select({ n: sql<number>`COUNT(*)`, ultimo: sql<Date | string | null>`MAX(${envios.enviadoEn})` }).from(envios)
         .where(and(sql`${envios.enviadoEn} >= ${inicioDelDiaMxSql(hoy)}`, sql`${envios.enviadoEn} < ${inicioDelDiaMxSql(diaSiguiente(hoy))}`)),
       this.problemasService.grupos()
     ]);
-    const configurado = Boolean(env.N8N_WEBHOOK_URL);
-    const enEspera = Number(espera?.n ?? 0);
-    const conFallas = Number(fallidos?.n ?? 0);
-    const porConfigurar = this.porConfigurar();
-
     return {
       revisado_en: new Date().toISOString(),
       api: this.api(),
       base_datos: baseDatos,
-      avisos_n8n: { estado: configurado && conFallas === 0 ? "ok" : "atencion", configurado, en_espera: enEspera, fallidos: conFallas },
       correos: { enviados_hoy: Number(correos?.n ?? 0), ultimo_envio_en: aIso(correos?.ultimo ?? null) },
-      por_configurar: porConfigurar,
-      resumen: { por_configurar: porConfigurar.length, problemas_abiertos: grupos.length }
+      resumen: { problemas_abiertos: grupos.length }
     };
   }
 
@@ -70,11 +57,6 @@ export class SaludService {
     return { estado: "ok" as const, revision: process.env.K_REVISION ?? null };
   }
 
-  private porConfigurar() {
-    const pendientes: { clave: string; texto: string }[] = [];
-    if (!env.N8N_WEBHOOK_URL) pendientes.push({ clave: "N8N_WEBHOOK_URL", texto: "Falta la dirección de n8n (N8N_WEBHOOK_URL): los avisos esperan sin salir." });
-    return pendientes;
-  }
 }
 
 // MAX() de un DATETIME llega como texto "AAAA-MM-DD HH:MM:SS" (UTC).

@@ -37,29 +37,11 @@ const schema = z.object({
   // 15-sep-2026). Apagado por default: confiar en X-Forwarded-For sin
   // saber que de verdad hay un proxy delante permitiría spoofear la IP y
   // saltarse el límite.
-  // z.preprocess normaliza "" a undefined (mismo motivo que N8N_WEBHOOK_URL
-  // arriba, mismo bug ya corregido una vez: hallazgo de code-review,
-  // 15-sep-2026) -- sin esto, dejar TRUST_PROXY= vacío en el .env (en vez
+  // z.preprocess normaliza "" a undefined -- sin esto, dejar TRUST_PROXY= vacío en el .env (en vez
   // de omitirlo del todo) tumbaba el arranque completo con un ZodError, ya
   // que "" no es ni "true" ni "false".
   TRUST_PROXY: z.preprocess((v) => (v === "" ? undefined : v), z.enum(["true", "false"]).default("false")).transform((v) => v === "true"),
   CRM_CALLBACK_API_KEY: z.string().min(16),
-  WEBHOOK_ENTRADA_API_KEY: z.string().min(16),
-  // Despachador de eventos_pendientes (patrón outbox, PLAN_CRM_DEFINITIVO.md
-  // #5): a dónde se entregan los eventos salientes hacia n8n. Sin configurar,
-  // el despachador deja los eventos en 'fallido' tras agotar reintentos en
-  // vez de intentar una URL inexistente. z.preprocess normaliza "" a
-  // undefined -- .env.example lo deja vacío (documentado, sin valor) igual
-  // que GCS_BUCKET/GCS_PROJECT_ID/GCS_KEY_FILE más abajo; sin esto, copiar
-  // .env.example tal cual tumbaba el arranque entero con un ZodError en vez
-  // de tratarse como "no configurado" (hallazgo de auditoría, 14-sep-2026).
-  // https obligatorio salvo en localhost (desarrollo): el despachador manda
-  // la API key en cada envío y no debe viajar sin cifrar (B4, 2-oct-2026).
-  N8N_WEBHOOK_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().refine((url) => {
-    const { protocol, hostname } = new URL(url);
-    return protocol === "https:" || (protocol === "http:" && ["localhost", "127.0.0.1"].includes(hostname));
-  }, { message: "N8N_WEBHOOK_URL debe ser https (http solo para localhost)" }).optional()),
-  OUTBOX_DISPATCH_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
   // Tope de correos por día de México, iniciales y recordatorios juntos
   // (bloque "antes de encender", decidido el 5-oct-2026: 50 para calentar el
   // dominio). Se sube con --update-env-vars en Cloud Run, sin deploy de código.
@@ -141,7 +123,6 @@ const schema = z.object({
   // autenticarse en el otro (hallazgo de code review, 14-sep-2026).
   const secretos: [string, string][] = [
     ["CRM_CALLBACK_API_KEY", data.CRM_CALLBACK_API_KEY],
-    ["WEBHOOK_ENTRADA_API_KEY", data.WEBHOOK_ENTRADA_API_KEY],
     ["REPLY_TO_SIGNING_SECRET", data.REPLY_TO_SIGNING_SECRET]
   ];
   for (let i = 0; i < secretos.length; i++) {

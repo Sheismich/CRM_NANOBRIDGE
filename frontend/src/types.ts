@@ -463,10 +463,8 @@ export type SaludSistema = {
   revisado_en: string;
   api: { estado: "ok"; revision: string | null };
   base_datos: { estado: "ok" | "error"; responde_ms: number | null };
-  avisos_n8n: { estado: "ok" | "atencion"; configurado: boolean; en_espera: number; fallidos: number } | null;
   correos: { enviados_hoy: number; ultimo_envio_en: string | null } | null;
-  por_configurar: { clave: string; texto: string }[];
-  resumen: { por_configurar: number; problemas_abiertos: number } | null;
+  resumen: { problemas_abiertos: number } | null;
 };
 
 // GET /admin/problemas → { grupos }
@@ -480,7 +478,6 @@ export type GrupoProblemas = {
   tipos_evento: { tipo: string; cantidad: number }[];
   desde: string;
   hasta: string;
-  acciones: ("reintentar" | "resolver")[];
 };
 
 export type TipoRegistro = "usuarios_roles" | "ediciones" | "borrados" | "descargas" | "configuracion";
@@ -597,20 +594,6 @@ export type RegistroAuditoria = {
   accion: string;
   antes: unknown;
   despues: unknown;
-  creado_en: string;
-};
-
-export type EventoPendiente = {
-  id: number;
-  evento_uuid: string;
-  tipo: string;
-  entidad_tipo: string;
-  entidad_id: number;
-  payload: unknown;
-  estado: "pendiente" | "procesando" | "enviado" | "fallido";
-  intentos: number;
-  proximo_intento_en: string | null;
-  ultimo_error: string | null;
   creado_en: string;
 };
 

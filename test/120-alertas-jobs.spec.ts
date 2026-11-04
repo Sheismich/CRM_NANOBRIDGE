@@ -5,7 +5,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { documentos, eventosPendientes } from "../src/database/schema.js";
+import { documentos, notificaciones } from "../src/database/schema.js";
 import { DocumentosService } from "../src/documentos/documentos.service.js";
 import { TareasService } from "../src/tareas/tareas.service.js";
 
@@ -42,9 +42,8 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
     await closeTestDb();
   });
 
-  async function buscarEvento(tipo: string, entidadId: number) {
-    const [row] = await db.select().from(eventosPendientes).where(and(eq(eventosPendientes.tipo, tipo), eq(eventosPendientes.entidadId, entidadId)));
-    return row;
+  async function avisos(tipo: string, entidadId: number) {
+    return db.select().from(notificaciones).where(and(eq(notificaciones.tipo, tipo), eq(notificaciones.entidadId, entidadId)));
   }
 
   it("un documento vigente sin revisar hace más de 7 días se alerta una sola vez (no antes, no dos veces)", async () => {
@@ -58,23 +57,20 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
 
     // Recién subido: todavía no cruza el umbral de 7 días.
     await app.get(DocumentosService).alertarDocumentosPendientes();
-    expect(await buscarEvento("documento_pendiente_revision", documentoId)).toBeUndefined();
+    expect(await avisos("documento_sin_revisar", documentoId)).toHaveLength(0);
 
     // "Adelantar el reloj" escribiendo directo creado_en -- mismo criterio
-    // que 50-outbox-dispatcher-retry.spec.ts con proximo_intento_en, en vez
-    // de esperar 8 días reales.
+    // que en el resto de las pruebas, en vez de esperar 8 días reales.
     await db.update(documentos).set({ creadoEn: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }).where(eq(documentos.id, documentoId));
 
     await app.get(DocumentosService).alertarDocumentosPendientes();
-    const evento = await buscarEvento("documento_pendiente_revision", documentoId);
-    expect(evento).toBeDefined();
-    expect(evento!.entidadTipo).toBe("documento");
-    expect((evento!.payload as { empresa_id: number }).empresa_id).toBe(empresaId);
+    const primerAviso = await avisos("documento_sin_revisar", documentoId);
+    expect(primerAviso.length).toBeGreaterThan(0);
+    expect(primerAviso[0]).toEqual(expect.objectContaining({ entidad: "documento", titulo: "Documento sin revisar: pendiente.pdf", cuerpo: "Empresa Alertas", enlace: "/documentos", correoEstado: "pendiente" }));
 
-    // Segunda corrida: alertado_en ya quedó fijo, no debe volver a encolar.
+    // Segunda corrida: alertado_en ya quedó fijo, no debe volver a avisar.
     await app.get(DocumentosService).alertarDocumentosPendientes();
-    const eventos = await db.select().from(eventosPendientes).where(and(eq(eventosPendientes.tipo, "documento_pendiente_revision"), eq(eventosPendientes.entidadId, documentoId)));
-    expect(eventos).toHaveLength(1);
+    expect(await avisos("documento_sin_revisar", documentoId)).toHaveLength(primerAviso.length);
   });
 
   it("marcar el documento como revisado ANTES del umbral evita la alerta por completo", async () => {
@@ -90,7 +86,7 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
     await db.update(documentos).set({ creadoEn: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }).where(eq(documentos.id, documentoId));
 
     await app.get(DocumentosService).alertarDocumentosPendientes();
-    expect(await buscarEvento("documento_pendiente_revision", documentoId)).toBeUndefined();
+    expect(await avisos("documento_sin_revisar", documentoId)).toHaveLength(0);
   });
 
   it("archivar y reactivar un documento nunca revisado lo vuelve a hacer candidato de alerta (alertado_en se limpia al volver a vigente)", async () => {
@@ -104,7 +100,7 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
 
     await db.update(documentos).set({ creadoEn: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000) }).where(eq(documentos.id, documentoId));
     await app.get(DocumentosService).alertarDocumentosPendientes();
-    expect(await buscarEvento("documento_pendiente_revision", documentoId)).toBeDefined();
+    expect((await avisos("documento_sin_revisar", documentoId)).length).toBeGreaterThan(0);
 
     const archivar = await request(app.getHttpServer()).patch(`/api/v1/documentos/${documentoId}/estado`).set("Cookie", adminCookie).send({ estado: "archivado" });
     expect(archivar.status).toBe(200);
@@ -114,9 +110,9 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
     // Sigue sin revisar y sigue "vieja" (creado_en no cambió) -- debe poder
     // alertar de nuevo, no quedar excluida para siempre por el alertado_en
     // de antes de archivarse.
-    await db.delete(eventosPendientes).where(and(eq(eventosPendientes.tipo, "documento_pendiente_revision"), eq(eventosPendientes.entidadId, documentoId)));
+    await db.delete(notificaciones).where(and(eq(notificaciones.tipo, "documento_sin_revisar"), eq(notificaciones.entidadId, documentoId)));
     await app.get(DocumentosService).alertarDocumentosPendientes();
-    expect(await buscarEvento("documento_pendiente_revision", documentoId)).toBeDefined();
+    expect((await avisos("documento_sin_revisar", documentoId)).length).toBeGreaterThan(0);
   });
 
   it("una tarea abierta con fecha_limite vencida se alerta una sola vez; una tarea sin fecha_limite nunca se alerta", async () => {
@@ -136,15 +132,14 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
 
     await app.get(TareasService).alertarTareasSlaVencidas();
 
-    const evento = await buscarEvento("tarea_sla_vencida", tareaId);
-    expect(evento).toBeDefined();
-    expect(evento!.entidadTipo).toBe("tarea");
-    expect(await buscarEvento("tarea_sla_vencida", sinFechaId)).toBeUndefined();
+    const primerAviso = await avisos("tarea_vencida", tareaId);
+    expect(primerAviso).toHaveLength(1);
+    expect(primerAviso[0]!.entidad).toBe("tarea");
+    expect(await avisos("tarea_vencida", sinFechaId)).toHaveLength(0);
 
     // Segunda corrida: no debe duplicar.
     await app.get(TareasService).alertarTareasSlaVencidas();
-    const eventos = await db.select().from(eventosPendientes).where(and(eq(eventosPendientes.tipo, "tarea_sla_vencida"), eq(eventosPendientes.entidadId, tareaId)));
-    expect(eventos).toHaveLength(1);
+    expect(await avisos("tarea_vencida", tareaId)).toHaveLength(1);
   });
 
   it("cerrar la tarea ANTES de que corra el job evita la alerta por completo", async () => {
@@ -159,6 +154,6 @@ describe("jobs internos: alertas de documentos pendientes y de tareas con SLA ve
     expect(cerrar.status).toBe(200);
 
     await app.get(TareasService).alertarTareasSlaVencidas();
-    expect(await buscarEvento("tarea_sla_vencida", tareaId)).toBeUndefined();
+    expect(await avisos("tarea_vencida", tareaId)).toHaveLength(0);
   });
 });

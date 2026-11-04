@@ -17,7 +17,7 @@ const listQuerySchema = z.object({
 // Cola de clasificación manual (PLAN_CRM_DEFINITIVO.md #5): tareas tipo
 // 'clasificacion' pendientes. Resolverlas cierra la tarea, aplica la
 // decisión (respuesta, prospecto, supresión o seguimiento -- ver
-// TareasService.clasificar) y encola un evento outbox hacia n8n como aviso.
+// TareasService.clasificar).
 @Controller("api/v1/cola-clasificacion")
 @UseGuards(SessionAuthGuard, RolesGuard)
 export class ColaClasificacionController {

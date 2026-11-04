@@ -59,8 +59,8 @@ export function AdministracionPage() {
                 <Icono nombre="flechaIzquierda" size={14} /> Administración
               </button>
             }
-            titulo="Avisos y procesos fallidos"
-            subtitulo="El detalle técnico de cada aviso hacia n8n y de cada falla que reportó el Error Workflow."
+            titulo="Procesos fallidos"
+            subtitulo="El detalle técnico de cada falla que reportó el Error Workflow."
           />
         }
       >

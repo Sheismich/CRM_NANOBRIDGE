@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq } from "drizzle-orm";
@@ -6,16 +5,11 @@ import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { ensureSeedAdmin } from "./support/seed.js";
 import { closeTestDb, testDb } from "./support/db.js";
-import { auditoria, eventosPendientes, procesosFallidos } from "../src/database/schema.js";
+import { auditoria, procesosFallidos } from "../src/database/schema.js";
 
-// Cubre el hallazgo de la auditoría global del plan (18-sep-2026):
-// PLAN_API_DEFINITIVO.md, "Reglas técnicas obligatorias", exige auditar
-// "reintentos manuales" -- OutboxService.retry() y
-// .actualizarEstadoProcesoFallido() no escribían nada en `auditoria` hasta
-// ahora. Verifica que sí quede la fila (con antes/después correctos) en el
-// camino feliz, y que un intento rechazado (409/404) NO deje rastro --
-// ambos casos van dentro de la misma transacción que la validación.
-describe("Auditoría de reintentos manuales (eventos_pendientes y procesos_fallidos)", () => {
+// Cambiar el estado de un proceso fallido queda en `auditoria`; un intento
+// rechazado no deja rastro.
+describe("Auditoría de procesos fallidos", () => {
   let app: INestApplication;
   let adminCookie: string[];
   let adminId: number;
@@ -36,49 +30,6 @@ describe("Auditoría de reintentos manuales (eventos_pendientes y procesos_falli
   async function auditoriaDe(entidad: string, entidadId: number) {
     return db.select().from(auditoria).where(eq(auditoria.entidad, entidad)).then((rows) => rows.filter((row) => row.entidadId === entidadId));
   }
-
-  it("reintentar un evento fallido queda auditado con el estado anterior y el nuevo", async () => {
-    const [seed] = await db.insert(eventosPendientes).values({
-      eventoUuid: randomUUID(),
-      tipo: "test_auditoria_retry",
-      entidadTipo: "test",
-      entidadId: 1,
-      payload: { motivo: "prueba de auditoría" },
-      estado: "fallido",
-      intentos: 3,
-      ultimoError: "N8N_WEBHOOK_URL no está configurado"
-    });
-    const eventoId = seed.insertId;
-
-    const res = await request(app.getHttpServer()).post(`/api/v1/eventos-pendientes/${eventoId}/reintentar`).set("Cookie", adminCookie);
-    expect(res.status).toBe(204);
-
-    const filas = await auditoriaDe("evento_pendiente", eventoId);
-    expect(filas).toHaveLength(1);
-    const fila = filas[0];
-    expect(fila.usuarioId).toBe(adminId);
-    expect(fila.accion).toBe("reintentar");
-    expect(fila.antes).toMatchObject({ estado: "fallido", intentos: 3 });
-    expect(fila.despues).toMatchObject({ estado: "pendiente", intentos: 0 });
-  });
-
-  it("reintentar un evento que NO está en 'fallido' responde 409 y no deja rastro en auditoría", async () => {
-    const [seed] = await db.insert(eventosPendientes).values({
-      eventoUuid: randomUUID(),
-      tipo: "test_auditoria_retry_rechazado",
-      entidadTipo: "test",
-      entidadId: 2,
-      payload: {},
-      estado: "pendiente"
-    });
-    const eventoId = seed.insertId;
-
-    const res = await request(app.getHttpServer()).post(`/api/v1/eventos-pendientes/${eventoId}/reintentar`).set("Cookie", adminCookie);
-    expect(res.status).toBe(409);
-
-    const filas = await auditoriaDe("evento_pendiente", eventoId);
-    expect(filas).toHaveLength(0);
-  });
 
   it("cambiar el estado de un proceso fallido queda auditado con el estado anterior y el nuevo", async () => {
     const [seed] = await db.insert(procesosFallidos).values({

@@ -35,12 +35,6 @@ export class AdminController {
     return { grupos: await this.problemasService.grupos(estado) };
   }
 
-  @Post("problemas/reintentar")
-  @HttpCode(200)
-  reintentar(@Body() body: unknown, @CurrentUser() actor: CurrentUserType) {
-    return this.problemasService.reintentar(actor, claveProblemaSchema.parse(body).clave);
-  }
-
   @Post("problemas/resolver")
   @HttpCode(200)
   resolver(@Body() body: unknown, @CurrentUser() actor: CurrentUserType) {
