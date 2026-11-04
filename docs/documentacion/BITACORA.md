@@ -79,7 +79,7 @@ Revisión y decisión de Dirección: Por registrar para todos los entregables. E
 | 6 | Autorización escrita de Dirección para el piloto | G5 | Dirección | Antes del 30 nov | Audiencia, mensaje, infraestructura y límites aprobados por escrito. El programa dice que sin aprobación escrita no hay ejecución externa. |
 | 7 | Monitoreo del piloto | Semana 14 | Datos | 30 nov al 4 dic | Una auditoría por día, anotada en el registro del procedimiento de auditoría. |
 | 8 | Reporte del piloto (OB-06) | Semanas 14 y 15 | Daniela, con los datos de Fabián | 4 y 11 dic | Reporte factual: qué se envió, qué respondieron, fallas e incidentes. Sin conclusiones que no estén respaldadas por datos. |
-| 9 | Manual operativo de la automatización | G6 | Daniela | Semana 15 | Qué hace cada flujo, cómo encender y apagar, qué hacer si algo falla, horarios, tope diario y modo de prueba. Se puede partir del RUNBOOK (§10 y §11). |
+| 9 | Manual operativo de la automatización | G6 | Daniela | Semana 15 | v0.9 adelantada el 4-nov (docs/documentacion/MANUAL_OPERATIVO_AUTOMATIZACION.md). Falta la lista de accesos (con OB-07) y lo que deje el piloto. |
 | 10 | Manual para el vendedor | G6 | Daniela y Fabián | Semana 15 | Cómo usar las 13 pantallas, en lenguaje sencillo. Es parte de la transferencia operativa y hoy no existe. |
 | 11 | Inventario de entregables, pendientes y lecciones aprendidas | Semana 15 | Equipo | 7 al 11 dic | Se arma a partir de esta bitácora. |
 | 12 | Reporte final de Datos | G6 | Daniela | Semana 15 o 16 | Indicadores acumulados T1.1 a T1.3, pendientes y transferencia. La carpeta de documentación lo marca como pendiente. |
@@ -158,6 +158,7 @@ Hitos del trabajo, con su evidencia. El historial completo está en el repositor
 | Evaluación del modelo | OB-04 v1.0 listo, pero sin resultados sobre muestra: la base es de ejemplo y los resultados saldrán del piloto, con pocos casos. Las 5 métricas no las ha aprobado Dirección. | Dirección |
 | Webhook B3 y N8N_WEBHOOK_URL | Sin configurar. Mientras tanto los avisos del outbox esperan sin enviarse. | Fabián |
 | Recordatorios fuera del piloto | Con el cierre el 9-dic, solo los correos del 30-nov y del 1-dic alcanzan su primer recordatorio (8 y 9-dic) y ningún segundo recordatorio cae dentro del proyecto. El piloto mide sobre todo la respuesta al primer correo (OB-05 §4). | Dirección |
+| Baja pedida por teléfono o en persona | El CRM no tiene botón para registrar la baja de alguien que no contestó el correo. Hoy solo se puede con la API y la llave de n8n (manual operativo §5). Conviene agregar el botón antes del piloto. | Daniela y Fabián |
 | Pruebas en vivo pendientes | Respuesta automática (fuera de oficina), correo sin firma, rebote, responder desde el CRM y «Resumir con IA» con Gemini real. | Fabián y Daniela |
 | Primera carga lenta | Con la API dormida, el primero que entra espera de 8 a 9 s. Se quita con `min-instances=1`, que tiene costo. | Fabián o Carlos |
 | Correos de área y teléfonos sin código de país | 9 de 25 correos de la lista son de área (info@, ventas@) y los teléfonos no se reconocen con y sin +52. | Carlos y equipo |
