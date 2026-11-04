@@ -80,7 +80,7 @@ Revisión y decisión de Dirección: Por registrar para todos los entregables. E
 | 7 | Monitoreo del piloto | Semana 14 | Datos | 30 nov al 4 dic | Una auditoría por día, anotada en el registro del procedimiento de auditoría. |
 | 8 | Reporte del piloto (OB-06) | Semanas 14 y 15 | Daniela, con los datos de Fabián | 4 y 11 dic | Reporte factual: qué se envió, qué respondieron, fallas e incidentes. Sin conclusiones que no estén respaldadas por datos. |
 | 9 | Manual operativo de la automatización | G6 | Daniela | Semana 15 | v0.9 adelantada el 4-nov (docs/documentacion/MANUAL_OPERATIVO_AUTOMATIZACION.md). Falta la lista de accesos (con OB-07) y lo que deje el piloto. |
-| 10 | Manual para el vendedor | G6 | Daniela y Fabián | Semana 15 | Cómo usar las 13 pantallas, en lenguaje sencillo. Es parte de la transferencia operativa y hoy no existe. |
+| 10 | Manual para el vendedor | G6 | Daniela | Semana 15 | v0.9 adelantada el 4-nov (docs/documentacion/MANUAL_DEL_VENDEDOR.md). Faltan capturas y lo que entre con la rama de Fabián (escalar interesados, seguimiento de cotizaciones). |
 | 11 | Inventario de entregables, pendientes y lecciones aprendidas | Semana 15 | Equipo | 7 al 11 dic | Se arma a partir de esta bitácora. |
 | 12 | Reporte final de Datos | G6 | Daniela | Semana 15 o 16 | Indicadores acumulados T1.1 a T1.3, pendientes y transferencia. La carpeta de documentación lo marca como pendiente. |
 | 13 | Paquete final y transferencia operativa (OB-07) | G6 | Equipo | Semana 16 | Índice de todo lo anterior, quién tiene qué acceso, respaldos y quién mantiene cada parte. |
