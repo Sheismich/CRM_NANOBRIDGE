@@ -394,7 +394,8 @@ export const envios = mysqlTable("envios", {
   destinatario: varchar("destinatario", { length: 512 }),
   estado: mysqlEnum("estado", ["registrado", "enviado", "fallido"]).notNull().default("registrado"),
   proveedorId: varchar("proveedor_id", { length: 255 }),
-  error: varchar("error", { length: 300 })
+  error: varchar("error", { length: 300 }),
+  intentos: tinyint("intentos", { unsigned: true }).notNull().default(1)
 }, (table) => [
   uniqueIndex("uq_envios_execution_id").on(table.executionId),
   uniqueIndex("uq_envios_prospecto_canal_numero").on(table.prospectoId, table.canal, table.numeroContacto),

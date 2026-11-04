@@ -187,12 +187,12 @@ export class RegistroCambiosService {
     const nombres = await this.nombres(filas);
     return filas.map((fila) => {
       const tipo = tipoDeFila(fila.entidad, fila.accion, fila.despues);
-      const quien = nombres.usuarios.get(fila.usuarioId!) ?? `Usuario #${fila.usuarioId}`;
+      const quien = fila.usuarioId === null ? "Sistema" : (nombres.usuarios.get(fila.usuarioId) ?? `Usuario #${fila.usuarioId}`);
       const base: FilaAuditoria = fila;
       return {
         id: fila.id,
         fecha: fila.creadoEn,
-        usuario: { id: fila.usuarioId!, nombre: quien },
+        usuario: { id: fila.usuarioId ?? 0, nombre: quien },
         tipo,
         accion: fila.accion,
         registro: { entidad: fila.entidad, id: fila.entidadId, nombre: nombreDelRegistro(base, nombres) },

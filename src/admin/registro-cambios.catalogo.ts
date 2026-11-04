@@ -68,7 +68,8 @@ function condicionDe(tipo: TipoRegistro): SQL {
 /** Condición SQL del filtro ("todo" = la suma de los cinco), siempre con una persona detrás. */
 export function condicionRegistro(tipo: TipoRegistro | "todo"): SQL {
   const condicion = tipo === "todo" ? or(...TIPOS_REGISTRO.map(condicionDe))! : condicionDe(tipo);
-  return and(isNotNull(auditoria.usuarioId), condicion)!;
+  // Solo acciones de personas, más la pausa automática del freno.
+  return and(or(isNotNull(auditoria.usuarioId), eq(auditoria.entidad, "freno_dominio")), condicion)!;
 }
 
 /** En qué filtro cae una fila (para etiquetarla en la lista "Todo"). */

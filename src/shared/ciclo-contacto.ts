@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
 import { envios, listaSupresion, mediosContacto, prospectos } from "../database/schema.js";
 
@@ -30,13 +30,13 @@ function sumarMeses(fecha: Date, meses: number): Date {
 // (hallazgo de la auditoría del workflow "PT1. ingesta y scoring",
 // 22-sep-2026). El ciclo se corta en el primer hueco de MESES_ENFRIAMIENTO
 // o más: si el último envío ya tiene esa antigüedad, el ciclo está vacío y
-// la persona vuelve a empezar.
+// la persona vuelve a empezar. Un envío fallido no cuenta: nunca llegó.
 export async function cicloActualDePersona(db: DrizzleDb | DrizzleTx, contactoId: number, canal: "correo" | "whatsapp") {
   const rows = await db
     .select({ id: envios.id, enviadoEn: envios.enviadoEn, ventanaEstado: envios.ventanaEstado, ventanaVenceEn: envios.ventanaVenceEn })
     .from(envios)
     .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
-    .where(and(eq(prospectos.contactoId, contactoId), eq(envios.canal, canal)))
+    .where(and(eq(prospectos.contactoId, contactoId), eq(envios.canal, canal), ne(envios.estado, "fallido")))
     .orderBy(desc(envios.enviadoEn), desc(envios.id));
 
   const ciclo: typeof rows = [];

@@ -6,6 +6,7 @@ import { compactConditions } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
+import { cancelarSeguimientosDeOportunidad } from "../shared/seguimiento-cotizacion.js";
 import type { CambiarEtapaInput, CambiarLlevaFacturaInput, CrearOportunidadInput, ListOportunidadesQuery, ReabrirOportunidadInput } from "./dto/oportunidad.schema.js";
 
 function toRow(row: typeof oportunidades.$inferSelect & { etapaClave: string; etapaNombre: string; probabilidad: number }) {
@@ -297,6 +298,7 @@ export class OportunidadesService {
       if (result.affectedRows === 0) {
         throw new HttpError(409, "La oportunidad cambió de estado, vuelve a intentarlo");
       }
+      if (nuevaEtapa.esCierre) await cancelarSeguimientosDeOportunidad(tx, id);
 
       await tx.insert(historialEtapaOportunidad).values({
         oportunidadId: id,
@@ -348,6 +350,7 @@ export class OportunidadesService {
       if (result.affectedRows === 0) {
         throw new HttpError(409, "La oportunidad cambió de estado, vuelve a intentarlo");
       }
+      if (nuevaEtapa.esCierre) await cancelarSeguimientosDeOportunidad(tx, id);
 
       await tx.insert(historialEtapaOportunidad).values({
         oportunidadId: id,

@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
 import { ensureSeedAdmin } from "./support/seed.js";
+import { env } from "../src/config/env.js";
 import { envios, mediosContacto, prospectos } from "../src/database/schema.js";
 
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -139,12 +140,12 @@ describe("envíos: a qué correo salen y qué pasó con ellos", () => {
       expect(await filaDe(id)).toEqual(expect.objectContaining({ estado: "enviado", error: null }));
     });
 
-    it("un reintento que sí salió convierte el fallido en enviado", async () => {
+    it("un enviado tardío no cambia un intento que ya falló", async () => {
       const id = await envioNuevo();
       await confirmar(id, { estado: "fallido", error: "SendGrid respondió 500" });
-      expect(await filaDe(id)).toEqual(expect.objectContaining({ estado: "fallido", error: "SendGrid respondió 500" }));
-      await confirmar(id, { estado: "enviado", proveedor_id: "sg-789" });
-      expect(await filaDe(id)).toEqual(expect.objectContaining({ estado: "enviado", proveedorId: "sg-789", error: null }));
+      const res = await confirmar(id, { estado: "enviado", proveedor_id: "sg-789" });
+      expect(res.body).toEqual({ id, estado: "fallido" });
+      expect(await filaDe(id)).toEqual(expect.objectContaining({ estado: "fallido", error: "SendGrid respondió 500", proveedorId: null }));
     });
 
     it("un envío que no existe da 404 y sin llave no entra", async () => {
@@ -152,13 +153,71 @@ describe("envíos: a qué correo salen y qué pasó con ellos", () => {
       expect((await api().post("/api/v1/automatizacion/envios/1/confirmacion").send({ estado: "enviado" })).status).toBe(401);
     });
 
-    it("un fallido sigue contando para la política: la ventana de espera no se abre de nuevo", async () => {
+    const estadoDe = async (id: number) => (await db.select({ estado: prospectos.estado }).from(prospectos).where(eq(prospectos.id, id)))[0]!.estado;
+    const validar = (id: number) => db.update(prospectos).set({ estado: "validado" }).where(eq(prospectos.id, id));
+
+    it("si falla el primer correo no gasta el contacto: vuelve a la fila y el reintento usa la misma fila", async () => {
       const p = await prospecto(false);
       const id = (await registrar(p.id)).body.id as number;
-      await confirmar(id, { estado: "fallido", error: "x" });
+      await confirmar(id, { estado: "fallido", error: "SendGrid respondió 500" });
+
+      expect(await filaDe(id)).toEqual(expect.objectContaining({ estado: "fallido", ventanaEstado: "cerrada" }));
+      expect(await estadoDe(p.id)).toBe("en_fila");
+
+      await validar(p.id);
       const otro = await registrar(p.id);
-      expect(otro.status).toBe(409);
-      expect(otro.body.message).toMatch(/Ventana de espera/);
+      expect(otro.status).toBe(201);
+      expect(otro.body).toEqual(expect.objectContaining({ id, numero_contacto: 1, numero_en_ciclo: 1 }));
+      expect(await filaDe(id)).toEqual(expect.objectContaining({ estado: "registrado", ventanaEstado: "abierta", error: null, intentos: 2 }));
+      expect(await db.select().from(envios).where(eq(envios.prospectoId, p.id))).toHaveLength(1);
+    });
+
+    it("si falla un recordatorio, PT4 lo vuelve a mandar y no salta al siguiente", async () => {
+      const p = await prospecto(false);
+      const primero = (await registrar(p.id)).body.id as number;
+      await confirmar(primero, { estado: "enviado", proveedor_id: "sg-1" });
+      await db.update(envios).set({ ventanaEstado: "vencida" }).where(eq(envios.id, primero));
+
+      const recordatorio = (await registrar(p.id)).body.id as number;
+      await confirmar(recordatorio, { estado: "fallido", error: "x" });
+      const ventana = await filaDe(primero);
+      expect(ventana.ventanaEstado).toBe("abierta");
+      expect(ventana.ventanaVenceEn.getTime()).toBeGreaterThan(Date.now());
+
+      await db.update(envios).set({ ventanaVenceEn: new Date("2020-01-01T12:00:00Z") }).where(eq(envios.id, primero));
+      const vencidas = await conLlave(api().get("/api/v1/automatizacion/envios/vencidas")).query({ limit: 200 });
+      const fila = (vencidas.body.data as { envio_id: number; numero_en_ciclo: number; es_ultimo_contacto: boolean }[]).find((v) => v.envio_id === primero);
+      expect(fila).toEqual(expect.objectContaining({ numero_en_ciclo: 1, es_ultimo_contacto: false }));
+
+      const otra = await registrar(p.id);
+      expect(otra.body).toEqual(expect.objectContaining({ id: recordatorio, numero_contacto: 2, numero_en_ciclo: 2 }));
+    });
+
+    it("después de 3 intentos ya no se reprograma", async () => {
+      const p = await prospecto(false);
+      const id = (await registrar(p.id)).body.id as number;
+      for (const _ of [1, 2]) {
+        await confirmar(id, { estado: "fallido", error: "x" });
+        expect(await estadoDe(p.id)).toBe("en_fila");
+        await validar(p.id);
+        expect((await registrar(p.id)).status).toBe(201);
+      }
+      expect((await filaDe(id)).intentos).toBe(3);
+      await confirmar(id, { estado: "fallido", error: "x" });
+      expect(await estadoDe(p.id)).toBe("validado");
+    });
+
+    it("un fallido ocupa lugar del tope: si SendGrid rechaza todo, la fila se detiene", async () => {
+      const tope = env.TOPE_DIARIO_CORREOS;
+      try {
+        await confirmar(await envioNuevo(), { estado: "fallido", error: "x" });
+        const [fila] = await db.select({ n: sql<number>`COUNT(*)` }).from(envios).where(sql`${envios.enviadoEn} >= CURRENT_TIMESTAMP - INTERVAL 20 HOUR`);
+        env.TOPE_DIARIO_CORREOS = Number(fila!.n);
+        const nuevo = await prospecto(false);
+        expect((await verificar(nuevo.id)).body).toEqual(expect.objectContaining({ puede_enviar: false, en_espera: true }));
+      } finally {
+        env.TOPE_DIARIO_CORREOS = tope;
+      }
     });
 
     it("un fallido no cuenta como correo enviado, y uno sin confirmar se señala después de una hora", async () => {

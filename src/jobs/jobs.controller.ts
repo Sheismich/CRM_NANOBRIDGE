@@ -1,4 +1,4 @@
-import { Controller, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
+import { Controller, HttpCode, Logger, Param, Post, UseGuards } from "@nestjs/common";
 import { ApiKeyGuard } from "../auth/guards/api-key.guard.js";
 import { AuthService } from "../auth/auth.service.js";
 import { TareasService } from "../tareas/tareas.service.js";
@@ -19,6 +19,7 @@ import { fechaMx } from "../shared/dia-habil.js";
 @Controller("api/v1/automatizacion/jobs")
 @UseGuards(ApiKeyGuard)
 export class JobsController {
+  private readonly logger = new Logger(JobsController.name);
   // Un solo mapa de nombre → trabajo, en vez de un switch.
   private readonly trabajos: Record<string, () => Promise<Record<string, unknown>>>;
 
@@ -36,11 +37,11 @@ export class JobsController {
       // prospecto interesado" que nadie tomó). También reintenta los correos
       // de aviso que no salieron (etapa 2 de las mejoras, 19-oct-2026; va
       // aquí y no en un trabajo propio para no tener que tocar PT5).
-      "sla-tareas": async () => ({
-        procesados: await tareasService.alertarTareasSlaVencidas(),
-        interesados_escalados: await tareasService.escalarInteresadosSinAtender(),
-        cotizaciones_en_seguimiento: await cotizacionesService.crearSeguimientos(),
-        correos_reintentados: await notificacionesService.reintentarCorreos()
+      "sla-tareas": () => this.correrPasos({
+        procesados: () => tareasService.alertarTareasSlaVencidas(),
+        interesados_escalados: () => tareasService.escalarInteresadosSinAtender(),
+        cotizaciones_en_seguimiento: () => cotizacionesService.crearSeguimientos(),
+        correos_reintentados: () => notificacionesService.reintentarCorreos()
       }),
       // Interesados con un día hábil sin atender. También corre en sla-tareas;
       // aparte para que PT5 lo pueda llamar cada hora.
@@ -64,6 +65,23 @@ export class JobsController {
         };
       }
     };
+  }
+
+  // Un paso que truena no detiene a los demás. El error sale al final para que
+  // PT5 lo vea y avise el Error Workflow.
+  private async correrPasos(pasos: Record<string, () => Promise<number>>) {
+    const resultado: Record<string, number> = {};
+    const errores: unknown[] = [];
+    for (const [nombre, paso] of Object.entries(pasos)) {
+      try {
+        resultado[nombre] = await paso();
+      } catch (error) {
+        this.logger.error(`Falló el paso ${nombre}: ${(error as Error).message}`);
+        errores.push(error);
+      }
+    }
+    if (errores.length > 0) throw errores[0];
+    return resultado;
   }
 
   @Post(":nombre")

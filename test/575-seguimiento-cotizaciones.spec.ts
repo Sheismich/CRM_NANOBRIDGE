@@ -107,11 +107,11 @@ describe("seguimiento de cotizaciones", () => {
     expect((await api().patch(`/api/v1/cotizaciones/${aceptada.id}/estado`).set("Cookie", adminCookie).send({ estado: "aceptada" })).status).toBe(200);
     expect((await api().patch(`/api/v1/cotizaciones/${rechazada.id}/estado`).set("Cookie", adminCookie).send({ estado: "rechazada", motivoRechazo: "precio" })).status).toBe(200);
 
-    expect((await tareasDe(aceptada.id))[0]).toEqual(expect.objectContaining({ estado: "cancelada", resultado: "Cancelada: la cotización ya tuvo respuesta" }));
+    expect((await tareasDe(aceptada.id))[0]).toEqual(expect.objectContaining({ estado: "cancelada", resultado: "Cancelada: la cotización ya no sigue abierta" }));
     expect((await tareasDe(rechazada.id))[0]!.estado).toBe("cancelada");
   });
 
-  it("una versión nueva cancela la de la anterior; pasar a vencida no", async () => {
+  it("una versión nueva cancela la de la anterior, y vencer también", async () => {
     const versionada = await enviadaHaceTiempo();
     const vencida = await enviadaHaceTiempo();
     await correr();
@@ -124,7 +124,29 @@ describe("seguimiento de cotizaciones", () => {
     expect((await tareasDe(versionada.id))[0]!.estado).toBe("cancelada");
 
     expect((await api().patch(`/api/v1/cotizaciones/${vencida.id}/estado`).set("Cookie", adminCookie).send({ estado: "vencida" })).status).toBe(200);
-    expect((await tareasDe(vencida.id))[0]!.estado).toBe("pendiente");
+    expect((await tareasDe(vencida.id))[0]!.estado).toBe("cancelada");
+  });
+
+  it("el trabajo que vence cotizaciones también cancela su tarea", async () => {
+    const c = await enviadaHaceTiempo();
+    await correr();
+    await db.update(cotizaciones).set({ fechaEsperadaCierre: haceDias(2) }).where(eq(cotizaciones.id, c.id));
+    await app.get(CotizacionesService).vencerCotizacionesPasadas();
+    expect((await tareasDe(c.id))[0]!.estado).toBe("cancelada");
+  });
+
+  it("cerrar la oportunidad cancela las tareas de todas sus cotizaciones", async () => {
+    const perdida = await enviadaHaceTiempo();
+    await correr();
+    const res = await api().patch(`/api/v1/oportunidades/${perdida.oportunidadId}/etapa`).set("Cookie", adminCookie).send({ etapaClave: "perdida", motivoPerdidaClave: "otro", motivoPerdidaDetalle: "Ya no sigue" });
+    expect(res.status).toBe(200);
+    expect((await tareasDe(perdida.id))[0]!.estado).toBe("cancelada");
+
+    const ganadora = await enviadaHaceTiempo();
+    const [hermana] = await db.insert(cotizaciones).values({ empresaId: ganadora.empresaId, oportunidadId: ganadora.oportunidadId, subtotal: "1000.00", total: "1000.00", fechaEmision: haceDias(20), fechaEnvio: haceDias(14), estado: "enviada", creadoPor: adminId });
+    await correr();
+    expect((await api().patch(`/api/v1/cotizaciones/${ganadora.id}/estado`).set("Cookie", adminCookie).send({ estado: "aceptada" })).status).toBe(200);
+    expect((await tareasDe(hermana.insertId))[0]!.estado).toBe("cancelada");
   });
 
   it("corre dentro del trabajo diario", async () => {

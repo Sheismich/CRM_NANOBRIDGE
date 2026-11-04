@@ -27,15 +27,18 @@ import { correoDeEnvio, correoParaEnvio } from "../plantillas/plantillas.correo.
 import { EVENTOS_BAJA_DE_PERSONA } from "./dto/automatizacion.schema.js";
 import type { CampanaActivaQuery, ConfirmacionEnvioInput, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, RespuestaSugeridaInput, ScoringInput, TomarDeFilaInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
+const MENSAJE_SUPRIMIDO = "El contacto está en la lista de supresión";
+const MENSAJE_SIN_CORREO = "El contacto no tiene un correo utilizable";
+// Veces que se intenta un mismo correo. Después ya no se reprograma: cada falla
+// ya avisó por el Error Workflow.
+const MAX_INTENTOS_ENVIO = 3;
+
 // tipo fijo de incidencias.tipo para todo lo que reporta el Error Workflow
 // global de n8n (B4) — junto con execution_id es la pareja que usa el
 // UNIQUE uq_incidencias_execution_tipo (004_scoring_e_incidencias.sql)
 // para que registrarErrorWorkflow() sea idempotente.
 // Exportado: la bitácora del día (reportes/reporte-dia.service.ts) distingue
 // estas fallas (un workflow de n8n) de las de un aviso de la API.
-const MENSAJE_SUPRIMIDO = "El contacto está en la lista de supresión";
-const MENSAJE_SIN_CORREO = "El contacto no tiene un correo utilizable";
-
 export const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
 
 // POST /automatizacion/envios para un prospecto que no está validado.
@@ -678,12 +681,13 @@ export class AutomatizacionService {
     return { ...resultado, en_espera: false };
   }
 
-  // Correos registrados hoy (día de México), iniciales y recordatorios.
+  // Correos registrados hoy (día de México), iniciales y recordatorios. Los
+  // fallidos cuentan: son intentos, y si SendGrid rechaza todo un día la fila
+  // debe detenerse en el tope en vez de seguir sacando prospectos.
   private async correosEnviadosHoy(db: DrizzleDb | DrizzleTx) {
     const hoy = fechaMx(new Date());
     const [fila] = await db.select({ n: sql<number>`COUNT(*)` }).from(envios).where(and(
       eq(envios.canal, "correo"),
-      ne(envios.estado, "fallido"),
       gte(envios.enviadoEn, sql`${inicioDelDiaMxSql(hoy)}`),
       lt(envios.enviadoEn, sql`${inicioDelDiaMxSql(diaSiguiente(hoy))}`)
     ));
@@ -813,26 +817,28 @@ export class AutomatizacionService {
           }
 
           const [ultimo] = await tx
-            .select({ numeroContacto: envios.numeroContacto })
+            .select({ id: envios.id, numeroContacto: envios.numeroContacto, estado: envios.estado, intentos: envios.intentos })
             .from(envios)
             .where(and(eq(envios.prospectoId, input.prospecto_id), eq(envios.canal, input.canal)))
             .orderBy(desc(envios.numeroContacto))
             .limit(1);
 
-          const numeroContacto = (ultimo?.numeroContacto ?? 0) + 1;
           const { plantillaId, correo } = await correoParaEnvio(tx, input.prospecto_id, ciclo.length + 1);
+          const datos = { ventanaVenceEn, executionId: input.execution_id, plantillaId, asunto: correo.asunto.slice(0, 200), destinatario: destino.valor };
 
-          const [result] = await tx.insert(envios).values({
-            prospectoId: input.prospecto_id,
-            canal: input.canal,
-            numeroContacto,
-            ventanaVenceEn,
-            executionId: input.execution_id,
-            plantillaId,
-            asunto: correo.asunto.slice(0, 200),
-            destinatario: destino.valor
-          });
-          return { id: result.insertId, numero_contacto: numeroContacto, numero_en_ciclo: ciclo.length + 1, ventana_vence_en: ventanaVenceEn, reply_to: firmarReplyTo(result.insertId), destinatario: destino.valor, ya_existia: false as const, correo };
+          // Un reintento usa la fila que falló: numero_contacto no se gasta.
+          let envioId: number;
+          let numeroContacto: number;
+          if (ultimo?.estado === "fallido") {
+            envioId = ultimo.id;
+            numeroContacto = ultimo.numeroContacto;
+            await tx.update(envios).set({ ...datos, ventanaEstado: "abierta", enviadoEn: sql`CURRENT_TIMESTAMP`, estado: "registrado", error: null, intentos: ultimo.intentos + 1 }).where(eq(envios.id, envioId));
+          } else {
+            numeroContacto = (ultimo?.numeroContacto ?? 0) + 1;
+            const [result] = await tx.insert(envios).values({ ...datos, prospectoId: input.prospecto_id, canal: input.canal, numeroContacto });
+            envioId = result.insertId;
+          }
+          return { id: envioId, numero_contacto: numeroContacto, numero_en_ciclo: ciclo.length + 1, ventana_vence_en: ventanaVenceEn, reply_to: firmarReplyTo(envioId), destinatario: destino.valor, ya_existia: false as const, correo };
         });
       } catch (error) {
         if (error instanceof HttpError) throw error;
@@ -855,18 +861,45 @@ export class AutomatizacionService {
   }
 
   // --- Confirmación de envío -----------------------------------------------------------
-  // n8n registra antes de mandar, así que hasta aquí no se sabe si salió.
-  // Se puede repetir sin duplicar nada. Un "enviado" gana siempre: un fallido
-  // tardío no lo pisa, y un reintento que sí salió corrige a un fallido.
+  // n8n registra antes de mandar, así que hasta aquí no se sabe si salió. Solo
+  // cuenta la primera confirmación de cada intento: repetirla no cambia nada.
+  // Un fallido no gasta el contacto: se cierra su ventana y se reprograma.
   async confirmarEnvio(id: number, input: ConfirmacionEnvioInput) {
-    if (input.estado === "enviado") {
-      await this.db.update(envios).set({ estado: "enviado", error: null, ...(input.proveedor_id ? { proveedorId: input.proveedor_id } : {}) }).where(eq(envios.id, id));
-    } else {
-      await this.db.update(envios).set({ estado: "fallido", error: input.error ?? null }).where(and(eq(envios.id, id), ne(envios.estado, "enviado")));
+    return this.db.transaction(async (tx) => {
+      const [envio] = await tx
+        .select({ estado: envios.estado, prospectoId: envios.prospectoId, canal: envios.canal, intentos: envios.intentos })
+        .from(envios)
+        .where(eq(envios.id, id))
+        .limit(1)
+        .for("update");
+      if (!envio) throw new HttpError(404, "Envío no encontrado");
+      if (envio.estado !== "registrado") return { id, estado: envio.estado };
+
+      if (input.estado === "enviado") {
+        await tx.update(envios).set({ estado: "enviado", proveedorId: input.proveedor_id ?? null }).where(eq(envios.id, id));
+        return { id, estado: "enviado" as const };
+      }
+
+      await tx.update(envios).set({ estado: "fallido", error: input.error ?? null, ventanaEstado: "cerrada" }).where(eq(envios.id, id));
+      if (envio.intentos < MAX_INTENTOS_ENVIO) await this.reprogramarEnvio(tx, envio.prospectoId, envio.canal);
+      return { id, estado: "fallido" as const };
+    });
+  }
+
+  // Si la persona ya tenía un envío bueno, su ventana se vuelve a abrir y PT4
+  // manda ese recordatorio el siguiente día hábil. Si era el primer correo,
+  // regresa a la fila; PT1 la vuelve a tomar en HORAS_PARA_RETOMAR_DE_FILA.
+  private async reprogramarEnvio(tx: DrizzleTx, prospectoId: number, canal: "correo" | "whatsapp") {
+    const [prospecto] = await tx.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
+    const [anterior] = await cicloActualDePersona(tx, prospecto!.contactoId, canal);
+    if (anterior) {
+      await tx.update(envios).set({ ventanaEstado: "abierta", ventanaVenceEn: sumarDiasHabilesMx(new Date(), 1) }).where(eq(envios.id, anterior.id));
+      return;
     }
-    const [envio] = await this.db.select({ estado: envios.estado }).from(envios).where(eq(envios.id, id)).limit(1);
-    if (!envio) throw new HttpError(404, "Envío no encontrado");
-    return { id, estado: envio.estado };
+    const [result] = await tx.update(prospectos).set({ estado: "en_fila" }).where(and(eq(prospectos.id, prospectoId), eq(prospectos.estado, "validado")));
+    if (result.affectedRows > 0) {
+      await tx.insert(auditoria).values({ usuarioId: null, entidad: "prospecto", entidadId: prospectoId, accion: "volver_a_fila", antes: { estado: "validado" }, despues: { estado: "en_fila", motivo: "El primer correo no salió" } });
+    }
   }
 
   // --- Ventanas vencidas ---------------------------------------------------------------

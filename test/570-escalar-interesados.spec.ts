@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
 import { and, eq, inArray } from "drizzle-orm";
@@ -8,6 +8,7 @@ import { closeTestDb, testDb } from "./support/db.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { contactos, correosRespuesta, empresas, envios, notificaciones, prospectos, respuestas, tareas } from "../src/database/schema.js";
 import { TITULO_TAREA_INTERESADO, TareasService } from "../src/tareas/tareas.service.js";
+import { NotificacionesService } from "../src/notificaciones/notificaciones.service.js";
 
 const API_KEY = "test_crm_callback_api_key_0001";
 const HACE_UNA_SEMANA = () => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -89,6 +90,16 @@ describe("escalar interesados sin atender", () => {
     const id = await tarea({ prospectoId: prospecto.insertId });
     await escalar();
     expect((await filaDe(id)).escaladoEn).toBeNull();
+  });
+
+  it("si un paso del trabajo diario truena, los demás corren y el error se ve al final", async () => {
+    const falla = vi.spyOn(app.get(TareasService), "alertarTareasSlaVencidas").mockRejectedValueOnce(new Error("falla simulada"));
+    const correos = vi.spyOn(app.get(NotificacionesService), "reintentarCorreos");
+    const res = await api().post("/api/v1/automatizacion/jobs/sla-tareas").set("X-API-Key", API_KEY);
+    expect(res.status).toBe(500);
+    expect(correos).toHaveBeenCalledTimes(1);
+    falla.mockRestore();
+    correos.mockRestore();
   });
 
   it("corre como trabajo propio y dentro del trabajo diario", async () => {

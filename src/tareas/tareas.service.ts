@@ -906,12 +906,6 @@ export class TareasService {
     return prospecto;
   }
 
-  // "Alertas de tareas SLA vencidas" (PLAN_API_DEFINITIVO.md, "Jobs
-  // internos"; ya anticipado en el comentario de createFromAutomation
-  // arriba: "alerta con SLA para el Equipo CRM"). alertado_en evita avisar
-  // dos veces la misma tarea. fecha_limite es NULLABLE -- una tarea sin fecha límite nunca puede "vencer", y
-  // lt(tareas.fechaLimite, ...) ya la excluye sola (NULL < X es falso en
-  // SQL, no hace falta un isNotNull aparte). Lo dispara PT5 cada día.
   // Un interesado que lleva un día hábil sin que nadie lo tome: sube a urgente y
   // avisa a supervisores. No le quita la tarea a quien la tiene. Si un vendedor
   // ya le contestó al prospecto, está atendido aunque la tarea siga abierta.
@@ -926,7 +920,10 @@ export class TareasService {
         eq(tareas.titulo, TITULO_TAREA_INTERESADO),
         eq(tareas.estado, "pendiente"),
         isNull(tareas.escaladoEn),
-        lt(tareas.creadoEn, sql`CURRENT_TIMESTAMP - INTERVAL 1 DAY`)
+        lt(tareas.creadoEn, sql`CURRENT_TIMESTAMP - INTERVAL 1 DAY`),
+        // SQL a mano: con una sola tabla, Drizzle quita el nombre de la tabla de
+        // las columnas y las dos de abajo se leerían como la misma.
+        sql`NOT EXISTS (SELECT 1 FROM correos_respuesta c WHERE c.prospecto_id = tareas.prospecto_id AND c.estado = 'enviado')`
       ))
       .orderBy(tareas.creadoEn)
       .limit(ALERTAS_BATCH_SIZE);
@@ -934,7 +931,6 @@ export class TareasService {
     let escaladas = 0;
     for (const tarea of candidatas) {
       if (sumarDiasHabilesMx(tarea.creadoEn, 1) > ahora) continue;
-      if (tarea.prospectoId !== null && (await vendedorDeLaConversacion(this.db, tarea.prospectoId)) !== null) continue;
 
       const escalada = await this.db.transaction(async (tx) => {
         const [result] = await tx.update(tareas).set({ prioridad: "urgente", escaladoEn: sql`CURRENT_TIMESTAMP` }).where(and(eq(tareas.id, tarea.id), eq(tareas.estado, "pendiente"), isNull(tareas.escaladoEn)));
@@ -960,6 +956,12 @@ export class TareasService {
     return escaladas;
   }
 
+  // "Alertas de tareas SLA vencidas" (PLAN_API_DEFINITIVO.md, "Jobs
+  // internos"; ya anticipado en el comentario de createFromAutomation
+  // arriba: "alerta con SLA para el Equipo CRM"). alertado_en evita avisar
+  // dos veces la misma tarea. fecha_limite es NULLABLE -- una tarea sin fecha límite nunca puede "vencer", y
+  // lt(tareas.fechaLimite, ...) ya la excluye sola (NULL < X es falso en
+  // SQL, no hace falta un isNotNull aparte). Lo dispara PT5 cada día.
   async alertarTareasSlaVencidas() {
     const candidatas = await this.db
       .select({ id: tareas.id, tipo: tareas.tipo, titulo: tareas.titulo, empresaId: tareas.empresaId, responsableId: tareas.responsableId, fechaLimite: tareas.fechaLimite })

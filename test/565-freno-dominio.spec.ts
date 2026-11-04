@@ -92,6 +92,27 @@ describe("freno automático del dominio", () => {
     expect(freno.motivo).toMatch(/quejas/);
   });
 
+  it("dos quejas al mismo tiempo se cuentan bien y avisan una sola vez", async () => {
+    await limitesA(2, 50);
+    const antes = await db.select({ id: notificaciones.id }).from(notificaciones).where(eq(notificaciones.tipo, "freno_dominio"));
+    await Promise.all([supresion("spamreport"), supresion("spamreport")]);
+
+    expect((await salud()).pausado).toBe(true);
+    const vistas = new Set(antes.map((a) => a.id));
+    const despues = await db.select({ id: notificaciones.id, usuarioId: notificaciones.usuarioId }).from(notificaciones).where(eq(notificaciones.tipo, "freno_dominio"));
+    const nuevas = despues.filter((d) => !vistas.has(d.id));
+    expect(nuevas.length).toBeGreaterThan(0);
+    expect(new Set(nuevas.map((n) => n.usuarioId)).size).toBe(nuevas.length);
+  });
+
+  it("la pausa automática sale en el Registro de cambios, a nombre del sistema", async () => {
+    await limitesA(50, 1);
+    await supresion("bounce");
+    const res = await api().get("/api/v1/admin/registro-cambios").set("Cookie", adminCookie).query({ entidad: "freno_dominio", limit: 5 });
+    expect(res.status).toBe(200);
+    expect(res.body.data[0]).toEqual(expect.objectContaining({ accion: "pausar", usuario: { id: 0, nombre: "Sistema" }, texto: expect.stringMatching(/^Se pausaron los envíos/) }));
+  });
+
   it("una supresión sin evento (una baja a mano) no cuenta", async () => {
     await limitesA(1, 1);
     await supresion(undefined);

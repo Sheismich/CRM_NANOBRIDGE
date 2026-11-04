@@ -49,8 +49,11 @@ async function guardar(tx: DrizzleTx, valor: Freno) {
     .onDuplicateKeyUpdate({ set: { valor } });
 }
 
-// Corre dentro de la transacción que registró la supresión.
+// Corre dentro de la transacción que registró la supresión. El bloqueo forma a
+// dos eventos simultáneos: el segundo cuenta después de que el primero termine,
+// así no se quedan cortos los dos ni avisan dos veces.
 export async function evaluarFreno(tx: DrizzleTx) {
+  await tx.select({ clave: parametrosAutomatizacion.clave }).from(parametrosAutomatizacion).where(eq(parametrosAutomatizacion.clave, CLAVE_FRENO_DOMINIO)).for("update");
   const freno = await leerFreno(tx);
   if (freno.pausado) return;
 

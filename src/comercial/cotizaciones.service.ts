@@ -6,6 +6,7 @@ import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
 import { diasEntreFechas, fechaMx, finSiguienteDiaHabilMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
+import { cancelarSeguimiento, cancelarSeguimientosDeOportunidad } from "../shared/seguimiento-cotizacion.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
 import { enlaceTarea, nombreEmpresa, notificar, responsableOEquipo } from "../notificaciones/notificar.js";
 import { MOTIVOS_RECHAZO_COTIZACION } from "../shared/motivos-rechazo-cotizacion.js";
@@ -23,7 +24,6 @@ export const CODIGO_YA_HAY_COTIZACION_ACEPTADA = "YA_HAY_COTIZACION_ACEPTADA";
 export const CODIGO_OPORTUNIDAD_CERRADA = "OPORTUNIDAD_CERRADA";
 export const TITULO_SEGUIMIENTO_COTIZACION = "Dar seguimiento a cotización";
 const DIAS_HABILES_PARA_SEGUIMIENTO = 5;
-const RESULTADO_SEGUIMIENTO_CANCELADO = "Cancelada: la cotización ya tuvo respuesta";
 
 // "$1,500.00" para el comentario del historial cuando una cotización gana.
 const PESOS = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -231,7 +231,7 @@ export class CotizacionesService {
       if (marcarObsoleta.affectedRows === 0) {
         throw new HttpError(409, "La cotización ya fue versionada o marcada obsoleta por otra solicitud");
       }
-      await this.cancelarSeguimiento(tx, actual.id);
+      await cancelarSeguimiento(tx, actual.id);
 
       const [result] = await tx.insert(cotizaciones).values({
         empresaId: actual.empresaId,
@@ -396,17 +396,6 @@ export class CotizacionesService {
     return MOTIVOS_RECHAZO_COTIZACION;
   }
 
-  // Trabajo diario (corre con limpiar-borradores, jobs.controller.ts): las
-  // enviadas cuya fecha de cierre ya pasó (día de México) pasan a vencida.
-  // Sin fecha de cierre nunca vence; la del día de hoy todavía no. Cada una
-  // con su UPDATE ... AND estado = 'enviada' (si alguien la aceptó en ese
-  // momento, gana la persona) y su fila de auditoría sin usuario.
-  // Idempotente: lo ya vencido no se vuelve a tocar.
-  private async cancelarSeguimiento(tx: DrizzleTx, cotizacionId: number) {
-    await tx.update(tareas).set({ estado: "cancelada", resultado: RESULTADO_SEGUIMIENTO_CANCELADO, cerradaEn: sql`CURRENT_TIMESTAMP` })
-      .where(and(eq(tareas.cotizacionId, cotizacionId), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
-  }
-
   // Cotizaciones enviadas hace 5 días hábiles sin respuesta: una tarea para el
   // responsable de la oportunidad (o para el equipo, si ya no está). Una sola
   // por versión: el UNIQUE de tareas.cotizacion_id cubre dos corridas a la vez.
@@ -464,6 +453,12 @@ export class CotizacionesService {
     return creadas;
   }
 
+  // Trabajo diario (corre con limpiar-borradores, jobs.controller.ts): las
+  // enviadas cuya fecha de cierre ya pasó (día de México) pasan a vencida.
+  // Sin fecha de cierre nunca vence; la del día de hoy todavía no. Cada una
+  // con su UPDATE ... AND estado = 'enviada' (si alguien la aceptó en ese
+  // momento, gana la persona) y su fila de auditoría sin usuario.
+  // Idempotente: lo ya vencido no se vuelve a tocar.
   async vencerCotizacionesPasadas() {
     const hoy = fechaMx(new Date());
     const candidatas = await this.db
@@ -475,6 +470,7 @@ export class CotizacionesService {
       await this.db.transaction(async (tx) => {
         const [result] = await tx.update(cotizaciones).set({ estado: "vencida" }).where(and(eq(cotizaciones.id, c.id), eq(cotizaciones.estado, "enviada")));
         if (result.affectedRows === 0) return;
+        await cancelarSeguimiento(tx, c.id);
         await tx.insert(auditoria).values({
           usuarioId: null,
           entidad: "cotizacion",
@@ -593,7 +589,7 @@ export class CotizacionesService {
           : { estado: input.estado }
       });
 
-      if (input.estado === "aceptada" || input.estado === "rechazada") await this.cancelarSeguimiento(tx, id);
+      if (input.estado !== "enviada") await cancelarSeguimiento(tx, id);
       if (input.estado === "aceptada") await this.ganarOportunidad(tx, user, cotizacion);
     });
 
@@ -618,6 +614,7 @@ export class CotizacionesService {
       .set({ etapaId: ganada.id, cerrada: true, valorEstimado: cotizacion.total, motivoPerdidaId: null, motivoPerdidaDetalle: null })
       .where(and(eq(oportunidades.id, cotizacion.oportunidadId), eq(oportunidades.cerrada, false)));
     if (result.affectedRows === 0) throw new HttpError(409, "La oportunidad ya está cerrada", CODIGO_OPORTUNIDAD_CERRADA);
+    await cancelarSeguimientosDeOportunidad(tx, cotizacion.oportunidadId);
 
     const estimado = op.valorEstimado == null ? "sin estimado" : `estimado anterior ${PESOS.format(Number(op.valorEstimado))}`;
     await tx.insert(historialEtapaOportunidad).values({
