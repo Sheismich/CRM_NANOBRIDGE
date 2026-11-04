@@ -2,7 +2,7 @@
 
 **Entregable:** reporte de controles de la base v1 (OB-02), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026). **Dueño:** T1 · **Revisión:** T2 y Dirección General.
-**Versión:** 1.0 · 28 de octubre de 2026 · base en la migración `037_borrador_empresa_existente.sql`.
+**Versión:** 1.1 · 4 de noviembre de 2026 (F-05 deja de contar como activo) · la 1.0 es del 28 de octubre, base en la migración `037_borrador_empresa_existente.sql`.
 
 Este reporte lista los controles que protegen la base de datos: dónde vive cada uno y con qué se comprueba que funciona.
 Complementa al [diccionario de datos](DICCIONARIO_DE_DATOS.md) (qué es cada dato y sus reglas) y a la
@@ -19,8 +19,8 @@ Complementa al [diccionario de datos](DICCIONARIO_DE_DATOS.md) (qué es cada dat
 | C. Duplicados | 4 | 4 |
 | D. Protección de las personas contactadas | 7 | 7 |
 | E. Acceso y trazabilidad | 8 | 8 |
-| F. Operación | 6 | 6 |
-| **Total** | **37** | **37 (100 %)** |
+| F. Operación | 6 | 5 |
+| **Total** | **37** | **36 (97 %)** |
 
 Cómo se comprueba cada control:
 - **Prueba automática:** archivo de `test/` que corre en cada cambio. Hoy son 101 archivos y 808 pruebas de la API, más 32 del front.
@@ -93,7 +93,7 @@ Además hay 5 controles **propuestos que no entran en este corte** (§G). Se lis
 | F-02 | **Respaldo diario y recuperación a un minuto exacto** (7 días) | Cloud SQL | Prueba manual documentada: restauración probada el 27-oct-2026 (RUNBOOK §9) |
 | F-03 | **Aviso si la API se cae** (revisión cada 5 minutos, correo a T1 y T2) | Cloud Monitoring | Prueba manual documentada: alerta de prueba disparada el 28-oct-2026 (RUNBOOK §11) |
 | F-04 | **Auditoría periódica de calidad de datos** | `docs/documentacion/auditar-datos.mjs` | Primera corrida el 28-oct-2026 ([reporte](auditorias/calidad-2026-10-28.md)) |
-| F-05 | **Avisos a n8n que no se pierden:** bandeja de salida con reintentos (5 s, 30 s, 120 s) y procesos fallidos para revisar | `src/outbox/` | `50-outbox-dispatcher-retry`, `285-outbox-no-se-atora`, `340-outbox-carreras` |
+| F-05 | ~~**Avisos a n8n que no se pierden:** bandeja de salida con reintentos (5 s, 30 s, 120 s) y procesos fallidos para revisar~~ **No opera y se retira (4-nov-2026):** n8n nunca tuvo quién recibiera esos avisos (`N8N_WEBHOOK_URL` sin configurar) y se quedaban esperando. Los avisos que sí importan llegan por la campanita y el correo del CRM; los procesos fallidos de n8n siguen | `src/outbox/` (se retira en la rama de T2) | — |
 | F-06 | **Diccionario al día:** se regenera de la base real después de cada migración | `docs/documentacion/generar-diccionario.mjs` | Generado el 28-oct-2026: 393 campos, 0 sin descripción |
 
 ## G. Controles propuestos (fuera de este corte)
