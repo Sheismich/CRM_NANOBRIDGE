@@ -55,7 +55,7 @@ function ProcesosFallidos() {
       <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
         <div>
           <SectionTitle>Procesos fallidos</SectionTitle>
-          <div className="-mt-2.5 text-xs text-ink-3">Errores reportados por n8n o por el envío de eventos. Cambiar el estado solo lleva el seguimiento; no reintenta nada.</div>
+          <div className="-mt-2.5 text-xs text-ink-3">Errores reportados por n8n. Cambiar el estado solo lleva el seguimiento; no reintenta nada.</div>
         </div>
         <select aria-label="Estado del proceso" className={`${inputBaseClass} w-auto`} value={estado} onChange={(e) => {
               setPage(1);

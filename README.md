@@ -54,7 +54,7 @@ la regla "no dejar el sistema sin al menos un administrador activo"
 (`usuarios.service.ts`) incluyendo el arreglo de interbloqueo por orden fijo
 de locks, `RateLimitGuard` en `/auth/login`/`/auth/bootstrap` (incluida una
 prueba con peticiones concurrentes reales, no solo secuenciales), el
-backoff de reintentos del despachador outbox (5s/30s/120s), la "promoción"
+la "promoción"
 de idempotencia en `registrarErrorWorkflow`, empresas/contactos y
 `/contactos` (scoping por dueño para agentes, cascada al desactivar una
 empresa, preservación de `no_contactar`, 409 por correo duplicado),
@@ -77,7 +77,7 @@ local de storage, 404 por tipo inexistente, herencia del tipo al
 versionar), los dos jobs de alerta (documentos pendientes de revisión,
 tareas con SLA vencido -- idempotencia diaria y el caso de archivar/
 reactivar un documento), la auditoría de reintentos manuales
-(`eventos_pendientes` y `procesos_fallidos`) y `/reportes/desempeno-por-agente`
+(`procesos_fallidos`) y `/reportes/desempeno-por-agente`
 (agrupado por agente en una sola consulta por métrica, agentes sin
 actividad en el rango incluidos en ceros, filtro por `responsableId` y por
 rango de fechas, exportación CSV). Es una base incremental, no cobertura
@@ -118,11 +118,8 @@ src/
     tareas.module.ts, tareas.controller.ts, tareas.service.ts   GET/POST /tareas, GET /tareas/:id, PATCH /tareas/:id/cerrar
     cola-clasificacion.controller.ts   GET /cola-clasificacion, POST /cola-clasificacion/:id/clasificar
     dto/tarea.schema.ts                esquemas Zod de entrada
-  outbox/
-    outbox.module.ts, outbox.service.ts            enqueue(tx, evento) — inserta en eventos_pendientes dentro de la misma transacción
-    outbox-dispatcher.service.ts                   despachador @Interval(): entrega a n8n, reintentos 5s/30s/120s, procesos_fallidos al agotarlos
-    eventos-pendientes.controller.ts               GET/POST /eventos-pendientes (solo administrador)
-    procesos-fallidos.controller.ts                GET /procesos-fallidos, PATCH /:id/estado (solo administrador)
+  procesos-fallidos/
+    procesos-fallidos.service.ts, .controller.ts   GET /procesos-fallidos, PATCH /:id/estado (solo administrador)
 ```
 
 ## Capa de datos: Drizzle sobre el mismo pool de mysql2
@@ -152,15 +149,10 @@ Siguiente prioridad del backlog (`MATRICES_Y_BACKLOG_DEFINITIVO.md`, "Prioridad 
   - `baja`: el prospecto pasa a `baja` y **todos** los medios del contacto (correo, teléfono y WhatsApp) entran a `lista_supresion`, sin depender de n8n. Solo ese contacto, no los demás de la empresa. Si no tiene ninguno, se crea una incidencia `baja_sin_medios`.
   - `invalido`: el prospecto pasa a `descartado`.
   - `reagendar`: exige `fechaSeguimiento` (futura) y crea una tarea de seguimiento para esa fecha, asignada a quien clasificó; el estado del prospecto no cambia.
-  - El evento `prospecto_clasificado` sigue saliendo hacia n8n, solo como aviso, y solo en la clasificación manual. Cuando clasifica n8n no se encola: n8n ya lo sabe.
   - **Nadie pisa una decisión ya tomada.** Si la respuesta ya tiene clasificación (por la IA o por otra persona) o la tarea ya se cerró, responde 409 con `code: "RESPUESTA_YA_CLASIFICADA"`, para que la pantalla muestre un mensaje claro sin comparar el texto. La única excepción es una respuesta "ambigua": resolverla es justo el trabajo de la cola. Cuando n8n clasifica directo, se cierran solas las tareas de clasificación abiertas de esa respuesta.
   - **Sugerencia de la IA** (modo sugerencia, 30-sep-2026): `respuesta.clasificacion_sugerida` muestra lo que propuso la IA (`POST /automatizacion/respuestas/sugerencia`, migración `023_sugerencia_clasificacion.sql`) o, si no hay propuesta, lo que decidió n8n. Además vienen `confianza_sugerida` (0-100) y `motivo_sugerencia`.
   - **Quién clasifica:** administradores y supervisores (decisión del 24-sep-2026). Un agente recibe 403 tanto al ver la cola (`GET`) como al clasificar. Las tareas de clasificación solo se resuelven clasificándolas: `PATCH /tareas/:id/cerrar` las rechaza con 409, porque cerrarlas por ahí no aplicaría la decisión.
-- **Outbox** (`OutboxService.enqueue`): cerrar una tarea o resolver una clasificación manual inserta la fila en `eventos_pendientes` **dentro de la misma transacción** que el cambio de estado — si la transacción falla, el evento tampoco se crea, así el patrón es real y no solo un `try { await fetch() }` suelto en el controlador.
-- **Despachador** (`OutboxDispatcherService`, `@Interval` de `@nestjs/schedule`, `OUTBOX_DISPATCH_INTERVAL_MS`): entrega los eventos pendientes a `N8N_WEBHOOK_URL` con el header `X-API-Key: WEBHOOK_ENTRADA_API_KEY` (mismo esquema que ya definía `PLAN_API_DEFINITIVO.md` para CRM → n8n). Reintentos idempotentes: 3 intentos con backoff 5 s / 30 s / 120 s (`MATRICES_Y_BACKLOG_DEFINITIVO.md`); al agotarlos, el evento queda `fallido` y se crea una fila en `procesos_fallidos`.
-- **Pantalla de eventos pendientes** (`GET /api/v1/eventos-pendientes`, `POST /:id/reintentar`, `POST /despachar`, solo `administrador`): "los eventos fallidos son visibles y reintentables desde la pantalla de eventos pendientes" tal cual pide el plan. `/despachar` fuerza una corrida del despachador sin esperar el intervalo.
-
-Probado de extremo a extremo con un receptor HTTP de prueba haciendo de n8n: cierre de tarea → evento entregado y marcado `enviado`; clasificación de prospecto → mismo flujo con `entidad_tipo=prospecto`; receptor caído → 3 reintentos con el backoff exacto (5 s/30 s/120 s), evento marcado `fallido` y fila creada en `procesos_fallidos`; `POST /reintentar` con el receptor de vuelta → el evento se reenvía y queda `enviado`. También roles: un agente que cierra sesión ve la bandeja vacía si las tareas son de otro responsable, recibe 404 al pedir una tarea ajena por id, y 403 en `/eventos-pendientes`.
+El outbox hacia n8n se retiró en nov-2026: n8n nunca tuvo quién recibiera esos eventos. Los avisos van por `notificar()`. La tabla `eventos_pendientes` se conserva sin escrituras.
 
 ## Campañas (1-oct-2026)
 
@@ -222,7 +214,7 @@ Esta sección estaba desactualizada: automatización (los 20 endpoints para n8n,
 - CRUD independiente de `/contactos` ✅ ya existe (18-sep-2026): `GET/POST /api/v1/contactos` y `GET/PATCH/DELETE /api/v1/contactos/:id`, para buscar/abrir un contacto sin conocer antes su empresa (filtros `empresaId` y `q` por nombre, paginado). Las rutas anidadas `/empresas/:id/contactos/*` se mantienen y comparten la misma lógica: las escrituras de `/contactos` delegan en `EmpresasService`, así que validaciones, 409 por medio duplicado, `no_contactar` y auditoría son las mismas. Único cambio de contrato: aquí cada contacto trae sus medios anidados en `medios: [...]` (una fila por contacto), no una fila por medio como devuelve `/empresas/:id`. `POST` recibe `empresaId` en el cuerpo. Un agente solo ve/edita contactos de sus empresas (lo ajeno responde 404).
 - `GET /api/v1/catalogos` (sesión, CRM) ✅ ya existe (17-sep-2026) — expone los mismos catálogos ENUM que `/automatizacion/catalogos` (tamaño de empresa, tipo/estado de medio de contacto, prioridad de prospecto, tipo/prioridad de tarea, etc.) sin requerir `X-API-Key`. El de etapa del embudo/motivo de pérdida sigue aparte, en `/api/v1/oportunidades/catalogos` (propio de ese módulo).
 - `catalogo_tipo_documento` ✅ ya existe (17-sep-2026, migración `018_catalogo_tipo_documento.sql`) — seis tipos semilla (contrato, identificación oficial, comprobante de domicilio, acta constitutiva, cotización firmada, otro). `documentos.tipo_documento_id` es opcional (no rompe documentos ya subidos); `GET /api/v1/documentos/catalogos` lo expone con `id` (a diferencia de `/oportunidades/catalogos`, aquí el cliente sí necesita el id numérico, no solo la clave, porque así es como `subirDocumentoSchema` lo recibe de vuelta). `metricas_comerciales_diarias` ya existe y tiene su job diario (ver arriba).
-- Jobs internos de `PLAN_API_DEFINITIVO.md` ✅ los 6 ya existen (17-sep-2026): despachador de `eventos_pendientes`, limpieza de borradores vencidos, job diario de métricas, revisión de procesos fallidos (pantalla `/procesos-fallidos`, no un `@Interval` — es triage humano, no automatizable), y los dos últimos, `DocumentosService.alertarDocumentosPendientes()` (documentos vigentes sin revisar tras 7 días) y `TareasService.alertarTareasSlaVencidas()` (tareas abiertas con `fecha_limite` vencida) — migración `019_alertas_sla.sql`. Ninguno de los dos llama a n8n directo: encolan en `eventos_pendientes` (mismo patrón outbox que cerrar/clasificar tareas) y el despachador existente los entrega; n8n decide el canal real de aviso. Desde el 2-oct-2026 los dispara n8n (PT5) con `POST /automatizacion/jobs/:nombre`; los `@Interval` no corrían en Cloud Run.
+- Jobs internos de `PLAN_API_DEFINITIVO.md` ✅ los 6 ya existen (17-sep-2026): limpieza de borradores vencidos, job diario de métricas, revisión de procesos fallidos (pantalla `/procesos-fallidos`, no un `@Interval` — es triage humano, no automatizable), y los dos últimos, `DocumentosService.alertarDocumentosPendientes()` (documentos vigentes sin revisar tras 7 días) y `TareasService.alertarTareasSlaVencidas()` (tareas abiertas con `fecha_limite` vencida) — migración `019_alertas_sla.sql`. Ninguno de los dos llama a n8n directo: encolan en `eventos_pendientes` (mismo patrón outbox que cerrar/clasificar tareas) y el despachador existente los entrega; n8n decide el canal real de aviso. Desde el 2-oct-2026 los dispara n8n (PT5) con `POST /automatizacion/jobs/:nombre`; los `@Interval` no corrían en Cloud Run.
 - Cobertura de pruebas de cotizaciones (versionado/transiciones), documentos (versionado, cambio de estado, revisión, borrado) y tareas/cola de clasificación ✅ cerrada (22-sep-2026, ver "Pruebas automatizadas" arriba) -- lo único de esos tres módulos que sigue sin probar automatizado es el driver GCS (`gcs-storage.driver.ts`), que se probó a mano en producción el 2-oct-2026 (subir y descargar). Cobertura de `/api/v1/automatizacion/*` (los 20 endpoints que consume n8n), revisada el 16-oct-2026: 17 tienen prueba propia (la fila de automatización, envíos y ventanas, respuestas y su clasificación, supresión, campañas, validaciones, estado de prospecto, parámetros, catálogos, errores-workflow…). Faltan solo `POST /scoring`, `POST /incidencias` y `GET /prospectos/scoring`.
 - Redes sociales en empresas/contactos ✅ ya existen (22-sep-2026, migración `021_redes_sociales.sql`): `facebook_url`/`instagram_url` además de `linkedin_url`/`sitio_web` -- ver `docs/planes/PLAN_FRONTEND.md` §2. De paso se corrigió que esos cuatro campos de URL (antes solo `linkedinUrl`/`sitioWeb`, ahora también `facebookUrl`/`instagramUrl`) aceptaban cualquier esquema (`javascript:`, `data:`) en vez de solo `http`/`https` -- ver `src/shared/http-url.ts`.
 - `GET /api/v1/reportes/prospeccion` ✅ ya existe (1-oct-2026): correos enviados, personas contactadas, respuestas por clasificación y tasa de respuesta, en total y por campaña (filtros: periodo y `campanaId`). Las respuestas automáticas no cuentan para la tasa. También se exporta (`/reportes/export/prospeccion`). De paso, `GET /tareas?sinAsignar=true` lista las tareas sin responsable para que un supervisor las reparta. Ver `docs/planes/PLAN_FRONTEND.md`.
