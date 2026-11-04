@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { empresas, usoIa } from "../database/schema.js";
@@ -111,6 +111,8 @@ function lineaDeEvento(e: Evento): string | null {
 
 @Injectable()
 export class ResumenFichaService {
+  private readonly logger = new Logger(ResumenFichaService.name);
+
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDb,
     @Inject(IA_SERVICE) private readonly ia: IaService,
@@ -201,7 +203,8 @@ export class ResumenFichaService {
     let resultado: { resumen?: unknown; siguiente_paso?: unknown };
     try {
       resultado = await this.ia.generarJson({ instrucciones: INSTRUCCIONES, texto: this.texto(datos), esquema: ESQUEMA });
-    } catch {
+    } catch (error) {
+      this.logger.error(`La IA no pudo resumir la empresa ${empresaId}: ${(error as Error).message}`);
       throw new HttpError(502, "No se pudo resumir con IA en este momento; inténtalo más tarde.");
     }
     const resumen = typeof resultado.resumen === "string" ? recortarTexto(resultado.resumen.trim(), 1000) : "";

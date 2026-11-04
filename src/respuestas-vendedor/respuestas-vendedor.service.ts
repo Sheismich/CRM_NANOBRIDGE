@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { auditoria, contactos, correosRespuesta, empresas, listaSupresion, mediosContacto, prospectos, respuestas, tareas, usoIa } from "../database/schema.js";
@@ -59,6 +59,8 @@ type Contexto = Awaited<ReturnType<RespuestasVendedorService["cargar"]>>;
 
 @Injectable()
 export class RespuestasVendedorService {
+  private readonly logger = new Logger(RespuestasVendedorService.name);
+
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDb,
     @Inject(CORREO_SERVICE) private readonly correo: CorreoService,
@@ -203,7 +205,8 @@ export class RespuestasVendedorService {
     let resultado: { texto?: unknown };
     try {
       resultado = await this.ia.generarJson<{ texto?: unknown }>({ instrucciones: INSTRUCCIONES_BORRADOR, texto, esquema: ESQUEMA_BORRADOR });
-    } catch {
+    } catch (error) {
+      this.logger.error(`La IA no pudo redactar el borrador de la respuesta ${respuestaId}: ${(error as Error).message}`);
       throw new HttpError(502, "No se pudo redactar con IA en este momento; escríbelo tú.");
     }
     const propuesta = typeof resultado.texto === "string" ? recortarTexto(resultado.texto.trim(), 5000) : "";

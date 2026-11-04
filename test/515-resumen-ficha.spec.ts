@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import type { INestApplication } from "@nestjs/common";
+import { Logger, type INestApplication } from "@nestjs/common";
 import { eq, sql } from "drizzle-orm";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
@@ -180,6 +180,15 @@ describe("resumen con IA en la ficha", () => {
     ia.respuesta = {};
     expect((await resumir(agente, empresaId)).status).toBe(502);
     expect((await ver(agente, empresaId)).body.resumen).toBeNull();
+  });
+
+  it("si la IA falla, el error real queda en el log", async () => {
+    const { empresaId } = await empresaDelAgente();
+    const log = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+    ia.fallar = true;
+    expect((await resumir(agente, empresaId)).status).toBe(502);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("falla simulada"));
+    log.mockRestore();
   });
 
   it("máximo 20 resúmenes por persona al día (429)", async () => {

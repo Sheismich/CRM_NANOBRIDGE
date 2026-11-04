@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import type { INestApplication } from "@nestjs/common";
+import { Logger, type INestApplication } from "@nestjs/common";
 import { and, eq, sql } from "drizzle-orm";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
@@ -351,10 +351,13 @@ describe("responder al prospecto desde el CRM", () => {
 
     it("si la IA falla: 502 con mensaje para escribirlo a mano", async () => {
       const r = await respuestaDe();
+      const log = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
       ia.fallar = true;
       const res = await borrador(admin, r.respuestaId);
       expect(res.status).toBe(502);
       expect(res.body.message).toMatch(/escr[ií]belo/i);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("falla simulada"));
+      log.mockRestore();
     });
 
     it("máximo 20 borradores por persona al día (429)", async () => {
