@@ -39,7 +39,7 @@ function envioToEvento(row: typeof envios.$inferSelect): TimelineEvento {
     canal: row.canal,
     resultado: null,
     proxima_accion: null,
-    detalle: { envio_id: row.id, prospecto_id: row.prospectoId, numero_contacto: row.numeroContacto, ventana_estado: row.ventanaEstado }
+    detalle: { envio_id: row.id, prospecto_id: row.prospectoId, numero_contacto: row.numeroContacto, ventana_estado: row.ventanaEstado, estado: row.estado }
   };
 }
 

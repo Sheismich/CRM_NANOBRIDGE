@@ -333,7 +333,7 @@ export class TareasService {
 
     if (tarea.prospecto_id) {
       const [filasEnvios, filasRespuestas] = await Promise.all([
-        this.db.select({ fecha: envios.enviadoEn, numeroContacto: envios.numeroContacto, canal: envios.canal }).from(envios).where(eq(envios.prospectoId, tarea.prospecto_id)),
+        this.db.select({ fecha: envios.enviadoEn, numeroContacto: envios.numeroContacto, canal: envios.canal }).from(envios).where(and(eq(envios.prospectoId, tarea.prospecto_id), ne(envios.estado, "fallido"))),
         this.db.select({ fecha: respuestas.recibidoEn, clasificacion: respuestas.clasificacion, contenido: respuestas.contenido }).from(respuestas).where(eq(respuestas.prospectoId, tarea.prospecto_id))
       ]);
       eventos.push(

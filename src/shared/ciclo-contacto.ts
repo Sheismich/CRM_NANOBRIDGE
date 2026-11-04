@@ -49,6 +49,19 @@ export async function cicloActualDePersona(db: DrizzleDb | DrizzleTx, contactoId
   return ciclo;
 }
 
+// Bloquea los correos de la persona hasta que termine la transacción. Así dos
+// envíos de la misma persona se forman, y una supresión al mismo tiempo espera
+// a que este envío termine (o este a que ella termine). Va antes de leer con
+// correoUtilizable, para que esa lectura vea lo último confirmado.
+export async function bloquearCorreosDePersona(tx: DrizzleTx, contactoId: number) {
+  await tx
+    .select({ id: mediosContacto.id })
+    .from(mediosContacto)
+    .where(and(eq(mediosContacto.contactoId, contactoId), eq(mediosContacto.tipo, "correo")))
+    .orderBy(mediosContacto.id)
+    .for("update");
+}
+
 export type CorreoUtilizable = { valor: string } | { motivo: "sin_correo" | "suprimido" };
 
 // El correo al que se manda: uno activo y fuera de lista_supresion (el

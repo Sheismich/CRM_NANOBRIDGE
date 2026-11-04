@@ -151,6 +151,14 @@ export const registroEnvioInputSchema = z.object({
 });
 export type RegistroEnvioInput = z.infer<typeof registroEnvioInputSchema>;
 
+// Lo que pasó al mandarlo: n8n lo confirma después de llamar a SendGrid.
+export const confirmacionEnvioInputSchema = z.object({
+  estado: z.enum(["enviado", "fallido"]),
+  proveedor_id: z.string().trim().min(1).max(255).optional(),
+  error: z.string().trim().max(300).optional()
+});
+export type ConfirmacionEnvioInput = z.infer<typeof confirmacionEnvioInputSchema>;
+
 // --- Respuesta recibida --------------------------------------------------------------
 export const respuestaRecibidaInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),

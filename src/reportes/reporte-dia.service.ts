@@ -89,7 +89,7 @@ export class ReporteDiaService {
         .from(envios)
         .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
         .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
-        .where(delDia(envios.enviadoEn)),
+        .where(and(ne(envios.estado, "fallido"), delDia(envios.enviadoEn))),
       this.db
         .select({ id: respuestas.id, fecha: respuestas.recibidoEn, clasificacion: respuestas.clasificacion, estado: respuestas.estado, contactoId: contactos.id, contactoNombre: contactos.nombre, empresaId: empresas.id, empresaNombre })
         .from(respuestas)

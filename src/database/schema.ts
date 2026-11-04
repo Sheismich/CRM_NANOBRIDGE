@@ -364,10 +364,13 @@ export const listaSupresion = mysqlTable("lista_supresion", {
   tipo: mysqlEnum("tipo", ["correo", "telefono", "whatsapp"]).notNull(),
   valorNormalizado: varchar("valor_normalizado", { length: 512 }).notNull(),
   motivo: varchar("motivo", { length: 255 }).notNull(),
+  // 039: el evento de SendGrid que la causó, si vino de ahí.
+  evento: varchar("evento", { length: 40 }),
   executionId: varchar("execution_id", { length: 100 }),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => [
-  uniqueIndex("uq_supresion_tipo_valor").on(table.tipo, table.valorNormalizado)
+  uniqueIndex("uq_supresion_tipo_valor").on(table.tipo, table.valorNormalizado),
+  index("idx_supresion_evento").on(table.evento, table.creadoEn)
 ]);
 
 export const envios = mysqlTable("envios", {
@@ -381,12 +384,18 @@ export const envios = mysqlTable("envios", {
   enviadoEn: datetime("enviado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   // 033_plantillas_correo.sql: qué plantilla y qué asunto salieron.
   plantillaId: bigint("plantilla_id", { mode: "number", unsigned: true }),
-  asunto: varchar("asunto", { length: 200 })
+  asunto: varchar("asunto", { length: 200 }),
+  // 039: a quién salió y qué pasó. n8n confirma después de mandar.
+  destinatario: varchar("destinatario", { length: 512 }),
+  estado: mysqlEnum("estado", ["registrado", "enviado", "fallido"]).notNull().default("registrado"),
+  proveedorId: varchar("proveedor_id", { length: 255 }),
+  error: varchar("error", { length: 300 })
 }, (table) => [
   uniqueIndex("uq_envios_execution_id").on(table.executionId),
   uniqueIndex("uq_envios_prospecto_canal_numero").on(table.prospectoId, table.canal, table.numeroContacto),
   index("idx_envios_prospecto_canal").on(table.prospectoId, table.canal),
-  index("idx_envios_ventana").on(table.ventanaEstado, table.ventanaVenceEn)
+  index("idx_envios_ventana").on(table.ventanaEstado, table.ventanaVenceEn),
+  index("idx_envios_estado").on(table.estado, table.enviadoEn)
 ]);
 
 // 033_plantillas_correo.sql: texto de los correos de prospección. giro '' =

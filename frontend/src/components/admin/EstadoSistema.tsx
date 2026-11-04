@@ -78,8 +78,8 @@ export function EstadoSistema() {
           sub="envío de campañas"
           etiqueta="Enviados hoy"
           valor={correos ? String(correos.enviados_hoy) : "…"}
-          pie={correos?.ultimo_envio_en ? `Último envío ${isoDia(new Date(correos.ultimo_envio_en)) === isoDia(new Date()) ? hora(new Date(correos.ultimo_envio_en)) : new Date(correos.ultimo_envio_en).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}` : "Hoy no ha salido ninguno"}
-          ok
+          pie={(correos?.sin_confirmar ?? 0) > 0 ? plural(correos!.sin_confirmar, "correo sin confirmar", "correos sin confirmar") : correos?.ultimo_envio_en ? `Último envío ${isoDia(new Date(correos.ultimo_envio_en)) === isoDia(new Date()) ? hora(new Date(correos.ultimo_envio_en)) : new Date(correos.ultimo_envio_en).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}` : "Hoy no ha salido ninguno"}
+          ok={(correos?.sin_confirmar ?? 0) === 0}
         />
       </div>
     </section>

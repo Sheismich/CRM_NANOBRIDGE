@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
@@ -131,7 +131,7 @@ describe("administración: estado del sistema y problemas agrupados", () => {
 
       const hoy = fechaMx(new Date());
       const [correos] = await db.select({ n: sql<number>`COUNT(*)`, ultimo: sql<string | null>`MAX(${envios.enviadoEn})` }).from(envios)
-        .where(and(sql`${envios.enviadoEn} >= ${inicioDelDiaMxSql(hoy)}`, sql`${envios.enviadoEn} < ${inicioDelDiaMxSql(diaSiguiente(hoy))}`));
+        .where(and(ne(envios.estado, "fallido"), sql`${envios.enviadoEn} >= ${inicioDelDiaMxSql(hoy)}`, sql`${envios.enviadoEn} < ${inicioDelDiaMxSql(diaSiguiente(hoy))}`));
       expect(res.body.correos.enviados_hoy).toBe(Number(correos!.n));
 
       expect(res.body).not.toHaveProperty("avisos_n8n");

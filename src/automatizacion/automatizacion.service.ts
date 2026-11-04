@@ -10,7 +10,7 @@ import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
 import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
-import { ESTADOS_PROSPECTO_CERRADO, MAX_CONTACTOS_POR_CICLO, cicloActualDePersona, correoUtilizable } from "../shared/ciclo-contacto.js";
+import { ESTADOS_PROSPECTO_CERRADO, MAX_CONTACTOS_POR_CICLO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { HORAS_PARA_RETOMAR_DE_FILA } from "../shared/listo-para-automatizacion.js";
 import { diaSiguiente, esFeriadoMx, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
@@ -24,7 +24,7 @@ import { recortarTexto } from "../shared/texto.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import { correoDeEnvio, correoParaEnvio } from "../plantillas/plantillas.correo.js";
 import { EVENTOS_BAJA_DE_PERSONA } from "./dto/automatizacion.schema.js";
-import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, RespuestaSugeridaInput, ScoringInput, TomarDeFilaInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
+import type { CampanaActivaQuery, ConfirmacionEnvioInput, ConsultaProspectoScoringQuery, ConsultaSupresionQuery, ErrorWorkflowInput, EstadoProspectoInput, IncidenciaInput, RegistroEnvioInput, RegistroProspectoInput, RegistroSupresionInput, RespuestaClasificadaInput, RespuestaRecibidaInput, RespuestaSugeridaInput, ScoringInput, TomarDeFilaInput, ValidacionInput, VentanasVencidasQuery, VerificacionEnvioQuery } from "./dto/automatizacion.schema.js";
 
 // tipo fijo de incidencias.tipo para todo lo que reporta el Error Workflow
 // global de n8n (B4) — junto con execution_id es la pareja que usa el
@@ -32,6 +32,9 @@ import type { CampanaActivaQuery, ConsultaProspectoScoringQuery, ConsultaSupresi
 // para que registrarErrorWorkflow() sea idempotente.
 // Exportado: la bitácora del día (reportes/reporte-dia.service.ts) distingue
 // estas fallas (un workflow de n8n) de las de un aviso de la API.
+const MENSAJE_SUPRIMIDO = "El contacto está en la lista de supresión";
+const MENSAJE_SIN_CORREO = "El contacto no tiene un correo utilizable";
+
 export const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
 
 // POST /automatizacion/envios para un prospecto que no está validado.
@@ -654,33 +657,6 @@ export class AutomatizacionService {
     return { id: input.prospecto_id, estado: input.estado, motivo: input.motivo, en_baja: false as const };
   }
 
-  // Compartido por verificarEnvio() y registrarEnvio(): true si el medio
-  // de contacto (correo/whatsapp) de este prospecto para este canal está
-  // en lista_supresion. No asume que el medio ya esté marcado
-  // estado_contacto='no_contactar' -- registrarSupresion() solo actualiza
-  // esa columna si el medio YA existía en el momento de suprimirse; si el
-  // medio se agrega/reactiva después con el mismo valor, mediosContacto
-  // vuelve a nacer en 'activo' (default de columna) aunque lista_supresion
-  // siga teniendo el registro, así que esta consulta va directo contra
-  // lista_supresion, la fuente de verdad real (hallazgo de code review,
-  // 14-sep-2026).
-  private async estaSuprimido(prospectoId: number, canal: "correo" | "whatsapp"): Promise<boolean> {
-    const [medio] = await this.db
-      .select({ valorNormalizado: mediosContacto.valorNormalizado })
-      .from(mediosContacto)
-      .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
-      .where(and(eq(prospectos.id, prospectoId), eq(mediosContacto.tipo, canal)))
-      .limit(1);
-    if (!medio) return false;
-
-    const [suprimido] = await this.db
-      .select({ id: listaSupresion.id })
-      .from(listaSupresion)
-      .where(and(eq(listaSupresion.tipo, canal), eq(listaSupresion.valorNormalizado, medio.valorNormalizado)))
-      .limit(1);
-    return !!suprimido;
-  }
-
   // --- Verificación de envío ----------------------------------------------------------
   // B1, paso 9 (PLAN_N8N_DEFINITIVO.md): gate antes de enviar. Bloquea por
   // canal apagado (política de contactos: WhatsApp sigue desactivado hasta
@@ -703,6 +679,7 @@ export class AutomatizacionService {
     const hoy = fechaMx(new Date());
     const [fila] = await db.select({ n: sql<number>`COUNT(*)` }).from(envios).where(and(
       eq(envios.canal, "correo"),
+      ne(envios.estado, "fallido"),
       gte(envios.enviadoEn, sql`${inicioDelDiaMxSql(hoy)}`),
       lt(envios.enviadoEn, sql`${inicioDelDiaMxSql(diaSiguiente(hoy))}`)
     ));
@@ -733,16 +710,10 @@ export class AutomatizacionService {
       return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto o la empresa fueron desactivados", numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
-    // Consulta directa a lista_supresion agregada (hallazgo de code
-    // review, 14-sep-2026): antes este gate confiaba por completo en que
-    // n8n hubiera llamado ANTES a "Consulta de supresión" como paso
-    // separado del flujo (PLAN_N8N_DEFINITIVO.md B1) -- si el workflow
-    // reintenta/reentra directo en verificación sin repetir ese paso
-    // (bug de workflow, reintento manual, etc.), este endpoint dejaba
-    // pasar el envío sin ninguna comprobación de supresión propia. Mismo
-    // chequeo en registrarEnvio() más abajo.
-    if (await this.estaSuprimido(query.prospecto_id, query.canal)) {
-      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "El contacto está en la lista de supresión", numero_en_ciclo_siguiente: null, ventana_vence_en: null };
+    // El correo al que se mandaría: la misma regla de la fila y los recordatorios.
+    const correo = await correoUtilizable(this.db, prospecto.contactoId);
+    if ("motivo" in correo) {
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: correo.motivo === "suprimido" ? MENSAJE_SUPRIMIDO : MENSAJE_SIN_CORREO, numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
     const ciclo = await cicloActualDePersona(this.db, prospecto.contactoId, query.canal);
@@ -773,7 +744,7 @@ export class AutomatizacionService {
   // endpoint sin pasar por la verificación.
   async registrarEnvio(input: RegistroEnvioInput) {
     const [existing] = await this.db
-      .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn })
+      .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn, destinatario: envios.destinatario })
       .from(envios)
       .where(eq(envios.executionId, input.execution_id))
       .limit(1);
@@ -781,7 +752,7 @@ export class AutomatizacionService {
     // después del hecho no es confiable (el ciclo pudo avanzar desde entonces).
     // correo: el texto ya armado con la plantilla del número que toca
     // (Administración → Correos de prospección); n8n ya no tiene texto propio.
-    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, numero_en_ciclo: null, ventana_vence_en: existing.ventanaVenceEn, reply_to: firmarReplyTo(existing.id), ya_existia: true as const, correo: await correoDeEnvio(this.db, existing.id) };
+    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, numero_en_ciclo: null, ventana_vence_en: existing.ventanaVenceEn, reply_to: firmarReplyTo(existing.id), destinatario: existing.destinatario, ya_existia: true as const, correo: await correoDeEnvio(this.db, existing.id) };
 
     if (input.canal === "whatsapp") {
       throw new HttpError(409, "Canal WhatsApp desactivado (pendiente proveedor aprobado)");
@@ -804,36 +775,16 @@ export class AutomatizacionService {
     // se recalcula el total y se reintenta, en vez de confiar solo en el
     // chequeo en memoria (hallazgo de code review, 10-sep-2026).
     //
-    // El chequeo de supresión vive DENTRO de esta misma transacción, con
-    // un FOR UPDATE sobre la fila de medios_contacto (hallazgo de code
-    // review, 14-sep-2026): hacerlo antes y fuera de una transacción (como
-    // en un primer intento de este fix) dejaba una ventana real entre "leer
-    // que no está suprimido" y "confirmar el envío" en la que un
-    // registrarSupresion() concurrente para ese mismo valor podía colarse
-    // sin que este método se enterara. Con el FOR UPDATE, un
-    // registrarSupresion() concurrente que intente actualizar esa misma
-    // fila de medios_contacto se queda esperando a que esta transacción
-    // termine -- el orden final ya no es ambiguo, sea cual sea quien
-    // arrancó primero.
+    // El correo se elige y se revisa dentro de esta transacción, con los
+    // correos de la persona bloqueados: entre leer que no está suprimido y
+    // confirmar el envío no se puede colar una supresión.
     const MAX_INTENTOS = 3;
     for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
       try {
         return await this.db.transaction(async (tx) => {
-          const [medio] = await tx
-            .select({ valorNormalizado: mediosContacto.valorNormalizado })
-            .from(mediosContacto)
-            .innerJoin(prospectos, eq(prospectos.contactoId, mediosContacto.contactoId))
-            .where(and(eq(prospectos.id, input.prospecto_id), eq(mediosContacto.tipo, input.canal)))
-            .limit(1)
-            .for("update");
-          if (medio) {
-            const [suprimido] = await tx
-              .select({ id: listaSupresion.id })
-              .from(listaSupresion)
-              .where(and(eq(listaSupresion.tipo, input.canal), eq(listaSupresion.valorNormalizado, medio.valorNormalizado)))
-              .limit(1);
-            if (suprimido) throw new HttpError(409, "El contacto está en la lista de supresión");
-          }
+          await bloquearCorreosDePersona(tx, prospecto.contactoId);
+          const destino = await correoUtilizable(tx, prospecto.contactoId);
+          if ("motivo" in destino && destino.motivo === "suprimido") throw new HttpError(409, MENSAJE_SUPRIMIDO);
 
           // Solo un prospecto validado recibe correos (revisión del
           // 15-oct-2026: había "Capturados" con envíos). n8n registra el
@@ -844,11 +795,10 @@ export class AutomatizacionService {
             throw new HttpError(409, `El prospecto no está validado (estado: ${actual?.estado ?? "desconocido"})`, CODIGO_PROSPECTO_NO_VALIDADO);
           }
 
-          // Va DESPUÉS del FOR UPDATE de arriba a propósito: todos los
-          // prospectos de la misma persona bloquean la misma fila de
-          // medios_contacto, así que dos envíos concurrentes para la misma
-          // persona (desde prospectos distintos, donde el UNIQUE de
-          // numero_contacto no los detecta) se serializan aquí.
+          if ("motivo" in destino) throw new HttpError(409, MENSAJE_SIN_CORREO);
+
+          // Después del bloqueo: dos envíos a la misma persona desde
+          // prospectos distintos se forman, y el segundo ve al primero.
           const ciclo = await cicloActualDePersona(tx, prospecto.contactoId, input.canal);
           if (ciclo.length >= MAX_CONTACTOS_POR_CICLO) throw new HttpError(409, "Máximo de 3 contactos alcanzado para esta persona y canal");
           const ultimoDePersona = ciclo[0];
@@ -873,20 +823,21 @@ export class AutomatizacionService {
             ventanaVenceEn,
             executionId: input.execution_id,
             plantillaId,
-            asunto: correo.asunto.slice(0, 200)
+            asunto: correo.asunto.slice(0, 200),
+            destinatario: destino.valor
           });
-          return { id: result.insertId, numero_contacto: numeroContacto, numero_en_ciclo: ciclo.length + 1, ventana_vence_en: ventanaVenceEn, reply_to: firmarReplyTo(result.insertId), ya_existia: false as const, correo };
+          return { id: result.insertId, numero_contacto: numeroContacto, numero_en_ciclo: ciclo.length + 1, ventana_vence_en: ventanaVenceEn, reply_to: firmarReplyTo(result.insertId), destinatario: destino.valor, ya_existia: false as const, correo };
         });
       } catch (error) {
         if (error instanceof HttpError) throw error;
         if (!isDuplicateEntry(error)) throw error;
 
         const [retry] = await this.db
-          .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn })
+          .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn, destinatario: envios.destinatario })
           .from(envios)
           .where(eq(envios.executionId, input.execution_id))
           .limit(1);
-        if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, numero_en_ciclo: null, ventana_vence_en: retry.ventanaVenceEn, reply_to: firmarReplyTo(retry.id), ya_existia: true as const, correo: await correoDeEnvio(this.db, retry.id) };
+        if (retry) return { id: retry.id, numero_contacto: retry.numeroContacto, numero_en_ciclo: null, ventana_vence_en: retry.ventanaVenceEn, reply_to: firmarReplyTo(retry.id), destinatario: retry.destinatario, ya_existia: true as const, correo: await correoDeEnvio(this.db, retry.id) };
 
         // No fue nuestro propio execution_id el que chocó -- fue el
         // UNIQUE de numero_contacto contra otra llamada concurrente.
@@ -895,6 +846,21 @@ export class AutomatizacionService {
     }
 
     throw new HttpError(409, "No se pudo registrar el envío tras varios intentos concurrentes; reintenta");
+  }
+
+  // --- Confirmación de envío -----------------------------------------------------------
+  // n8n registra antes de mandar, así que hasta aquí no se sabe si salió.
+  // Se puede repetir sin duplicar nada. Un "enviado" gana siempre: un fallido
+  // tardío no lo pisa, y un reintento que sí salió corrige a un fallido.
+  async confirmarEnvio(id: number, input: ConfirmacionEnvioInput) {
+    if (input.estado === "enviado") {
+      await this.db.update(envios).set({ estado: "enviado", error: null, ...(input.proveedor_id ? { proveedorId: input.proveedor_id } : {}) }).where(eq(envios.id, id));
+    } else {
+      await this.db.update(envios).set({ estado: "fallido", error: input.error ?? null }).where(and(eq(envios.id, id), ne(envios.estado, "enviado")));
+    }
+    const [envio] = await this.db.select({ estado: envios.estado }).from(envios).where(eq(envios.id, id)).limit(1);
+    if (!envio) throw new HttpError(404, "Envío no encontrado");
+    return { id, estado: envio.estado };
   }
 
   // --- Ventanas vencidas ---------------------------------------------------------------

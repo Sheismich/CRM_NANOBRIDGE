@@ -59,7 +59,10 @@ function textoPrincipal(evento: TimelineEvento): string | null {
     return `Cotización #${String(d.cotizacion_id)}${version} por correo${para}${typeof d.para === "string" ? ` (${d.para})` : ""}`;
   }
   if (evento.tipo === "cambio_estado_prospecto") return typeof d.motivo === "string" ? d.motivo : null;
-  if (evento.tipo === "correo_enviado") return typeof d.numero_contacto === "number" ? `Contacto #${d.numero_contacto} de la secuencia` : null;
+  if (evento.tipo === "correo_enviado") {
+    if (d.estado === "fallido") return "No se pudo enviar";
+    return typeof d.numero_contacto === "number" ? `Contacto #${d.numero_contacto} de la secuencia` : null;
+  }
   if (ES_DOCUMENTO.has(evento.tipo)) {
     const version = typeof d.version === "number" && d.version > 1 ? ` (versión ${d.version})` : "";
     return [typeof d.tipo_nombre === "string" ? d.tipo_nombre : null, typeof d.nombre === "string" ? `${d.nombre}${version}` : null].filter(Boolean).join(" · ") || null;

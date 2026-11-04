@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { and, eq, gte, inArray, lt, lte, notInArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, lte, ne, notInArray, sql } from "drizzle-orm";
 import type { INestApplication } from "@nestjs/common";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
@@ -46,6 +46,7 @@ describe("tope diario de correos", () => {
     const hoy = fechaMx(new Date());
     const [fila] = await db.select({ n: sql<number>`COUNT(*)` }).from(envios).where(and(
       eq(envios.canal, "correo"),
+      ne(envios.estado, "fallido"),
       gte(envios.enviadoEn, sql`${inicioDelDiaMxSql(hoy)}`),
       lt(envios.enviadoEn, sql`${inicioDelDiaMxSql(diaSiguiente(hoy))}`)
     ));

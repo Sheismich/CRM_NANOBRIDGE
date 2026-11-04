@@ -1,10 +1,12 @@
-import { Body, Controller, Get, HttpCode, Post, Query, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
+import { z } from "zod";
 import { AutomatizacionService } from "./automatizacion.service.js";
 import { TareasService } from "../tareas/tareas.service.js";
 import { ApiKeyGuard } from "../auth/guards/api-key.guard.js";
 import {
   campanaActivaQuerySchema,
+  confirmacionEnvioInputSchema,
   consultaProspectoScoringQuerySchema,
   consultaSupresionQuerySchema,
   errorWorkflowInputSchema,
@@ -128,6 +130,13 @@ export class AutomatizacionController {
     const result = await this.automatizacionService.registrarEnvio(input);
     response.status(result.ya_existia ? 200 : 201);
     return result;
+  }
+
+  @Post("envios/:id/confirmacion")
+  @HttpCode(200)
+  confirmarEnvio(@Param("id") idParam: string, @Body() body: unknown) {
+    const id = z.coerce.number().int().positive().parse(idParam);
+    return this.automatizacionService.confirmarEnvio(id, confirmacionEnvioInputSchema.parse(body));
   }
 
   @Get("envios/vencidas")

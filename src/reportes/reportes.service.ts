@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, desc, eq, gte, inArray, isNotNull, lte, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lte, ne, sql, type SQL } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { actividades, auditoria, campanas, catalogoEtapaEmbudo, contactos, empresas, envios, historialEtapaOportunidad, metricasComercialesDiarias, oportunidades, prospectos, respuestas, roles, tareas, usuarios } from "../database/schema.js";
 import { compactConditions } from "../shared/drizzle-utils.js";
@@ -706,6 +706,7 @@ export class ReportesService {
   //   que es el consecutivo dentro del prospecto.
   async prospeccion(query: ProspeccionQuery) {
     const condicionesEnvio = compactConditions([
+      ne(envios.estado, "fallido"),
       query.campanaId ? eq(prospectos.campanaId, query.campanaId) : undefined,
       ...condicionRangoFecha(envios.enviadoEn, query.fechaInicio, query.fechaFin)
     ]);
@@ -854,7 +855,7 @@ export class ReportesService {
         .select({ dia: diaEnvio, cantidad: sql<number>`COUNT(*)` })
         .from(envios)
         .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
-        .where(and(...compactConditions([campana, ...condicionRangoFecha(envios.enviadoEn, query.fechaInicio, query.fechaFin)])))
+        .where(and(...compactConditions([ne(envios.estado, "fallido"), campana, ...condicionRangoFecha(envios.enviadoEn, query.fechaInicio, query.fechaFin)])))
         .groupBy(diaEnvio),
       this.db
         .select({ dia: diaRespuesta, cantidad: sql<number>`COUNT(*)` })
@@ -923,7 +924,7 @@ export class ReportesService {
         .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
         .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
         .leftJoin(campanas, eq(campanas.id, prospectos.campanaId))
-        .where(and(...compactConditions(corte(envios.enviadoEn, undefined, query.hasta))))
+        .where(and(ne(envios.estado, "fallido"), ...compactConditions(corte(envios.enviadoEn, undefined, query.hasta))))
         .orderBy(desc(envios.enviadoEn), desc(envios.id))
         .limit(query.limit),
       this.db

@@ -463,7 +463,7 @@ export type SaludSistema = {
   revisado_en: string;
   api: { estado: "ok"; revision: string | null };
   base_datos: { estado: "ok" | "error"; responde_ms: number | null };
-  correos: { enviados_hoy: number; ultimo_envio_en: string | null } | null;
+  correos: { enviados_hoy: number; ultimo_envio_en: string | null; sin_confirmar: number } | null;
   resumen: { problemas_abiertos: number } | null;
 };
 
