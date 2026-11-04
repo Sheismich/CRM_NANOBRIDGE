@@ -58,7 +58,10 @@ describe("usuarios: sesiones, desactivar y reactivar", () => {
 
   it("al desactivar a alguien, sus tareas abiertas pasan a 'Sin asignar' (las cerradas no se tocan)", async () => {
     const agente = await agenteNuevo();
-    const abierta = await api().post("/api/v1/tareas").set("Cookie", adminCookie).send({ titulo: "Llamar al cliente", responsableId: agente.id });
+    // Título único: la lista "Sin asignar" se busca por él, no por la primera
+    // página, que depende de cuántas tareas dejaron las demás pruebas.
+    const titulo = `Llamar al cliente ${randomUUID().slice(0, 8)}`;
+    const abierta = await api().post("/api/v1/tareas").set("Cookie", adminCookie).send({ titulo, responsableId: agente.id });
     const cerrada = await api().post("/api/v1/tareas").set("Cookie", adminCookie).send({ titulo: "Ya hecha", responsableId: agente.id });
     expect((await api().patch(`/api/v1/tareas/${cerrada.body.id}/cerrar`).set("Cookie", adminCookie).send({ resultado: "listo" })).status).toBe(200);
 
@@ -69,7 +72,7 @@ describe("usuarios: sesiones, desactivar y reactivar", () => {
     const [filaCerrada] = await db.select({ responsableId: tareas.responsableId }).from(tareas).where(eq(tareas.id, cerrada.body.id));
     expect(filaCerrada!.responsableId).toBe(agente.id);
 
-    const sinAsignar = await api().get("/api/v1/tareas").set("Cookie", adminCookie).query({ sinAsignar: "true", limit: 100 });
+    const sinAsignar = await api().get("/api/v1/tareas").set("Cookie", adminCookie).query({ sinAsignar: "true", q: titulo, limit: 100 });
     expect((sinAsignar.body.data as { id: number }[]).some((t) => t.id === abierta.body.id)).toBe(true);
 
     const [audit] = await db.select().from(auditoria).where(and(eq(auditoria.entidad, "usuario"), eq(auditoria.entidadId, agente.id), eq(auditoria.accion, "desactivar")));

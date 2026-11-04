@@ -2,8 +2,11 @@
 
 export const formatoMonedaEntera = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 export const formatoMoneda = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
-const formatoCompacto = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", maximumFractionDigits: 0 });
-const formatoMillones = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", maximumFractionDigits: 2 });
+// minimumFractionDigits: 0 explícito: con currency, versiones anteriores de
+// ICU (Node 22, algunos navegadores) ponen 2 decimales mínimos aunque el
+// máximo sea 2, y "$1M" salía "$1.00M" (CI, 4-nov-2026).
+const formatoCompacto = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const formatoMillones = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 2 });
 // "$120K" / "$1.28M", como los prototipos (Intl pone "$120 k"). Los millones
 // llevan hasta dos decimales: "$1M" escondía casi 300 mil. Oportunidades,
 // Cotizaciones y Reportes.
