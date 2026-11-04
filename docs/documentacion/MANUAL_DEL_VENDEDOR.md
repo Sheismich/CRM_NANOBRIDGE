@@ -1,7 +1,8 @@
 # Manual del vendedor · CRM NANOBRIDGE
 
 **Para:** quien vende y da seguimiento a los clientes en el CRM (agentes y supervisores).
-**Versión:** 0.9 · 4 de noviembre de 2026. Pasa a 1.0 al cierre, con capturas de pantalla y lo que salga del piloto.
+**Versión:** 0.9 · 4 de noviembre de 2026. Pasa a 1.0 al cierre, con lo que salga del piloto. Las capturas son del CRM con
+datos de ejemplo: ningún nombre ni correo es de un cliente real.
 
 El CRM está en **https://crm-prospeccion-outbound.web.app**. Funciona en la computadora y en el celular.
 
@@ -9,6 +10,8 @@ El CRM está en **https://crm-prospeccion-outbound.web.app**. Funciona en la com
 
 **Entrar.** Con tu correo y tu contraseña (12 caracteres o más). Si te equivocas varias veces seguidas, espera unos
 minutos antes de volver a intentar. Si no tienes cuenta o la olvidaste, pídesela a un administrador.
+
+![Pantalla para entrar al CRM](img/manual-vendedor/01-entrar.jpg)
 
 **Qué ves según tu rol:**
 
@@ -25,14 +28,20 @@ y el resto en «Más».
 **Buscar cualquier cosa:** **Ctrl + K** (en Mac, Cmd + K), la caja de búsqueda del menú o la lupa en el celular. Busca
 a la vez en empresas, contactos, prospectos, oportunidades, cotizaciones y tareas.
 
+![El buscador con resultados de «aceros»](img/manual-vendedor/15-buscar.jpg)
+
 **Modo día o noche:** «Tema», al final del menú.
 
 ## 2. Tu día
 
 1. **Inicio.** Arriba, «Lo nuevo para ti»: los avisos que no has leído (una tarea que te asignaron, un interesado, una
    tarea vencida, un documento rechazado). El numerito de Inicio en el menú dice cuántos hay.
+
+   ![Inicio con los avisos y los números del mes](img/manual-vendedor/02-inicio.jpg)
 2. **Tareas → Mi día.** Lo que tienes que hacer hoy y lo que ya venció (el numerito de Tareas en el menú). Para cada
    una: **Cerrar** (con lo que pasó) o **Reprogramar** (para otro día). «Ver todas» enseña también las de otros días.
+
+   ![Tareas, Mi día](img/manual-vendedor/03-mi-dia.jpg)
 3. **Si te llegó un interesado** (la tarea «Contactar prospecto interesado»): vence al final del siguiente día hábil.
    Atiéndela primero.
 
@@ -42,9 +51,13 @@ a la vez en empresas, contactos, prospectos, oportunidades, cotizaciones y tarea
 
 **Encontrar una empresa:** Empresas → busca por nombre, giro o ciudad. Los contadores de arriba también filtran.
 
+![La lista de empresas](img/manual-vendedor/04-empresas.jpg)
+
 **Dar de alta una empresa:** Empresas → «+ Nueva empresa», con su primer contacto (nombre y al menos un correo,
 teléfono o WhatsApp). **Si sale «Ya hay una empresa con este nombre»**, revisa si es la misma antes de crear otra: el
 CRM compara sin mayúsculas, acentos ni «S.A. de C.V.».
+
+![Aviso de que ya hay empresas con el mismo nombre](img/manual-vendedor/05-empresa-parecida.jpg)
 
 **La ficha de la empresa** es donde está todo. Arriba, cuatro datos y los botones:
 
@@ -59,6 +72,8 @@ CRM compara sin mayúsculas, acentos ni «S.A. de C.V.».
 Abajo, el **Resumen** (contactos, historial y oportunidades abiertas) y las pestañas Oportunidades, Cotizaciones y
 Documentos.
 
+![La ficha de una empresa](img/manual-vendedor/06-ficha.jpg)
+
 **Contactos de la empresa.** En la tarjeta Contactos:
 - **+ Agregar** una persona; **Editar** sus datos. Borrar el valor de un correo o teléfono no lo elimina: queda como
   «obsoleto».
@@ -66,6 +81,8 @@ Documentos.
 - **Dar de baja**: si la persona te pidió **por teléfono o en persona** que no le escriban. Escribe cómo lo pidió.
   Sus correos y teléfonos pasan a «no contactar», sus prospectos a baja y sus seguimientos se cancelan. **No se
   deshace.**
+
+  ![El diálogo para dar de baja a una persona](img/manual-vendedor/07-dar-de-baja.jpg)
 - **Desactivar**: si la persona ya no trabaja ahí. Su correo y su teléfono siguen apartados.
 
 Un correo o teléfono en **«no contactar»** es de alguien que pidió su baja: se ve, pero no se puede editar ni usar.
@@ -84,18 +101,25 @@ filtros dicen a quién se le puede escribir.
 
 **Prospectos** son las personas a las que todavía no les vendemos y a las que la automatización les puede escribir.
 
+![La lista de prospectos](img/manual-vendedor/08-prospectos.jpg)
+
 - **Alta de uno:** Prospectos → «+ Nuevo prospecto»: de una empresa nueva o de una que ya existe («Ya existe en el CRM»).
 - **Varios a la vez:** Prospectos → Importaciones → «Descargar plantilla», llénala y súbela. Nada entra hasta que
   revisas y confirmas cada fila. Las filas «Duplicada» son personas que ya existen. Las que tienen una empresa con el
   mismo nombre te dejan elegir «Confirmar en …» (la que ya existe) o «Es otra empresa». Detalle en el
   [manual de datos](MANUAL_DE_DATOS.md).
+
+  ![Una importación con una empresa parecida y una fila duplicada](img/manual-vendedor/09-importaciones.jpg)
 - **Mandar a la automatización** (supervisor y administrador): elegir prospectos → «Mandar a automatización», con la
   campaña. Solo entran los que tienen giro, tamaño y correo; los demás regresan con su motivo.
 
 **Cuando un prospecto responde:**
 1. Su respuesta cae en la **cola de clasificación** (Tareas → Ver todas → «Cola de clasificación»; la ven supervisores
    y administradores). La IA
-   sugiere qué es; una persona decide: interesado, no interesado, baja, respuesta automática o ambigua.
+   sugiere qué es; una persona decide: **Interesado**, **No interesado**, **Baja**, **Inválido** o **Reagendar** (pide
+   la fecha para volver a buscarlo).
+
+   ![La cola de clasificación con la sugerencia de la IA](img/manual-vendedor/10-cola.jpg)
 2. **Interesado:** se crea la tarea «Contactar prospecto interesado» para un vendedor. Desde la cola, **Responder
    ahora** te deja contestarle de inmediato y la tarea queda contigo.
 3. **Para contestarle:** «Responder por correo». **Redactar con IA** te propone un borrador con lo que él escribió y el
@@ -108,6 +132,8 @@ filtros dicen a quién se le puede escribir.
 Una **oportunidad** es un trato posible con una empresa: qué se le quiere vender, por cuánto y qué tan probable es.
 
 - **Crear:** desde la ficha («+ Oportunidad») o desde Oportunidades.
+
+  ![El tablero de oportunidades por etapa](img/manual-vendedor/11-oportunidades.jpg)
 - **El tablero** tiene una columna por etapa. **Arrastra la tarjeta** para cambiarla de etapa. Para ganarla, llévala a
   «✓ Ganada» y confirma: queda cerrada y **ya no se reabre**. **Marcar perdida** pide el motivo; una perdida sí se puede
   reabrir.
@@ -120,6 +146,8 @@ Una **oportunidad** es un trato posible con una empresa: qué se le quiere vende
 
 - **Hacer una:** Cotizaciones → «+ Nueva cotización» (o desde la oportunidad). Por pasos: empresa y oportunidad,
   partidas («+ Agregar partida»), descuento e impuestos, y «Revisar y enviar».
+
+  ![El tablero de cotizaciones](img/manual-vendedor/12-cotizaciones.jpg)
 - **Mandar por correo:** la cotización sale con el PDF adjunto, firmada con tu nombre, y la respuesta del cliente te
   llega a ti. Queda en el Historial de la ficha.
 - **Cambiarla:** «Nueva versión». La anterior se conserva.
@@ -130,6 +158,8 @@ Una **oportunidad** es un trato posible con una empresa: qué se le quiere vende
 
 - **Subir documento:** desde Documentos o desde la pestaña Documentos de la ficha. Se aceptan PDF, Word, Excel, PNG y
   JPG de hasta 25 MB.
+
+  ![La bandeja de documentos](img/manual-vendedor/13-documentos.jpg)
 - **Revisión** (supervisor y administrador): abrir el documento → **Aprobar** o **Rechazar documento** con el motivo. Si
   se rechaza, a quien lo subió le llega el aviso y una tarea para corregirlo.
 - **Descargar lote:** varios documentos en un zip.
@@ -137,6 +167,8 @@ Una **oportunidad** es un trato posible con una empresa: qué se le quiere vende
 ## 8. Reportes
 
 - **Agente:** Reportes → **Día**: lo que hiciste hoy (tareas, correos, respuestas).
+
+  ![Reportes, vista Día](img/manual-vendedor/14-reportes-dia.jpg)
 - **Supervisor y administrador:** Día, Semana, Mes, Trimestre y Año, cada uno contra el periodo anterior: ventas,
   prospección y equipo. Desde Oportunidades se descarga el **informe ejecutivo** en PDF.
 
@@ -148,3 +180,8 @@ Una **oportunidad** es un trato posible con una empresa: qué se le quiere vende
 - **A quien pidió la baja no se le escribe,** ni desde la automatización ni desde el CRM.
 - **La IA solo propone** (clasificación, borrador, resumen): siempre decide y revisa una persona.
 - **Si algo no funciona:** anota qué estabas haciendo y la hora, y avisa al administrador.
+
+---
+
+Las capturas se sacan con [`capturar.cjs`](img/manual-vendedor/capturar.cjs) sobre un CRM local con los datos de
+[`sembrar-ejemplo.py`](img/manual-vendedor/sembrar-ejemplo.py). Se vuelven a sacar cuando cambie una pantalla.
