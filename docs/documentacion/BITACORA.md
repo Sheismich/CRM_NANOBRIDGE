@@ -83,7 +83,7 @@ Revisión y decisión de Dirección: Por registrar para todos los entregables. E
 | 10 | Manual para el vendedor | G6 | Daniela | Semana 15 | v0.9 adelantada el 4-nov (docs/documentacion/MANUAL_DEL_VENDEDOR.md). Faltan capturas y lo que entre con la rama de Fabián (escalar interesados, seguimiento de cotizaciones). |
 | 11 | Inventario de entregables, pendientes y lecciones aprendidas | Semana 15 | Equipo | 7 al 11 dic | Se arma a partir de esta bitácora. |
 | 12 | Reporte final de Datos | G6 | Daniela | Semana 15 o 16 | Indicadores acumulados T1.1 a T1.3, pendientes y transferencia. La carpeta de documentación lo marca como pendiente. |
-| 13 | Paquete final y transferencia operativa (OB-07) | G6 | Equipo | Semana 16 | Índice de todo lo anterior, quién tiene qué acceso, respaldos y quién mantiene cada parte. |
+| 13 | Paquete final y transferencia operativa (OB-07) | G6 | Equipo | Semana 16 | Índice de todo lo anterior, respaldos y quién mantiene cada parte. Los accesos ya están en docs/documentacion/INVENTARIO_DE_ACCESOS.md (v0.9, 4-nov), con 7 pasos para antes del cierre. |
 | 14 | Entregables de las semanas 5, 7 y 8 sin documento propio | — | Equipo y Dirección | Esta semana | Reporte de carga, paquete PDR y base v0.8. Confirmar con Dirección si se aceptaron con lo que hay o si piden un documento. |
 | 15 | Actas y tablero semanal de compromisos | Continuo | Equipo | Cada semana | Lo pide el KPI C4. La primera es la del G4 (docs/documentacion/actas/2026-11-G4.md, para llenar en la junta); sirve de plantilla para las demás. |
 
