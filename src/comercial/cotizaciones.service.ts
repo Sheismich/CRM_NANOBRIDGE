@@ -1,10 +1,13 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, gte, like, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, like, lt, ne, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, catalogoEtapaEmbudo, contactos, cotizacionPartidas, cotizaciones, empresas, historialEtapaOportunidad, oportunidades, usuarios } from "../database/schema.js";
+import { auditoria, catalogoEtapaEmbudo, contactos, cotizacionPartidas, cotizaciones, empresas, historialEtapaOportunidad, oportunidades, tareas, usuarios } from "../database/schema.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { HttpError } from "../shared/http-error.js";
-import { diasEntreFechas, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
+import { diasEntreFechas, fechaMx, finSiguienteDiaHabilMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
+import { isDuplicateEntry } from "../shared/database-errors.js";
+import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
+import { enlaceTarea, nombreEmpresa, notificar, responsableOEquipo } from "../notificaciones/notificar.js";
 import { MOTIVOS_RECHAZO_COTIZACION } from "../shared/motivos-rechazo-cotizacion.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { aCentavos, calcularCotizacion, deCentavos } from "./dinero.js";
@@ -18,6 +21,9 @@ import type { CambiarEstadoCotizacionInput, ConteosCotizacionesQuery, CrearCotiz
 export const CODIGO_COTIZACION_ACEPTADA = "COTIZACION_ACEPTADA";
 export const CODIGO_YA_HAY_COTIZACION_ACEPTADA = "YA_HAY_COTIZACION_ACEPTADA";
 export const CODIGO_OPORTUNIDAD_CERRADA = "OPORTUNIDAD_CERRADA";
+export const TITULO_SEGUIMIENTO_COTIZACION = "Dar seguimiento a cotización";
+const DIAS_HABILES_PARA_SEGUIMIENTO = 5;
+const RESULTADO_SEGUIMIENTO_CANCELADO = "Cancelada: la cotización ya tuvo respuesta";
 
 // "$1,500.00" para el comentario del historial cuando una cotización gana.
 const PESOS = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -225,6 +231,7 @@ export class CotizacionesService {
       if (marcarObsoleta.affectedRows === 0) {
         throw new HttpError(409, "La cotización ya fue versionada o marcada obsoleta por otra solicitud");
       }
+      await this.cancelarSeguimiento(tx, actual.id);
 
       const [result] = await tx.insert(cotizaciones).values({
         empresaId: actual.empresaId,
@@ -395,6 +402,68 @@ export class CotizacionesService {
   // con su UPDATE ... AND estado = 'enviada' (si alguien la aceptó en ese
   // momento, gana la persona) y su fila de auditoría sin usuario.
   // Idempotente: lo ya vencido no se vuelve a tocar.
+  private async cancelarSeguimiento(tx: DrizzleTx, cotizacionId: number) {
+    await tx.update(tareas).set({ estado: "cancelada", resultado: RESULTADO_SEGUIMIENTO_CANCELADO, cerradaEn: sql`CURRENT_TIMESTAMP` })
+      .where(and(eq(tareas.cotizacionId, cotizacionId), sql`${tareas.estado} NOT IN ('cerrada', 'cancelada')`));
+  }
+
+  // Cotizaciones enviadas hace 5 días hábiles sin respuesta: una tarea para el
+  // responsable de la oportunidad (o para el equipo, si ya no está). Una sola
+  // por versión: el UNIQUE de tareas.cotizacion_id cubre dos corridas a la vez.
+  async crearSeguimientos() {
+    const ahora = new Date();
+    const candidatas = await this.db
+      .select({
+        id: cotizaciones.id,
+        version: cotizaciones.version,
+        empresaId: cotizaciones.empresaId,
+        contactoId: cotizaciones.contactoId,
+        fechaEnvio: cotizaciones.fechaEnvio,
+        responsableId: oportunidades.responsableId
+      })
+      .from(cotizaciones)
+      .innerJoin(oportunidades, eq(oportunidades.id, cotizaciones.oportunidadId))
+      .leftJoin(tareas, eq(tareas.cotizacionId, cotizaciones.id))
+      .where(and(eq(cotizaciones.estado, "enviada"), eq(oportunidades.cerrada, false), isNotNull(cotizaciones.fechaEnvio), isNull(tareas.id)))
+      .orderBy(cotizaciones.fechaEnvio)
+      .limit(ALERTAS_BATCH_SIZE);
+
+    let creadas = 0;
+    for (const c of candidatas) {
+      // Medianoche de México del día que se envió (06:00 UTC).
+      if (sumarDiasHabilesMx(new Date(`${c.fechaEnvio}T06:00:00Z`), DIAS_HABILES_PARA_SEGUIMIENTO) > ahora) continue;
+      try {
+        await this.db.transaction(async (tx) => {
+          const { ids, delEquipo } = await responsableOEquipo(tx, c.responsableId);
+          const [tarea] = await tx.insert(tareas).values({
+            tipo: "seguimiento",
+            titulo: TITULO_SEGUIMIENTO_COTIZACION,
+            descripcion: `Cotización #${c.id} v${c.version}, enviada el ${c.fechaEnvio}, sigue sin respuesta.`,
+            prioridad: "media",
+            responsableId: delEquipo ? null : c.responsableId,
+            empresaId: c.empresaId,
+            contactoId: c.contactoId,
+            cotizacionId: c.id,
+            fechaLimite: finSiguienteDiaHabilMx(ahora)
+          });
+          await notificar(tx, ids, {
+            tipo: "tarea_asignada",
+            titulo: `Dar seguimiento: ${(await nombreEmpresa(tx, c.empresaId)) ?? "cotización"}`,
+            cuerpo: `La cotización #${c.id} lleva ${DIAS_HABILES_PARA_SEGUIMIENTO} días hábiles sin respuesta.`,
+            enlace: enlaceTarea(tarea.insertId, delEquipo ? "sin_asignar" : undefined),
+            entidad: "tarea",
+            entidadId: tarea.insertId,
+            conCorreo: true
+          });
+        });
+        creadas++;
+      } catch (error) {
+        if (!isDuplicateEntry(error)) throw error;
+      }
+    }
+    return creadas;
+  }
+
   async vencerCotizacionesPasadas() {
     const hoy = fechaMx(new Date());
     const candidatas = await this.db
@@ -524,6 +593,7 @@ export class CotizacionesService {
           : { estado: input.estado }
       });
 
+      if (input.estado === "aceptada" || input.estado === "rechazada") await this.cancelarSeguimiento(tx, id);
       if (input.estado === "aceptada") await this.ganarOportunidad(tx, user, cotizacion);
     });
 

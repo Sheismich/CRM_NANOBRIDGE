@@ -39,6 +39,7 @@ export class JobsController {
       "sla-tareas": async () => ({
         procesados: await tareasService.alertarTareasSlaVencidas(),
         interesados_escalados: await tareasService.escalarInteresadosSinAtender(),
+        cotizaciones_en_seguimiento: await cotizacionesService.crearSeguimientos(),
         correos_reintentados: await notificacionesService.reintentarCorreos()
       }),
       // Interesados con un día hábil sin atender. También corre en sla-tareas;
