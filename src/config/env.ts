@@ -51,6 +51,10 @@ const schema = z.object({
   // TOPE_DIARIO_CORREOS: los recordatorios van primero. Se cambia con
   // --update-env-vars, igual que el tope.
   NUEVOS_POR_DIA: z.coerce.number().int().positive().default(10),
+  // Freno automático del dominio (shared/freno-dominio.ts): quejas de spam o
+  // rebotes en 7 días que pausan la prospección.
+  FRENO_QUEJAS_7D: z.coerce.number().int().positive().default(2),
+  FRENO_REBOTES_7D: z.coerce.number().int().positive().default(5),
   // Expediente documental (PLAN_CRM_DEFINITIVO.md #8). STORAGE_DRIVER
   // decide en runtime qué StorageService implementa
   // src/documentos/storage/storage.provider.ts:

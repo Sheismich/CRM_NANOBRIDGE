@@ -43,6 +43,7 @@ const REGLAS: Record<TipoRegistro, Record<string, string[]>> = {
     plantilla_correo: ["editar"],
     pie_correo: ["editar"],
     reparto_interesados: ["editar"],
+    freno_dominio: ["pausar", "reanudar"],
     catalogo_tipo_documento: ["cambiar_obligatorio"],
     evento_pendiente: ["reintentar"],
     proceso_fallido: ["cambiar_estado"]

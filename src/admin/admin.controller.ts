@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Query, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { contentDispositionAdjunto } from "../shared/content-disposition.js";
 import { RegistroCambiosService } from "./registro-cambios.service.js";
@@ -9,6 +9,8 @@ import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { ProblemasService } from "./problemas.service.js";
 import { SaludService } from "./salud.service.js";
+import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
+import { reanudarFreno } from "../shared/freno-dominio.js";
 import { claveProblemaSchema, problemasQuerySchema, registroCambiosExportQuerySchema, registroCambiosQuerySchema } from "./dto/admin.schema.js";
 
 // Pantalla de Administración del rediseño (12-oct-2026): todo solo para el
@@ -21,7 +23,8 @@ export class AdminController {
   constructor(
     private readonly saludService: SaludService,
     private readonly problemasService: ProblemasService,
-    private readonly registroCambiosService: RegistroCambiosService
+    private readonly registroCambiosService: RegistroCambiosService,
+    @Inject(DRIZZLE) private readonly db: DrizzleDb
   ) {}
 
   @Get("salud")
@@ -39,6 +42,12 @@ export class AdminController {
   @HttpCode(200)
   resolver(@Body() body: unknown, @CurrentUser() actor: CurrentUserType) {
     return this.problemasService.resolver(actor, claveProblemaSchema.parse(body).clave);
+  }
+
+  @Post("freno-dominio/reanudar")
+  @HttpCode(200)
+  reanudarFreno(@CurrentUser() actor: CurrentUserType) {
+    return reanudarFreno(this.db, actor);
   }
 
   @Get("registro-cambios")

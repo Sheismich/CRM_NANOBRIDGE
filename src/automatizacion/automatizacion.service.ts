@@ -10,6 +10,7 @@ import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
 import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
+import { CODIGO_ENVIOS_EN_PAUSA, MENSAJE_EN_PAUSA, evaluarFreno, leerFreno } from "../shared/freno-dominio.js";
 import { ESTADOS_PROSPECTO_CERRADO, MAX_CONTACTOS_POR_CICLO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { HORAS_PARA_RETOMAR_DE_FILA } from "../shared/listo-para-automatizacion.js";
@@ -417,7 +418,7 @@ export class AutomatizacionService {
   //   igual): esperan su lugar para el siguiente día hábil.
   async tomarDeFila(input: TomarDeFilaInput) {
     const hoy = fechaMx(new Date());
-    if (esFeriadoMx(hoy)) return { data: [], cupo_restante: 0, tope_diario_alcanzado: false };
+    if (esFeriadoMx(hoy) || (await leerFreno(this.db)).pausado) return { data: [], cupo_restante: 0, tope_diario_alcanzado: false };
     return this.db.transaction(async (tx) => {
       // Primero se bloquea toda la fila (son decenas o cientos de renglones):
       // dos corridas a la vez se forman, y la segunda cuenta el cupo con lo
@@ -665,6 +666,9 @@ export class AutomatizacionService {
   // envío que sigue abierta y vigente.
   async verificarEnvio(query: VerificacionEnvioQuery) {
     const resultado = await this.verificarEnvioSinTope(query);
+    if (resultado.puede_enviar && query.canal === "correo" && (await leerFreno(this.db)).pausado) {
+      return { ...resultado, puede_enviar: false, motivo: MENSAJE_EN_PAUSA, en_espera: true };
+    }
     // Tope diario de correos (bloque "antes de encender", 5-oct-2026): solo
     // cuando lo demás ya dejaría pasar. en_espera=true le dice a PT1 que NO
     // marque "excluido": la persona no tiene nada malo, solo no hay lugar hoy.
@@ -757,6 +761,8 @@ export class AutomatizacionService {
     if (input.canal === "whatsapp") {
       throw new HttpError(409, "Canal WhatsApp desactivado (pendiente proveedor aprobado)");
     }
+
+    if ((await leerFreno(this.db)).pausado) throw new HttpError(409, MENSAJE_EN_PAUSA, CODIGO_ENVIOS_EN_PAUSA);
 
     const [prospecto] = await this.db.select({ id: prospectos.id, contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
@@ -882,7 +888,8 @@ export class AutomatizacionService {
     const hoy = fechaMx(new Date());
     // En feriado no se reclama nada (n8n no conoce los feriados y PT4 corre
     // igual): las ventanas siguen abiertas y salen el siguiente día hábil.
-    if (esFeriadoMx(hoy)) return { data: [], omitidas: [], tope_diario_alcanzado: false };
+    // En pausa tampoco: siguen abiertas y salen al reanudar.
+    if (esFeriadoMx(hoy) || (await leerFreno(this.db)).pausado) return { data: [], omitidas: [], tope_diario_alcanzado: false };
     return this.db.transaction(async (tx) => {
       // Tope diario de correos (bloque "antes de encender", 5-oct-2026): solo
       // se entregan los recordatorios que caben hoy. Los que no caben NO se
@@ -1119,7 +1126,8 @@ export class AutomatizacionService {
     return this.db.transaction(async (tx) => {
       const valorNormalizado = normalizarValorSupresion(input.tipo, input.valor);
       const origen = { motivo: input.motivo, executionId: input.execution_id, usuarioId: null };
-      const supresion = await registrarSupresion(tx, { tipo: input.tipo, valorNormalizado, ...origen });
+      const supresion = await registrarSupresion(tx, { tipo: input.tipo, valorNormalizado, evento: input.evento, ...origen });
+      if (!supresion.ya_existia && (input.evento === "bounce" || input.evento === "spamreport")) await evaluarFreno(tx);
 
       const esBajaDePersona = input.evento !== undefined && (EVENTOS_BAJA_DE_PERSONA as readonly string[]).includes(input.evento);
       if (!esBajaDePersona) {

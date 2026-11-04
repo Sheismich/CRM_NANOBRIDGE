@@ -43,4 +43,8 @@ process.env.CRM_URL = "https://crm.test";
 process.env.PORT = "3000";
 process.env.SESSION_COOKIE_NAME = "nanobridge_session";
 process.env.SESSION_TTL_HOURS = "12";
+// Muy altos: los eventos de SendGrid de toda la suite no deben pausar los envíos
+// (565-freno-dominio.spec.ts los baja a mano).
+process.env.FRENO_QUEJAS_7D = "1000000";
+process.env.FRENO_REBOTES_7D = "1000000";
 process.env.STORAGE_MAX_FILE_SIZE_MB = "25";

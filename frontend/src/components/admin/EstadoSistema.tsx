@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { clsx } from "clsx";
 import { Icono } from "../ui/Icono";
 import type { NombreIcono } from "../ui/iconos";
 import { MarcaDeAgua } from "../ui/MarcaDeAgua";
-import { api } from "../../lib/api";
+import { Button } from "../ui/Button";
+import { ApiError, api } from "../../lib/api";
 import { hora } from "../../lib/mi-dia";
 import { isoDia } from "../../lib/inicio";
 import { plural } from "../../lib/formato";
@@ -17,6 +18,9 @@ import type { SaludSistema } from "../../types";
 // el backend con un SELECT 1. Se revisa solo cada minuto.
 
 export function EstadoSistema() {
+  const queryClient = useQueryClient();
+  const [reanudando, setReanudando] = useState(false);
+  const [errorFreno, setErrorFreno] = useState<string | null>(null);
   const salud = useQuery({
     queryKey: ["admin", "salud"],
     queryFn: async () => {
@@ -29,16 +33,32 @@ export function EstadoSistema() {
   const segundos = useSegundosDesde(salud.dataUpdatedAt);
   const s = salud.data?.datos;
   const correos = s?.correos;
+  const freno = s?.freno;
   const problemas = s?.resumen?.problemas_abiertos ?? 0;
   const baseCaida = s?.base_datos.estado === "error";
-  const titulo = !s ? "Revisando…" : baseCaida ? "La base de datos no responde" : problemas === 0 ? "Todo en orden" : "Casi todo en orden";
+  const titulo = !s ? "Revisando…" : baseCaida ? "La base de datos no responde" : freno?.pausado ? "Envíos de prospección en pausa" : problemas === 0 ? "Todo en orden" : "Casi todo en orden";
   const subtitulo = !s
     ? ""
     : baseCaida
       ? "La API funciona, pero no alcanza la base de datos. Nada se guarda hasta que vuelva."
+      : freno?.pausado
+        ? "Nadie recibe correos de prospección hasta que un administrador los reanude."
       : problemas === 0
         ? "Ningún problema abierto."
         : `Hay ${plural(problemas, "problema abierto", "problemas abiertos")}.`;
+
+  async function reanudar() {
+    setReanudando(true);
+    setErrorFreno(null);
+    try {
+      await api.post("/api/v1/admin/freno-dominio/reanudar");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "salud"] });
+    } catch (err) {
+      setErrorFreno(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+    } finally {
+      setReanudando(false);
+    }
+  }
 
   return (
     <section className="franja px-4 py-5 md:px-7 md:py-6">
@@ -61,7 +81,18 @@ export function EstadoSistema() {
         )}
       </div>
       {salud.isError && <p className="relative z-[1] mt-4 text-[13px] text-[#ffb1b9]">No se pudo revisar el estado. Se vuelve a intentar en un minuto.</p>}
-      <div className="relative z-[1] mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {freno?.pausado && (
+        <div className="relative z-[1] mt-4 flex flex-wrap items-center gap-3 rounded-[14px] border border-[#f4c06a]/70 bg-[#f4c06a]/[0.08] px-4 py-3">
+          <p className="min-w-0 flex-1 text-[13px] text-white/85">
+            {freno.motivo} Revisa la lista antes de reanudar: los correos siguen esperando su turno.
+            {errorFreno && <span className="mt-1 block text-[#ffb1b9]">{errorFreno}</span>}
+          </p>
+          <Button disabled={reanudando} onClick={() => void reanudar()}>
+            {reanudando ? "…" : "Reanudar envíos"}
+          </Button>
+        </div>
+      )}
+      <div className="relative z-[1] mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Servicio icono="servidor" titulo="API del CRM" sub={s?.api.revision ? `revisión ${s.api.revision.replace(/^nanobridge-api-/, "")} · Cloud Run` : "Cloud Run"} etiqueta="Responde en" valor={salud.data ? `${salud.data.respondeMs} ms` : "…"} pie="Funcionando" ok />
         <Servicio
           icono={"M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3z M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6 M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"}
@@ -80,6 +111,15 @@ export function EstadoSistema() {
           valor={correos ? String(correos.enviados_hoy) : "…"}
           pie={(correos?.sin_confirmar ?? 0) > 0 ? plural(correos!.sin_confirmar, "correo sin confirmar", "correos sin confirmar") : correos?.ultimo_envio_en ? `Último envío ${isoDia(new Date(correos.ultimo_envio_en)) === isoDia(new Date()) ? hora(new Date(correos.ultimo_envio_en)) : new Date(correos.ultimo_envio_en).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}` : "Hoy no ha salido ninguno"}
           ok={(correos?.sin_confirmar ?? 0) === 0}
+        />
+        <Servicio
+          icono="aviso"
+          titulo="Reputación del dominio"
+          sub="quejas y rebotes en 7 días"
+          etiqueta="Quejas · rebotes"
+          valor={freno ? `${freno.quejas_7d} · ${freno.rebotes_7d}` : "…"}
+          pie={!freno ? "…" : freno.pausado ? "Envíos en pausa" : `Se pausa con ${freno.limite_quejas} quejas o ${freno.limite_rebotes} rebotes`}
+          ok={!freno?.pausado}
         />
       </div>
     </section>

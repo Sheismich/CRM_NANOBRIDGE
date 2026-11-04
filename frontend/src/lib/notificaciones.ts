@@ -9,7 +9,7 @@ import { horaEvento } from "./inicio";
 // abre el panel (docs/diseno/avisos-menu.html opción D, panel versión 2
 // de docs/diseno/avisos-panel.html).
 
-export type TipoAviso = "tarea_asignada" | "interesado" | "tarea_vencida" | "documento_rechazado" | "documento_sin_revisar" | "respuesta_por_clasificar" | "respuesta_conversacion";
+export type TipoAviso = "tarea_asignada" | "interesado" | "tarea_vencida" | "documento_rechazado" | "documento_sin_revisar" | "respuesta_por_clasificar" | "respuesta_conversacion" | "freno_dominio";
 
 export interface Notificacion {
   id: number;
@@ -82,7 +82,8 @@ const TIPOS: Record<TipoAviso, { etiqueta: string; raya: string; pastilla: strin
   documento_sin_revisar: { etiqueta: "Documento", raya: "bg-warn", pastilla: "bg-warn-bg text-warn" },
   respuesta_por_clasificar: { etiqueta: "Por clasificar", raya: "bg-info", pastilla: "bg-info-bg text-info" },
   // Etapa 3: el cliente contestó a un correo que le mandaste desde el CRM.
-  respuesta_conversacion: { etiqueta: "Te contestó", raya: "bg-ok", pastilla: "bg-ok-bg text-ok" }
+  respuesta_conversacion: { etiqueta: "Te contestó", raya: "bg-ok", pastilla: "bg-ok-bg text-ok" },
+  freno_dominio: { etiqueta: "Envíos en pausa", raya: "bg-danger", pastilla: "bg-danger-bg text-danger" }
 };
 export function tipoAviso(tipo: string) {
   return TIPOS[tipo as TipoAviso] ?? { etiqueta: "Aviso", raya: "bg-ink-3", pastilla: "bg-soft text-ink-2" };

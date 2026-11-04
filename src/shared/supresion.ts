@@ -17,6 +17,8 @@ export type SupresionNueva = {
   // leen los gates de envío, sin volver a normalizar algo ya normalizado.
   valorNormalizado: string;
   motivo: string;
+  // El evento de SendGrid que la causó, si vino de ahí.
+  evento?: string;
   // execution_id de n8n; NULL cuando la origina una persona desde el CRM.
   executionId: string | null;
   // Quien la originó, para auditoría; NULL = automatización.
@@ -56,6 +58,7 @@ export async function registrarSupresion(tx: DrizzleTx, input: SupresionNueva) {
       tipo,
       valorNormalizado,
       motivo: input.motivo,
+      evento: input.evento,
       executionId: input.executionId
     });
     id = result.insertId;

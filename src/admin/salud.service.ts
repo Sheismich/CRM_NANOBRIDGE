@@ -3,6 +3,7 @@ import { and, eq, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { envios } from "../database/schema.js";
 import { diaSiguiente, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
+import { estadoFreno } from "../shared/freno-dominio.js";
 import { ProblemasService } from "./problemas.service.js";
 
 // "Estado del sistema" de Administración (12-oct-2026; puntos 38 y 54). Solo
@@ -12,6 +13,7 @@ import { ProblemasService } from "./problemas.service.js";
 //   contestar lo mide la pantalla.
 // - Base de datos: cuánto tarda un SELECT 1. El respaldo diario es
 //   configuración de Cloud SQL: lo dice la pantalla como texto fijo.
+// - Freno del dominio: si los envíos están en pausa, y quejas y rebotes en 7 días.
 // - Correos: cuántos van hoy (día de México), cuándo salió el último y cuántos
 //   siguen sin confirmar de n8n después de una hora.
 
@@ -35,17 +37,19 @@ export class SaludService {
         api: this.api(),
         base_datos: { estado: "error" as const, responde_ms: null },
         correos: null,
+        freno: null,
         resumen: null
       };
     }
 
     const hoy = fechaMx(new Date());
-    const [[correos], [sinConfirmar], grupos] = await Promise.all([
+    const [[correos], [sinConfirmar], freno, grupos] = await Promise.all([
       this.db.select({ n: sql<number>`COUNT(*)`, ultimo: sql<Date | string | null>`MAX(${envios.enviadoEn})` }).from(envios)
         .where(and(ne(envios.estado, "fallido"), sql`${envios.enviadoEn} >= ${inicioDelDiaMxSql(hoy)}`, sql`${envios.enviadoEn} < ${inicioDelDiaMxSql(diaSiguiente(hoy))}`)),
       // destinatario NULL = fila de antes de la 039: nadie la va a confirmar.
       this.db.select({ n: sql<number>`COUNT(*)` }).from(envios)
         .where(and(eq(envios.estado, "registrado"), isNotNull(envios.destinatario), lt(envios.enviadoEn, sql`CURRENT_TIMESTAMP - INTERVAL 1 HOUR`))),
+      estadoFreno(this.db),
       this.problemasService.grupos()
     ]);
     return {
@@ -53,6 +57,7 @@ export class SaludService {
       api: this.api(),
       base_datos: baseDatos,
       correos: { enviados_hoy: Number(correos?.n ?? 0), ultimo_envio_en: aIso(correos?.ultimo ?? null), sin_confirmar: Number(sinConfirmar?.n ?? 0) },
+      freno,
       resumen: { problemas_abiertos: grupos.length }
     };
   }

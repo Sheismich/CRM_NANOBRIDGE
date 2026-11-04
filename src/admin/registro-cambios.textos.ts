@@ -147,6 +147,7 @@ export function nombreDelRegistro(fila: FilaAuditoria, nombres: Nombres): string
     case "plantilla_correo": return NOMBRES_PLANTILLA[String(objeto(fila.despues)?.numero ?? "")] ?? null;
     case "pie_correo": return "Pie de los correos";
     case "reparto_interesados": return "Reparto de interesados";
+    case "freno_dominio": return "Freno del dominio";
     case "catalogo_tipo_documento": return nombres.tiposDocumento.get(id) ?? null;
     case "prospecto": {
       const p = nombres.prospectos.get(id);
@@ -216,6 +217,8 @@ export function frase(fila: FilaAuditoria, quien: string, nombres: Nombres): str
     case "plantilla_correo:editar": return `${quien} editó el correo de prospección «${nombre}».`;
     case "pie_correo:editar": return `${quien} editó el pie de los correos de prospección.`;
     case "reparto_interesados:editar": return despues.activo ? `${quien} cambió el reparto de interesados (prendido, ${Array.isArray(despues.usuario_ids) ? despues.usuario_ids.length : 0} en la lista).` : `${quien} apagó el reparto de interesados.`;
+    case "freno_dominio:pausar": return `Se pausaron los envíos de prospección. ${String(despues.motivo ?? "")}`.trim();
+    case "freno_dominio:reanudar": return `${quien} reanudó los envíos de prospección.`;
     case "registro_cambios:exportar": return `${quien} exportó el Registro de cambios (${String(despues.formato ?? "csv").toUpperCase()}).`;
   }
   if (fila.entidad === "campana" && VERBOS_CAMPANA[fila.accion]) return `${quien} ${VERBOS_CAMPANA[fila.accion]} la campaña ${nombre}.`;
