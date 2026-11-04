@@ -153,7 +153,7 @@ Hitos del trabajo, con su evidencia. El historial completo está en el repositor
 | Tema | Qué pasa | Quién decide |
 |---|---|---|
 | Fecha de cierre | El equipo trabaja contra el 9 de diciembre; el PDF del programa dice el 18. Falta la confirmación escrita de Dirección. | Dirección |
-| Cuenta de SendGrid | Vence el 24-nov. Sin pagarla puede no haber piloto. Confirmar antes que el plan incluya Inbound Parse. | Dirección |
+| Cuenta de SendGrid | Vence el 24-nov. Carlos confirmó el 4-nov que se paga el plan; falta hacerlo antes del 24-nov y confirmar que incluye Inbound Parse. | Dirección |
 | Correos de prospección en Promociones de Gmail | Desde el molde del 22-oct caen en Promociones. Quitar el logo no bastó y el HTML sencillo se probó y se revirtió el 29-oct. Pega directo en las respuestas del piloto. | Fabián |
 | Quién atiende a los interesados | El reparto automático ya está en producción, apagado. Falta dar de alta al equipo de ventas, elegir la lista y prenderlo antes del piloto (OB-05, decisión 11). Con eso también se resuelve que las empresas de los interesados tengan responsable. | Dirección y Carlos |
 | Tamaño de empresa | La lista de Carlos no lo trae y sin él ninguna empresa entra a la automatización. | Carlos y Daniela |

@@ -20,7 +20,7 @@ El detalle de todo está en la [bitácora](BITACORA.md); aquí solo lo que hace 
 |---|---|---|
 | **T1.1 · Validez y completitud** | 98.4 % | Línea base sobre **datos de ejemplo**: mide que el método funciona, no la calidad de la base real |
 | **T1.2 · Control de duplicados** | 96.8 % | Igual: los duplicados que aparecen son de las pruebas y se borran antes de cargar la lista real |
-| **T1.3 · Controles operativos** | 37 de 37 (100 %) | Cada control está activo y tiene su prueba o verificación |
+| **T1.3 · Controles operativos** | 36 de 37 (97 %) | Los demás están activos y tienen su prueba o verificación. F-05 (avisos hacia n8n) nunca entregó nada, porque n8n no tiene quién los reciba, y se retira |
 | Pruebas automáticas | 803 de 803 (API) y 30 de 30 (pantallas) | Sobre el código que está en producción (3-nov) |
 
 La medición que vale para T1.1 y T1.2 es la auditoría que se corra **después de cargar la lista de Carlos** (semana 12).
@@ -47,7 +47,7 @@ días hábiles, aviso y fusión de empresas repetidas, cotización por correo y 
 
 | Riesgo | Qué hace falta | Quién |
 |---|---|---|
-| **SendGrid vence el 24-nov** | Pagar el plan, con Inbound Parse incluido. Sin él no hay piloto | Dirección |
+| **SendGrid vence el 24-nov** | Carlos confirmó que se paga el plan (4-nov). Falta que se haga antes del 24-nov y confirmar que incluye Inbound Parse (sin él no llegan las respuestas) | Dirección |
 | **La lista de Carlos no trae el tamaño de la empresa** | Sin tamaño, ninguna empresa entra a la automatización | Carlos |
 | **Los correos caen en Promociones de Gmail** | Quien no ve el correo no responde | T2 |
 | **Los recordatorios casi no caben antes del cierre** | Solo los correos del 30-nov y del 1-dic alcanzan su primer recordatorio; el piloto mide sobre todo la respuesta al primer correo | Dirección: aceptarlo o empezar antes |
@@ -57,7 +57,7 @@ días hábiles, aviso y fusión de empresas repetidas, cotización por correo y 
 | Cuándo | Qué | Quién |
 |---|---|---|
 | Esta semana | Tamaño de las empresas, textos de los 3 correos y domicilio para el pie | Carlos |
-| Antes del 24-nov | Pago de SendGrid | Dirección |
+| Antes del 24-nov | Pago de SendGrid (ya confirmado por Carlos) | Dirección |
 | Semana 11 | Pruebas en vivo que faltan (fuera de oficina, correo sin firma, rebote) | T2 |
 | Semana 12 | Borrar los datos de ejemplo, cargar la lista y correr la auditoría (certificación de audiencia) | T1 y T2 |
 | Semana 13 · G5 | OB-05 v1.0 y autorización escrita del piloto | Equipo y Dirección |

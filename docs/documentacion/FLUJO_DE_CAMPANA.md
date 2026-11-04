@@ -24,7 +24,7 @@ solo lo que hace falta para decidir.
 | 7 | **Un «no interesado»** ¿bloquea para siempre o 6 meses? | — | ⏳ Pregunta abierta a Carlos |
 | 8 | **Correos de área** (`info@`, `ventas@`): 9 de los 25 de la lista | Incluirlos o excluirlos | ⏳ Decidir |
 | 9 | **Quién recibe los avisos** de respuestas (PT2) y de fallas (B4) | Hoy llegan al Gmail de Fabián; cambiarlos al supervisor que clasifica y a quien atienda las fallas | ⏳ Decidir nombres |
-| 10 | **Cuenta de SendGrid** pagada, con Inbound Parse incluido | Plan de pago con la tarjeta de la empresa, antes del 24-nov | ⏳ Pago de Dirección |
+| 10 | **Cuenta de SendGrid** pagada, con Inbound Parse incluido | Plan de pago con la tarjeta de la empresa, antes del 24-nov | Carlos confirmó el pago (4-nov); falta hacerlo |
 | 11 | **Quién atiende a los interesados** | Reparto automático entre el equipo de ventas (2 o 3 personas), elegidas en Administración → «Reparto de interesados» (§6). Hoy está apagado | ⏳ Dar de alta al equipo y elegir la lista |
 
 ## 2. Audiencia
