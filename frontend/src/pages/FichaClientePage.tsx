@@ -17,7 +17,7 @@ import { useOportunidadesEmpresa } from "../components/ficha/queries";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { EnlaceExterno } from "../components/ui/Enlaces";
-import { ServerError } from "../components/ui/Field";
+import { Field, ServerError, inputClass } from "../components/ui/Field";
 import { Icono } from "../components/ui/Icono";
 import { LogoEmpresa } from "../components/ui/LogoEmpresa";
 import { MarcaDeAgua } from "../components/ui/MarcaDeAgua";
@@ -388,6 +388,11 @@ function Kpi({ etiqueta, children }: { etiqueta: string; children: ReactNode }) 
 
 type ContactoAgrupado = ReturnType<typeof agruparContactos>[number];
 
+// "Dar de baja" (4-nov-2026): la persona pidió por teléfono o en persona que
+// no le escriban. POST /contactos/:id/baja hace lo mismo que el link de baja
+// del correo (suprime todos sus medios, pasa sus prospectos a baja, cancela
+// sus seguimientos) y no se deshace. Solo a quien tiene algún correo,
+// teléfono o WhatsApp activo: si no, no hay nada que bloquear.
 // "A prospección" (22-oct-2026): POST /prospectos/desde-contacto crea su
 // prospecto sin volver a capturarlo; de ahí se manda a automatización desde
 // Prospectos. Solo a quien tiene correo activo (la automatización solo
@@ -400,6 +405,9 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
   const [porDesactivar, setPorDesactivar] = useState<ContactoAgrupado | null>(null);
   const [porProspectar, setPorProspectar] = useState<ContactoAgrupado | null>(null);
   const [prospectado, setProspectado] = useState<{ nombre: string; prospectoId: number } | null>(null);
+  const [porDarDeBaja, setPorDarDeBaja] = useState<ContactoAgrupado | null>(null);
+  const [motivoBaja, setMotivoBaja] = useState("");
+  const [dadoDeBaja, setDadoDeBaja] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function aProspeccion(c: ContactoAgrupado) {
@@ -412,6 +420,27 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
       await queryClient.invalidateQueries({ queryKey: ["prospectos"] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+    }
+  }
+
+  async function darDeBaja(c: ContactoAgrupado) {
+    setError(null);
+    setDadoDeBaja(null);
+    try {
+      await api.post(`/api/v1/contactos/${c.contacto.id}/baja`, { motivo: motivoBaja.trim() });
+      setDadoDeBaja(c.contacto.nombre);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["empresa", String(empresaId)] }),
+        queryClient.invalidateQueries({ queryKey: ["contactos"] }),
+        queryClient.invalidateQueries({ queryKey: ["prospectos"] }),
+        queryClient.invalidateQueries({ queryKey: ["timeline"] }),
+        queryClient.invalidateQueries({ queryKey: ["tareas"] })
+      ]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+    } finally {
+      setPorDarDeBaja(null);
+      setMotivoBaja("");
     }
   }
 
@@ -458,6 +487,12 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
           </Link>
         </div>
       )}
+      {dadoDeBaja && (
+        <div className="mx-4 mt-3 flex items-center gap-2 rounded-[12px] bg-ok-bg px-3.5 py-3 text-[12px] font-semibold text-ok md:mx-[22px]">
+          <Icono nombre="check" size={15} className="shrink-0" />
+          <span className="min-w-0 flex-1">{dadoDeBaja} quedó dada de baja: ya no se le escribe y sus seguimientos se cancelaron.</span>
+        </div>
+      )}
       {agregando && (
         <div className="p-4 md:px-[22px]">
           <ContactoForm empresaId={empresaId} onDone={() => setAgregando(false)} />
@@ -476,6 +511,7 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
           }
           const sinMedioActivo = medios.every((m) => m.estado_contacto !== "activo");
           const conCorreo = medios.some((m) => m.medio_tipo === "correo" && m.estado_contacto === "activo");
+          const contactable = medios.some((m) => (m.medio_tipo === "correo" || m.medio_tipo === "telefono" || m.medio_tipo === "whatsapp") && m.estado_contacto === "activo");
           return (
             <li key={contacto.id} className="flex flex-wrap items-start gap-3 px-4 py-3.5 md:px-[22px]">
               <Avatar nombre={contacto.nombre} className={sinMedioActivo ? "!bg-none !bg-soft !text-ink-3" : ""} />
@@ -513,6 +549,16 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
                 >
                   Editar
                 </button>
+                {contactable && (
+                  <button
+                    type="button"
+                    className="rounded-[8px] px-2 py-1 text-[12px] font-bold text-danger hover:bg-danger-bg"
+                    title="Pidió por teléfono o en persona que no le escriban"
+                    onClick={() => setPorDarDeBaja(agrupado)}
+                  >
+                    Dar de baja
+                  </button>
+                )}
                 <button type="button" className="rounded-[8px] px-2 py-1 text-[12px] font-bold text-danger hover:bg-danger-bg" onClick={() => setPorDesactivar(agrupado)}>
                   Desactivar
                 </button>
@@ -537,6 +583,50 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
           </>
         }
       />
+      <Modal
+        abierto={porDarDeBaja !== null}
+        onCerrar={() => {
+          setPorDarDeBaja(null);
+          setMotivoBaja("");
+        }}
+        titulo="¿Dar de baja a esta persona?"
+        descripcion={
+          porDarDeBaja
+            ? `«${porDarDeBaja.contacto.nombre}» pidió que no le escriban. Sus correos y teléfonos pasan a «no contactar», sus prospectos a baja y sus seguimientos se cancelan. No se puede deshacer desde el CRM.`
+            : undefined
+        }
+        acciones={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPorDarDeBaja(null);
+                setMotivoBaja("");
+              }}
+            >
+              No
+            </Button>
+            <Button variant="rechazar" disabled={motivoBaja.trim().length < 2} onClick={() => porDarDeBaja && void darDeBaja(porDarDeBaja)}>
+              Sí, dar de baja
+            </Button>
+          </>
+        }
+      >
+        <div className="px-5 pb-2">
+          <Field label="¿Cómo lo pidió?" htmlFor="motivo-baja">
+            <textarea
+              id="motivo-baja"
+              data-autofocus
+              rows={2}
+              maxLength={255}
+              placeholder="Ej. Lo pidió por teléfono al vendedor"
+              className={inputClass}
+              value={motivoBaja}
+              onChange={(e) => setMotivoBaja(e.target.value)}
+            />
+          </Field>
+        </div>
+      </Modal>
       <Modal
         abierto={porProspectar !== null}
         onCerrar={() => setPorProspectar(null)}
