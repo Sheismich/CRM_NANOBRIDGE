@@ -38,8 +38,9 @@ a la vez en empresas, contactos, prospectos, oportunidades, cotizaciones y tarea
    tarea vencida, un documento rechazado). El numerito de Inicio en el menú dice cuántos hay.
 
    ![Inicio con los avisos y los números del mes](img/manual-vendedor/02-inicio.jpg)
-2. **Tareas → Mi día.** Lo que tienes que hacer hoy y lo que ya venció (el numerito de Tareas en el menú). Para cada
-   una: **Cerrar** (con lo que pasó) o **Reprogramar** (para otro día). «Ver todas» enseña también las de otros días.
+2. **Tareas → Mi día.** Lo que tienes que hacer hoy y lo que ya venció (el numerito de Tareas en el menú), una por una
+   y la más urgente primero. Para cada una: **Hecha** (escribes qué pasó y queda en el Historial), **Reprogramar** (para
+   otro día) o **Saltar** (pasa a la siguiente y la deja para después). «Ver todas» enseña también las de otros días.
 
    ![Tareas, Mi día](img/manual-vendedor/03-mi-dia.jpg)
 3. **Si te llegó un interesado** (la tarea «Contactar prospecto interesado»): vence al final del siguiente día hábil.
