@@ -295,9 +295,13 @@ export const tareas = mysqlTable("tareas", {
   // 029: el documento rechazado de una tarea "Corregir documento"; NULL en
   // cualquier otra.
   documentoId: bigint("documento_id", { mode: "number", unsigned: true }),
+  // 040: la cotización de un "Dar seguimiento a cotización"; NULL en cualquier otra.
+  cotizacionId: bigint("cotizacion_id", { mode: "number", unsigned: true }),
   executionId: varchar("execution_id", { length: 100 }),
   fechaLimite: datetime("fecha_limite"),
   alertadoEn: datetime("alertado_en"),
+  // 040: cuándo se avisó a supervisores que un interesado sigue sin atender.
+  escaladoEn: datetime("escalado_en"),
   clasificacion: varchar("clasificacion", { length: 60 }),
   resultado: text("resultado"),
   cerradaEn: datetime("cerrada_en"),
@@ -310,7 +314,8 @@ export const tareas = mysqlTable("tareas", {
   index("idx_tareas_responsable_estado").on(table.responsableId, table.estado),
   index("idx_tareas_tipo_estado").on(table.tipo, table.estado),
   index("idx_tareas_fecha_limite").on(table.fechaLimite),
-  index("idx_tareas_respuesta").on(table.respuestaId)
+  index("idx_tareas_respuesta").on(table.respuestaId),
+  uniqueIndex("uq_tareas_cotizacion").on(table.cotizacionId)
 ]);
 
 // Sin uso desde que se retiró el outbox (nov-2026): nadie escribe aquí. Se

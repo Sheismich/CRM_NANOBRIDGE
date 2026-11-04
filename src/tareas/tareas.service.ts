@@ -6,7 +6,7 @@ import { HttpError } from "../shared/http-error.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { aplicarClasificacionAlProspecto, type ClasificacionRespuesta, type OrigenClasificacion } from "../shared/clasificacion-respuesta.js";
 import { recortarTexto } from "../shared/texto.js";
-import { diaAnterior, diaSiguiente, fechaMx, finSiguienteDiaHabilMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
+import { diaAnterior, diaSiguiente, fechaMx, finSiguienteDiaHabilMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
 import { CODIGO_RESPUESTA_YA_CLASIFICADA } from "../shared/clasificaciones.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { ALERTAS_BATCH_SIZE } from "../shared/jobs.js";
@@ -912,6 +912,54 @@ export class TareasService {
   // dos veces la misma tarea. fecha_limite es NULLABLE -- una tarea sin fecha límite nunca puede "vencer", y
   // lt(tareas.fechaLimite, ...) ya la excluye sola (NULL < X es falso en
   // SQL, no hace falta un isNotNull aparte). Lo dispara PT5 cada día.
+  // Un interesado que lleva un día hábil sin que nadie lo tome: sube a urgente y
+  // avisa a supervisores. No le quita la tarea a quien la tiene. Si un vendedor
+  // ya le contestó al prospecto, está atendido aunque la tarea siga abierta.
+  // Corre cada mañana dentro de sla-tareas; para que sean 24 h reales, PT5 lo
+  // puede llamar cada hora (escalar-interesados). Se puede repetir sin duplicar.
+  async escalarInteresadosSinAtender() {
+    const ahora = new Date();
+    const candidatas = await this.db
+      .select({ id: tareas.id, empresaId: tareas.empresaId, prospectoId: tareas.prospectoId, responsableId: tareas.responsableId, creadoEn: tareas.creadoEn })
+      .from(tareas)
+      .where(and(
+        eq(tareas.titulo, TITULO_TAREA_INTERESADO),
+        eq(tareas.estado, "pendiente"),
+        isNull(tareas.escaladoEn),
+        lt(tareas.creadoEn, sql`CURRENT_TIMESTAMP - INTERVAL 1 DAY`)
+      ))
+      .orderBy(tareas.creadoEn)
+      .limit(ALERTAS_BATCH_SIZE);
+
+    let escaladas = 0;
+    for (const tarea of candidatas) {
+      if (sumarDiasHabilesMx(tarea.creadoEn, 1) > ahora) continue;
+      if (tarea.prospectoId !== null && (await vendedorDeLaConversacion(this.db, tarea.prospectoId)) !== null) continue;
+
+      const escalada = await this.db.transaction(async (tx) => {
+        const [result] = await tx.update(tareas).set({ prioridad: "urgente", escaladoEn: sql`CURRENT_TIMESTAMP` }).where(and(eq(tareas.id, tarea.id), eq(tareas.estado, "pendiente"), isNull(tareas.escaladoEn)));
+        if (result.affectedRows === 0) return false;
+
+        await tx.insert(auditoria).values({ usuarioId: null, entidad: "tarea", entidadId: tarea.id, accion: "escalar", despues: { prioridad: "urgente" } });
+        const empresa = await nombreEmpresa(tx, tarea.empresaId);
+        await notificar(tx, await adminsYSupervisores(tx), {
+          tipo: "interesado",
+          titulo: `Interesado sin atender: ${empresa ?? "prospecto"}`,
+          cuerpo: tarea.responsableId === null ? "Lleva un día hábil sin asignar." : "Lleva un día hábil sin que nadie lo contacte.",
+          enlace: enlaceTarea(tarea.id, tarea.responsableId === null ? "sin_asignar" : "todas"),
+          entidad: "tarea",
+          entidadId: tarea.id,
+          conCorreo: true
+        });
+        return true;
+      });
+      if (escalada) escaladas++;
+    }
+
+    if (escaladas > 0) this.logger.log(`${escaladas} interesado(s) escalado(s)`);
+    return escaladas;
+  }
+
   async alertarTareasSlaVencidas() {
     const candidatas = await this.db
       .select({ id: tareas.id, tipo: tareas.tipo, titulo: tareas.titulo, empresaId: tareas.empresaId, responsableId: tareas.responsableId, fechaLimite: tareas.fechaLimite })

@@ -38,8 +38,12 @@ export class JobsController {
       // aquí y no en un trabajo propio para no tener que tocar PT5).
       "sla-tareas": async () => ({
         procesados: await tareasService.alertarTareasSlaVencidas(),
+        interesados_escalados: await tareasService.escalarInteresadosSinAtender(),
         correos_reintentados: await notificacionesService.reintentarCorreos()
       }),
+      // Interesados con un día hábil sin atender. También corre en sla-tareas;
+      // aparte para que PT5 lo pueda llamar cada hora.
+      "escalar-interesados": async () => ({ procesados: await tareasService.escalarInteresadosSinAtender() }),
       // Documentos vigentes sin revisar después de 7 días.
       "documentos-pendientes": async () => ({ procesados: await documentosService.alertarDocumentosPendientes() }),
       // El día ANTERIOR completo, en hora de México (n8n lo corre en la mañana).
