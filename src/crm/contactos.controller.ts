@@ -7,7 +7,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { updateContactSchema } from "./dto/empresa.schema.js";
-import { conteosContactosQuerySchema, createContactoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
+import { bajaContactoSchema, conteosContactosQuerySchema, createContactoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -49,6 +49,15 @@ export class ContactosController {
   @Roles("administrador", "supervisor", "agente")
   update(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
     return this.contactosService.update(user, idParamSchema.parse(idParam), updateContactSchema.parse(body));
+  }
+
+  // La persona pidió no ser contactada por teléfono o en persona (no por
+  // el link del correo). Cualquier rol del CRM, sobre los contactos que ve.
+  @Post(":id/baja")
+  @HttpCode(200)
+  @Roles("administrador", "supervisor", "agente")
+  darDeBaja(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    return this.contactosService.darDeBaja(user, idParamSchema.parse(idParam), bajaContactoSchema.parse(body ?? {}).motivo);
   }
 
   @Delete(":id")

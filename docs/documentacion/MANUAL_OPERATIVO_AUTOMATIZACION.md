@@ -86,11 +86,10 @@ el RUNBOOK, «Qué está en producción».
   clasifique «baja». En todos los casos se suprimen **todos** sus medios, se cancelan sus seguimientos y no se le
   vuelve a escribir.
 - **Una baja no se deshace desde el CRM.** Si alguien pide volver a recibir correos, lo decide Dirección.
-- **Hueco conocido:** si alguien pide la baja **por teléfono o en persona**, sin contestar el correo, el CRM no tiene
-  hoy un botón para registrarla. Mientras tanto, la persona con acceso técnico la registra con
-  `POST /api/v1/automatizacion/supresion` y la llave de n8n, con `tipo: "correo"`, `valor` (su correo), `motivo`
-  («Pidió la baja por teléfono»), un `execution_id` único y `evento: "unsubscribe"`, que la trata igual que el link
-  del pie: suprime todos sus medios y pasa sus prospectos a baja. Conviene agregar ese botón antes del piloto.
+- **Si alguien pide la baja por teléfono o en persona,** sin contestar el correo: en la ficha de la empresa, en el
+  contacto, «Dar de baja», con el motivo («Lo pidió por teléfono al vendedor»). Hace lo mismo que el link del pie:
+  suprime todos sus medios, pasa sus prospectos a baja y cancela sus seguimientos. Queda en el Historial de la ficha y
+  en el Registro de cambios con quién la registró.
 
 ## 6. Qué hacer si algo falla
 

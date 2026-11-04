@@ -93,6 +93,8 @@ teléfonos **siguen apartados**, así que no se pueden volver a capturar para ot
 
 - Una persona se da de baja sola con el enlace «Darte de baja» del pie de los correos, marcando el correo como spam, o
   si su correo rebota. También al clasificar su respuesta como «baja».
+- **Si lo pide por teléfono o en persona:** en la ficha de la empresa, en el contacto, «Dar de baja», y escribir cómo
+  lo pidió. Hace exactamente lo mismo que el enlace del pie (desde el 4-nov-2026).
 - Al darse de baja: sus medios pasan a «no contactar», entra a la **lista de supresión**, se cancelan sus seguimientos y
   su prospecto queda en «baja».
 - **La lista de supresión manda sobre todo:** aunque alguien vuelva a capturar ese correo, nunca se le escribe.

@@ -4,6 +4,8 @@ import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { contactos, empresas, mediosContacto } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
+import { suprimirMediosDeContacto } from "../shared/supresion.js";
+import { ACCION_BAJA_DESDE_FICHA, darDeBajaPersona } from "../shared/baja-prospecto.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { EmpresasService } from "./empresas.service.js";
 import type { UpdateContactInput } from "./dto/empresa.schema.js";
@@ -133,6 +135,24 @@ export class ContactosService {
   async deactivate(user: CurrentUser, id: number) {
     const empresaId = await this.resolverEmpresaId(user, id);
     await this.empresasService.deactivateContact(user, empresaId, id);
+  }
+
+  // Baja pedida fuera del correo (4-nov-2026): por teléfono o en persona, sin
+  // contestar el correo, así que ni n8n ni la cola de clasificación se
+  // enteran. Hace lo mismo que el link de baja del pie (AutomatizacionService.
+  // registrarSupresion con evento unsubscribe): suprime todos sus medios,
+  // pasa sus prospectos a baja y cancela sus seguimientos, en una sola
+  // transacción y en el mismo orden (medios primero, luego la persona). No
+  // se deshace desde el CRM. Sin correo, teléfono ni WhatsApp no hay nada
+  // que bloquear: 409, para que no parezca hecha.
+  async darDeBaja(user: CurrentUser, id: number, motivo: string) {
+    await this.resolverEmpresaId(user, id);
+    return this.db.transaction(async (tx) => {
+      const supresionIds = await suprimirMediosDeContacto(tx, id, { motivo, executionId: null, usuarioId: user.id });
+      if (supresionIds.length === 0) throw new HttpError(409, "Esta persona no tiene correo, teléfono ni WhatsApp registrados: no hay nada que dar de baja");
+      const baja = await darDeBajaPersona(tx, id, { accion: ACCION_BAJA_DESDE_FICHA, motivo, executionId: null, usuarioId: user.id });
+      return { contacto_id: id, supresion_ids: supresionIds, prospectos_en_baja: baja.prospectosEnBaja, tareas_canceladas: baja.tareasCanceladas };
+    });
   }
 
   // Contacto activo, de una empresa activa y (si quien llama es agente) de

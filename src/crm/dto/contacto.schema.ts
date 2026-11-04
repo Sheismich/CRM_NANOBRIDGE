@@ -25,5 +25,11 @@ export const conteosContactosQuerySchema = z.object({
 });
 export type ConteosContactosQuery = z.infer<typeof conteosContactosQuerySchema>;
 
+// Baja pedida fuera del correo (4-nov-2026): el motivo queda en la lista de
+// supresión y en la bitácora (mismo largo que lista_supresion.motivo).
+export const bajaContactoSchema = z.object({
+  motivo: z.string().trim().min(2).max(255)
+});
+
 export type CreateContactoInput = z.infer<typeof createContactoSchema>;
 export type ListContactosQuery = z.infer<typeof listContactosQuerySchema>;

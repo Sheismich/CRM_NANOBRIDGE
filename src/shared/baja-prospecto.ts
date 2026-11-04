@@ -4,10 +4,14 @@ import { auditoria, contactos, prospectos, tareas } from "../database/schema.js"
 
 export const RESULTADO_TAREA_CANCELADA_POR_BAJA = "Cancelada: el prospecto pidió la baja";
 
+// Acción de auditoría de la baja que registra una persona desde la ficha,
+// cuando la pidieron fuera del correo (ContactosService.darDeBaja).
+export const ACCION_BAJA_DESDE_FICHA = "dar_de_baja_desde_ficha";
+
 export type OrigenBaja = {
-  // Acción de auditoría del cambio de estado: una de las dos que lee el
+  // Acción de auditoría del cambio de estado: una de las que lee el
   // Historial de la ficha (ActividadesService): "cambiar_estado_por_
-  // clasificacion" o "cambiar_estado_automatizacion".
+  // clasificacion", "cambiar_estado_automatizacion" o ACCION_BAJA_DESDE_FICHA.
   accion: string;
   motivo: string;
   // execution_id de n8n; NULL cuando la origina una persona.
