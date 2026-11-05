@@ -526,8 +526,9 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       viene de la API dentro del pie (etiqueta `[darte_de_baja]`) y PT1b
       solo manda `substitution_tag` (prompt 4 de `docs/n8n/pt1b-plantillas/`).
       Las respuestas desde el CRM también la llevan.
-- [ ] Domicilio de la empresa (lo pasa Carlos): se escribe en Administración →
-      Correos de prospección → "Pie de los tres", no en n8n.
+- [ ] Domicilio de la empresa (Carlos, 4-nov-2026: Ignacio T Chávez 328, Obraje, 20230,
+      Aguascalientes, Ags.): se escribe en Administración → Correos de prospección →
+      "Pie de los tres", no en n8n.
 - [x] Página de baja en español (29-oct-2026): Settings → Tracking →
       Subscription Tracking → Landing Page con `docs/sendgrid/pagina-baja.html`
       y el **Status PRENDIDO** (apagado, SendGrid ignora la página y muestra
@@ -598,8 +599,8 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - [ ] Borrar los datos de prueba (incluye el PDF de pantallas subido a
       "Empresa Prueba Envio 1" el 15-oct y las cotizaciones/oportunidades de
       prueba "NO SE", "NO SE 2").
-- [ ] Domicilio de la empresa en el remitente de SendGrid (hoy el remitente
-      de pruebas tiene el de la casa de Fabián).
+- [ ] Domicilio de la empresa en el remitente de SendGrid: Ignacio T Chávez 328, Obraje,
+      20230, Aguascalientes, Ags. (hoy el remitente de pruebas tiene el de la casa de Fabián).
 - [ ] Prender el **reparto de interesados** (Administración → "Reparto de interesados", 3-nov-2026)
       cuando el equipo de ventas ya esté dado de alta: marcar a quiénes reciben y "Repartir solo".
       Empieza apagado a propósito, para que ningún interesado real le caiga a una cuenta de prueba.
@@ -628,8 +629,9 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       Teammate administrador, para que la cuenta no dependa de la pasantía.
 - [x] Nombre del admin corregido a "Fabián" (7-oct-2026). Desde la revisión `00021-xq8` un
       JSON que no es UTF-8 se rechaza (400 `TEXTO_NO_UTF8`), así que no se repite.
-- [ ] Las 5 respuestas de Carlos, incluida: ¿"no interesado" bloquea para
-      siempre o 6 meses?
+- [ ] "No interesado" (Carlos, 4-nov-2026): se le puede volver a escribir después de 6 meses,
+      no es para siempre. El sistema lo cumple desde el commit de la espera: puede volver a entrar,
+      pero el correo no sale hasta 6 meses después de su respuesta.
 - [x] Los 2 usuarios `root` de MySQL (host `%` y host vacío): contraseña
       nueva al azar que nadie vio (`openssl rand`, 8-oct-2026). Si hace
       falta entrar como `root`, el dueño del proyecto le pone otra con

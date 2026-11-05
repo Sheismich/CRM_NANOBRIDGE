@@ -102,6 +102,7 @@ const TEXTO_MOTIVO: Record<string, string> = {
   contacto_desactivado: "el contacto o la empresa están desactivados",
   maximo_contactos: "ya se le escribió 3 veces; hay que esperar 6 meses",
   ventana_activa: "ya va en otra campaña esperando respuesta",
+  no_interesado_reciente: "respondió que no le interesa; hay que esperar 6 meses",
   ya_en_fila: "la misma persona ya está en la fila con otro prospecto",
   ya_tomado: "la automatización ya lo tomó",
   estado_no_permitido: "solo se mandan los capturados y los excluidos",

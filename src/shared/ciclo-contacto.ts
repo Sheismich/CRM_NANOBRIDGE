@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
-import { envios, listaSupresion, mediosContacto, prospectos } from "../database/schema.js";
+import { envios, listaSupresion, mediosContacto, prospectos, respuestas } from "../database/schema.js";
 
 // Política de contactos (PLAN_N8N_DEFINITIVO.md): máximo tres contactos
 // totales POR PERSONA (contacto), no por prospecto -- la misma persona
@@ -47,6 +47,22 @@ export async function cicloActualDePersona(db: DrizzleDb | DrizzleTx, contactoId
     referencia = row.enviadoEn;
   }
   return ciclo;
+}
+
+// Quien contestó que no le interesa puede volver a entrar a prospección, pero
+// no recibe correo hasta 6 meses después de su última respuesta de ese tipo
+// (decisión de Carlos, 4-nov-2026). Sin esto, con menos de 3 correos en el
+// ciclo le saldría otro en cuanto volviera a entrar. Si esa respuesta se
+// corrigió, el prospecto ya no está en no_interesado y no hay espera.
+export async function noInteresadoReciente(db: DrizzleDb | DrizzleTx, contactoId: number) {
+  const [ultima] = await db
+    .select({ recibidoEn: respuestas.recibidoEn })
+    .from(respuestas)
+    .innerJoin(prospectos, eq(prospectos.id, respuestas.prospectoId))
+    .where(and(eq(prospectos.contactoId, contactoId), eq(prospectos.estado, "no_interesado"), eq(respuestas.clasificacion, "no_interesado")))
+    .orderBy(desc(respuestas.recibidoEn))
+    .limit(1);
+  return !!ultima && sumarMeses(ultima.recibidoEn, MESES_ENFRIAMIENTO) > new Date();
 }
 
 // Bloquea los correos de la persona hasta que termine la transacción. Así dos
