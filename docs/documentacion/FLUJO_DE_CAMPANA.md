@@ -17,11 +17,11 @@ solo lo que hace falta para decidir.
 |---|---|---|---|
 | 1 | **Audiencia** | Los prospectos de la lista de Carlos que la auditoría certifique como listos (§2) | ⏳ Se certifica en la semana 12 |
 | 2 | **Textos de los 3 correos** (inicial y 2 recordatorios) | Los que apruebe Carlos, escritos en Administración → Correos de prospección (§3) | ⏳ Propuesta lista para Carlos ([PROPUESTA_CORREOS.md](PROPUESTA_CORREOS.md), 5-nov) |
-| 3 | **Pie del correo:** domicilio de la empresa y aviso de privacidad | El domicilio lo pasa Carlos; el aviso ya está publicado | ⏳ Falta el domicilio |
+| 3 | **Pie del correo:** domicilio de la empresa y aviso de privacidad | Ignacio T Chávez 328, Obraje, 20230, Aguascalientes, Ags. (Carlos, 4-nov); el aviso ya está publicado | ⏳ Falta escribirlo en Administración y en el remitente de SendGrid |
 | 4 | **Tope diario** de correos | 20 al día, para calentar el dominio; se duplica cada semana si los rebotes quedan debajo de 2 % y las quejas debajo de 0.1 % | Propuesto (25-sep) |
 | 5 | **Nuevos por día** | 10 como máximo (`NUEVOS_POR_DIA`) | Valor actual |
 | 6 | **Horario** | Lunes a viernes: recordatorios (PT4) a las 9:00 y nuevos (PT1) a las 10:00. Hoy PT4 corre a las 10:00 | ⏳ Decidir |
-| 7 | **Un «no interesado»** ¿bloquea para siempre o 6 meses? | — | ⏳ Pregunta abierta a Carlos |
+| 7 | **Un «no interesado»** ¿bloquea para siempre o 6 meses? | 6 meses desde su respuesta: puede volver a entrar, pero el correo espera (`578-no-interesado-seis-meses`) | Carlos decidió (4-nov) |
 | 8 | **Correos de área** (`info@`, `ventas@`): 9 de los 25 de la lista | Incluirlos o excluirlos | ⏳ Decidir |
 | 9 | **Quién recibe los avisos** de respuestas (PT2) y de fallas (B4) | Hoy llegan al Gmail de Fabián; cambiarlos al supervisor que clasifica y a quien atienda las fallas | ⏳ Decidir nombres |
 | 10 | **Cuenta de SendGrid** pagada, con Inbound Parse incluido | Plan de pago con la tarjeta de la empresa, antes del 24-nov | Carlos confirmó el pago (4-nov); falta hacerlo |

@@ -11,7 +11,7 @@ import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto 
 import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { CODIGO_ENVIOS_EN_PAUSA, MENSAJE_EN_PAUSA, bloquearFreno, evaluarFreno, leerFreno } from "../shared/freno-dominio.js";
-import { ESTADOS_PROSPECTO_CERRADO, MAX_CONTACTOS_POR_CICLO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable } from "../shared/ciclo-contacto.js";
+import { ESTADOS_PROSPECTO_CERRADO, MAX_CONTACTOS_POR_CICLO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable, noInteresadoReciente } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { HORAS_PARA_RETOMAR_DE_FILA } from "../shared/listo-para-automatizacion.js";
 import { diaSiguiente, esFeriadoMx, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
@@ -29,6 +29,8 @@ import type { CampanaActivaQuery, ConfirmacionEnvioInput, ConsultaProspectoScori
 
 const MENSAJE_SUPRIMIDO = "El contacto está en la lista de supresión";
 const MENSAJE_SIN_CORREO = "El contacto no tiene un correo utilizable";
+const MENSAJE_NO_INTERESADO = "Respondió que no le interesa; hay que esperar 6 meses";
+const CODIGO_NO_INTERESADO_RECIENTE = "NO_INTERESADO_RECIENTE";
 // Veces que se intenta un mismo correo. Después ya no se reprograma: cada falla
 // ya avisó por el Error Workflow.
 const MAX_INTENTOS_ENVIO = 3;
@@ -50,7 +52,7 @@ export const CODIGO_PROSPECTO_NO_VALIDADO = "PROSPECTO_NO_VALIDADO";
 
 
 // Por qué /envios/vencidas no devuelve una ventana (ver destinoDeRecordatorio).
-type MotivoRecordatorioOmitido = "prospecto_cerrado" | "campana_inactiva" | "sin_correo" | "suprimido" | "canal_desactivado";
+type MotivoRecordatorioOmitido = "prospecto_cerrado" | "campana_inactiva" | "sin_correo" | "suprimido" | "canal_desactivado" | "no_interesado_reciente";
 
 // Lo que n8n necesita para mandar un recordatorio. Nada de esto va a
 // Gemini (PLAN_N8N_DEFINITIVO.md B2, flujo de recordatorios).
@@ -724,6 +726,11 @@ export class AutomatizacionService {
       return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: correo.motivo === "suprimido" ? MENSAJE_SUPRIMIDO : MENSAJE_SIN_CORREO, numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
+    // No lleva en_espera: son meses, no tiene caso que PT1 lo retome cada día.
+    if (await noInteresadoReciente(this.db, prospecto.contactoId)) {
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: MENSAJE_NO_INTERESADO, numero_en_ciclo_siguiente: null, ventana_vence_en: null };
+    }
+
     const ciclo = await cicloActualDePersona(this.db, prospecto.contactoId, query.canal);
     const ultimo = ciclo[0];
     const total = ciclo.length;
@@ -809,6 +816,7 @@ export class AutomatizacionService {
           }
 
           if ("motivo" in destino) throw new HttpError(409, MENSAJE_SIN_CORREO);
+          if (await noInteresadoReciente(tx, prospecto.contactoId)) throw new HttpError(409, MENSAJE_NO_INTERESADO, CODIGO_NO_INTERESADO_RECIENTE);
 
           // Después del bloqueo: dos envíos a la misma persona desde
           // prospectos distintos se forman, y el segundo ve al primero.
@@ -1087,6 +1095,7 @@ export class AutomatizacionService {
 
     if (campanaActiva === false) return { motivo: "campana_inactiva" as const };
     if ("motivo" in correo) return { motivo: correo.motivo };
+    if (await noInteresadoReciente(tx, contactoId)) return { motivo: "no_interesado_reciente" as const };
     return datos;
   }
 

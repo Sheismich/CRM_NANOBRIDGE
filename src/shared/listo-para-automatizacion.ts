@@ -2,7 +2,7 @@ import { and, eq, ne } from "drizzle-orm";
 import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
 import { contactos, empresas, prospectos } from "../database/schema.js";
 import { personaEnBaja } from "./baja-prospecto.js";
-import { MAX_CONTACTOS_POR_CICLO, cicloActualDePersona, correoUtilizable } from "./ciclo-contacto.js";
+import { MAX_CONTACTOS_POR_CICLO, cicloActualDePersona, correoUtilizable, noInteresadoReciente } from "./ciclo-contacto.js";
 
 // Uno que PT1 tomó de la fila y que en este tiempo no avanzó (sigue
 // en_fila: PT1 se cayó antes de Validaciones) se puede volver a tomar, y
@@ -24,13 +24,14 @@ export type MotivoNoListo =
   | "contacto_desactivado"
   | "maximo_contactos"
   | "ventana_activa"
+  | "no_interesado_reciente"
   | "ya_en_fila";
 
 /**
  * ¿Le saldría el correo inicial a este prospecto si PT1 lo tomara hoy? Junta
  * en un solo lugar lo que PT1 revisa por partes (Validaciones: giro y
- * tamaño; Verificación de envío: contacto activo, supresión, máximo de 3 y
- * ventana de espera) para que el botón lo diga en el momento, en vez de que
+ * tamaño; Verificación de envío: contacto activo, supresión, máximo de 3,
+ * ventana de espera y los 6 meses de un "no interesado") para que el botón lo diga en el momento, en vez de que
  * PT1 lo marque "excluido" días después por un dato que se corrige
  * (decisión de Fabián, 16-oct-2026). Solo correo: WhatsApp sigue apagado.
  *
@@ -61,6 +62,8 @@ export async function revisarListoParaAutomatizacion(db: DrizzleDb | DrizzleTx, 
   const ultimo = ciclo[0];
   if (ciclo.length >= MAX_CONTACTOS_POR_CICLO) motivos.push("maximo_contactos");
   else if (ultimo && ultimo.ventanaEstado === "abierta" && ultimo.ventanaVenceEn > new Date()) motivos.push("ventana_activa");
+
+  if (await noInteresadoReciente(db, row.contactoId)) motivos.push("no_interesado_reciente");
 
   // Otro prospecto de la misma persona esperando en la fila: le saldrían dos
   // correos iniciales.
