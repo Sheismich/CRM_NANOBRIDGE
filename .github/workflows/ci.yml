@@ -16,6 +16,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Solo lectura: el repo es público y un pull request de fuera también dispara
+# este workflow. Las pruebas no necesitan escribir nada ni usan secretos.
+permissions:
+  contents: read
+
 jobs:
   api:
     name: API · lint, tipos y pruebas

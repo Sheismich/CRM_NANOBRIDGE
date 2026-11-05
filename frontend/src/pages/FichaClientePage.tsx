@@ -190,8 +190,8 @@ function FichaCliente({ id }: { id: string }) {
             onCambiar={setTab}
             opciones={[
               { id: "resumen", texto: "Resumen" },
-              { id: "oportunidades", texto: "Oportunidades", cuenta: abiertas.length || undefined },
-              { id: "cotizaciones", texto: "Cotizaciones" },
+              { id: "oportunidades", texto: "Oportunidades", corto: "Oportun.", cuenta: abiertas.length || undefined },
+              { id: "cotizaciones", texto: "Cotizaciones", corto: "Cotiz." },
               { id: "documentos", texto: "Documentos" }
             ]}
           />

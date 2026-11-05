@@ -80,10 +80,10 @@ Revisión y decisión de Dirección: Por registrar para todos los entregables. E
 | 7 | Monitoreo del piloto | Semana 14 | Datos | 30 nov al 4 dic | Una auditoría por día, anotada en el registro del procedimiento de auditoría. |
 | 8 | Reporte del piloto (OB-06) | Semanas 14 y 15 | Daniela, con los datos de Fabián | 4 y 11 dic | Reporte factual: qué se envió, qué respondieron, fallas e incidentes. Sin conclusiones que no estén respaldadas por datos. |
 | 9 | Manual operativo de la automatización | G6 | Daniela | Semana 15 | v0.9 adelantada el 4-nov (docs/documentacion/MANUAL_OPERATIVO_AUTOMATIZACION.md). Falta la lista de accesos (con OB-07) y lo que deje el piloto. |
-| 10 | Manual para el vendedor | G6 | Daniela y Fabián | Semana 15 | Cómo usar las 13 pantallas, en lenguaje sencillo. Es parte de la transferencia operativa y hoy no existe. |
+| 10 | Manual para el vendedor | G6 | Daniela | Semana 15 | v0.9 adelantada el 4-nov (docs/documentacion/MANUAL_DEL_VENDEDOR.md). Faltan capturas y lo que entre con la rama de Fabián (escalar interesados, seguimiento de cotizaciones). |
 | 11 | Inventario de entregables, pendientes y lecciones aprendidas | Semana 15 | Equipo | 7 al 11 dic | Se arma a partir de esta bitácora. |
-| 12 | Reporte final de Datos | G6 | Daniela | Semana 15 o 16 | Indicadores acumulados T1.1 a T1.3, pendientes y transferencia. La carpeta de documentación lo marca como pendiente. |
-| 13 | Paquete final y transferencia operativa (OB-07) | G6 | Equipo | Semana 16 | Índice de todo lo anterior, quién tiene qué acceso, respaldos y quién mantiene cada parte. |
+| 12 | Reporte final de Datos | G6 | Daniela | Semana 15 o 16 | Esqueleto del 5-nov (docs/documentacion/REPORTE_FINAL_T1.md) con la línea base, los controles, pendientes y transferencia; faltan los números de la semana 12 y del piloto, y las metas del programa para T1.1 a T1.3. |
+| 13 | Paquete final y transferencia operativa (OB-07) | G6 | Equipo | Semana 16 | Índice de todo lo anterior, respaldos y quién mantiene cada parte. Los accesos ya están en docs/documentacion/INVENTARIO_DE_ACCESOS.md (v0.9, 4-nov), con 7 pasos para antes del cierre. |
 | 14 | Entregables de las semanas 5, 7 y 8 sin documento propio | — | Equipo y Dirección | Esta semana | Reporte de carga, paquete PDR y base v0.8. Confirmar con Dirección si se aceptaron con lo que hay o si piden un documento. |
 | 15 | Actas y tablero semanal de compromisos | Continuo | Equipo | Cada semana | Lo pide el KPI C4. La primera es la del G4 (docs/documentacion/actas/2026-11-G4.md, para llenar en la junta); sirve de plantilla para las demás. |
 
@@ -147,6 +147,7 @@ Hitos del trabajo, con su evidencia. El historial completo está en el repositor
 | 3-nov | Mandar la cotización por correo con el PDF adjunto (migración 038) y borrador con IA sin correos ni teléfonos, en producción: servidor 00045-dfv y pantallas en Firebase. | Fabián | cdeb4aa · 17c36e5 · e4ff3b2 |
 | 3-nov | Reparto automático de interesados (apagado), «Responder ahora» desde la cola de clasificación y correos marcados como español, en producción: servidor 00046-vrm y pantallas en Firebase. Flujo de campaña (OB-05 v0.5). | Fabián y Daniela | c8c87ad · c9af079 · cdf293e · 8670b5e |
 | 4-nov | Paquete para la revisión G4 (resumen y acta), manual operativo de la automatización (v0.9), botón «Dar de baja» desde la ficha y GitHub Actions (pruebas en cada push). En producción: servidor 00047-hrd y pantallas en Firebase. | Daniela | 8128b86 · b86e45a · fe25390 · 8c529d7 · 552d68a |
+| 4-nov | Revisión de seguridad: sin credenciales en los 370 commits del historial ni archivos con datos de clientes; bucket de documentos sin acceso público, Cloud SQL sin IPs autorizadas y solo cifrado, encabezados de seguridad completos en el sitio, rutas con sesión y sin CORS abierto; npm audit sin vulnerabilidades altas. GitHub Actions en solo lectura. Queda: el repo es público y trae los Gmail de prueba de Fabián y los correos de las cuentas de pasante. | Daniela | e74da81 |
 
 ## 7. Decisiones y riesgos abiertos
 
@@ -160,6 +161,8 @@ Hitos del trabajo, con su evidencia. El historial completo está en el repositor
 | Evaluación del modelo | OB-04 v1.0 listo, pero sin resultados sobre muestra: la base es de ejemplo y los resultados saldrán del piloto, con pocos casos. Las 5 métricas no las ha aprobado Dirección. | Dirección |
 | Webhook B3 y N8N_WEBHOOK_URL | Sin configurar. Mientras tanto los avisos del outbox esperan sin enviarse. | Fabián |
 | Recordatorios fuera del piloto | Con el cierre el 9-dic, solo los correos del 30-nov y del 1-dic alcanzan su primer recordatorio (8 y 9-dic) y ningún segundo recordatorio cae dentro del proyecto. El piloto mide sobre todo la respuesta al primer correo (OB-05 §4). | Dirección |
+| Dependencias con avisos moderados (riesgo aceptado, 4-nov) | npm audit: front sin vulnerabilidades; la API tiene 7 moderadas en producción y ninguna alta. uuid (vía Google Cloud Storage) solo falla en v3/v5/v6 con búfer, que el CRM no usa. archiver (zip de «Descargar lote») trae glob y minimatch con fallas al buscar archivos por patrón, que el CRM no usa: solo agrega los documentos uno por uno. Pasar a archiver 8 (versión mayor) después del piloto, con sus pruebas. | Daniela y Fabián |
+| Repositorio público | Cualquiera puede leer el código, el RUNBOOK (URLs del servicio y cuentas) y los Gmail de prueba de Fabián. No hay credenciales ni datos de clientes. Conviene hacerlo privado (Settings → General → Danger Zone); Actions sigue funcionando. | Daniela |
 | Pruebas en vivo pendientes | Respuesta automática (fuera de oficina), correo sin firma, rebote, responder desde el CRM y «Resumir con IA» con Gemini real. | Fabián y Daniela |
 | Primera carga lenta | Con la API dormida, el primero que entra espera de 8 a 9 s. Se quita con `min-instances=1`, que tiene costo. | Fabián o Carlos |
 | Correos de área y teléfonos sin código de país | 9 de 25 correos de la lista son de área (info@, ventas@) y los teléfonos no se reconocen con y sin +52. | Carlos y equipo |

@@ -16,7 +16,7 @@ solo lo que hace falta para decidir.
 | # | Decisión | Propuesta | Estado |
 |---|---|---|---|
 | 1 | **Audiencia** | Los prospectos de la lista de Carlos que la auditoría certifique como listos (§2) | ⏳ Se certifica en la semana 12 |
-| 2 | **Textos de los 3 correos** (inicial y 2 recordatorios) | Los que apruebe Carlos, escritos en Administración → Correos de prospección (§3) | ⏳ Hoy hay un borrador |
+| 2 | **Textos de los 3 correos** (inicial y 2 recordatorios) | Los que apruebe Carlos, escritos en Administración → Correos de prospección (§3) | ⏳ Propuesta lista para Carlos ([PROPUESTA_CORREOS.md](PROPUESTA_CORREOS.md), 5-nov) |
 | 3 | **Pie del correo:** domicilio de la empresa y aviso de privacidad | El domicilio lo pasa Carlos; el aviso ya está publicado | ⏳ Falta el domicilio |
 | 4 | **Tope diario** de correos | 20 al día, para calentar el dominio; se duplica cada semana si los rebotes quedan debajo de 2 % y las quejas debajo de 0.1 % | Propuesto (25-sep) |
 | 5 | **Nuevos por día** | 10 como máximo (`NUEVOS_POR_DIA`) | Valor actual |

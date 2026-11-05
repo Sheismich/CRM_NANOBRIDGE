@@ -13,12 +13,15 @@ Cierre del proyecto: **9 de diciembre de 2026**.
 | [Evaluación del modelo](EVALUACION_DEL_MODELO.md) | Dónde se usa Gemini, con qué datos, quién revisa, cómo se mide y qué resultados hay | OB-04 · G4 | ✅ v1.0 (3-nov); resultados sobre muestra en el piloto |
 | [Auditoría de calidad · 28-oct](auditorias/calidad-2026-10-28.md) | Línea base de validez y duplicados (KPI T1.1 y T1.2) con conclusiones y acciones | Semana 9 · G4 | ✅ |
 | [Procedimiento de auditoría y actualización](PROCEDIMIENTO_AUDITORIA.md) | Cuándo y cómo auditar, qué hacer con cada hallazgo, qué hacer tras una migración | Semana 11 | ✅ v1.0 (adelantado) |
+| [Inventario de accesos](INVENTARIO_DE_ACCESOS.md) | Quién tiene acceso a Google Cloud, SendGrid, n8n, dominio, Gemini, GitHub y el CRM, y qué pasar a alguien de planta antes del cierre | OB-07 · cierre | 🟡 v0.9 (4-nov, adelantado): faltan datos de n8n, AI Studio y DNS |
+| [Manual del vendedor](MANUAL_DEL_VENDEDOR.md) | Cómo usar el CRM día a día: tu día, empresas y contactos, prospectos y respuestas, oportunidades, cotizaciones, documentos y reportes | OB-07 · cierre | 🟡 v0.9 (4-nov, adelantado): faltan capturas |
 | [Manual operativo de la automatización](MANUAL_OPERATIVO_AUTOMATIZACION.md) | Qué corre solo y cuándo, qué revisar cada día, cómo prender, pausar y apagar, parámetros y qué hacer si algo falla | OB-07 · cierre | 🟡 v0.9 (4-nov, adelantado): faltan los accesos |
 | [Manual de datos](MANUAL_DE_DATOS.md) | Cómo cargar, revisar, corregir y mantener los datos en el CRM | OB-07 · cierre | ✅ v1.0 (adelantado) |
+| [Propuesta de textos de los correos](PROPUESTA_CORREOS.md) | Los 3 correos de prospección y el pie, para que Carlos los apruebe; marca lo que falta escribir | G5 | 🟡 v0.1 (5-nov): espera a Carlos |
 | [Flujo de campaña](FLUJO_DE_CAMPANA.md) | Lo que Dirección necesita para autorizar el piloto: audiencia, mensaje, límites, exclusiones, registros, vigilancia y cómo se detiene | OB-05 · G5 | 🟡 v0.5 (3-nov): se completa con la lista de Carlos |
 | Certificación de audiencia | Cuántos prospectos de cada campaña recibirían correo y por qué no los demás | Semana 13 · G5 | Sale sola en cada auditoría (§5); se presenta en G5 |
 | Monitoreo durante el piloto | Integridad de la base cada día de la campaña | Semana 14 | Auditoría diaria (procedimiento §1) |
-| Reporte final de T1 | KPI acumulados, pendientes y transferencia | Cierre (9-dic) | Pendiente |
+| [Reporte final de T1](REPORTE_FINAL_T1.md) | KPI acumulados, auditorías, controles, pendientes, transferencia y lecciones | Cierre (9-dic) | 🟡 esqueleto (5-nov): se llena con la lista de Carlos y el piloto |
 
 ## Herramientas
 
