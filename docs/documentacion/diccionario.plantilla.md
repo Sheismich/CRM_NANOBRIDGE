@@ -3,7 +3,7 @@
 **Entregable:** OB-01 (diccionario y reglas) y apoyo de OB-02 (base maestra controlada), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026).
 **Dueño:** T1 (datos y estandarización) · **Revisión:** T2 y Dirección General.
-**Versión:** 1.0 · generado el {{FECHA}} desde la base real, con migraciones hasta `{{MIGRACION}}` ({{MIGRACIONES}} en total). Cubre {{TOTALES}}.
+**Versión:** 1.1 · generado el {{FECHA}} desde la base real, con migraciones hasta `{{MIGRACION}}` ({{MIGRACIONES}} en total). Cubre {{TOTALES}}.
 
 > Este documento se genera con `generar-diccionario.mjs` (misma carpeta) a partir de la estructura real de la
 > base y de las reglas del código. No editar las tablas a mano: cambiar el script y volver a generarlo (ver al final).

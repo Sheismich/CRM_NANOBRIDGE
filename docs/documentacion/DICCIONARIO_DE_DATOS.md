@@ -3,7 +3,7 @@
 **Entregable:** OB-01 (diccionario y reglas) y apoyo de OB-02 (base maestra controlada), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026).
 **Dueño:** T1 (datos y estandarización) · **Revisión:** T2 y Dirección General.
-**Versión:** 1.0 · generado el 28 de octubre de 2026 desde la base real, con migraciones hasta `037_borrador_empresa_existente.sql` (37 en total). Cubre 35 tablas y 393 campos.
+**Versión:** 1.1 · generado el 5 de noviembre de 2026 desde la base real, con migraciones hasta `040_escalar_y_seguimiento.sql` (40 en total). Cubre 36 tablas y 414 campos.
 
 > Este documento se genera con `generar-diccionario.mjs` (misma carpeta) a partir de la estructura real de la
 > base y de las reglas del código. No editar las tablas a mano: cambiar el script y volver a generarlo (ver al final).
@@ -22,7 +22,7 @@
 - **Clientes y prospección:** `borradores_captura`, `contactos`, `empresas`, `medios_contacto`, `prospectos`
 - **Campañas y correo:** `campanas`, `correos_respuesta`, `envios`, `lista_supresion`, `parametros_automatizacion`, `plantillas_correo`, `respuestas`
 - **Automatización (n8n):** `eventos_pendientes`, `incidencias`, `procesos_fallidos`, `resultados_scoring`
-- **Ventas:** `cotizacion_partidas`, `cotizaciones`, `historial_etapa_oportunidad`, `oportunidades`
+- **Ventas:** `correos_cotizacion`, `cotizacion_partidas`, `cotizaciones`, `historial_etapa_oportunidad`, `oportunidades`
 - **Documentos:** `catalogo_tipo_documento`, `documentos`
 - **Seguimiento:** `actividades`, `notificaciones`, `tareas`, `uso_ia`
 - **Reportes:** `metricas_comerciales_diarias`
@@ -345,6 +345,11 @@ Cada correo de prospección que salió (inicial o recordatorio) y su ventana de 
 | `enviado_en` | fecha y hora (UTC) | sí | Cuándo salió el correo. |
 | `plantilla_id` | entero | no | Plantilla con la que salió (para rearmarlo si n8n reintenta). |
 | `asunto` | texto (máx. 200) | no | Asunto con el que salió. |
+| `destinatario` | texto (máx. 512) | no | A quién salió y qué pasó. n8n confirma después de mandar. |
+| `estado` | uno de: registrado, enviado, fallido | sí | Estado (valores en Formato). Por omisión: `registrado`. |
+| `proveedor_id` | texto (máx. 255) | no | Identificador del correo en SendGrid; lo manda n8n al confirmar el envío. |
+| `error` | texto (máx. 300) | no | Error, si falló. |
+| `intentos` | entero | sí | Cuántas veces se intentó este correo. Un fallido se reintenta sobre la misma fila, hasta 3 veces, sin gastar otro número de contacto. Por omisión: `1`. |
 
 #### `lista_supresion`
 
@@ -361,6 +366,7 @@ Correos, teléfonos o WhatsApp a los que nunca se les escribe (bajas, rebotes, q
 | `tipo` | uno de: correo, telefono, whatsapp | sí | Qué se suprime: correo, teléfono o WhatsApp. |
 | `valor_normalizado` | texto (máx. 512) | sí | Correo o teléfono normalizado. Único por tipo. |
 | `motivo` | texto (máx. 255) | sí | Por qué se suprimió (baja, rebote, queja…). |
+| `evento` | texto (máx. 40) | no | El evento de SendGrid que la causó, si vino de ahí. |
 | `execution_id` | texto (máx. 100) | no | Identificador de la corrida de n8n que lo creó. Único: si n8n reintenta, no se duplica (idempotencia). |
 | `creado_en` | fecha y hora (UTC) | sí | Cuándo se creó el registro. |
 
@@ -529,6 +535,30 @@ Cada calificación (score 0-100) que n8n calculó para un prospecto, con Gemini 
 | `creado_en` | fecha y hora (UTC) | sí | Cuándo se creó el registro. |
 
 ### Ventas
+
+#### `correos_cotizacion`
+
+Cada vez que un vendedor manda una cotización por correo desde el CRM, con el PDF adjunto. No es prospección: no cuenta para el límite de 3 ni lleva link de baja.
+
+- **Fuente:** CRM (pantallas, con sesión).
+- **Actualización:** Se crea al mandar; pasa de enviando a enviado o fallido. No se edita.
+- **Identificador:** `id`.
+
+| Campo | Formato | Obligatorio | Descripción |
+|---|---|---|---|
+| `id` | entero | auto | Identificador interno, autonumérico. |
+| `cotizacion_id` | entero | sí | → `cotizaciones.id` |
+| `empresa_id` | entero | sí | Empresa a la que pertenece. → `empresas.id` |
+| `contacto_id` | entero | sí | Contacto al que pertenece. → `contactos.id` |
+| `usuario_id` | entero | sí | Usuario relacionado. → `usuarios.id` |
+| `para` | texto (máx. 320) | sí | Correo del contacto al que se mandó la cotización. |
+| `asunto` | texto (máx. 500) | sí | Asunto del correo. |
+| `texto` | texto largo | sí | Texto del correo. |
+| `estado` | uno de: enviando, enviado, fallido | sí | Estado (valores en Formato). Por omisión: `enviando`. |
+| `error` | texto (máx. 300) | no | Error, si falló. |
+| `proveedor_id` | texto (máx. 255) | no | Identificador del correo en SendGrid. |
+| `creado_en` | fecha y hora (UTC) | sí | Cuándo se creó el registro. |
+| `enviado_en` | fecha y hora (UTC) | no | Fecha: enviado en. |
 
 #### `cotizacion_partidas`
 
@@ -738,7 +768,7 @@ Pendientes de una persona (llamar, clasificar una respuesta, corregir un documen
 - **Fuente:** CRM (pantallas, con sesión); n8n (API /automatizacion, llave X-API-Key); La API sola (trabajos programados o efectos de otra acción).
 - **Actualización:** pendiente → en_progreso → cerrada / cancelada. Responsable vacío = 'Sin asignar'.
 - **Identificador:** `id`.
-- **Únicos (no se pueden repetir):** `execution_id`.
+- **Únicos (no se pueden repetir):** `cotizacion_id`; `execution_id`.
 
 | Campo | Formato | Obligatorio | Descripción |
 |---|---|---|---|
@@ -756,6 +786,7 @@ Pendientes de una persona (llamar, clasificar una respuesta, corregir un documen
 | `execution_id` | texto (máx. 100) | no | Identificador de la corrida de n8n que lo creó. Único: si n8n reintenta, no se duplica (idempotencia). |
 | `fecha_limite` | fecha y hora (UTC) | no | Para cuándo. Vencida si pasó y sigue abierta. |
 | `alertado_en` | fecha y hora (UTC) | no | Cuándo se avisó que estaba vencida. |
+| `escalado_en` | fecha y hora (UTC) | no | Cuándo se avisó a supervisores que un interesado sigue sin atender. |
 | `clasificacion` | texto (máx. 60) | no | Clasificación elegida al cerrar una tarea de clasificación. |
 | `resultado` | texto largo | no | Qué pasó al cerrarla. |
 | `cerrada_en` | fecha y hora (UTC) | no | Cuándo se cerró. |
@@ -763,6 +794,7 @@ Pendientes de una persona (llamar, clasificar una respuesta, corregir un documen
 | `creado_en` | fecha y hora (UTC) | sí | Cuándo se creó el registro. |
 | `actualizado_en` | fecha y hora (UTC) | sí | Última modificación. |
 | `documento_id` | entero | no | Documento rechazado de una tarea «Corregir documento»; vacío en las demás. |
+| `cotizacion_id` | entero | no | La cotización de un "Dar seguimiento a cotización"; NULL en cualquier otra. → `cotizaciones.id` |
 
 #### `uso_ia`
 

@@ -7,7 +7,7 @@ Cierre del proyecto: **9 de diciembre de 2026**.
 |---|---|---|---|
 | [Resumen para la revisión G4](G4_RESUMEN.md) y [acta](actas/2026-11-G4.md) | Una página con lo que se entrega, los indicadores, lo que se pide decidir y los riesgos; el acta se llena en la junta | G4 | Listo para la junta |
 | [Bitácora del proyecto](BITACORA.md) | Avance contra el programa, expediente de entregables, documentación que falta, control de cambios y riesgos (KPI C3) | Todo el proyecto | Corte al 3-nov |
-| [Diccionario de datos y reglas](DICCIONARIO_DE_DATOS.md) | Cada tabla y campo de la base: formato, obligatoriedad, fuente, identificador, reglas de duplicados y de actualización | OB-01 · G4 | ✅ v1.0 (28-oct) |
+| [Diccionario de datos y reglas](DICCIONARIO_DE_DATOS.md) | Cada tabla y campo de la base: formato, obligatoriedad, fuente, identificador, reglas de duplicados y de actualización | OB-01 · G4 | ✅ v1.1 (5-nov, regenerado con las migraciones 039 y 040) |
 | [Reporte de controles](REPORTE_DE_CONTROLES.md) | Los 37 controles que protegen la base, dónde viven y con qué se comprueban (KPI T1.3) | OB-02 · G4 | ✅ v1.0 (28-oct) |
 | [Flujo de actualización](FLUJO_DE_ACTUALIZACION.md) | Cómo entran y cambian los registros con la automatización: alta, cambio, rechazo, registro, reversión y sus pruebas | OB-03 · G4 | ✅ v1.0 (3-nov) |
 | [Evaluación del modelo](EVALUACION_DEL_MODELO.md) | Dónde se usa Gemini, con qué datos, quién revisa, cómo se mide y qué resultados hay | OB-04 · G4 | ✅ v1.0 (3-nov); resultados sobre muestra en el piloto |
@@ -17,7 +17,7 @@ Cierre del proyecto: **9 de diciembre de 2026**.
 | [Manual del vendedor](MANUAL_DEL_VENDEDOR.md) | Cómo usar el CRM día a día: tu día, empresas y contactos, prospectos y respuestas, oportunidades, cotizaciones, documentos y reportes | OB-07 · cierre | 🟡 v0.9 (4-nov, adelantado): faltan capturas |
 | [Manual operativo de la automatización](MANUAL_OPERATIVO_AUTOMATIZACION.md) | Qué corre solo y cuándo, qué revisar cada día, cómo prender, pausar y apagar, parámetros y qué hacer si algo falla | OB-07 · cierre | 🟡 v0.9 (4-nov, adelantado): faltan los accesos |
 | [Manual de datos](MANUAL_DE_DATOS.md) | Cómo cargar, revisar, corregir y mantener los datos en el CRM | OB-07 · cierre | ✅ v1.0 (adelantado) |
-| [Propuesta de textos de los correos](PROPUESTA_CORREOS.md) | Los 3 correos de prospección y el pie, para que Carlos los apruebe; marca lo que falta escribir | G5 | 🟡 v0.1 (5-nov): espera a Carlos |
+| [Propuesta de textos de los correos](PROPUESTA_CORREOS.md) | Los 3 correos de prospección y el pie, para que Carlos los apruebe; marca lo que falta escribir | G5 | ✅ Carlos aprobó los textos (5-nov) |
 | [Flujo de campaña](FLUJO_DE_CAMPANA.md) | Lo que Dirección necesita para autorizar el piloto: audiencia, mensaje, límites, exclusiones, registros, vigilancia y cómo se detiene | OB-05 · G5 | 🟡 v0.5 (3-nov): se completa con la lista de Carlos |
 | Certificación de audiencia | Cuántos prospectos de cada campaña recibirían correo y por qué no los demás | Semana 13 · G5 | Sale sola en cada auditoría (§5); se presenta en G5 |
 | Monitoreo durante el piloto | Integridad de la base cada día de la campaña | Semana 14 | Auditoría diaria (procedimiento §1) |

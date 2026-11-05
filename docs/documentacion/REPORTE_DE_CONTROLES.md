@@ -94,7 +94,7 @@ Además hay 5 controles **propuestos que no entran en este corte** (§G). Se lis
 | F-03 | **Aviso si la API se cae** (revisión cada 5 minutos, correo a T1 y T2) | Cloud Monitoring | Prueba manual documentada: alerta de prueba disparada el 28-oct-2026 (RUNBOOK §11) |
 | F-04 | **Auditoría periódica de calidad de datos** | `docs/documentacion/auditar-datos.mjs` | Primera corrida el 28-oct-2026 ([reporte](auditorias/calidad-2026-10-28.md)) |
 | F-05 | ~~**Avisos a n8n que no se pierden:** bandeja de salida con reintentos (5 s, 30 s, 120 s) y procesos fallidos para revisar~~ **No opera y se retira (4-nov-2026):** n8n nunca tuvo quién recibiera esos avisos (`N8N_WEBHOOK_URL` sin configurar) y se quedaban esperando. Los avisos que sí importan llegan por la campanita y el correo del CRM; los procesos fallidos de n8n siguen | `src/outbox/` (se retira en la rama de T2) | — |
-| F-06 | **Diccionario al día:** se regenera de la base real después de cada migración | `docs/documentacion/generar-diccionario.mjs` | Generado el 28-oct-2026: 393 campos, 0 sin descripción |
+| F-06 | **Diccionario al día:** se regenera de la base real después de cada migración | `docs/documentacion/generar-diccionario.mjs` | Generado el 5-nov-2026 (migración 040): 414 campos, 0 sin descripción |
 
 ## G. Controles propuestos (fuera de este corte)
 
