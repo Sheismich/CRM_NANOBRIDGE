@@ -1,6 +1,6 @@
 # Revisión G4 · CDR — Resumen para Dirección
 
-Proyecto naranja (outbound) · Semana 10 de 16 (2-6 nov 2026) · Corte al 4 de noviembre de 2026.
+Proyecto naranja (outbound) · Semana 10 de 16 (2-6 nov 2026) · Corte al 5 de noviembre de 2026.
 El detalle de todo está en la [bitácora](BITACORA.md); aquí solo lo que hace falta para la junta.
 
 ## 1. Qué se entrega
@@ -21,15 +21,17 @@ El detalle de todo está en la [bitácora](BITACORA.md); aquí solo lo que hace 
 | **T1.1 · Validez y completitud** | 98.4 % | Línea base sobre **datos de ejemplo**: mide que el método funciona, no la calidad de la base real |
 | **T1.2 · Control de duplicados** | 96.8 % | Igual: los duplicados que aparecen son de las pruebas y se borran antes de cargar la lista real |
 | **T1.3 · Controles operativos** | 36 de 37 (97 %) | Los demás están activos y tienen su prueba o verificación. F-05 (avisos hacia n8n) nunca entregó nada, porque n8n no tiene quién los reciba, y se retira |
-| Pruebas automáticas | 803 de 803 (API) y 30 de 30 (pantallas) | Sobre el código que está en producción (3-nov) |
+| Pruebas automáticas | 845 de 845 (API) y 34 de 34 (pantallas) | Sobre el código que está en producción (5-nov). Corren solas en GitHub en cada cambio |
 
 La medición que vale para T1.1 y T1.2 es la auditoría que se corra **después de cargar la lista de Carlos** (semana 12).
 
 ## 3. Lo que ya está en producción
 
-Servidor `00046-vrm` y pantallas en Firebase, en **modo de prueba** (ningún correo sale a prospectos reales). Desde G3:
+Servidor `00049-7dm` y pantallas en Firebase, en **modo de prueba** (ningún correo sale a prospectos reales). Desde G3:
 botón «Mandar a automatización», correos editables, IA en modo sugerencia, responder y resumir con IA, feriados en los
-días hábiles, aviso y fusión de empresas repetidas, cotización por correo y reparto de interesados (apagado).
+días hábiles, aviso y fusión de empresas repetidas, cotización por correo, reparto de interesados (apagado), «Dar de
+baja» desde la ficha, freno automático del dominio, correos fallidos que no gastan el contacto, interesados sin atender
+que se escalan, seguimiento de cotizaciones y la espera de 6 meses tras un «no interesado» (decisión de Carlos).
 
 ## 4. Lo que se pide decidir hoy
 

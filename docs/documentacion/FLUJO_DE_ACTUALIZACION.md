@@ -2,7 +2,7 @@
 
 **Entregable:** flujo de actualización de la base (OB-03), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026). **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n) y Dirección General.
-**Versión:** 1.1 · 5 de noviembre de 2026 (sin bandeja de salida; envíos confirmados, freno del dominio y tareas nuevas) · API `nanobridge-api-00048-7x5`, base en la migración `040_escalar_y_seguimiento.sql`.
+**Versión:** 1.1 · 5 de noviembre de 2026 (sin bandeja de salida; envíos confirmados, freno del dominio y tareas nuevas) · API `nanobridge-api-00049-7dm`, base en la migración `040_escalar_y_seguimiento.sql`.
 
 Este documento explica cómo entran y cambian los registros de la base cuando interviene la automatización: qué
 crea cada paso, qué se rechaza, qué queda registrado, qué se puede deshacer y con qué pruebas se comprueba. Las
@@ -163,8 +163,8 @@ en vivo con n8n y SendGrid están fechadas en `PLAN_N8N_DEFINITIVO.md`.
 | **Tareas nuevas** | Interesados sin atender se escalan; seguimiento de cotizaciones a los 5 días hábiles, que se cancela al cerrarse | `570-escalar-interesados`, `575-seguimiento-cotizaciones` |
 | **Concurrencia** | Dos corridas a la vez no toman el mismo prospecto ni la misma espera, ni mandan dos correos a la misma persona | `485-fila-automatizacion`, `230-recordatorios` |
 
-Resultado al 3-nov-2026 (código de `e4ff3b2`, el que está en producción): 792 de 792 pruebas de la API, en 99
-archivos, en una corrida completa.
+Resultado al 5-nov-2026 (código de `d1bbe75`, el que está en producción): 845 de 845 pruebas de la API, en 102
+archivos, en GitHub Actions.
 
 ## 11. Límites y pendientes
 

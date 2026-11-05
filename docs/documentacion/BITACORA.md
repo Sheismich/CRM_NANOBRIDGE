@@ -19,7 +19,7 @@ Junta en un solo lugar lo que pide el programa de 16 semanas, lo que ya existe y
 ## 1. Dónde estamos
 
 - Estamos en la semana 10 de 16: revisión G4 (CDR). El equipo trabaja contra el cierre del 9 de diciembre; el PDF del programa marca G6 del 14 al 18 de diciembre. Falta que Dirección confirme por escrito el 9 de diciembre.
-- El sistema está construido y funcionando en modo de pruebas: 326 cambios guardados (234 de Fabián, 91 de Daniela, 1 inicial), 13 pantallas y 807 pruebas automáticas (777 del servidor y 30 de las pantallas). En la corrida del 3-nov pasaron 805; las 2 que fallaron se revisan en §7.
+- El sistema está construido y funcionando en modo de pruebas: 13 pantallas y 879 pruebas automáticas (845 del servidor y 34 de las pantallas), que pasan todas y corren solas en GitHub en cada cambio (5-nov). En producción: servidor `00049-7dm`.
 - En producción desde el 3-nov: servidor `00044-5fh` y pantallas en Firebase, con el aviso y la fusión de empresas repetidas (G-01 y G-05).
 - Datos: listos para G4. Hay diccionario, reporte de controles, auditoría de calidad (línea base sobre datos de ejemplo), procedimiento de auditoría y manual de datos.
 - Automatización: el sistema funciona. Desde el 3-nov Daniela se encarga de toda la documentación, también la de automatización. El 3-nov quedaron el flujo de actualización (OB-03) y la evaluación del modelo (OB-04 v1.0, con la fórmula, el modelo y el prompt que confirmó Fabián; los resultados sobre muestra salen del piloto). El flujo de campaña (OB-05, para G5) está en borrador v0.5: se completa con la lista de Carlos.
