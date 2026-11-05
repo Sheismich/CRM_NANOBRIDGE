@@ -21,7 +21,7 @@ Cierre del proyecto: **9 de diciembre de 2026**.
 | [Flujo de campaña](FLUJO_DE_CAMPANA.md) | Lo que Dirección necesita para autorizar el piloto: audiencia, mensaje, límites, exclusiones, registros, vigilancia y cómo se detiene | OB-05 · G5 | 🟡 v0.5 (3-nov): se completa con la lista de Carlos |
 | Certificación de audiencia | Cuántos prospectos de cada campaña recibirían correo y por qué no los demás | Semana 13 · G5 | Sale sola en cada auditoría (§5); se presenta en G5 |
 | Monitoreo durante el piloto | Integridad de la base cada día de la campaña | Semana 14 | Auditoría diaria (procedimiento §1) |
-| Reporte final de T1 | KPI acumulados, pendientes y transferencia | Cierre (9-dic) | Pendiente |
+| [Reporte final de T1](REPORTE_FINAL_T1.md) | KPI acumulados, auditorías, controles, pendientes, transferencia y lecciones | Cierre (9-dic) | 🟡 esqueleto (5-nov): se llena con la lista de Carlos y el piloto |
 
 ## Herramientas
 

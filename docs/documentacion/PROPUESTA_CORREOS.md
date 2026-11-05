@@ -80,7 +80,7 @@ El enlace «Darte de baja» lo pone el sistema solo; no hay que escribirlo.
 
 ## 6. Por qué así
 
-- **Cortos, de tú a tú y con una sola pregunta.** Un correo largo, con imágenes o con varios enlaces parece publicidad, y
+- **Cortos, como de persona a persona y con una sola pregunta.** Un correo largo, con imágenes o con varios enlaces parece publicidad, y
   Gmail lo manda a Promociones, donde casi nadie lo lee. Hoy los correos de prueba caen ahí; un texto sencillo ayuda.
 - **Sin precios, descuentos ni plazos** (regla del proyecto): eso se habla en la llamada.
 - **El segundo pide a la persona indicada.** Muchos correos de la lista son de área (`ventas@`, `info@`) o de alguien
