@@ -15,7 +15,7 @@ para terminarlos.
 | 2 | **El tema en 3 a 5 palabras** («[TEMA]»), para el segundo y el tercer correo | Recordarle de qué le escribimos sin repetir todo |
 | 3 | **Un beneficio concreto en una frase** («[BENEFICIO]»), para el segundo correo | La razón para contestar |
 | 4 | **Quién firma**: nombre y puesto de una persona («[FIRMA]») | Un correo firmado por una persona se contesta más que uno de «Equipo NANOBRIDGE». Las respuestas le llegan a la cola del CRM, no a su bandeja |
-| 5 | **Aprobar el pie** con el domicilio y el aviso de privacidad (§5) | Lo pide la ley en un correo comercial |
+| 5 | **Aprobar el pie** con el aviso de privacidad (§5). El domicilio ya lo confirmó (4-nov) | Lo pide la ley en un correo comercial |
 
 ## 2. Primer correo
 
@@ -64,8 +64,8 @@ para terminarlos.
 
 ## 5. Pie de los tres correos
 
-Va debajo de la firma, en letra gris. Esta es la versión del diseño aprobado del correo (22-oct-2026); confirme el
-domicilio:
+Va debajo de la firma, en letra gris. Esta es la versión del diseño aprobado del correo (22-oct-2026), con el domicilio
+que usted confirmó el 4-nov:
 
 > Nano Bridge SA de CV, con domicilio en Ignacio T Chávez 328, colonia Obraje, C.P. 20230, Aguascalientes, Ags.,
 > México, trata su nombre, puesto, empresa, correo, teléfono e información comercial y de sus interacciones para
