@@ -17,6 +17,7 @@ Cierre del proyecto: **9 de diciembre de 2026**.
 | [Manual del vendedor](MANUAL_DEL_VENDEDOR.md) | Cómo usar el CRM día a día: tu día, empresas y contactos, prospectos y respuestas, oportunidades, cotizaciones, documentos y reportes | OB-07 · cierre | 🟡 v0.9 (4-nov, adelantado): faltan capturas |
 | [Manual operativo de la automatización](MANUAL_OPERATIVO_AUTOMATIZACION.md) | Qué corre solo y cuándo, qué revisar cada día, cómo prender, pausar y apagar, parámetros y qué hacer si algo falla | OB-07 · cierre | 🟡 v0.9 (4-nov, adelantado): faltan los accesos |
 | [Manual de datos](MANUAL_DE_DATOS.md) | Cómo cargar, revisar, corregir y mantener los datos en el CRM | OB-07 · cierre | ✅ v1.0 (adelantado) |
+| [Propuesta de textos de los correos](PROPUESTA_CORREOS.md) | Los 3 correos de prospección y el pie, para que Carlos los apruebe; marca lo que falta escribir | G5 | 🟡 v0.1 (5-nov): espera a Carlos |
 | [Flujo de campaña](FLUJO_DE_CAMPANA.md) | Lo que Dirección necesita para autorizar el piloto: audiencia, mensaje, límites, exclusiones, registros, vigilancia y cómo se detiene | OB-05 · G5 | 🟡 v0.5 (3-nov): se completa con la lista de Carlos |
 | Certificación de audiencia | Cuántos prospectos de cada campaña recibirían correo y por qué no los demás | Semana 13 · G5 | Sale sola en cada auditoría (§5); se presenta en G5 |
 | Monitoreo durante el piloto | Integridad de la base cada día de la campaña | Semana 14 | Auditoría diaria (procedimiento §1) |
