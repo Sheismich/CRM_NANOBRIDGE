@@ -8,6 +8,7 @@ import { closeTestDb, testDb } from "./support/db.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
 import { auditoria, envios, listaSupresion, notificaciones, parametrosAutomatizacion, prospectos } from "../src/database/schema.js";
 import { env } from "../src/config/env.js";
+import { evaluarFreno } from "../src/shared/freno-dominio.js";
 
 const API_KEY = "test_crm_callback_api_key_0001";
 
@@ -103,6 +104,20 @@ describe("freno automático del dominio", () => {
     const nuevas = despues.filter((d) => !vistas.has(d.id));
     expect(nuevas.length).toBeGreaterThan(0);
     expect(new Set(nuevas.map((n) => n.usuarioId)).size).toBe(nuevas.length);
+  });
+
+  it("cuenta la queja que otro evento confirmó mientras esta transacción ya había leído (lectura con bloqueo)", async () => {
+    await limitesA(2, 50);
+    await db.transaction(async (tx) => {
+      // Una lectura cualquiera fija la "foto" de esta transacción (REPEATABLE READ).
+      await tx.select({ id: listaSupresion.id }).from(listaSupresion).limit(1);
+      // Otra queja llega por la API y se confirma en otra conexión.
+      await supresion("spamreport");
+      // La de esta transacción: con ella son 2, el límite.
+      await tx.insert(listaSupresion).values({ tipo: "correo", valorNormalizado: `foto.${randomUUID()}@destino.test`, motivo: "Evento de SendGrid", evento: "spamreport" });
+      await evaluarFreno(tx);
+    });
+    expect((await salud()).pausado).toBe(true);
   });
 
   it("la pausa automática sale en el Registro de cambios, a nombre del sistema", async () => {

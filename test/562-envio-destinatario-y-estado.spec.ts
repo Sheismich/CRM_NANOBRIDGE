@@ -178,7 +178,9 @@ describe("envíos: a qué correo salen y qué pasó con ellos", () => {
       await confirmar(primero, { estado: "enviado", proveedor_id: "sg-1" });
       await db.update(envios).set({ ventanaEstado: "vencida" }).where(eq(envios.id, primero));
 
-      const recordatorio = (await registrar(p.id)).body.id as number;
+      // PT4 usa el mismo execution_id en los dos intentos: "recordatorio-" + la ventana.
+      const deLaVentana = `recordatorio-${primero}`;
+      const recordatorio = (await registrar(p.id, deLaVentana)).body.id as number;
       await confirmar(recordatorio, { estado: "fallido", error: "x" });
       const ventana = await filaDe(primero);
       expect(ventana.ventanaEstado).toBe("abierta");
@@ -189,8 +191,12 @@ describe("envíos: a qué correo salen y qué pasó con ellos", () => {
       const fila = (vencidas.body.data as { envio_id: number; numero_en_ciclo: number; es_ultimo_contacto: boolean }[]).find((v) => v.envio_id === primero);
       expect(fila).toEqual(expect.objectContaining({ numero_en_ciclo: 1, es_ultimo_contacto: false }));
 
-      const otra = await registrar(p.id);
-      expect(otra.body).toEqual(expect.objectContaining({ id: recordatorio, numero_contacto: 2, numero_en_ciclo: 2 }));
+      const otra = await registrar(p.id, deLaVentana);
+      expect(otra.body).toEqual(expect.objectContaining({ id: recordatorio, numero_contacto: 2, numero_en_ciclo: 2, ya_existia: false }));
+      expect((await filaDe(recordatorio)).intentos).toBe(2);
+
+      // Ya registrado de nuevo, repetir la llamada sí es idempotente.
+      expect((await registrar(p.id, deLaVentana)).body).toEqual(expect.objectContaining({ id: recordatorio, ya_existia: true }));
     });
 
     it("después de 3 intentos ya no se reprograma", async () => {

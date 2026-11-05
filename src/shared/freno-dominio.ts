@@ -20,16 +20,22 @@ export const CODIGO_ENVIOS_EN_PAUSA = "ENVIOS_EN_PAUSA";
 
 type Freno = { pausado: boolean; motivo: string | null; pausado_en: string | null; reanudado_en: string | null };
 
-export async function leerFreno(db: DrizzleDb | DrizzleTx): Promise<Freno> {
-  const [fila] = await db.select({ valor: parametrosAutomatizacion.valor }).from(parametrosAutomatizacion).where(eq(parametrosAutomatizacion.clave, CLAVE_FRENO_DOMINIO)).limit(1);
-  const valor = (fila?.valor ?? {}) as Partial<Freno>;
+function aFreno(guardado: unknown): Freno {
+  const valor = (guardado ?? {}) as Partial<Freno>;
   return { pausado: valor.pausado === true, motivo: valor.motivo ?? null, pausado_en: valor.pausado_en ?? null, reanudado_en: valor.reanudado_en ?? null };
 }
 
-async function contarEventos(db: DrizzleDb | DrizzleTx, freno: Freno) {
+export async function leerFreno(db: DrizzleDb | DrizzleTx): Promise<Freno> {
+  const [fila] = await db.select({ valor: parametrosAutomatizacion.valor }).from(parametrosAutomatizacion).where(eq(parametrosAutomatizacion.clave, CLAVE_FRENO_DOMINIO)).limit(1);
+  return aFreno(fila?.valor);
+}
+
+// bloquear: lectura con bloqueo (FOR SHARE), que ve lo último confirmado y no
+// la "foto" de la transacción (REPEATABLE READ). Lo usa evaluarFreno.
+async function contarEventos(db: DrizzleDb | DrizzleTx, freno: Freno, bloquear = false) {
   // reanudado_en es ISO en UTC, igual que la sesión de MySQL.
   const desdeReanudar = freno.reanudado_en ? freno.reanudado_en.slice(0, 19).replace("T", " ") : null;
-  const filas = await db
+  const consulta = db
     .select({ evento: listaSupresion.evento, n: count() })
     .from(listaSupresion)
     .where(and(
@@ -38,6 +44,7 @@ async function contarEventos(db: DrizzleDb | DrizzleTx, freno: Freno) {
       desdeReanudar ? gte(listaSupresion.creadoEn, sql`${desdeReanudar}`) : undefined
     ))
     .groupBy(listaSupresion.evento);
+  const filas = await (bloquear ? consulta.for("share") : consulta);
   const de = (evento: string) => Number(filas.find((f) => f.evento === evento)?.n ?? 0);
   return { quejas: de(EVENTO_QUEJA), rebotes: de(EVENTO_REBOTE) };
 }
@@ -52,12 +59,21 @@ async function guardar(tx: DrizzleTx, valor: Freno) {
 // Corre dentro de la transacción que registró la supresión. El bloqueo forma a
 // dos eventos simultáneos: el segundo cuenta después de que el primero termine,
 // así no se quedan cortos los dos ni avisan dos veces.
+// Forma a los eventos que cuentan para el freno. Quien guarda una queja o un
+// rebote lo pide ANTES de guardarla (AutomatizacionService.registrarSupresion).
+export async function bloquearFreno(tx: DrizzleTx) {
+  const [fila] = await tx.select({ valor: parametrosAutomatizacion.valor }).from(parametrosAutomatizacion).where(eq(parametrosAutomatizacion.clave, CLAVE_FRENO_DOMINIO)).for("update");
+  return aFreno(fila?.valor);
+}
+
+// Las dos lecturas son con bloqueo: si la transacción ya había leído algo
+// antes de esperar el FOR UPDATE, una lectura normal seguiría viendo su foto
+// de entonces, sin la queja que el otro evento acaba de confirmar.
 export async function evaluarFreno(tx: DrizzleTx) {
-  await tx.select({ clave: parametrosAutomatizacion.clave }).from(parametrosAutomatizacion).where(eq(parametrosAutomatizacion.clave, CLAVE_FRENO_DOMINIO)).for("update");
-  const freno = await leerFreno(tx);
+  const freno = await bloquearFreno(tx);
   if (freno.pausado) return;
 
-  const { quejas, rebotes } = await contarEventos(tx, freno);
+  const { quejas, rebotes } = await contarEventos(tx, freno, true);
   const motivo = quejas >= env.FRENO_QUEJAS_7D
     ? `Llegaron ${quejas} quejas de spam en 7 días.`
     : rebotes >= env.FRENO_REBOTES_7D ? `Llegaron ${rebotes} rebotes en 7 días.` : null;

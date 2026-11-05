@@ -10,7 +10,7 @@ import { insertarMediosContacto } from "../shared/medios-contacto.js";
 import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
 import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
-import { CODIGO_ENVIOS_EN_PAUSA, MENSAJE_EN_PAUSA, evaluarFreno, leerFreno } from "../shared/freno-dominio.js";
+import { CODIGO_ENVIOS_EN_PAUSA, MENSAJE_EN_PAUSA, bloquearFreno, evaluarFreno, leerFreno } from "../shared/freno-dominio.js";
 import { ESTADOS_PROSPECTO_CERRADO, MAX_CONTACTOS_POR_CICLO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { HORAS_PARA_RETOMAR_DE_FILA } from "../shared/listo-para-automatizacion.js";
@@ -752,7 +752,7 @@ export class AutomatizacionService {
   // endpoint sin pasar por la verificación.
   async registrarEnvio(input: RegistroEnvioInput) {
     const [existing] = await this.db
-      .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn, destinatario: envios.destinatario })
+      .select({ id: envios.id, numeroContacto: envios.numeroContacto, ventanaVenceEn: envios.ventanaVenceEn, destinatario: envios.destinatario, estado: envios.estado })
       .from(envios)
       .where(eq(envios.executionId, input.execution_id))
       .limit(1);
@@ -760,7 +760,10 @@ export class AutomatizacionService {
     // después del hecho no es confiable (el ciclo pudo avanzar desde entonces).
     // correo: el texto ya armado con la plantilla del número que toca
     // (Administración → Correos de prospección); n8n ya no tiene texto propio.
-    if (existing) return { id: existing.id, numero_contacto: existing.numeroContacto, numero_en_ciclo: null, ventana_vence_en: existing.ventanaVenceEn, reply_to: firmarReplyTo(existing.id), destinatario: existing.destinatario, ya_existia: true as const, correo: await correoDeEnvio(this.db, existing.id) };
+    // Un envío fallido no cuenta como "ya existe": PT4 reintenta un
+    // recordatorio con el mismo execution_id ("recordatorio-<ventana>"), y
+    // ese reintento tiene que pasar al de abajo, que reusa la fila.
+    if (existing && existing.estado !== "fallido") return { id: existing.id, numero_contacto: existing.numeroContacto, numero_en_ciclo: null, ventana_vence_en: existing.ventanaVenceEn, reply_to: firmarReplyTo(existing.id), destinatario: existing.destinatario, ya_existia: true as const, correo: await correoDeEnvio(this.db, existing.id) };
 
     if (input.canal === "whatsapp") {
       throw new HttpError(409, "Canal WhatsApp desactivado (pendiente proveedor aprobado)");
@@ -1159,8 +1162,14 @@ export class AutomatizacionService {
     return this.db.transaction(async (tx) => {
       const valorNormalizado = normalizarValorSupresion(input.tipo, input.valor);
       const origen = { motivo: input.motivo, executionId: input.execution_id, usuarioId: null };
+      // El freno se bloquea ANTES de guardar la queja o el rebote: dos eventos
+      // que llegan juntos se forman desde aquí. Si cada uno guardaba primero y
+      // luego pedía el bloqueo, el que contaba esperaba la fila sin confirmar
+      // del otro, y el otro esperaba el bloqueo: se trababan (deadlock).
+      const cuentaParaElFreno = input.evento === "bounce" || input.evento === "spamreport";
+      if (cuentaParaElFreno) await bloquearFreno(tx);
       const supresion = await registrarSupresion(tx, { tipo: input.tipo, valorNormalizado, evento: input.evento, ...origen });
-      if (!supresion.ya_existia && (input.evento === "bounce" || input.evento === "spamreport")) await evaluarFreno(tx);
+      if (!supresion.ya_existia && cuentaParaElFreno) await evaluarFreno(tx);
 
       const esBajaDePersona = input.evento !== undefined && (EVENTOS_BAJA_DE_PERSONA as readonly string[]).includes(input.evento);
       if (!esBajaDePersona) {
