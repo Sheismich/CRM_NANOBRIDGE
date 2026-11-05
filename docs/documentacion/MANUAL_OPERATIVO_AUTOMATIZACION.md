@@ -2,7 +2,7 @@
 
 **Para:** quien opere la prospección por correo después de la transferencia: el administrador o supervisor del CRM y
 la persona con acceso técnico (n8n, Google Cloud y SendGrid).
-**Versión:** 0.9 · 4 de noviembre de 2026 · servidor `nanobridge-api-00046-vrm`. Pasa a 1.0 al cierre, con lo que
+**Versión:** 0.9 · 5 de noviembre de 2026 · servidor `nanobridge-api-00048-7x5`. Pasa a 1.0 al cierre, con lo que
 deje el piloto y la lista de accesos de la transferencia (OB-07).
 
 Este manual dice qué corre solo, qué revisar cada día, cómo prender, pausar y apagar, cómo cambiar los parámetros y
@@ -22,6 +22,7 @@ no entrega nada a PT1 ni a PT4: corren, no mandan nada, y todo sale el siguiente
 | Cada vez que alguien responde | **PT2 · respuestas** | n8n | Registra la respuesta, detiene los recordatorios de esa persona, la pone en la cola de clasificación, pide la sugerencia a la IA y avisa al supervisor |
 | Cada evento de SendGrid | **PT3 · bajas, spam y rebotes** | n8n | Da de baja a la persona (o solo el correo, si rebotó) |
 | Cuando algo falla | **B4 · avisos de falla** | n8n | Registra la falla en el CRM y manda un correo «[NANOBRIDGE] Falló …» |
+| Con cada queja o rebote | **Freno del dominio** | API | Con 2 quejas o 5 rebotes en 7 días pausa la prospección y avisa a administradores y supervisores |
 | Cada 5 minutos | **Revisión de que la API responde** | Google Cloud Monitoring | Si la API no responde 5 minutos seguidos, manda un correo; otro cuando se recupera |
 
 Mientras siga el modo de prueba, PT1a se corre a mano y solo salen correos a buzones del equipo (§3).
@@ -58,6 +59,10 @@ los recordatorios salen repartidos por el tope diario.
 2. Pausar la campaña en el CRM.
 3. Avisar a Dirección.
 
+**Reanudar después del freno del dominio:** primero revisar de dónde salieron las quejas o los rebotes (la lista, un
+correo mal escrito); luego Administración → Estado del sistema → «Reanudar». Solo un administrador. Después solo cuentan
+las quejas y rebotes nuevos.
+
 **Prender el reparto de interesados:** Administración → «Reparto de interesados»: elegir a los vendedores que
 reciben y prender «Repartir solo». Antes, el equipo de ventas tiene que estar dado de alta como usuarios.
 
@@ -73,6 +78,7 @@ reciben y prender «Repartir solo». Antes, el equipo de ventas tiene que estar 
 | IA que sugiere la clasificación | `abierto` (todas las respuestas) | n8n: `IA_MODO` en PT2a (`abierto`, `pruebas` o `apagado`) |
 | IA del CRM (borrador y resumen) | Encendida | Google Cloud: `IA_DRIVER=gemini`; para apagarla, `IA_DRIVER=falso` |
 | Reparto de interesados | Apagado | CRM: Administración → Reparto de interesados |
+| Límites del freno del dominio | 2 quejas o 5 rebotes en 7 días | Google Cloud: `FRENO_QUEJAS_7D` y `FRENO_REBOTES_7D` con `--update-env-vars` |
 | A quién avisa B4 y a quién avisa PT2 | Hoy al Gmail de Fabián | n8n: `DESTINOS` en «armar correo de error» (B4) y en «armar aviso de respuesta» (PT2) |
 | A quién avisa Cloud Monitoring | Hoy a las cuentas de los pasantes | Google Cloud: Monitoring → Alerting → la alerta → Notifications |
 
@@ -100,7 +106,8 @@ el RUNBOOK, «Qué está en producción».
 | Hoy no salió ningún correo | ¿Es feriado? ¿La campaña está activa o pausada? ¿Hay prospectos en la fila? ¿Se alcanzó el tope? ¿Corrieron PT4 y PT1a en n8n? ¿Sigue encendido `MODO_PRUEBAS`? | Lo que aplique. Si n8n corrió y la API no entregó nada, el motivo está en la respuesta de `fila/tomar` o `envios/vencidas` dentro de la ejecución |
 | Muchos scores calculados «por reglas» | Incidencias `gemini_agotado` en Administración | Nada se atora: los prospectos siguen su camino. Si pasa seguido, revisar la llave y la cuota de Gemini |
 | Una respuesta llegó sin identificar | Queda como tarea en la cola | Clasificarla a mano; si es de un prospecto, buscarlo por su correo |
-| Rebotes arriba de 2 % o quejas arriba de 0.1 % en SendGrid | Estadísticas de SendGrid | **Pausar la campaña** (§3) y revisar la lista antes de seguir |
+| Aviso «Se pausaron los envíos de prospección» (freno del dominio) | Administración → Estado del sistema: cuántas quejas y rebotes | Revisar la lista que los causó, corregir y **Reanudar** (§3). Nadie perdió su lugar |
+| Administración marca «correos sin confirmar» | ¿Ya se aplicaron los prompts de `docs/n8n/confirmacion-envios/`? ¿PT1b falló? | Mientras no estén los prompts es normal. Después, revisar la ejecución de PT1b |
 | La auditoría marca una persona con más de 3 correos, o un medio activo en la lista de supresión | Reporte de la auditoría (§4 de sus controles rojos) | **Detener la campaña** y avisar a T2 y a Dirección (procedimiento de auditoría) |
 | Gmail manda los correos a Promociones | Bandeja de un buzón de prueba | Riesgo conocido, sin solución todavía; anotarlo en el reporte del piloto |
 

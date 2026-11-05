@@ -121,11 +121,16 @@ procesos fallidos). Nada de esto se borra.
 **Durante el piloto:**
 - **Auditoría de datos diaria** (procedimiento §1), con atención a los dos controles rojos: personas con más de 3
   correos en 6 meses y medios activos que están en la lista de supresión. Cualquiera de los dos **detiene la campaña**.
-- **Rebotes y quejas** en SendGrid: si los rebotes pasan de 2 % o las quejas de 0.1 %, se pausa y se revisa.
+- **Freno automático del dominio** (desde el 5-nov): con 2 quejas de spam o 5 rebotes en 7 días se pausa toda la
+  prospección y se avisa a administradores y supervisores; nadie pierde su lugar. Se revisa la lista y un
+  administrador reanuda en Administración.
+- **Correos que no salieron:** si SendGrid rechaza uno, se reintenta hasta 3 veces sin gastar el contacto de la persona.
+  Administración marca los que llevan más de una hora sin confirmar.
 - **Avisos automáticos:** B4 avisa por correo de cualquier falla de un flujo, y Cloud Monitoring avisa si la API se
   cae (revisión cada 5 minutos).
 - **Respuestas:** cada una cae en la cola de clasificación; una persona la clasifica (la IA solo sugiere). Un
-  «interesado» crea la tarea «Contactar prospecto interesado», que vence al final del siguiente día hábil. Desde la
+  «interesado» crea la tarea «Contactar prospecto interesado», que vence al final del siguiente día hábil (si nadie
+  la toma en un día hábil, sube a urgente y se avisa a los supervisores). Desde la
   cola, «Responder ahora» deja contestarle de inmediato, y quien lo hace se queda con la tarea.
 - **Reparto de interesados** (en producción desde el 3-nov, `00046-vrm`, **apagado**): prendido, la tarea le toca al
   vendedor de la lista con menos interesados abiertos; si empatan, al que lleva más tiempo sin recibir uno. Si la
@@ -161,6 +166,7 @@ encender, después de la autorización. Resumen al 3-nov:
 | SendGrid pagado con Inbound Parse | ⏳ Dirección, antes del 24-nov |
 | Datos de ejemplo borrados y lista de Carlos cargada | ⏳ Semana 12 |
 | Pruebas en vivo que faltan (fuera de oficina, sin firma, rebote) | ⏳ T2 |
+| Prompts de n8n para usar el correo de la API y confirmar cada envío (`docs/n8n/confirmacion-envios/`) | ⏳ T2 |
 | Avisos de PT2 y B4 a las personas correctas | ⏳ Decidir nombres |
 | Equipo de ventas dado de alta y reparto de interesados prendido | ⏳ Antes de encender |
 | Tope diario a 20 | ⏳ El día de encender |

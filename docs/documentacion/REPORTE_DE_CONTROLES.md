@@ -79,7 +79,7 @@ Además hay 5 controles **propuestos que no entran en este corte** (§G). Se lis
 | E-01 | **Todo pide sesión o la llave de n8n** (salvo `/health`) | Guardias de cada controlador | `00-auth`, `10-guards`; revisión en vivo del 26-oct: 74 rutas dan 401 sin sesión |
 | E-02 | **Permisos por rol:** administrador, supervisor y agente | `src/auth/guards/roles.guard.ts` | `10-guards`, `445-ultimo-acceso-y-auditoria-admin` |
 | E-03 | **Un agente solo ve lo suyo** (sus empresas y lo que cuelga de ellas) | Cada servicio | `80-oportunidades`, `140-cotizaciones-flujo`, `310-oportunidades-de-agente`, `515-resumen-ficha`; en total 52 archivos de prueba revisan lo que ve un agente |
-| E-04 | **Bitácora de cambios** con el antes y el después | Tabla `auditoria` | `455-registro-cambios`, `130-outbox-auditoria` |
+| E-04 | **Bitácora de cambios** con el antes y el después | Tabla `auditoria` | `455-registro-cambios`, `130-procesos-fallidos-auditoria` |
 | E-05 | **Nunca sin administrador:** no se puede desactivar ni degradar al último | `src/usuarios/usuarios.service.ts` | `20-usuarios-last-admin` |
 | E-06 | **Sesiones seguras:** token guardado como hash, 12 h, se cierran al desactivar; freno de intentos por IP y por cuenta | `src/auth/` | `275-usuarios-sesiones`, `270-login-por-cuenta`, `40-auth-rate-limit`, `42-auth-login-concurrent-rate-limit` |
 | E-07 | **Peticiones de otros sitios** rechazadas (CSRF) | `src/shared/origen-csrf.ts` | `295-origen-csrf` |

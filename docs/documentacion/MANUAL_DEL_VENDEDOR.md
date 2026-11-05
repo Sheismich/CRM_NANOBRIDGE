@@ -44,7 +44,7 @@ a la vez en empresas, contactos, prospectos, oportunidades, cotizaciones y tarea
 
    ![Tareas, Mi día](img/manual-vendedor/03-mi-dia.jpg)
 3. **Si te llegó un interesado** (la tarea «Contactar prospecto interesado»): vence al final del siguiente día hábil.
-   Atiéndela primero.
+   Atiéndela primero: si en un día hábil nadie la toma, sube a urgente y se avisa a los supervisores.
 
 **Avisos por correo:** además de verlos en Inicio, puedes recibirlos en tu correo. Se elige en «Lo nuevo para ti».
 
@@ -154,6 +154,9 @@ Una **oportunidad** es un trato posible con una empresa: qué se le quiere vende
 - **Cambiarla:** «Nueva versión». La anterior se conserva.
 - **En qué quedó:** el tablero tiene una columna por estado. Márcala aceptada o **Marcar rechazada** (con el motivo).
   Las que pasan su fecha de cierre sin respuesta se vencen solas.
+- **Seguimiento:** si a los 5 días hábiles de mandarla el cliente no ha contestado, al responsable le queda una tarea
+  «Dar seguimiento a cotización». Se cancela sola si la cotización se acepta, se rechaza, vence, sale otra versión o se
+  cierra la oportunidad.
 
 ## 7. Documentos
 
