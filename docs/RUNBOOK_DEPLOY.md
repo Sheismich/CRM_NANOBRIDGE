@@ -287,6 +287,8 @@ Actualiza esta tabla en cada deploy.
 | 5-nov-2026 | `nanobridge-api-00048-7x5` | `4d16f74` | `040_escalar_y_seguimiento.sql` | PR #1 de Fabián, terminado por Mich: outbox retirado, envíos con destinatario y confirmación (`POST /automatizacion/envios/:id/confirmacion`; un fallido se reintenta hasta 3 veces sin gastar el contacto), freno automático del dominio (2 quejas o 5 rebotes en 7 días), escalar interesados sin atender, seguimiento de cotizaciones y aviso real de documentos sin revisar. Incluye los arreglos del reintento de recordatorios y del conteo del freno (`4d16f74`), las iniciales y las pestañas cortas en celular. Antes se confirmó en `schema_migrations` que la 039 no se había aplicado. Migraciones 039 y 040 primero desde la compu de Mich (IP autorizada y revocada), build desde copia limpia (`git archive`). `/health` ok, rutas nuevas dan 401 sin sesión, siguen las 6 variables, `N8N_WEBHOOK_URL` sin configurar. Front publicado en Firebase el mismo día. **Falta en n8n:** los prompts de `docs/n8n/confirmacion-envios/` |
 | 5-nov-2026 | `nanobridge-api-00049-7dm` | `d1bbe75` | ninguna | PR #2 de Fabián: a un «no interesado» no se le escribe hasta 6 meses después de su última respuesta (decisión de Carlos, 4-nov); lo revisan la verificación, el registro del envío, el botón «Mandar a automatización» y los recordatorios, y el botón lo dice en pantalla. Revisado por Mich, CI en verde sobre `main` ya combinado. Build desde copia limpia y deploy desde la compu de Mich. `/health` ok, rutas con llave dan 401 sin ella, siguen las 6 variables. Front publicado en Firebase el mismo día |
 | 6-nov-2026 | `nanobridge-api-00050-9v9` | `1c2120d` | 041 | Teléfonos con y sin lada de México se guardan igual y sin la extensión del final; la importación acepta CSV con punto y coma (hallazgos del ensayo de la carga de la semana 12). La 041 pasa a esa forma lo guardado; en producción no había teléfonos con lada, así que no cambió ningún dato. Respaldo del día confirmado antes de migrar; IP autorizada solo durante la migración y revocada. Build desde copia limpia, `/health` ok, rutas sin sesión 401, mismas variables. Front publicado en Firebase el mismo día, con el contraste de Importaciones (38009e5) |
+| 6-nov-2026 | `nanobridge-api-00051-wn9` | `1c2120d` (misma imagen) | ninguna | Encendido: `TOPE_DIARIO_CORREOS=20` con `--update-env-vars`, sin build. |
+| 6-nov-2026 | `nanobridge-api-00052-7mh` | `09e711f` | ninguna | Filtros del Registro de cambios (`GET /admin/registro-cambios/filtros`; filtro por persona y acción, y el PDF indica a qué se redujo). Front en Firebase. |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
@@ -297,9 +299,8 @@ conserva; no uses `--set-env-vars`, que borra las que no menciones):
 - `CORREO_DRIVER=sendgrid` y el secreto `SENDGRID_API_KEY` (desde la etapa 2 de las
   mejoras, avisos del CRM; ver §8b) — sin ellas la campanita sigue, pero no sale
   ningún correo de aviso (el driver "falso" solo los guarda en memoria).
-- `TOPE_DIARIO_CORREOS` no está puesta: vale 50 por defecto. Al encender los
-  envíos reales se baja a 20 (calentamiento del dominio, PLAN_N8N_DEFINITIVO.md)
-  con `--update-env-vars TOPE_DIARIO_CORREOS=20`.
+- `TOPE_DIARIO_CORREOS=20` (desde `00051-wn9`, encendido del 6-nov-2026; calentamiento
+  del dominio, PLAN_N8N_DEFINITIVO.md). Se cambia con `--update-env-vars`.
 
 ### Consultar la base desde Cloud Shell sin escribir la contraseña
 
