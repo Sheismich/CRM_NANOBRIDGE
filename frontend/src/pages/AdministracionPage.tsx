@@ -3,18 +3,16 @@ import { useSearchParams } from "react-router-dom";
 import { AppShell } from "../components/layout/AppShell";
 import { EstadoSistema } from "../components/admin/EstadoSistema";
 import { ProblemasAbiertos } from "../components/admin/ProblemasAbiertos";
-import { RegistroCambios, type FiltrosRegistro } from "../components/admin/RegistroCambios";
+import { RegistroCambios } from "../components/admin/RegistroCambios";
 import { EquipoRoles } from "../components/admin/EquipoRoles";
 import { CorreosProspeccion } from "../components/admin/CorreosProspeccion";
 import { RepartoInteresados } from "../components/admin/RepartoInteresados";
 import { IntegracionAdmin } from "../components/admin/IntegracionAdmin";
 import { UsuariosAdmin } from "../components/admin/UsuariosAdmin";
-import { Button } from "../components/ui/Button";
 import { EncabezadoPagina } from "../components/ui/EncabezadoPagina";
 import { Icono } from "../components/ui/Icono";
 import { PanelLateral } from "../components/ui/PanelLateral";
 import { Pastilla } from "../components/ui/Pastilla";
-import { ApiError, api } from "../lib/api";
 import { useAuth } from "../lib/auth-context";
 
 // Administración del rediseño (docs/diseno/administracion.html, ajustes del
@@ -31,22 +29,6 @@ export function AdministracionPage() {
   const esAdmin = user?.rol === "administrador";
   const [params, setParams] = useSearchParams();
   const [usuariosAbierto, setUsuariosAbierto] = useState(false);
-  const [filtros, setFiltros] = useState<FiltrosRegistro>({ tipo: "todo", q: "" });
-  const [exportando, setExportando] = useState<"pdf" | "csv" | null>(null);
-  const [errorExport, setErrorExport] = useState<string | null>(null);
-
-  async function exportar(formato: "pdf" | "csv") {
-    setExportando(formato);
-    setErrorExport(null);
-    try {
-      const qs = new URLSearchParams({ formato, tipo: filtros.tipo, ...(filtros.q ? { q: filtros.q } : {}) });
-      await api.descargar(`/api/v1/admin/registro-cambios/export?${qs.toString()}`);
-    } catch (err) {
-      setErrorExport(err instanceof ApiError ? err.message : "No se pudo exportar");
-    } finally {
-      setExportando(null);
-    }
-  }
 
   if (esAdmin && params.get("tab") === "integracion") {
     return (
@@ -86,29 +68,15 @@ export function AdministracionPage() {
           }
           titulo="Administración"
           subtitulo={esAdmin ? "Si todo está funcionando, qué falla, quién movió qué y quién tiene acceso." : "Quién tiene acceso y qué le escribimos a los prospectos."}
-          acciones={
-            esAdmin && (
-              <>
-                <span className="hidden font-heading text-[11px] font-extrabold uppercase tracking-[2px] text-ink-3 md:inline">Exportar registro de cambios</span>
-                <Button disabled={exportando !== null} onClick={() => void exportar("pdf")}>
-                  <Icono nombre="descargar" size={16} /> {exportando === "pdf" ? "…" : "PDF"}
-                </Button>
-                <Button variant="outline" disabled={exportando !== null} onClick={() => void exportar("csv")}>
-                  <Icono nombre="descargar" size={16} /> {exportando === "csv" ? "…" : "CSV"}
-                </Button>
-              </>
-            )
-          }
         />
       }
     >
-      {errorExport && <p className="mb-3 rounded-[12px] bg-danger-bg px-4 py-2.5 text-[13px] text-danger">{errorExport}</p>}
       {esAdmin && <EstadoSistema />}
       <div className={esAdmin ? "mt-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]" : "max-w-[640px]"}>
         {esAdmin && (
           <div className="flex min-w-0 flex-col gap-4">
             <ProblemasAbiertos onVerDetalle={() => setParams({ tab: "integracion" }, { replace: true })} />
-            <RegistroCambios filtros={filtros} onFiltros={setFiltros} />
+            <RegistroCambios />
           </div>
         )}
         <div className="flex min-w-0 flex-col gap-4">

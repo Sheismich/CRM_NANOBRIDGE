@@ -13,42 +13,64 @@ import { auditoria } from "../database/schema.js";
 export const TIPOS_REGISTRO = ["usuarios_roles", "ediciones", "borrados", "descargas", "configuracion"] as const;
 export type TipoRegistro = (typeof TIPOS_REGISTRO)[number];
 
-const REGLAS: Record<TipoRegistro, Record<string, string[]>> = {
+// Entidad → acción → cómo se llama en el filtro "Acción" y en el PDF. Va todo
+// junto para que una acción nueva no pueda entrar sin su nombre.
+const REGLAS: Record<TipoRegistro, Record<string, Record<string, string>>> = {
   usuarios_roles: {
-    usuario: ["crear", "actualizar", "desactivar", "reactivar"]
+    usuario: { crear: "Alta de usuario", actualizar: "Edición o cambio de rol de usuario", desactivar: "Desactivación de usuario", reactivar: "Reactivación de usuario" }
   },
   ediciones: {
-    empresa: ["crear", "actualizar", "tomar_empresa"],
-    contacto: ["crear", "actualizar"],
-    oportunidad: ["crear", "cambiar_etapa", "reabrir"],
-    cotizacion: ["crear", "nueva_version", "cambiar_estado"],
-    documento: ["subir", "nueva_version", "cambiar_estado", "revisar", "aprobar", "rechazar"],
-    prospecto: ["importar_borrador"]
+    empresa: { crear: "Alta de empresa", actualizar: "Edición de empresa", tomar_empresa: "Empresa asignada" },
+    contacto: { crear: "Alta de contacto", actualizar: "Edición de contacto" },
+    oportunidad: { crear: "Alta de oportunidad", cambiar_etapa: "Cambio de etapa de oportunidad", reabrir: "Reapertura de oportunidad" },
+    cotizacion: { crear: "Alta de cotización", nueva_version: "Versión nueva de cotización", cambiar_estado: "Cambio de estado de cotización" },
+    documento: { subir: "Documento subido", nueva_version: "Versión nueva de documento", cambiar_estado: "Cambio de estado de documento", revisar: "Documento revisado", aprobar: "Documento aprobado", rechazar: "Documento rechazado" },
+    prospecto: { importar_borrador: "Prospecto importado" }
   },
   borrados: {
-    documento: ["eliminar"],
-    empresa: ["desactivar"],
-    contacto: ["desactivar"],
-    medio_contacto: ["registrar_supresion"]
+    documento: { eliminar: "Documento eliminado" },
+    empresa: { desactivar: "Baja de empresa" },
+    contacto: { desactivar: "Baja de contacto" },
+    medio_contacto: { registrar_supresion: "Medio marcado como no contactar" }
     // + el prospecto que una persona pasó a "baja" (ver condicionBajaManual).
   },
   descargas: {
-    documento: ["ver", "descargar", "descargar_lote"],
-    reporte: ["exportar"],
-    cotizacion: ["descargar_pdf"],
-    registro_cambios: ["exportar"]
+    documento: { ver: "Documento visto", descargar: "Documento descargado", descargar_lote: "Lote de documentos descargado" },
+    reporte: { exportar: "Reporte exportado" },
+    cotizacion: { descargar_pdf: "PDF de cotización descargado" },
+    registro_cambios: { exportar: "Registro de cambios exportado" }
   },
   configuracion: {
-    campana: ["crear", "editar", "activar", "pausar", "finalizar"],
-    plantilla_correo: ["editar"],
-    pie_correo: ["editar"],
-    reparto_interesados: ["editar"],
-    freno_dominio: ["pausar", "reanudar"],
-    catalogo_tipo_documento: ["cambiar_obligatorio"],
-    evento_pendiente: ["reintentar"],
-    proceso_fallido: ["cambiar_estado"]
+    campana: { crear: "Alta de campaña", editar: "Edición de campaña", activar: "Campaña activada", pausar: "Campaña pausada", finalizar: "Campaña finalizada" },
+    plantilla_correo: { editar: "Edición de correo de prospección" },
+    pie_correo: { editar: "Edición del pie de correos" },
+    reparto_interesados: { editar: "Cambio del reparto de interesados" },
+    freno_dominio: { pausar: "Envíos pausados", reanudar: "Envíos reanudados" },
+    catalogo_tipo_documento: { cambiar_obligatorio: "Cambio de papeles obligatorios" },
+    evento_pendiente: { reintentar: "Aviso a n8n reintentado" },
+    proceso_fallido: { cambiar_estado: "Cambio de estado de un problema" }
   }
 };
+
+// La baja de un prospecto no es un verbo sino un resultado (ver
+// condicionBajaManual): en el filtro "Acción" usa esta clave.
+const CLAVE_BAJA_PROSPECTO = "prospecto:baja";
+
+export interface AccionRegistro {
+  clave: string; // "entidad:accion"
+  etiqueta: string;
+  tipo: TipoRegistro;
+}
+
+// Las opciones del filtro "Acción". Entidad y verbo van juntos porque el verbo
+// solo no dice nada: "crear" sirve igual para una empresa que para un usuario.
+export const ACCIONES_REGISTRO: AccionRegistro[] = TIPOS_REGISTRO.flatMap((tipo) => [
+  ...Object.entries(REGLAS[tipo]).flatMap(([entidad, acciones]) => Object.entries(acciones).map(([accion, etiqueta]) => ({ clave: `${entidad}:${accion}`, etiqueta, tipo }))),
+  ...(tipo === "borrados" ? [{ clave: CLAVE_BAJA_PROSPECTO, etiqueta: "Baja de prospecto", tipo }] : [])
+]);
+
+export const CLAVES_ACCION = ACCIONES_REGISTRO.map((a) => a.clave) as [string, ...string[]];
+const POR_CLAVE = new Map(ACCIONES_REGISTRO.map((a) => [a.clave, a]));
 
 // Una baja hecha por una persona (desde la cola de clasificación, por
 // ejemplo) sí es un "borrado", venga de la acción que venga; la que llega sola
@@ -60,7 +82,7 @@ const condicionBajaManual = and(
 )!;
 
 function condicionDe(tipo: TipoRegistro): SQL {
-  const partes = Object.entries(REGLAS[tipo]).map(([entidad, acciones]) => and(eq(auditoria.entidad, entidad), inArray(auditoria.accion, acciones))!);
+  const partes = Object.entries(REGLAS[tipo]).map(([entidad, acciones]) => and(eq(auditoria.entidad, entidad), inArray(auditoria.accion, Object.keys(acciones)))!);
   if (tipo === "borrados") partes.push(condicionBajaManual);
   return or(...partes)!;
 }
@@ -72,11 +94,19 @@ export function condicionRegistro(tipo: TipoRegistro | "todo"): SQL {
   return and(or(isNotNull(auditoria.usuarioId), eq(auditoria.entidad, "freno_dominio")), condicion)!;
 }
 
+/** Condición SQL de una acción del catálogo; siempre va junto con condicionRegistro. */
+export function condicionAccion(clave: string): SQL {
+  if (clave === CLAVE_BAJA_PROSPECTO) return condicionBajaManual;
+  const [entidad, accion] = clave.split(":") as [string, string];
+  return and(eq(auditoria.entidad, entidad), eq(auditoria.accion, accion))!;
+}
+
+export function etiquetaAccion(clave: string): string {
+  return POR_CLAVE.get(clave)?.etiqueta ?? clave;
+}
+
 /** En qué filtro cae una fila (para etiquetarla en la lista "Todo"). */
 export function tipoDeFila(entidad: string, accion: string, despues: unknown): TipoRegistro | null {
   if (entidad === "prospecto" && (despues as { estado?: string } | null)?.estado === "baja") return "borrados";
-  for (const tipo of TIPOS_REGISTRO) {
-    if (REGLAS[tipo][entidad]?.includes(accion)) return tipo;
-  }
-  return null;
+  return POR_CLAVE.get(`${entidad}:${accion}`)?.tipo ?? null;
 }

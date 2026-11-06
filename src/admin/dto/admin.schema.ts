@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TIPOS_REGISTRO } from "../registro-cambios.catalogo.js";
+import { CLAVES_ACCION, TIPOS_REGISTRO } from "../registro-cambios.catalogo.js";
 
 export const problemasQuerySchema = z.object({
   estado: z.enum(["abierto", "en_revision", "resuelto"]).optional()
@@ -13,6 +13,8 @@ export const claveProblemaSchema = z.object({
 const filtrosRegistro = z.object({
   tipo: z.enum(["todo", ...TIPOS_REGISTRO]).default("todo"),
   usuarioId: z.coerce.number().int().positive().optional(),
+  // "entidad:accion" del catálogo (registro-cambios.catalogo.ts).
+  accion: z.enum(CLAVES_ACCION).optional(),
   entidad: z.string().trim().min(1).max(80).optional(),
   entidadId: z.coerce.number().int().positive().optional(),
   q: z.string().trim().min(1).max(120).optional(),

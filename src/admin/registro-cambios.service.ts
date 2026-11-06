@@ -8,7 +8,7 @@ import { diaSiguiente, fechaMx, horaMx, inicioDelDiaMxSql, sumarDiasFecha } from
 import { toCsv } from "../shared/csv.js";
 import { COLOR, FUENTE, MARGEN, anchoUtil, asegurarEspacio, crearDocumentoCarta, tabla, terminar } from "../shared/pdf/molde.js";
 import { fechaCorta, fechaHoraMx, numero } from "../shared/pdf/formato.js";
-import { condicionRegistro, tipoDeFila, type TipoRegistro } from "./registro-cambios.catalogo.js";
+import { ACCIONES_REGISTRO, condicionAccion, condicionRegistro, etiquetaAccion, tipoDeFila, type TipoRegistro } from "./registro-cambios.catalogo.js";
 import { cambiosDe, frase, nombreDelRegistro, type FilaAuditoria, type Nombres } from "./registro-cambios.textos.js";
 import type { RegistroCambiosExportQuery, RegistroCambiosQuery } from "./dto/admin.schema.js";
 
@@ -19,7 +19,8 @@ import type { RegistroCambiosExportQuery, RegistroCambiosQuery } from "./dto/adm
 
 // La exportación (Fabián, 12-oct): sin fechas son los últimos 30 días, y el
 // PDF lleva a lo más 2,000 renglones (más serían cientos de hojas); el CSV
-// va completo.
+// va completo. La pantalla siempre manda las dos fechas (6-nov-2026), para que
+// lo que se baja sea exactamente lo que se está viendo.
 const DIAS_POR_OMISION = 30;
 export const TOPE_PDF = 2_000;
 // Un renglón de la tabla del PDF no se parte entre hojas (ver molde.ts).
@@ -66,6 +67,15 @@ export class RegistroCambiosService {
     return { page: query.page, limit: query.limit, total: Number(total?.n ?? 0), data: await this.describir(filas) };
   }
 
+  /**
+   * Las opciones de los filtros. Las personas son todas, también las
+   * desactivadas: lo que hicieron antes de irse sigue en el registro.
+   */
+  async opcionesDeFiltros() {
+    const personas = await this.db.select({ id: usuarios.id, nombre: usuarios.nombre, activo: usuarios.activo }).from(usuarios);
+    return { acciones: ACCIONES_REGISTRO, personas: personas.sort((a, b) => a.nombre.localeCompare(b.nombre, "es")) };
+  }
+
   /** Exportación en PDF o CSV con los mismos filtros. `tope` solo se cambia en pruebas. */
   async exportar(query: RegistroCambiosExportQuery, user: CurrentUser, opciones: { tope?: number } = {}) {
     const tope = opciones.tope ?? TOPE_PDF;
@@ -83,7 +93,7 @@ export class RegistroCambiosService {
         : this.db.select().from(auditoria).where(where).orderBy(...orden)
     ]);
     const filas = await this.describir(filasDb);
-    const nombreBase = `registro-de-cambios-${desde}-a-${hasta}`;
+    const nombreBase = `registro-de-cambios-${desde === hasta ? desde : `${desde}-a-${hasta}`}`;
 
     let resultado: { nombreArchivo: string; contenido: string | Buffer };
     if (query.formato === "csv") {
@@ -114,10 +124,10 @@ export class RegistroCambiosService {
   }
 
   private async pdf(filas: FilaRegistro[], total: number, filtros: Filtros, user: CurrentUser) {
-    const periodo = `Del ${fechaCorta(filtros.desde!)} al ${fechaCorta(filtros.hasta!)}`;
+    const periodo = filtros.desde === filtros.hasta ? `El ${fechaCorta(filtros.desde!)}` : `Del ${fechaCorta(filtros.desde!)} al ${fechaCorta(filtros.hasta!)}`;
     const doc = crearDocumentoCarta({
       titulo: "Registro de cambios",
-      lineas: [`${periodo} · ${ETIQUETAS_TIPO[filtros.tipo ?? "todo"]}${filtros.q ? ` · "${filtros.q}"` : ""}`, `Generado el ${fechaHoraMx(new Date())} por ${user.nombre}`]
+      lineas: [`${periodo} · ${ETIQUETAS_TIPO[filtros.tipo ?? "todo"]}`, ...(await this.detalleDeFiltros(filtros)), `Generado el ${fechaHoraMx(new Date())} por ${user.nombre}`]
     });
     doc.y += 15;
     tabla(doc, {
@@ -141,10 +151,22 @@ export class RegistroCambiosService {
     return terminar(doc);
   }
 
+  // El renglón del encabezado que dice a qué se redujo el PDF.
+  private async detalleDeFiltros(filtros: Filtros): Promise<string[]> {
+    const [persona] = filtros.usuarioId ? await this.db.select({ nombre: usuarios.nombre }).from(usuarios).where(eq(usuarios.id, filtros.usuarioId)) : [];
+    const partes = compactConditions<string | undefined>([
+      filtros.usuarioId ? `Persona: ${persona?.nombre ?? `#${filtros.usuarioId}`}` : undefined,
+      filtros.accion ? `Acción: ${etiquetaAccion(filtros.accion)}` : undefined,
+      filtros.q ? `Búsqueda: "${filtros.q}"` : undefined
+    ]);
+    return partes.length > 0 ? [partes.join(" · ")] : [];
+  }
+
   private async condiciones(filtros: Filtros): Promise<SQL> {
     const partes = compactConditions<SQL | undefined>([
       condicionRegistro(filtros.tipo ?? "todo"),
       filtros.usuarioId ? eq(auditoria.usuarioId, filtros.usuarioId) : undefined,
+      filtros.accion ? condicionAccion(filtros.accion) : undefined,
       filtros.entidad ? eq(auditoria.entidad, filtros.entidad) : undefined,
       filtros.entidadId ? eq(auditoria.entidadId, filtros.entidadId) : undefined,
       filtros.desde ? sql`${auditoria.creadoEn} >= ${inicioDelDiaMxSql(filtros.desde)}` : undefined,

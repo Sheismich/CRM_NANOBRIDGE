@@ -107,7 +107,7 @@ Hecha. Piezas nuevas en `components/admin/` (`EstadoSistema`, `ProblemasAbiertos
 - Todo lo de `/admin` es solo del administrador. El **supervisor** ve únicamente "Equipo y roles" (sin editar) y ya no tiene la pestaña Auditoría en el front nuevo.
 - "Nuevo usuario" y el botón de la tarjeta abren en un panel la administración de usuarios de siempre (`UsuariosAdmin`: alta, edición, desactivar, reactivar). Rehacerla con el estilo nuevo queda para después.
 - "Ver los N" de un problema abre `?tab=integracion` con el detalle técnico de siempre (`IntegracionAdmin`).
-- Exportar PDF/CSV usa los filtros del Registro de cambios (tipo y búsqueda).
+- Exportar PDF/CSV usa los filtros del Registro de cambios. Desde el 6-nov los botones viven dentro de la tarjeta, junto a los filtros (tipo, búsqueda, Desde/Hasta en día de México, persona y acción), y exportan exactamente lo filtrado.
 - Sin backend nuevo.
 
 Lo que se pidió:

@@ -55,6 +55,12 @@ export class AdminController {
     return this.registroCambiosService.listar(registroCambiosQuerySchema.parse(query));
   }
 
+  // Las opciones de los menús de filtros (acciones y personas).
+  @Get("registro-cambios/filtros")
+  filtrosRegistro() {
+    return this.registroCambiosService.opcionesDeFiltros();
+  }
+
   // PDF (hoja carta, molde común) o CSV, con los mismos filtros. @Res() sin
   // passthrough por lo mismo que /reportes/export: el cuerpo es el archivo.
   @Get("registro-cambios/export")
