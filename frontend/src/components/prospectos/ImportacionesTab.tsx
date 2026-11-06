@@ -352,6 +352,8 @@ export function ImportacionesTab() {
 // leyenda, fecha y lo que falta por hacer.
 function FilaLote({ lote, elegido, onElegir }: { lote: LoteImportacion; elegido: boolean; onElegir: () => void }) {
   const porRevisar = lote.resumen.pendiente_revision + lote.resumen.duplicado;
+  // Sobre el fondo azul de la fila elegida, ink-3 no llega a 4.5:1 en modo noche (axe, 5-nov-2026).
+  const tenue = elegido ? "text-ink-2" : "text-ink-3";
   const partes = ORDEN_BARRA.map((p) => ({ ...p, n: lote.resumen[p.estado] ?? 0 })).filter((p) => p.n > 0);
   return (
     <button
@@ -362,7 +364,7 @@ function FilaLote({ lote, elegido, onElegir }: { lote: LoteImportacion; elegido:
     >
       <div className="min-w-0">
         <b className="block truncate text-[14px] text-strong">{lote.fuente}</b>
-        <small className="block text-[12px] text-ink-3">{lote.total} filas</small>
+        <small className={clsx("block text-[12px]", tenue)}>{lote.total} filas</small>
       </div>
       <div className="min-w-0">
         <div className="flex h-2.5 overflow-hidden rounded-full bg-soft">
@@ -381,7 +383,7 @@ function FilaLote({ lote, elegido, onElegir }: { lote: LoteImportacion; elegido:
       </div>
       <div>
         <b className="block text-[13px] text-strong">{formatoFecha.format(new Date(lote.creado_en))}</b>
-        <small className="text-[12px] text-ink-3">{new Date(lote.creado_en).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</small>
+        <small className={clsx("text-[12px]", tenue)}>{new Date(lote.creado_en).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</small>
       </div>
       <div className="md:justify-self-end">{porRevisar > 0 ? <Pastilla tono="warn">{porRevisar} por revisar</Pastilla> : <Pastilla tono="ok">Terminado</Pastilla>}</div>
     </button>
