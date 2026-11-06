@@ -60,7 +60,14 @@ export function parseCsv(contenido: string): { encabezados: string[]; filas: Rec
   // agrega Excel al exportar "CSV UTF-8" -- sin esto, el primer header
   // queda con el BOM pegado y nunca hace match por nombre de columna).
   const texto = contenido.replace(/^\uFEFF/, "");
-  const filas = parseCsvFilas(texto);
+  // Excel con la configuraci\u00F3n regional de Espa\u00F1a (y algunas de M\u00E9xico)
+  // guarda "CSV" separado por punto y coma; antes eso daba "Columnas que no
+  // se reconocen: empresaNombreLegal;empresaGiro;\u2026" (ensayo de la carga,
+  // 6-nov-2026). Los nombres de columna no llevan comas ni punto y coma, as\u00ED
+  // que el encabezado basta para saber cu\u00E1l se us\u00F3.
+  const encabezado = texto.slice(0, texto.search(/\r?\n|$/));
+  const separador = encabezado.includes(";") && !encabezado.includes(",") ? ";" : ",";
+  const filas = parseCsvFilas(texto, separador);
   if (filas.length === 0) return { encabezados: [], filas: [] };
 
   const headers = filas[0]!.map((h) => h.trim());
@@ -76,7 +83,7 @@ export function parseCsv(contenido: string): { encabezados: string[]; filas: Rec
   return { encabezados: headers, filas: datos };
 }
 
-function parseCsvFilas(texto: string): string[][] {
+function parseCsvFilas(texto: string, separador: "," | ";"): string[][] {
   const filas: string[][] = [];
   let fila: string[] = [];
   let campo = "";
@@ -101,7 +108,7 @@ function parseCsvFilas(texto: string): string[][] {
 
     if (char === '"') {
       dentroDeComillas = true;
-    } else if (char === ",") {
+    } else if (char === separador) {
       fila.push(campo);
       campo = "";
     } else if (char === "\r") {

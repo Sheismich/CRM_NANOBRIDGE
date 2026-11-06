@@ -14,7 +14,6 @@ sacar la certificación de audiencia para G5. **Nada de esto manda correos**, si
 | **Giro con una de estas palabras:** tecnología, manufactura, logística, financiero, servicios, salud, construcción, agroindustria, comercio, educación u otro | El score solo reconoce esas (sin importar acentos ni mayúsculas). «Industria manufacturera», «Servicios financieros» o «Distribución» valen 0 de hasta 30 puntos | Se cargan igual; la auditoría los cuenta (§5, «Calidad de la audiencia»). Conviene corregirlos en el archivo antes de subirlo |
 | **Región** (columna aparte, por ejemplo «Bajío» o «Norte») | Da +10 en el score. El estado y la ciudad no cuentan como región | Todos pierden esos 10 por igual; no cambia el orden entre ellos |
 | **Un correo de persona** mejor que uno de área | `info@`, `ventas@` o `compras@` responden menos y no son una persona | Entran; la auditoría dice cuántos son. Decidir con Carlos si se dejan |
-| **Teléfono sin extensión** (la extensión, en observaciones) | «999 123 4567 ext 12» se guarda como 999123456712 | Quitar la extensión en el archivo |
 
 ## 2. En producción, en este orden
 
@@ -27,7 +26,7 @@ sacar la certificación de audiencia para G5. **Nada de esto manda correos**, si
 4. **Auditoría** (`auditar-datos.mjs`): §6 «Datos de prueba» en 0 y 0 empresas.
 5. **Preparar el archivo:** pasar la lista de Carlos a la plantilla (Prospectos → Importaciones → «Descargar
    plantilla»), con los nombres de columna exactos. Guardarlo desde Excel como **CSV separado por comas** (UTF-8 o el
-   normal: los dos sirven). Separado por punto y coma no entra.
+   normal) o separado por punto y coma: los tres sirven desde el 6-nov.
 6. **Campaña del piloto:** Prospectos → Campañas → crearla y **activarla**.
 7. **Importar** el archivo con esa campaña. Revisar las filas «Con errores» y «Duplicada» (Manual de datos §2) y
    luego «Confirmar todas las pendientes».
@@ -53,9 +52,8 @@ RUNBOOK §10.
   el motivo en español.
 - **Un conmutador compartido** (dos personas con el mismo teléfono): el teléfono se le queda a la primera; la segunda
   entra solo con su correo. No es un error.
-- **Teléfonos con y sin +52** («81 1234 5678» y «+52 81 1234 5678») se guardan distinto. La auditoría los marca como
-  posible duplicado (§3, «Mismo teléfono con distinto formato») y baja T1.2. Lo mejor es escribirlos todos igual en el
-  archivo, sin +52.
+- **Teléfonos con y sin +52** («81 1234 5678», «+52 81 1234 5678», «+52 1 81…») se guardan igual, y la extensión del
+  final («ext 12») se quita (desde el 6-nov, migración 041). La extensión se pierde: si importa, va en observaciones.
 
 ## 4. El ensayo (6-nov-2026)
 

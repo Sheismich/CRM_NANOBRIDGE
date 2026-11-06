@@ -45,7 +45,7 @@ Además hay 5 controles **propuestos que no entran en este corte** (§G). Se lis
 | ID | Control | Dónde | Comprobación |
 |---|---|---|---|
 | B-01 | **Prospecto válido** (alta manual y CSV): nombres, correo o teléfono obligatorio, canal con su medio, catálogos sin acentos ni mayúsculas | `src/crm/dto/prospecto.schema.ts` | `210-prospectos-csv-validacion`, `315-importacion-csv-limites` |
-| B-02 | **Normalización** de correo (minúsculas, sin espacios) y teléfono (solo dígitos, mínimo 7) igual en CRM, CSV y n8n | `src/shared/normalize.ts` | `255-identidad-personas`, `70-empresas-contactos` |
+| B-02 | **Normalización** de correo (minúsculas, sin espacios) y teléfono (solo dígitos, mínimo 7, sin extensión y sin la lada de México desde el 6-nov) igual en CRM, CSV y n8n | `src/shared/normalize.ts` | `255-identidad-personas`, `70-empresas-contactos`, `580-telefonos-y-csv` |
 | B-03 | **Enlaces seguros:** sitio web, redes y fuente solo `http`/`https` (no `javascript:`) | `src/shared/http-url.ts` | `210-prospectos-csv-validacion`, `500-plantillas-correo` |
 | B-04 | **Texto íntegro:** se rechaza lo que no es UTF-8 y los acentos se guardan como se leen | `src/shared/configurar-app.ts`, `texto.ts` | `356-codificacion`, `355-acentos` |
 | B-05 | **Documentos:** solo PDF, DOCX, XLSX, PNG y JPG, se revisa el contenido real del archivo, máximo 25 MB | `src/documentos/documentos.service.ts` | `320-documentos-contenido`, `150-documentos-flujo` |

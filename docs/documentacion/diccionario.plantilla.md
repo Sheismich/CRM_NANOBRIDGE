@@ -48,7 +48,7 @@ Una misma persona no debe existir dos veces. La regla es la misma para el alta m
 | Dato | Cómo se guarda para comparar | Dónde |
 |---|---|---|
 | Correo | sin espacios al inicio y al final, en minúsculas | `normalizeEmail`, `src/shared/normalize.ts` |
-| Teléfono / WhatsApp | solo dígitos (sin espacios, guiones, paréntesis ni «+»); debe tener al menos 7 | `normalizePhone`, `tieneDigitosSuficientes` |
+| Teléfono / WhatsApp | solo dígitos (sin espacios, guiones, paréntesis ni «+»), sin la extensión del final («ext 12») y sin la lada de México cuando deja 10 dígitos («+52 81 1234 5678» = «8112345678», desde la migración 041); debe tener al menos 7 sin contar la extensión | `normalizePhone`, `tieneDigitosSuficientes` |
 | Catálogos del CSV (tamaño, canal, confianza, prioridad) | sin mayúsculas ni acentos: «Pequeña» = `pequena`, «Teléfono» = `telefono` | `prospecto.schema.ts` |
 | Supresión | igual que el medio (correo o teléfono normalizado) | `normalizarValorSupresion` |
 | Textos de las pantallas | se recortan los espacios; los textos que no son UTF-8 se rechazan (400) | API |
@@ -115,7 +115,7 @@ Estados cerrados (no reciben más correos): `baja`, `interesado`, `no_interesado
 | 2 | **`prospectos.estado` es texto libre** en la base; los valores válidos solo están en el código. | Un valor mal escrito no lo detiene la base. | Aceptable mientras todo pase por la API; documentado en §6. |
 | 3 | **`empresas.giro` es texto libre** (sin catálogo). La base compara sin distinguir mayúsculas ni acentos, así que filtros y plantillas por giro tratan «Manufactura» y «manufactura» como el mismo; pero se guarda tal como se escribió y en pantalla (por ejemplo, las opciones del filtro de giro de Empresas) salen las dos formas. Un giro con otra palabra («Industria manufacturera») sí cuenta como otro. | Opciones repetidas en pantallas; plantillas por giro que no aplican si el giro se escribe distinto. | Catálogo de giros, o normalizar al capturar. La auditoría de datos reporta las formas distintas. |
 | 4 | **Región, estado y ciudad** son texto libre. | Filtros y reportes por zona. | Catálogo de estados de México. |
-| 5 | **Teléfonos sin formato internacional** (solo dígitos; «442…» y «52442…» son distintos). | Posible duplicado de la misma persona por teléfono. | Normalizar a E.164 (está en el backlog). |
+| 5 | **Teléfonos sin formato internacional.** Resuelto para México el 6-nov-2026 (migración 041): «442…» y «52442…» ya son el mismo. Los de otros países se guardan con los dígitos que traigan. | Posible duplicado de una persona extranjera escrita con y sin su lada. | Normalizar a E.164 si llegan listas de otros países. |
 | 6 | **Correos de Gmail con puntos o «+»** (`ana.ruiz@` y `anaruiz@`) cuentan como distintos. | Duplicados raros. | Está en el backlog; bajo impacto. |
 
 ## 9. Tablas y campos

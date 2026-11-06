@@ -3,7 +3,7 @@
 **Entregable:** OB-01 (diccionario y reglas) y apoyo de OB-02 (base maestra controlada), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026).
 **Dueño:** T1 (datos y estandarización) · **Revisión:** T2 y Dirección General.
-**Versión:** 1.1 · generado el 5 de noviembre de 2026 desde la base real, con migraciones hasta `040_escalar_y_seguimiento.sql` (40 en total). Cubre 36 tablas y 414 campos.
+**Versión:** 1.1 · generado el 6 de noviembre de 2026 desde la base real, con migraciones hasta `041_telefonos_sin_lada.sql` (41 en total). Cubre 36 tablas y 414 campos.
 
 > Este documento se genera con `generar-diccionario.mjs` (misma carpeta) a partir de la estructura real de la
 > base y de las reglas del código. No editar las tablas a mano: cambiar el script y volver a generarlo (ver al final).
@@ -57,7 +57,7 @@ Una misma persona no debe existir dos veces. La regla es la misma para el alta m
 | Dato | Cómo se guarda para comparar | Dónde |
 |---|---|---|
 | Correo | sin espacios al inicio y al final, en minúsculas | `normalizeEmail`, `src/shared/normalize.ts` |
-| Teléfono / WhatsApp | solo dígitos (sin espacios, guiones, paréntesis ni «+»); debe tener al menos 7 | `normalizePhone`, `tieneDigitosSuficientes` |
+| Teléfono / WhatsApp | solo dígitos (sin espacios, guiones, paréntesis ni «+»), sin la extensión del final («ext 12») y sin la lada de México cuando deja 10 dígitos («+52 81 1234 5678» = «8112345678», desde la migración 041); debe tener al menos 7 sin contar la extensión | `normalizePhone`, `tieneDigitosSuficientes` |
 | Catálogos del CSV (tamaño, canal, confianza, prioridad) | sin mayúsculas ni acentos: «Pequeña» = `pequena`, «Teléfono» = `telefono` | `prospecto.schema.ts` |
 | Supresión | igual que el medio (correo o teléfono normalizado) | `normalizarValorSupresion` |
 | Textos de las pantallas | se recortan los espacios; los textos que no son UTF-8 se rechazan (400) | API |
@@ -124,7 +124,7 @@ Estados cerrados (no reciben más correos): `baja`, `interesado`, `no_interesado
 | 2 | **`prospectos.estado` es texto libre** en la base; los valores válidos solo están en el código. | Un valor mal escrito no lo detiene la base. | Aceptable mientras todo pase por la API; documentado en §6. |
 | 3 | **`empresas.giro` es texto libre** (sin catálogo). La base compara sin distinguir mayúsculas ni acentos, así que filtros y plantillas por giro tratan «Manufactura» y «manufactura» como el mismo; pero se guarda tal como se escribió y en pantalla (por ejemplo, las opciones del filtro de giro de Empresas) salen las dos formas. Un giro con otra palabra («Industria manufacturera») sí cuenta como otro. | Opciones repetidas en pantallas; plantillas por giro que no aplican si el giro se escribe distinto. | Catálogo de giros, o normalizar al capturar. La auditoría de datos reporta las formas distintas. |
 | 4 | **Región, estado y ciudad** son texto libre. | Filtros y reportes por zona. | Catálogo de estados de México. |
-| 5 | **Teléfonos sin formato internacional** (solo dígitos; «442…» y «52442…» son distintos). | Posible duplicado de la misma persona por teléfono. | Normalizar a E.164 (está en el backlog). |
+| 5 | **Teléfonos sin formato internacional.** Resuelto para México el 6-nov-2026 (migración 041): «442…» y «52442…» ya son el mismo. Los de otros países se guardan con los dígitos que traigan. | Posible duplicado de una persona extranjera escrita con y sin su lada. | Normalizar a E.164 si llegan listas de otros países. |
 | 6 | **Correos de Gmail con puntos o «+»** (`ana.ruiz@` y `anaruiz@`) cuentan como distintos. | Duplicados raros. | Está en el backlog; bajo impacto. |
 
 ## 9. Tablas y campos
@@ -160,7 +160,7 @@ Estados cerrados (no reciben más correos): `baja`, `interesado`, `no_interesado
 | `correo` | texto (máx. 254) | no | Correo electrónico. |
 | `correo_normalizado` | texto (máx. 254) | no | Correo normalizado, para detectar duplicados. |
 | `telefono` | texto (máx. 40) | no | Como venía en la fila; al confirmarla pasa a medios_contacto (teléfono). |
-| `telefono_normalizado` | texto (máx. 40) | no | Teléfono normalizado (solo dígitos), para detectar duplicados. |
+| `telefono_normalizado` | texto (máx. 40) | no | Teléfono normalizado (solo dígitos, sin extensión ni lada de México), para detectar duplicados. |
 | `canal_inicial` | uno de: correo, telefono, whatsapp | no | Por dónde se le contactará primero. Debe tener su medio en la misma fila. |
 | `confianza` | uno de: alta, media, baja | no | Confianza (valores en Formato). |
 | `prioridad` | uno de: alta, media, baja | no | Prioridad (valores en Formato). |
@@ -246,7 +246,7 @@ Correos, teléfonos, WhatsApp, LinkedIn o sitio web de un contacto o de una empr
 | `contacto_id` | entero | no | Contacto al que pertenece. → `contactos.id` |
 | `tipo` | uno de: correo, telefono, whatsapp, linkedin, sitio_web | sí | Qué es: correo, teléfono, WhatsApp, LinkedIn o sitio web. |
 | `valor` | texto (máx. 512) | sí | Como se capturó (para mostrarlo). |
-| `valor_normalizado` | texto (máx. 512) | sí | Versión para comparar: correo en minúsculas y sin espacios; teléfono solo dígitos. Único por tipo en toda la base. |
+| `valor_normalizado` | texto (máx. 512) | sí | Versión para comparar: correo en minúsculas y sin espacios; teléfono solo dígitos, sin extensión ni la lada de México (52) cuando deja 10. Único por tipo en toda la base. |
 | `es_principal` | sí/no (1/0) | sí | El medio que se usa primero de ese tipo. Por omisión: `0`. |
 | `estado_contacto` | uno de: activo, no_contactar, obsoleto | sí | activo = se le puede escribir; no_contactar = baja, rebote o queja; obsoleto = ya no sirve. Por omisión: `activo`. |
 | `creado_en` | fecha y hora (UTC) | sí | Cuándo se creó el registro. |
