@@ -287,6 +287,7 @@ Actualiza esta tabla en cada deploy.
 | 5-nov-2026 | `nanobridge-api-00048-7x5` | `4d16f74` | `040_escalar_y_seguimiento.sql` | PR #1 de Fabián, terminado por Mich: outbox retirado, envíos con destinatario y confirmación (`POST /automatizacion/envios/:id/confirmacion`; un fallido se reintenta hasta 3 veces sin gastar el contacto), freno automático del dominio (2 quejas o 5 rebotes en 7 días), escalar interesados sin atender, seguimiento de cotizaciones y aviso real de documentos sin revisar. Incluye los arreglos del reintento de recordatorios y del conteo del freno (`4d16f74`), las iniciales y las pestañas cortas en celular. Antes se confirmó en `schema_migrations` que la 039 no se había aplicado. Migraciones 039 y 040 primero desde la compu de Mich (IP autorizada y revocada), build desde copia limpia (`git archive`). `/health` ok, rutas nuevas dan 401 sin sesión, siguen las 6 variables, `N8N_WEBHOOK_URL` sin configurar. Front publicado en Firebase el mismo día. **Falta en n8n:** los prompts de `docs/n8n/confirmacion-envios/` |
 | 5-nov-2026 | `nanobridge-api-00049-7dm` | `d1bbe75` | ninguna | PR #2 de Fabián: a un «no interesado» no se le escribe hasta 6 meses después de su última respuesta (decisión de Carlos, 4-nov); lo revisan la verificación, el registro del envío, el botón «Mandar a automatización» y los recordatorios, y el botón lo dice en pantalla. Revisado por Mich, CI en verde sobre `main` ya combinado. Build desde copia limpia y deploy desde la compu de Mich. `/health` ok, rutas con llave dan 401 sin ella, siguen las 6 variables. Front publicado en Firebase el mismo día |
 | 6-nov-2026 | `nanobridge-api-00050-9v9` | `1c2120d` | 041 | Teléfonos con y sin lada de México se guardan igual y sin la extensión del final; la importación acepta CSV con punto y coma (hallazgos del ensayo de la carga de la semana 12). La 041 pasa a esa forma lo guardado; en producción no había teléfonos con lada, así que no cambió ningún dato. Respaldo del día confirmado antes de migrar; IP autorizada solo durante la migración y revocada. Build desde copia limpia, `/health` ok, rutas sin sesión 401, mismas variables. Front publicado en Firebase el mismo día, con el contraste de Importaciones (38009e5) |
+| 6-nov-2026 | `nanobridge-api-00051-wn9` | `1c2120d` (misma imagen) | ninguna | Solo configuración: `TOPE_DIARIO_CORREOS=20` para el encendido. |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
@@ -297,9 +298,8 @@ conserva; no uses `--set-env-vars`, que borra las que no menciones):
 - `CORREO_DRIVER=sendgrid` y el secreto `SENDGRID_API_KEY` (desde la etapa 2 de las
   mejoras, avisos del CRM; ver §8b) — sin ellas la campanita sigue, pero no sale
   ningún correo de aviso (el driver "falso" solo los guarda en memoria).
-- `TOPE_DIARIO_CORREOS` no está puesta: vale 50 por defecto. Al encender los
-  envíos reales se baja a 20 (calentamiento del dominio, PLAN_N8N_DEFINITIVO.md)
-  con `--update-env-vars TOPE_DIARIO_CORREOS=20`.
+- `TOPE_DIARIO_CORREOS=20` desde el 6-nov-2026 (calentamiento del dominio,
+  PLAN_N8N_DEFINITIVO.md). Se cambia con `--update-env-vars`.
 
 ### Consultar la base desde Cloud Shell sin escribir la contraseña
 
@@ -509,12 +509,15 @@ parches hasta abril de 2027; antes de esa fecha hay que pasar a Node 24.
 
 ## 10. Lista de encendido (antes de salir en vivo)
 
+**Encendido el 6-nov-2026**, con autorización escrita de Carlos y sin lista cargada: la base quedó en cero y
+las primeras corridas automáticas son el lunes 9-nov. Lo que sigue sin marcar está pendiente.
+
 Nada de esto se hace hasta que todo esté listo: el día que se encienda, se
 recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 ("Pendientes en orden").
 
-- [ ] Apagar `MODO_PRUEBAS` en PT1 y PT4.
-- [ ] Textos reales en los correos. Desde el 19-oct-2026 se escriben en el
+- [x] Apagar `MODO_PRUEBAS` en PT1 y PT4 (6-nov-2026; `SANDBOX` también en false).
+- [x] Textos reales en los correos (Carlos los aprobó por escrito el 6-nov-2026). Desde el 19-oct-2026 se escriben en el
       CRM (Administración → Correos de prospección, migración 033) y la API
       se los da armados a n8n (`docs/n8n/pt1b-plantillas/`). Hoy tienen un
       borrador: cambiarlo por los textos aprobados por Carlos. El pie
@@ -529,7 +532,7 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       viene de la API dentro del pie (etiqueta `[darte_de_baja]`) y PT1b
       solo manda `substitution_tag` (prompt 4 de `docs/n8n/pt1b-plantillas/`).
       Las respuestas desde el CRM también la llevan.
-- [ ] Domicilio de la empresa (Carlos, 4-nov-2026: Ignacio T Chávez 328, Obraje, 20230,
+- [x] Domicilio de la empresa (Carlos, 4-nov-2026; visto en el correo de prueba del 6-nov: Ignacio T Chávez 328, Obraje, 20230,
       Aguascalientes, Ags.): se escribe en Administración → Correos de prospección →
       "Pie de los tres", no en n8n.
 - [x] Página de baja en español (29-oct-2026): Settings → Tracking →
@@ -548,11 +551,12 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       prospecto 35 quedó en `baja` y su correo en `no_contactar`. Igual con
       +prueba10 (prospecto 34, envío 21). Falta ver que PT4 no les escriba
       cuando les toque el contacto 2.
-- [ ] Pruebas en vivo que faltan: respuesta automática (fuera de
-      oficina), correo sin firma y rebote. Además: el 13-oct después de las 3 pm
+- [ ] Pruebas en vivo: fuera de oficina, respuesta de persona y firma incorrecta pasaron el 6-nov-2026
+      (PT2 #305, #307 y #311). Faltan el primer rebote y el primer recordatorio real de PT4.
+      Antes se había anotado: Además: el 13-oct después de las 3 pm
       correr PT4 (contacto 3 a +prueba1..3) y el 20-oct (deben quedar inactivos).
 - [x] Respaldos automáticos de Cloud SQL activos (ya lo estaban; revisado el 7-oct-2026, §9).
-- [ ] Tope diario a 20 para calentar el dominio:
+- [x] Tope diario a 20 para calentar el dominio (6-nov-2026, `00051-wn9`):
       `--update-env-vars TOPE_DIARIO_CORREOS=20`.
 - [x] Cupo apartado para recordatorios y fila de espera de correos iniciales
       (16-oct-2026): lo resuelve la fila del botón de abajo. Los recordatorios
@@ -570,12 +574,12 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       Prospectos y PT1 arrancando desde la fila con el flujo nuevo "PT1a. tomar
       de la fila". El correo de prueba llegó a Gmail. Detalle en
       `PLAN_N8N_DEFINITIVO.md` punto 7.
-- [ ] `NUEVOS_POR_DIA` (10 por defecto, ya en el código): cuántos nuevos toma
+- [x] `NUEVOS_POR_DIA` se queda en 10 (6-nov-2026). (10 por defecto, ya en el código): cuántos nuevos toma
       PT1 de la fila al día. Se cambia con `--update-env-vars NUEVOS_POR_DIA=…`,
       nunca con `--set-env-vars`. Con tope 20 y 3 correos por persona, el
       ritmo real se queda en unos **6-7 nuevos al día**: la lista de 30 de
       Carlos sale en unos 3 días hábiles.
-- [ ] Horario de PT1: lunes a viernes a las **10:00** (después de PT4). El
+- [x] Horario publicado el 6-nov-2026: PT4 a las 9:00 y PT1a a las **10:00**, lunes a viernes, hora de México. El
       horario va en **PT1a** (cambiar su Manual Trigger por un Schedule), no en
       PT1, que ahora solo se ejecuta llamado por PT1a. Mientras sigan las
       pruebas, PT1a se corre a mano.
@@ -593,21 +597,22 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - Nota, no es error: el primer recordatorio sale al **6.º día hábil**, no al
       5.º. La ventana vence a la misma hora del primer correo (10:05 + 5 días
       hábiles) y PT4 pasa a las 9:00, así que lo toma al día siguiente.
-- [ ] Decidir `min-instances=1` en Cloud Run: sin él la API se apaga cuando
+- [x] `min-instances=1`: por ahora no (6-nov-2026); se revisa tras una semana. Sin él sin él la API se apaga cuando
       nadie la usa y la primera petición tarda 5-10 s en despertarla (visto el
       15-oct-2026: Administración marcó 9,540 ms; las siguientes, 0.25 s).
       Cuesta aunque nadie la use: revisarlo con la calculadora de Google
       cuando el equipo lo use a diario. Se pone con
       `gcloud run services update nanobridge-api --min-instances=1 --region=us-central1`.
-- [ ] Borrar los datos de prueba (incluye el PDF de pantallas subido a
+- [x] Datos de prueba borrados el 6-nov-2026, con respaldo «antes de limpieza 6-nov». Se conservaron usuarios, catálogos,
+      plantillas, parámetros, supresión y auditoría; quedan 6 archivos sin registro en Cloud Storage. (Incluía el PDF de pantallas subido a
       "Empresa Prueba Envio 1" el 15-oct y las cotizaciones/oportunidades de
       prueba "NO SE", "NO SE 2").
-- [ ] Domicilio de la empresa en el remitente de SendGrid: Ignacio T Chávez 328, Obraje,
-      20230, Aguascalientes, Ags. (hoy el remitente de pruebas tiene el de la casa de Fabián).
-- [ ] Prender el **reparto de interesados** (Administración → "Reparto de interesados", 3-nov-2026)
+- [x] Domicilio de la empresa en el remitente de SendGrid: Ignacio T Chávez 328, Obraje,
+      20230, Aguascalientes, Ags. (6-nov-2026).
+- [x] Reparto prendido el 6-nov-2026 con Carlos, Fabián y Mich. **Reparto de interesados** (Administración → "Reparto de interesados", 3-nov-2026)
       cuando el equipo de ventas ya esté dado de alta: marcar a quiénes reciben y "Repartir solo".
       Empieza apagado a propósito, para que ningún interesado real le caiga a una cuenta de prueba.
-- [ ] Cambiar `DESTINOS` de los avisos (hoy el Gmail de Fabián): en B4 ("armar correo de error") a
+- [x] `DESTINOS` cambiados el 6-nov-2026 a `pasante.tics002@` y `director.general@nano-bridge-mex.com`: en B4 ("armar correo de error") a
       quien atienda los errores, y en PT2 ("armar aviso de respuesta") al supervisor que clasifica.
 - [x] **IA en la API (etapas 3 y 4: "Redactar con IA" y "Resumir con IA").**
       Encendida el 21-oct-2026 (`nanobridge-api-00036-jvl`), después de publicar el
@@ -632,7 +637,7 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       Teammate administrador, para que la cuenta no dependa de la pasantía.
 - [x] Nombre del admin corregido a "Fabián" (7-oct-2026). Desde la revisión `00021-xq8` un
       JSON que no es UTF-8 se rechaza (400 `TEXTO_NO_UTF8`), así que no se repite.
-- [ ] "No interesado" (Carlos, 4-nov-2026): se le puede volver a escribir después de 6 meses,
+- [x] "No interesado" (Carlos, 4-nov-2026): se le puede volver a escribir después de 6 meses,
       no es para siempre. El sistema lo cumple desde el commit de la espera: puede volver a entrar,
       pero el correo no sale hasta 6 meses después de su respuesta.
 - [x] Los 2 usuarios `root` de MySQL (host `%` y host vacío): contraseña

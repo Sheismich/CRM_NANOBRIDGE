@@ -17,7 +17,7 @@ no entrega nada a PT1 ni a PT4: corren, no mandan nada, y todo sale el siguiente
 | Hora | Qué | Dónde | Qué hace |
 |---|---|---|---|
 | 7:00 (todos los días) | **PT5 · trabajos diarios** | n8n | Vence importaciones sin confirmar (30 días) y cotizaciones con cierre pasado, avisa de tareas vencidas y documentos sin revisar, calcula las métricas del día anterior |
-| 10:00 (9:00 si se decide) | **PT4 · recordatorios** | n8n | Manda los correos 2 y 3 a quien ya cumplió su espera de 5 días hábiles; marca inactivo a quien ya recibió 3 |
+| 9:00 | **PT4 · recordatorios** | n8n | Manda los correos 2 y 3 a quien ya cumplió su espera de 5 días hábiles; marca inactivo a quien ya recibió 3 |
 | 10:00, después de PT4 | **PT1a → PT1 · nuevos** | n8n | Toma de la fila hasta 10 prospectos (sin pasar del tope diario), los valida, los califica y les manda el primer correo |
 | Cada vez que alguien responde | **PT2 · respuestas** | n8n | Registra la respuesta, detiene los recordatorios de esa persona, la pone en la cola de clasificación, pide la sugerencia a la IA y avisa al supervisor |
 | Cada evento de SendGrid | **PT3 · bajas, spam y rebotes** | n8n | Da de baja a la persona (o solo el correo, si rebotó) |
@@ -25,7 +25,7 @@ no entrega nada a PT1 ni a PT4: corren, no mandan nada, y todo sale el siguiente
 | Con cada queja o rebote | **Freno del dominio** | API | Con 2 quejas o 5 rebotes en 7 días pausa la prospección y avisa a administradores y supervisores |
 | Cada 5 minutos | **Revisión de que la API responde** | Google Cloud Monitoring | Si la API no responde 5 minutos seguidos, manda un correo; otro cuando se recupera |
 
-Mientras siga el modo de prueba, PT1a se corre a mano y solo salen correos a buzones del equipo (§3).
+Desde el 6-nov-2026 `MODO_PRUEBAS` está apagado: PT4 y PT1a corren solos con estos horarios.
 
 ## 2. Qué revisar cada día
 
@@ -74,12 +74,12 @@ reciben y prender «Repartir solo». Antes, el equipo de ventas tiene que estar 
 | Tope diario de correos | 20 al encender; se duplica cada semana si los rebotes quedan debajo de 2 % y las quejas debajo de 0.1 % | Google Cloud: `gcloud run services update nanobridge-api --update-env-vars TOPE_DIARIO_CORREOS=<n> --region=us-central1` |
 | Nuevos por día | 10 | Igual, con `NUEVOS_POR_DIA=<n>` |
 | Horarios de PT1a, PT4 y PT5 | §1 | n8n: el disparador de cada flujo |
-| Modo de prueba | Encendido hasta el día de encender | n8n: `MODO_PRUEBAS` y la lista `PERMITIDOS` en PT1 y PT4 |
+| Modo de prueba | Apagado desde el 6-nov-2026 | n8n: `MODO_PRUEBAS` y la lista `PERMITIDOS` en PT1 y PT4 |
 | IA que sugiere la clasificación | `abierto` (todas las respuestas) | n8n: `IA_MODO` en PT2a (`abierto`, `pruebas` o `apagado`) |
 | IA del CRM (borrador y resumen) | Encendida | Google Cloud: `IA_DRIVER=gemini`; para apagarla, `IA_DRIVER=falso` |
 | Reparto de interesados | Apagado | CRM: Administración → Reparto de interesados |
 | Límites del freno del dominio | 2 quejas o 5 rebotes en 7 días | Google Cloud: `FRENO_QUEJAS_7D` y `FRENO_REBOTES_7D` con `--update-env-vars` |
-| A quién avisa B4 y a quién avisa PT2 | Hoy al Gmail de Fabián | n8n: `DESTINOS` en «armar correo de error» (B4) y en «armar aviso de respuesta» (PT2) |
+| A quién avisa B4 y a quién avisa PT2 | `pasante.tics002@` y `director.general@nano-bridge-mex.com` | n8n: `DESTINOS` en «armar correo de error» (B4) y en «armar aviso de respuesta» (PT2) |
 | A quién avisa Cloud Monitoring | Hoy a las cuentas de los pasantes | Google Cloud: Monitoring → Alerting → la alerta → Notifications |
 
 **Cuidado con las variables de Google Cloud:** usar siempre `--update-env-vars`, nunca `--set-env-vars`, que borra
