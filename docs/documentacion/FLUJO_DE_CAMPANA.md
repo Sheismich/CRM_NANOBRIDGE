@@ -39,7 +39,9 @@ misma persona en la fila. Los demás regresan con su motivo.
 
 **Cómo se certifica:** la [auditoría de datos](PROCEDIMIENTO_AUDITORIA.md) (§5 del reporte) da, por campaña, cuántos
 prospectos están listos y por qué no los demás (desactivado, sin giro, sin tamaño, sin correo utilizable, en baja o
-ya con 3 correos). Esa tabla, corrida después de cargar la lista, es la certificación.
+ya con 3 correos o con un «no interesado» de hace menos de 6 meses), y cuántos tienen un giro que el score no reconoce
+o un correo de área. Esa tabla, corrida después de cargar la lista, es la certificación. El orden seguro para cargar y
+certificar sin que salga ningún correo está en [Carga de la lista de Carlos](CARGA_DE_LA_LISTA.md).
 
 | Campaña | En espera | Listos | Fuera, y por qué |
 |---|---|---|---|

@@ -128,7 +128,10 @@ del encendido (RUNBOOK §10), así:
 2. Correr el script **sin** `--borrar`: lista las empresas que reconoce como de prueba y cuántas filas se borrarían de
    cada tabla. Revisar la lista con T2.
 3. Correrlo con `--empresas=<ids>` y `--borrar` (más `LIMPIEZA_CONFIRMO=borrar-datos-de-prueba`). Si alguna empresa no
-   parece de prueba, el script no borra nada; si algo falla a medias, deshace todo.
+   parece de prueba, el script no borra nada; si algo falla a medias, deshace todo. Las de ejemplo que no parecen de
+   prueba (nombre y correos que parecen reales) se pasan aparte con `--de-ejemplo=<ids>`, después de confirmarlo, y
+   quedan anotadas así en el registro. El paso a paso de la semana 12 está en
+   [Carga de la lista de Carlos](CARGA_DE_LA_LISTA.md).
 4. Correr la auditoría y comprobar que «Datos de prueba» quedó en cero. El registro de la limpieza queda en
    `auditorias/limpieza-<fecha>.md`.
 

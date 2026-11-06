@@ -24,8 +24,8 @@ const db = await mysql.createConnection({
   database: url.pathname.slice(1),
   ssl: url.hostname === "127.0.0.1" || url.hostname === "localhost" ? undefined : { rejectUnauthorized: false }
 });
-const uno = async (sql) => Number(Object.values((await db.query(sql))[0][0])[0]);
-const filas = async (sql) => (await db.query(sql))[0];
+const uno = async (sql, params) => Number(Object.values((await db.query(sql, params))[0][0])[0]);
+const filas = async (sql, params) => (await db.query(sql, params))[0];
 const ids = (lista, max = 15) => (lista.length ? lista.slice(0, max).join(", ") + (lista.length > max ? ` y ${lista.length - max} más` : "") : "—");
 
 const ESTADOS_VALIDOS = ["capturado", "en_fila", "validado", "excluido", "interesado", "no_interesado", "en_revision", "descartado", "inactivo", "baja"];
@@ -107,7 +107,11 @@ r.borradores = {
 
 // --- Audiencia por campaña (certificación de T1 antes de G5): de los prospectos que
 // esperan correo (en fila o validados), cuántos lo recibirían hoy y por qué no los
-// demás. Mismas reglas que src/shared/listo-para-automatizacion.ts.
+// demás. Mismas reglas que src/shared/listo-para-automatizacion.ts, menos la
+// ventana de espera (solo aplica a quien ya recibió un correo) y "ya en fila".
+// Los 6 meses tras un "no interesado" (PR #2, 5-nov-2026) se cuentan aparte.
+const NO_INTERESADO_RECIENTE = `EXISTS (SELECT 1 FROM respuestas rn JOIN prospectos pn ON pn.id = rn.prospecto_id
+  WHERE pn.contacto_id = c.id AND pn.estado = 'no_interesado' AND rn.clasificacion = 'no_interesado' AND rn.recibido_en > NOW() - INTERVAL 6 MONTH)`;
 r.audiencia = await filas(`
   SELECT cp.id, cp.nombre, cp.estado,
     COUNT(*) total,
@@ -118,11 +122,13 @@ r.audiencia = await filas(`
       AND NOT EXISTS (SELECT 1 FROM lista_supresion s WHERE s.tipo = 'correo' AND s.valor_normalizado = m.valor_normalizado))) sin_correo_utilizable,
     SUM(EXISTS (SELECT 1 FROM prospectos pb WHERE pb.contacto_id = c.id AND pb.estado = 'baja')) en_baja,
     SUM((SELECT COUNT(*) FROM envios v JOIN prospectos pv ON pv.id = v.prospecto_id WHERE pv.contacto_id = c.id AND v.canal = 'correo' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH) >= 3) maximo_contactos,
+    SUM(${NO_INTERESADO_RECIENTE}) no_interesado_reciente,
     SUM(e.activo = 1 AND c.activo = 1 AND e.giro IS NOT NULL AND TRIM(e.giro) <> '' AND e.tamano IS NOT NULL
       AND EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.tipo = 'correo' AND m.estado_contacto = 'activo'
         AND NOT EXISTS (SELECT 1 FROM lista_supresion s WHERE s.tipo = 'correo' AND s.valor_normalizado = m.valor_normalizado))
       AND NOT EXISTS (SELECT 1 FROM prospectos pb WHERE pb.contacto_id = c.id AND pb.estado = 'baja')
-      AND (SELECT COUNT(*) FROM envios v JOIN prospectos pv ON pv.id = v.prospecto_id WHERE pv.contacto_id = c.id AND v.canal = 'correo' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH) < 3) listos
+      AND (SELECT COUNT(*) FROM envios v JOIN prospectos pv ON pv.id = v.prospecto_id WHERE pv.contacto_id = c.id AND v.canal = 'correo' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH) < 3
+      AND NOT ${NO_INTERESADO_RECIENTE}) listos
   FROM prospectos p
   JOIN contactos c ON c.id = p.contacto_id
   JOIN empresas e ON e.id = c.empresa_id
@@ -131,6 +137,28 @@ r.audiencia = await filas(`
   GROUP BY cp.id, cp.nombre, cp.estado
   ORDER BY cp.id`);
 r.audienciaSinCampana = await uno("SELECT COUNT(*) FROM prospectos WHERE estado IN ('en_fila', 'validado') AND campana_id IS NULL");
+
+// --- Calidad de la audiencia (ensayo de la carga, 6-nov-2026): no impide el envío,
+// pero baja el score o la probabilidad de respuesta.
+// Giros de la tabla del score de PT1 (docs/n8n/pt1-scoring/README.md): se comparan
+// en minúsculas y sin acentos; otro escrito vale 0 de hasta 30 puntos.
+const GIROS_DEL_SCORE = ["tecnologia", "manufactura", "logistica", "financiero", "servicios", "salud", "construccion", "agroindustria", "comercio", "educacion", "otro"];
+const sinAcentos = (s) => String(s).trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+const EN_ESPERA = "FROM prospectos p JOIN contactos c ON c.id = p.contacto_id JOIN empresas e ON e.id = c.empresa_id JOIN campanas cp ON cp.id = p.campana_id WHERE p.estado IN ('en_fila', 'validado') AND cp.estado <> 'finalizada'";
+const girosEnEspera = await filas(`SELECT e.giro, COUNT(*) n ${EN_ESPERA} AND e.giro IS NOT NULL AND TRIM(e.giro) <> '' GROUP BY e.giro`);
+const noReconocidos = new Map();
+for (const { giro, n } of girosEnEspera) {
+  const g = sinAcentos(giro);
+  if (!GIROS_DEL_SCORE.includes(g)) noReconocidos.set(g, (noReconocidos.get(g) ?? 0) + Number(n));
+}
+r.girosNoReconocidos = [...noReconocidos].sort((a, b) => b[1] - a[1]);
+r.enEspera = await uno(`SELECT COUNT(*) ${EN_ESPERA}`);
+// Correos de área: buzones de un puesto o del área, no de una persona.
+const BUZONES_DE_AREA = ["info", "informes", "informacion", "ventas", "contacto", "compras", "rh", "recursoshumanos", "atencion", "atencionaclientes",
+  "administracion", "admin", "recepcion", "facturacion", "licitaciones", "hola", "gerencia", "direccion", "soporte", "servicio", "servicios",
+  "cotizaciones", "marketing", "mercadotecnia", "contabilidad", "ventas1", "ventas2", "comercial", "office", "sales", "contact"];
+r.correosDeArea = await uno(`SELECT COUNT(DISTINCT p.id) ${EN_ESPERA} AND EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.tipo = 'correo'
+  AND m.estado_contacto = 'activo' AND SUBSTRING_INDEX(m.valor_normalizado, '@', 1) IN (?))`, [BUZONES_DE_AREA]);
 
 // --- Datos de prueba (para limpiar antes del piloto)
 r.prueba = {
@@ -272,9 +300,13 @@ ${tabla(["Medio", "Estado", "Cantidad"], r.med.porTipoEstado.map((x) => [x.tipo,
 Prospectos que esperan correo (en fila o validados) en campañas no finalizadas, y cuántos lo recibirían hoy.
 Un prospecto puede tener varios motivos; «Listos» cumple todo.
 
-${r.audiencia.length ? tabla(["Campaña", "Estado", "En espera", "Listos", "Desactivado", "Sin giro", "Sin tamaño", "Sin correo utilizable", "En baja", "Ya con 3 correos"], r.audiencia.map((a) => [`${a.id} · ${a.nombre}`, a.estado, String(a.total), `**${a.listos}**`, String(a.desactivado), String(a.sin_giro), String(a.sin_tamano), String(a.sin_correo_utilizable), String(a.en_baja), String(a.maximo_contactos)])) : "No hay prospectos esperando correo en campañas abiertas."}
+${r.audiencia.length ? tabla(["Campaña", "Estado", "En espera", "Listos", "Desactivado", "Sin giro", "Sin tamaño", "Sin correo utilizable", "En baja", "Ya con 3 correos", "No interesado (6 meses)"], r.audiencia.map((a) => [`${a.id} · ${a.nombre}`, a.estado, String(a.total), `**${a.listos}**`, String(a.desactivado), String(a.sin_giro), String(a.sin_tamano), String(a.sin_correo_utilizable), String(a.en_baja), String(a.maximo_contactos), String(a.no_interesado_reciente)])) : "No hay prospectos esperando correo en campañas abiertas."}
 
 Prospectos en espera sin campaña: ${r.audienciaSinCampana}.
+
+**Calidad de la audiencia** (no impide el envío; ${r.enEspera} prospectos en espera en campañas abiertas):
+- Con un giro que el score no reconoce (vale 0 de hasta 30 puntos): **${r.girosNoReconocidos.reduce((s, [, n]) => s + n, 0)}**${r.girosNoReconocidos.length ? ` (${r.girosNoReconocidos.map(([g, n]) => `«${g}» ${n}`).join(", ")}). Giros que reconoce: ${GIROS_DEL_SCORE.join(", ")}` : ""}.
+- Con correo de área (info@, ventas@, compras@…), que suele responder menos y no es una persona: **${r.correosDeArea}**.
 
 ## 6. Datos de prueba (a limpiar antes del piloto)
 

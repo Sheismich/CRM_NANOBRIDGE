@@ -9,6 +9,9 @@
 //   de prueba según los mismos criterios de auditar-datos.mjs (nombre con
 //   "prueba", o algún medio .test / .local / +prueba). Si alguna no lo es, no
 //   borra nada.
+// - Las de ejemplo que no se reconocen solas (nombre y correos que parecen
+//   reales) van aparte, con --de-ejemplo=<ids>: alguien tiene que haber
+//   confirmado que son de ejemplo, y quedan anotadas así en el registro.
 // - --borrar exige además LIMPIEZA_CONFIRMO=borrar-datos-de-prueba.
 // - Todo en una transacción: si algo falla, no se borra nada.
 // - No toca lista_supresion (una baja nunca se pierde) ni auditoria (la bitácora
@@ -25,7 +28,9 @@ const require = createRequire(join(AQUI, "..", "..", "package.json"));
 const mysql = require("mysql2/promise");
 
 const arg = (nombre) => process.argv.find((a) => a.startsWith(`--${nombre}`));
-const pedidas = (arg("empresas")?.split("=")[1] ?? "").split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0);
+const listaDeIds = (nombre) => (arg(nombre)?.split("=")[1] ?? "").split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0);
+const pedidas = listaDeIds("empresas=");
+const deEjemplo = listaDeIds("de-ejemplo=");
 const borrar = Boolean(arg("borrar"));
 if (borrar && process.env.LIMPIEZA_CONFIRMO !== "borrar-datos-de-prueba") {
   console.error("Para borrar hace falta LIMPIEZA_CONFIRMO=borrar-datos-de-prueba. No se borró nada.");
@@ -54,20 +59,31 @@ const candidatas = await ids(`
   UNION SELECT m.empresa_id id FROM medios_contacto m WHERE m.empresa_id IS NOT NULL AND ${ES_PRUEBA_MEDIO}`);
 
 console.log(`Empresas reconocidas como de prueba (${candidatas.length}): ${candidatas.join(", ") || "ninguna"}`);
-if (!pedidas.length) {
-  console.log("Para ver qué se borraría, pasa --empresas=<ids> (por ejemplo, las de la lista de arriba que de verdad sean de prueba).");
+const todas = (await db.query("SELECT id FROM empresas ORDER BY id"))[0].map((f) => Number(f.id));
+const noReconocidas = todas.filter((id) => !candidatas.includes(id));
+console.log(`Empresas que NO parecen de prueba (${noReconocidas.length}): ${noReconocidas.join(", ") || "ninguna"}`);
+if (!pedidas.length && !deEjemplo.length) {
+  console.log("Para ver qué se borraría, pasa --empresas=<ids> (por ejemplo, las de la lista de arriba que de verdad sean de prueba)");
+  console.log("y, si alguna de las que no parecen de prueba también es de ejemplo, --de-ejemplo=<ids>.");
   await db.end();
   process.exit(0);
 }
 const ajenas = pedidas.filter((id) => !candidatas.includes(id));
 if (ajenas.length) {
-  console.error(`Estas empresas NO parecen de prueba y no se tocan: ${ajenas.join(", ")}. Quítalas de --empresas. No se borró nada.`);
+  console.error(`Estas empresas NO parecen de prueba y no se tocan: ${ajenas.join(", ")}. Quítalas de --empresas`);
+  console.error("(si alguien confirmó que son de ejemplo, pásalas con --de-ejemplo). No se borró nada.");
+  await db.end();
+  process.exit(1);
+}
+const inexistentes = deEjemplo.filter((id) => !todas.includes(id));
+if (inexistentes.length) {
+  console.error(`Estas empresas de --de-ejemplo no existen: ${inexistentes.join(", ")}. No se borró nada.`);
   await db.end();
   process.exit(1);
 }
 
 // --- Todo lo que cuelga de esas empresas
-const E = pedidas;
+const E = [...new Set([...pedidas, ...deEjemplo])].sort((a, b) => a - b);
 const C = await ids("SELECT id FROM contactos WHERE empresa_id IN (?)", en(E));
 const P = await ids("SELECT id FROM prospectos WHERE contacto_id IN (?)", en(C));
 const O = await ids("SELECT id FROM oportunidades WHERE empresa_id IN (?) OR contacto_id IN (?) OR prospecto_id IN (?)", [...en(E), ...en(C), ...en(P)]);
@@ -75,7 +91,7 @@ const Q = await ids("SELECT id FROM cotizaciones WHERE empresa_id IN (?) OR opor
 const D = await ids("SELECT id FROM documentos WHERE empresa_id IN (?) OR oportunidad_id IN (?) OR contacto_id IN (?)", [...en(E), ...en(O), ...en(C)]);
 const V = await ids("SELECT id FROM envios WHERE prospecto_id IN (?)", en(P));
 const R = await ids("SELECT id FROM respuestas WHERE prospecto_id IN (?) OR envio_id IN (?)", [...en(P), ...en(V)]);
-const T = await ids("SELECT id FROM tareas WHERE empresa_id IN (?) OR contacto_id IN (?) OR prospecto_id IN (?) OR respuesta_id IN (?) OR documento_id IN (?)", [...en(E), ...en(C), ...en(P), ...en(R), ...en(D)]);
+const T = await ids("SELECT id FROM tareas WHERE empresa_id IN (?) OR contacto_id IN (?) OR prospecto_id IN (?) OR respuesta_id IN (?) OR documento_id IN (?) OR cotizacion_id IN (?)", [...en(E), ...en(C), ...en(P), ...en(R), ...en(D), ...en(Q)]);
 const archivos = (await db.query("SELECT COUNT(*) n FROM documentos WHERE id IN (?) AND storage_driver = 'gcs'", en(D)))[0][0].n;
 
 // Orden: primero lo que apunta a otras tablas, al final las empresas.
@@ -84,6 +100,8 @@ const PASOS = [
   ["uso_ia", "DELETE FROM uso_ia WHERE empresa_id IN (?) OR respuesta_id IN (?)", [...en(E), ...en(R)]],
   ["correos_respuesta", "DELETE FROM correos_respuesta WHERE respuesta_id IN (?) OR prospecto_id IN (?)", [...en(R), ...en(P)]],
   ["tareas", "DELETE FROM tareas WHERE id IN (?)", en(T)],
+  // Correos con los que se mandó la cotización (migración 038, 3-nov-2026).
+  ["correos_cotizacion", "DELETE FROM correos_cotizacion WHERE cotizacion_id IN (?) OR empresa_id IN (?) OR contacto_id IN (?)", [...en(Q), ...en(E), ...en(C)]],
   ["cotizacion_partidas", "DELETE FROM cotizacion_partidas WHERE cotizacion_id IN (?)", en(Q)],
   ["cotizaciones (versiones)", "UPDATE cotizaciones SET cotizacion_raiz_id = NULL WHERE id IN (?)", en(Q)],
   ["cotizaciones", "DELETE FROM cotizaciones WHERE id IN (?)", en(Q)],
@@ -146,6 +164,7 @@ writeFileSync(
 Hecha el ${cuando} con \`limpiar-datos-prueba.mjs\` sobre la base \`${url.pathname.slice(1)}\`. Sin datos personales.
 
 - Empresas borradas: ${E.join(", ")}.
+- De ellas, de ejemplo sin parecer de prueba (confirmadas a mano, con \`--de-ejemplo\`): ${deEjemplo.join(", ") || "ninguna"}.
 - Archivos de documentos que quedaron en Google Cloud Storage sin registro: ${archivos}.
 - No se tocaron: lista de supresión, bitácora de auditoría, campañas, usuarios ni catálogos.
 
