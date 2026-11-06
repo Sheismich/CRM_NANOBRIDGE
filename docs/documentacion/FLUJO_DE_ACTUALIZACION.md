@@ -168,7 +168,7 @@ archivos, en GitHub Actions.
 
 ## 11. Límites y pendientes
 
-- **Todo sigue en modo de pruebas.** `MODO_PRUEBAS` está encendido: los correos solo salen a buzones del equipo.
+- **Encendido el 6-nov-2026.** `MODO_PRUEBAS` está apagado; los envíos automáticos corren de lunes a viernes desde el 9-nov.
   Encender es una decisión de G5, con la lista de encendido del RUNBOOK (§10).
 - **Faltan dos cambios en n8n** (`docs/n8n/confirmacion-envios/`): que PT1 y PT4 manden al correo que devuelve la API
   y que PT1b confirme cada envío. Mientras tanto los correos salen igual, pero Administración los marca «sin confirmar»
