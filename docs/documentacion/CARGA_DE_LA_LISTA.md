@@ -26,7 +26,10 @@ sacar la certificación de audiencia para G5. **Nada de esto manda correos**, si
 4. **Auditoría** (`auditar-datos.mjs`): §6 «Datos de prueba» en 0 y 0 empresas.
 5. **Preparar el archivo:** pasar la lista de Carlos a la plantilla (Prospectos → Importaciones → «Descargar
    plantilla»), con los nombres de columna exactos. Guardarlo desde Excel como **CSV separado por comas** (UTF-8 o el
-   normal) o separado por punto y coma: los tres sirven desde el 6-nov.
+   normal) o separado por punto y coma: los tres sirven desde el 6-nov. Si Carlos usó la plantilla de Excel que se le
+   mandó el 6-nov («Lista de prospectos para el piloto.xlsx», con listas para giro, tamaño y canal y una revisión de lo
+   que falta), basta con abrir la hoja «Lista» y Guardar como → «CSV UTF-8»: Excel guarda solo esa hoja, ya con los
+   nombres de columna del CRM (probado: las filas vacías del final se ignoran).
 6. **Campaña del piloto:** Prospectos → Campañas → crearla y **activarla**.
 7. **Importar** el archivo con esa campaña. Revisar las filas «Con errores» y «Duplicada» (Manual de datos §2) y
    luego «Confirmar todas las pendientes».
