@@ -1,6 +1,6 @@
 # Bitácora del proyecto — CRM NANOBRIDGE
 
-Proyecto naranja (outbound) · Documentación y entregables · Corte al 3 de noviembre de 2026 · Semana 10 del programa (revisión G4)
+Proyecto naranja (outbound) · Documentación y entregables · Corte al 6 de noviembre de 2026 · Semana 10 del programa (revisión G4)
 
 ## Cómo leer esta bitácora
 
@@ -80,7 +80,7 @@ Revisión y decisión de Dirección: Por registrar para todos los entregables. E
 | 7 | Monitoreo del piloto | Semana 14 | Datos | 30 nov al 4 dic | Una auditoría por día, anotada en el registro del procedimiento de auditoría. |
 | 8 | Reporte del piloto (OB-06) | Semanas 14 y 15 | Daniela, con los datos de Fabián | 4 y 11 dic | Reporte factual: qué se envió, qué respondieron, fallas e incidentes. Sin conclusiones que no estén respaldadas por datos. |
 | 9 | Manual operativo de la automatización | G6 | Daniela | Semana 15 | v0.9 adelantada el 4-nov (docs/documentacion/MANUAL_OPERATIVO_AUTOMATIZACION.md). Falta la lista de accesos (con OB-07) y lo que deje el piloto. |
-| 10 | Manual para el vendedor | G6 | Daniela | Semana 15 | v0.9 adelantada el 4-nov (docs/documentacion/MANUAL_DEL_VENDEDOR.md). Faltan capturas y lo que entre con la rama de Fabián (escalar interesados, seguimiento de cotizaciones). |
+| 10 | Manual para el vendedor | G6 | Daniela | Semana 15 | v0.9.1 del 6-nov (docs/documentacion/MANUAL_DEL_VENDEDOR.md), con 15 capturas y lo que entró con los PR #1 y #2 (escalar interesados, seguimiento de cotizaciones, 6 meses tras un «no interesado»). Falta lo que deje el piloto. |
 | 11 | Inventario de entregables, pendientes y lecciones aprendidas | Semana 15 | Equipo | 7 al 11 dic | Se arma a partir de esta bitácora. |
 | 12 | Reporte final de Datos | G6 | Daniela | Semana 15 o 16 | Esqueleto del 5-nov (docs/documentacion/REPORTE_FINAL_T1.md) con la línea base, los controles, pendientes y transferencia; faltan los números de la semana 12 y del piloto, y las metas del programa para T1.1 a T1.3. |
 | 13 | Paquete final y transferencia operativa (OB-07) | G6 | Equipo | Semana 16 | Índice de todo lo anterior, respaldos y quién mantiene cada parte. Los accesos ya están en docs/documentacion/INVENTARIO_DE_ACCESOS.md (v0.9, 4-nov), con 7 pasos para antes del cierre. |
@@ -155,6 +155,7 @@ Hitos del trabajo, con su evidencia. El historial completo está en el repositor
 | 4-nov | Revisión de seguridad: sin credenciales en los 370 commits del historial ni archivos con datos de clientes; bucket de documentos sin acceso público, Cloud SQL sin IPs autorizadas y solo cifrado, encabezados de seguridad completos en el sitio, rutas con sesión y sin CORS abierto; npm audit sin vulnerabilidades altas. GitHub Actions en solo lectura. Queda: el repo es público y trae los Gmail de prueba de Fabián y los correos de las cuentas de pasante. | Daniela | e74da81 |
 | 5-nov | PR #1 en producción (servidor 00048-7x5, migraciones 039 y 040, pantallas en Firebase): envíos confirmados y fallidos que no gastan el contacto, freno del dominio, escalar interesados, seguimiento de cotizaciones y retiro del outbox. Mich terminó los dos arreglos pendientes y lo desplegó. Propuesta de correos para Carlos (Word) y esqueleto del reporte final de T1. | Daniela y Fabián | 4d16f74 · 68d83ba · 9007838 |
 | 5-nov | Espera de 6 meses tras un «no interesado» en producción (servidor 00049-7dm y pantallas). Carlos confirmó el domicilio para el pie y el remitente. | Fabián y Daniela | d1bbe75 |
+| 6-nov | Revisión de accesibilidad (axe, WCAG 2.1 AA) de lo nuevo desde el 27-oct: 9 pantallas y diálogos en modo día y noche, 18 de 18 sin problemas tras corregir el contraste del lote elegido en Importaciones (pendiente de subir a Firebase). Manual del vendedor 0.9.1 con lo de los PR #1 y #2. | Daniela | 38009e5 |
 
 ## 7. Decisiones y riesgos abiertos
 

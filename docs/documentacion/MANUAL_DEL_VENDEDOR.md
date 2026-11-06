@@ -1,7 +1,7 @@
 # Manual del vendedor · CRM NANOBRIDGE
 
 **Para:** quien vende y da seguimiento a los clientes en el CRM (agentes y supervisores).
-**Versión:** 0.9 · 4 de noviembre de 2026. Pasa a 1.0 al cierre, con lo que salga del piloto. Las capturas son del CRM con
+**Versión:** 0.9.1 · 6 de noviembre de 2026 (con lo que entró el 5-nov). Pasa a 1.0 al cierre, con lo que salga del piloto. Las capturas son del CRM con
 datos de ejemplo: ningún nombre ni correo es de un cliente real.
 
 El CRM está en **https://crm-prospeccion-outbound.web.app**. Funciona en la computadora y en el celular.
@@ -35,7 +35,9 @@ a la vez en empresas, contactos, prospectos, oportunidades, cotizaciones y tarea
 ## 2. Tu día
 
 1. **Inicio.** Arriba, «Lo nuevo para ti»: los avisos que no has leído (una tarea que te asignaron, un interesado, una
-   tarea vencida, un documento rechazado). El numerito de Inicio en el menú dice cuántos hay.
+   tarea vencida, un documento rechazado). El numerito de Inicio en el menú dice cuántos hay. Supervisores y
+   administradores ven además los documentos sin revisar y, si se pausaron los envíos de prospección por quejas o
+   rebotes, el aviso «Envíos en pausa».
 
    ![Inicio con los avisos y los números del mes](img/manual-vendedor/02-inicio.jpg)
 2. **Tareas → Mi día.** Lo que tienes que hacer hoy y lo que ya venció (el numerito de Tareas en el menú), una por una
@@ -112,7 +114,8 @@ filtros dicen a quién se le puede escribir.
 
   ![Una importación con una empresa parecida y una fila duplicada](img/manual-vendedor/09-importaciones.jpg)
 - **Mandar a la automatización** (supervisor y administrador): elegir prospectos → «Mandar a automatización», con la
-  campaña. Solo entran los que tienen giro, tamaño y correo; los demás regresan con su motivo.
+  campaña. Solo entran los que tienen giro, tamaño y correo; los demás regresan con su motivo. Uno de esos motivos
+  es «respondió que no le interesa; hay que esperar 6 meses» (ver abajo).
 
 **Cuando un prospecto responde:**
 1. Su respuesta cae en la **cola de clasificación** (Tareas → Ver todas → «Cola de clasificación»; la ven supervisores
@@ -126,7 +129,12 @@ filtros dicen a quién se le puede escribir.
 3. **Para contestarle:** «Responder por correo». **Redactar con IA** te propone un borrador con lo que él escribió y el
    correo que se le mandó; revísalo y cámbialo antes de mandarlo. El correo sale con tu nombre y su respuesta te
    llega a ti.
-4. **Baja:** no se le vuelve a escribir, nunca. No se deshace desde el CRM.
+4. **No interesado:** la automatización no le vuelve a escribir en **6 meses** desde su respuesta, aunque se le vuelva a
+   mandar a la automatización (decisión de Carlos). Pasado ese tiempo, sí.
+5. **Baja:** no se le vuelve a escribir, nunca. No se deshace desde el CRM.
+
+**Si un correo no salió:** en el Historial de la ficha aparece «No se pudo enviar». No cuenta como uno de sus 3
+correos.
 
 ## 5. Oportunidades
 
