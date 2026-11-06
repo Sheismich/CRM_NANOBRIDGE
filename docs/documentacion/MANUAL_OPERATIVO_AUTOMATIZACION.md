@@ -2,7 +2,7 @@
 
 **Para:** quien opere la prospección por correo después de la transferencia: el administrador o supervisor del CRM y
 la persona con acceso técnico (n8n, Google Cloud y SendGrid).
-**Versión:** 0.9 · 5 de noviembre de 2026 · servidor `nanobridge-api-00049-7dm`. Pasa a 1.0 al cierre, con lo que
+**Versión:** 0.9 · 5 de noviembre de 2026 · servidor `nanobridge-api-00050-9v9` (6-nov). Pasa a 1.0 al cierre, con lo que
 deje el piloto y la lista de accesos de la transferencia (OB-07).
 
 Este manual dice qué corre solo, qué revisar cada día, cómo prender, pausar y apagar, cómo cambiar los parámetros y
