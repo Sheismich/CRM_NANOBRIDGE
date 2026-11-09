@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
 import { crearAgente, ensureSeedAdmin, loginAs } from "./support/seed.js";
-import { auditoria, envios, plantillasCorreo, prospectos } from "../src/database/schema.js";
+import { auditoria, campanas, envios, plantillasCorreo, prospectos } from "../src/database/schema.js";
 import { armarCorreo, enlacesInvalidos, ETIQUETA_BAJA, variablesDesconocidas } from "../src/shared/plantillas.js";
 
 const API_KEY = "test_crm_callback_api_key_0001";
@@ -142,7 +142,8 @@ describe("plantillas de correo", () => {
   it("GET trae las 3 generales sembradas, el pie y las variables", async () => {
     const res = await api().get("/api/v1/plantillas").set("Cookie", admin);
     expect(res.status).toBe(200);
-    expect(res.body.plantillas.map((p: { numero: number; giro: string }) => [p.numero, p.giro])).toEqual([[1, ""], [2, ""], [3, ""]]);
+    expect(res.body.plantillas.map((p: { numero: number; giro: string; origen: string }) => [p.numero, p.giro, p.origen])).toEqual([[1, "", "general"], [2, "", "general"], [3, "", "general"]]);
+    expect(res.body.campana).toBeNull();
     expect(res.body.plantillas[0].asunto.length).toBeGreaterThan(0);
     expect(res.body.plantillas[0].cuerpo).toContain("{{");
     expect(typeof res.body.pie.texto).toBe("string");
@@ -283,6 +284,104 @@ describe("plantillas de correo", () => {
     } finally {
       await db.delete(plantillasCorreo).where(eq(plantillasCorreo.id, creada.insertId));
     }
+  });
+
+  // Correos por campaña (9-nov-2026): campañas de servicios distintos con los
+  // mismos contactos. El número que la campaña no tiene usa el general.
+  describe("correos propios de una campaña", () => {
+    async function campana(nombre = `Agua ${randomUUID().slice(0, 8)}`) {
+      const [c] = await db.insert(campanas).values({ nombre, canal: "correo", estado: "activa" });
+      return { id: c.insertId, nombre };
+    }
+    const deCampana = (campanaId: number) => api().get("/api/v1/plantillas").query({ campana_id: campanaId }).set("Cookie", admin);
+
+    it("sin correos propios, la campaña muestra los 3 generales", async () => {
+      const c = await campana();
+      const res = await deCampana(c.id);
+      expect(res.status).toBe(200);
+      expect(res.body.campana).toEqual({ id: c.id, nombre: c.nombre });
+      expect(res.body.plantillas.map((p: { numero: number; origen: string }) => [p.numero, p.origen])).toEqual([[1, "general"], [2, "general"], [3, "general"]]);
+      expect((await api().get("/api/v1/plantillas").query({ campana_id: 999_999_991 }).set("Cookie", admin)).status).toBe(404);
+    });
+
+    it("guardar con campana_id crea el propio de esa campaña; los generales y las otras campañas no cambian", async () => {
+      const c = await campana();
+      const otra = await campana();
+      const generalAntes = (await api().get("/api/v1/plantillas").set("Cookie", admin)).body.plantillas[0];
+
+      const res = await api().put("/api/v1/plantillas/1").set("Cookie", supervisor).send({ asunto: "Agua para {{empresa}}", cuerpo: "Hola {{primer_nombre}},\n\nTratamos agua.", campana_id: c.id });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ numero: 1, origen: "campana", campana_id: c.id, asunto: "Agua para {{empresa}}" });
+      expect(res.body.id).not.toBe(generalAntes.id);
+
+      expect((await deCampana(c.id)).body.plantillas.map((p: { origen: string }) => p.origen)).toEqual(["campana", "general", "general"]);
+      expect((await deCampana(otra.id)).body.plantillas.map((p: { origen: string }) => p.origen)).toEqual(["general", "general", "general"]);
+      const generales = (await api().get("/api/v1/plantillas").set("Cookie", admin)).body.plantillas;
+      expect(generales).toHaveLength(3);
+      expect(generales[0]).toMatchObject({ id: generalAntes.id, asunto: generalAntes.asunto, origen: "general" });
+
+      // Editarlo otra vez cambia el mismo, no crea otro.
+      const otraVez = await api().put("/api/v1/plantillas/1").set("Cookie", admin).send({ asunto: "Agua limpia para {{empresa}}", cuerpo: "Hola {{primer_nombre}},\n\nTratamos agua.", campana_id: c.id });
+      expect(otraVez.body.id).toBe(res.body.id);
+
+      const lista = await api().get("/api/v1/campanas").set("Cookie", admin).query({ limit: 100 });
+      expect(lista.body.data.find((x: { id: number }) => x.id === c.id).correos_propios).toBe(1);
+      expect(lista.body.data.find((x: { id: number }) => x.id === otra.id).correos_propios).toBe(0);
+    });
+
+    it("el envío de un prospecto de la campaña sale con su correo propio; el número que no tiene, con el general", async () => {
+      const c = await campana();
+      const propio = await api().put("/api/v1/plantillas/1").set("Cookie", admin).send({ asunto: "Maquinaria para {{empresa}}", cuerpo: "Hola {{primer_nombre}},\n\nCuidamos su maquinaria.", campana_id: c.id });
+      const prospectoId = await prospectoValidado("Manufactura", "Lucía Paz");
+      await db.update(prospectos).set({ campanaId: c.id }).where(eq(prospectos.id, prospectoId));
+
+      const primero = await registrarEnvio(prospectoId);
+      expect(primero.status).toBe(201);
+      expect(primero.body.correo.asunto).toMatch(/^Maquinaria para Plantillas /);
+      expect(primero.body.correo.texto).toContain("Cuidamos su maquinaria.");
+      const [envio] = await db.select().from(envios).where(eq(envios.id, primero.body.id));
+      expect(envio!.plantillaId).toBe(propio.body.id);
+
+      await db.update(envios).set({ ventanaVenceEn: new Date(Date.now() - 60_000) }).where(eq(envios.id, primero.body.id));
+      const segundo = await registrarEnvio(prospectoId);
+      const general2 = (await api().get("/api/v1/plantillas").set("Cookie", admin)).body.plantillas[1];
+      const [envio2] = await db.select().from(envios).where(eq(envios.id, segundo.body.id));
+      expect(envio2!.plantillaId).toBe(general2.id);
+    });
+
+    it("quitar el propio regresa ese número al general; quitar uno que no hay es 404", async () => {
+      const c = await campana();
+      await api().put("/api/v1/plantillas/2").set("Cookie", admin).send({ asunto: "Seguimos con {{empresa}}", cuerpo: "Hola {{primer_nombre}}, seguimiento.", campana_id: c.id });
+
+      const res = await api().delete("/api/v1/plantillas/2").query({ campana_id: c.id }).set("Cookie", supervisor);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ numero: 2, origen: "general" });
+      expect((await deCampana(c.id)).body.plantillas.map((p: { origen: string }) => p.origen)).toEqual(["general", "general", "general"]);
+      expect((await api().delete("/api/v1/plantillas/2").query({ campana_id: c.id }).set("Cookie", admin)).status).toBe(404);
+      // Sin campaña no hay nada que quitar: el general no se borra.
+      expect((await api().delete("/api/v1/plantillas/2").set("Cookie", admin)).status).toBe(400);
+      expect((await api().delete("/api/v1/plantillas/2").query({ campana_id: c.id }).set("Cookie", agente)).status).toBe(403);
+    });
+
+    it("guardar en una campaña que no existe es 404", async () => {
+      const res = await api().put("/api/v1/plantillas/1").set("Cookie", admin).send({ asunto: "Asunto", cuerpo: "Texto de prueba suficiente.", campana_id: 999_999_992 });
+      expect(res.status).toBe(404);
+    });
+
+    it("el Registro de cambios dice de qué campaña es el correo", async () => {
+      const c = await campana(`Agua registro ${randomUUID().slice(0, 6)}`);
+      const res = await api().put("/api/v1/plantillas/3").set("Cookie", supervisor).send({ asunto: "Último para {{empresa}}", cuerpo: "Hola {{primer_nombre}}, último correo.", campana_id: c.id });
+      await api().delete("/api/v1/plantillas/3").query({ campana_id: c.id }).set("Cookie", supervisor);
+
+      const filas = await db.select().from(auditoria).where(and(eq(auditoria.entidad, "plantilla_correo"), eq(auditoria.entidadId, res.body.id)));
+      expect(filas.map((f) => f.accion)).toEqual(["editar", "quitar"]);
+      expect(filas[0]!.despues).toMatchObject({ numero: 3, campana_id: c.id, campana: c.nombre, asunto: "Último para {{empresa}}" });
+
+      const registro = await api().get("/api/v1/admin/registro-cambios?tipo=configuracion").set("Cookie", admin);
+      const textos = registro.body.data.filter((f: { registro: { entidad: string; id: number } }) => f.registro.entidad === "plantilla_correo" && f.registro.id === res.body.id).map((f: { texto: string }) => f.texto);
+      expect(textos).toContain(`Supervisora Plantillas editó el correo de prospección «Recordatorio 2» de la campaña ${c.nombre}.`);
+      expect(textos).toContain(`Supervisora Plantillas regresó «Recordatorio 2» de la campaña ${c.nombre} al correo general.`);
+    });
   });
 
   it("las rutas piden sesión", async () => {

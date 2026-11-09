@@ -11,9 +11,8 @@ import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto 
 import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { CODIGO_ENVIOS_EN_PAUSA, MENSAJE_EN_PAUSA, bloquearFreno, evaluarFreno, leerFreno } from "../shared/freno-dominio.js";
-import { ESTADOS_PROSPECTO_CERRADO, MAX_CONTACTOS_POR_CICLO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable, noInteresadoReciente } from "../shared/ciclo-contacto.js";
+import { ESTADOS_PROSPECTO_CERRADO, HORAS_PARA_RETOMAR_DE_FILA, MAX_CONTACTOS_POR_CICLO, MENSAJE_INTERESADO_EN_OTRA, MENSAJE_SERIE_EN_CURSO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable, interesadoEnOtraCampanaSql, noInteresadoReciente, otraCampanaBloquea, serieEnCursoEnOtraCampanaSql } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
-import { HORAS_PARA_RETOMAR_DE_FILA } from "../shared/listo-para-automatizacion.js";
 import { diaSiguiente, esFeriadoMx, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
 import { env } from "../config/env.js";
 import { obtenerCatalogosEnum } from "../shared/catalogos-enum.js";
@@ -31,6 +30,9 @@ const MENSAJE_SUPRIMIDO = "El contacto está en la lista de supresión";
 const MENSAJE_SIN_CORREO = "El contacto no tiene un correo utilizable";
 const MENSAJE_NO_INTERESADO = "Respondió que no le interesa; hay que esperar 6 meses";
 const CODIGO_NO_INTERESADO_RECIENTE = "NO_INTERESADO_RECIENTE";
+// El correo 1 de una campaña mientras otra campaña de la persona sigue en
+// curso, o le interesó otra (una serie a la vez, 9-nov-2026).
+export const CODIGO_OTRA_CAMPANA_EN_CURSO = "OTRA_CAMPANA_EN_CURSO";
 // Veces que se intenta un mismo correo. Después ya no se reprograma: cada falla
 // ya avisó por el Error Workflow.
 const MAX_INTENTOS_ENVIO = 3;
@@ -46,13 +48,13 @@ export const TIPO_ERROR_WORKFLOW = "error_workflow_n8n";
 // POST /automatizacion/envios para un prospecto que no está validado.
 export const CODIGO_PROSPECTO_NO_VALIDADO = "PROSPECTO_NO_VALIDADO";
 
-// La política de contactos (máximo 3 por persona, 6 meses de espera) vive
-// en shared/ciclo-contacto.ts: el botón "Mandar a automatización" del CRM
-// revisa lo mismo.
+// La política de contactos (máximo 3 por persona y campaña, 6 meses de
+// espera, una serie a la vez) vive en shared/ciclo-contacto.ts: el botón
+// "Mandar a automatización" del CRM revisa lo mismo.
 
 
 // Por qué /envios/vencidas no devuelve una ventana (ver destinoDeRecordatorio).
-type MotivoRecordatorioOmitido = "prospecto_cerrado" | "campana_inactiva" | "sin_correo" | "suprimido" | "canal_desactivado" | "no_interesado_reciente";
+type MotivoRecordatorioOmitido = "prospecto_cerrado" | "campana_inactiva" | "sin_correo" | "suprimido" | "canal_desactivado" | "no_interesado_reciente" | "interesado_en_otra_campana";
 
 // Lo que n8n necesita para mandar un recordatorio. Nada de esto va a
 // Gemini (PLAN_N8N_DEFINITIVO.md B2, flujo de recordatorios).
@@ -449,18 +451,31 @@ export class AutomatizacionService {
         ids = mismos.map((m) => m.id);
       } else {
         const cupo = Math.min(input.limite, env.NUEVOS_POR_DIA - tomadosHoy, env.TOPE_DIARIO_CORREOS - correosHoy);
+        // Varias campañas (9-nov-2026): una serie a la vez. No sale quien
+        // tiene otra campaña en curso o le interesó otra; espera en la fila
+        // sin perder su lugar. Sin LIMIT en SQL: si la misma persona está en
+        // la fila de dos campañas, solo sale la que entró primero (el resto
+        // del día espera) y el cupo se cuenta después de quitarla.
         const candidatos = cupo <= 0 ? [] : await tx
-          .select({ id: prospectos.id })
+          .select({ id: prospectos.id, contactoId: prospectos.contactoId })
           .from(prospectos)
           .innerJoin(campanas, eq(campanas.id, prospectos.campanaId))
           .where(and(
             eq(prospectos.estado, "en_fila"),
             or(isNull(prospectos.filaTomadoEn), sql`${prospectos.filaTomadoEn} < CURRENT_TIMESTAMP - INTERVAL ${sql.raw(String(HORAS_PARA_RETOMAR_DE_FILA))} HOUR`),
-            campanaActivaSql(hoy)
+            campanaActivaSql(hoy),
+            sql`NOT ${interesadoEnOtraCampanaSql(sql`${prospectos.contactoId}`, sql`${prospectos.campanaId}`)}`,
+            sql`NOT ${serieEnCursoEnOtraCampanaSql(sql`${prospectos.contactoId}`, sql`${prospectos.campanaId}`)}`
           ))
-          .orderBy(asc(prospectos.filaDesde), asc(prospectos.id))
-          .limit(cupo);
-        ids = candidatos.map((c) => c.id);
+          .orderBy(asc(prospectos.filaDesde), asc(prospectos.id));
+        const personas = new Set<number>();
+        ids = [];
+        for (const c of candidatos) {
+          if (ids.length >= cupo) break;
+          if (personas.has(c.contactoId)) continue;
+          personas.add(c.contactoId);
+          ids.push(c.id);
+        }
         nuevos = ids.length;
         if (nuevos > 0) {
           await tx.update(prospectos).set({ filaTomadoEn: sql`CURRENT_TIMESTAMP`, filaExecutionId: input.execution_id }).where(inArray(prospectos.id, ids));
@@ -708,7 +723,7 @@ export class AutomatizacionService {
     // empresa se desactivara después -- la automatización podía seguir
     // enviándole correos a una empresa ya dada de baja en el CRM.
     const [prospecto] = await this.db
-      .select({ id: prospectos.id, contactoId: prospectos.contactoId, contactoActivo: contactos.activo, empresaActiva: empresas.activo })
+      .select({ id: prospectos.id, contactoId: prospectos.contactoId, campanaId: prospectos.campanaId, contactoActivo: contactos.activo, empresaActiva: empresas.activo })
       .from(prospectos)
       .innerJoin(contactos, eq(contactos.id, prospectos.contactoId))
       .innerJoin(empresas, eq(empresas.id, contactos.empresaId))
@@ -727,16 +742,24 @@ export class AutomatizacionService {
     }
 
     // No lleva en_espera: son meses, no tiene caso que PT1 lo retome cada día.
-    if (await noInteresadoReciente(this.db, prospecto.contactoId)) {
+    if (await noInteresadoReciente(this.db, prospecto.contactoId, prospecto.campanaId)) {
       return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: MENSAJE_NO_INTERESADO, numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
-    const ciclo = await cicloActualDePersona(this.db, prospecto.contactoId, query.canal);
+    const ciclo = await cicloActualDePersona(this.db, prospecto.contactoId, query.canal, prospecto.campanaId);
     const ultimo = ciclo[0];
     const total = ciclo.length;
 
     if (total >= MAX_CONTACTOS_POR_CICLO) {
       return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: "Máximo de 3 contactos alcanzado", numero_en_ciclo_siguiente: null, ventana_vence_en: null };
+    }
+
+    // Una serie a la vez (9-nov-2026). Sin en_espera: PT1 lo marca excluido
+    // con el motivo y se vuelve a mandar con el botón. Casi nunca llega aquí:
+    // tomarDeFila no entrega a quien tiene otra serie en curso.
+    const bloqueo = await otraCampanaBloquea(this.db, prospecto.contactoId, prospecto.campanaId);
+    if (bloqueo === "interesado_en_otra_campana" || (bloqueo === "serie_en_curso" && total === 0)) {
+      return { prospecto_id: query.prospecto_id, canal: query.canal, puede_enviar: false, motivo: bloqueo === "serie_en_curso" ? MENSAJE_SERIE_EN_CURSO : MENSAJE_INTERESADO_EN_OTRA, numero_en_ciclo_siguiente: null, ventana_vence_en: null };
     }
 
     if (ultimo && ultimo.ventanaEstado === "abierta" && ultimo.ventanaVenceEn > new Date()) {
@@ -778,7 +801,7 @@ export class AutomatizacionService {
 
     if ((await leerFreno(this.db)).pausado) throw new HttpError(409, MENSAJE_EN_PAUSA, CODIGO_ENVIOS_EN_PAUSA);
 
-    const [prospecto] = await this.db.select({ id: prospectos.id, contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
+    const [prospecto] = await this.db.select({ id: prospectos.id, contactoId: prospectos.contactoId, campanaId: prospectos.campanaId }).from(prospectos).where(eq(prospectos.id, input.prospecto_id)).limit(1);
     if (!prospecto) throw new HttpError(404, "Prospecto no encontrado");
     // El estado se revisa dentro de la transacción (abajo, después de la
     // supresión, para que una baja siga respondiendo "lista de supresión").
@@ -816,16 +839,21 @@ export class AutomatizacionService {
           }
 
           if ("motivo" in destino) throw new HttpError(409, MENSAJE_SIN_CORREO);
-          if (await noInteresadoReciente(tx, prospecto.contactoId)) throw new HttpError(409, MENSAJE_NO_INTERESADO, CODIGO_NO_INTERESADO_RECIENTE);
+          if (await noInteresadoReciente(tx, prospecto.contactoId, prospecto.campanaId)) throw new HttpError(409, MENSAJE_NO_INTERESADO, CODIGO_NO_INTERESADO_RECIENTE);
 
           // Después del bloqueo: dos envíos a la misma persona desde
           // prospectos distintos se forman, y el segundo ve al primero.
-          const ciclo = await cicloActualDePersona(tx, prospecto.contactoId, input.canal);
+          const ciclo = await cicloActualDePersona(tx, prospecto.contactoId, input.canal, prospecto.campanaId);
           if (ciclo.length >= MAX_CONTACTOS_POR_CICLO) throw new HttpError(409, "Máximo de 3 contactos alcanzado para esta persona y canal");
           const ultimoDePersona = ciclo[0];
           if (ultimoDePersona && ultimoDePersona.ventanaEstado === "abierta" && ultimoDePersona.ventanaVenceEn > new Date()) {
             throw new HttpError(409, "Ventana de espera activa para esta persona y canal");
           }
+          // Una serie a la vez (9-nov-2026): el correo 1 espera a que termine la
+          // de otra campaña; un "interesado" en otra campaña frena todo.
+          const bloqueo = await otraCampanaBloquea(tx, prospecto.contactoId, prospecto.campanaId);
+          if (bloqueo === "interesado_en_otra_campana") throw new HttpError(409, MENSAJE_INTERESADO_EN_OTRA, CODIGO_OTRA_CAMPANA_EN_CURSO);
+          if (bloqueo === "serie_en_curso" && ciclo.length === 0) throw new HttpError(409, MENSAJE_SERIE_EN_CURSO, CODIGO_OTRA_CAMPANA_EN_CURSO);
 
           const [ultimo] = await tx
             .select({ id: envios.id, numeroContacto: envios.numeroContacto, estado: envios.estado, intentos: envios.intentos })
@@ -901,8 +929,8 @@ export class AutomatizacionService {
   // manda ese recordatorio el siguiente día hábil. Si era el primer correo,
   // regresa a la fila; PT1 la vuelve a tomar en HORAS_PARA_RETOMAR_DE_FILA.
   private async reprogramarEnvio(tx: DrizzleTx, prospectoId: number, canal: "correo" | "whatsapp") {
-    const [prospecto] = await tx.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
-    const [anterior] = await cicloActualDePersona(tx, prospecto!.contactoId, canal);
+    const [prospecto] = await tx.select({ contactoId: prospectos.contactoId, campanaId: prospectos.campanaId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
+    const [anterior] = await cicloActualDePersona(tx, prospecto!.contactoId, canal, prospecto!.campanaId);
     if (anterior) {
       await tx.update(envios).set({ ventanaEstado: "abierta", ventanaVenceEn: sumarDiasHabilesMx(new Date(), 1) }).where(eq(envios.id, anterior.id));
       return;
@@ -983,10 +1011,11 @@ export class AutomatizacionService {
       // filas de prospectos y se saltaría envíos solo porque otra
       // transacción está tocando su prospecto.
       const duenos = await tx
-        .select({ id: prospectos.id, contactoId: prospectos.contactoId })
+        .select({ id: prospectos.id, contactoId: prospectos.contactoId, campanaId: prospectos.campanaId })
         .from(prospectos)
         .where(inArray(prospectos.id, [...new Set(rows.map((row) => row.prospectoId))]));
       const contactoDe = new Map(duenos.map((d) => [d.id, d.contactoId]));
+      const campanaDe = new Map(duenos.map((d) => [d.id, d.campanaId]));
 
       const data = [];
       const omitidas: { envio_id: number; prospecto_id: number; motivo: MotivoRecordatorioOmitido }[] = [];
@@ -996,7 +1025,8 @@ export class AutomatizacionService {
       let correosQueSalen = 0;
       for (const row of rows) {
         const contactoId = contactoDe.get(row.prospectoId)!;
-        const ciclo = await cicloActualDePersona(tx, contactoId, row.canal);
+        const campanaId = campanaDe.get(row.prospectoId) ?? null;
+        const ciclo = await cicloActualDePersona(tx, contactoId, row.canal, campanaId);
         if (ciclo[0]?.id !== row.id) {
           reclamadas.push(row.id);
           continue;
@@ -1095,7 +1125,9 @@ export class AutomatizacionService {
 
     if (campanaActiva === false) return { motivo: "campana_inactiva" as const };
     if ("motivo" in correo) return { motivo: correo.motivo };
-    if (await noInteresadoReciente(tx, contactoId)) return { motivo: "no_interesado_reciente" as const };
+    if (await noInteresadoReciente(tx, contactoId, contexto.campanaId)) return { motivo: "no_interesado_reciente" as const };
+    // Un "me interesa" tardío a otra campaña, con esta serie ya en curso.
+    if (await otraCampanaBloquea(tx, contactoId, contexto.campanaId) === "interesado_en_otra_campana") return { motivo: "interesado_en_otra_campana" as const };
     return datos;
   }
 
@@ -1281,21 +1313,24 @@ export class AutomatizacionService {
         // La persona antes que el prospecto (ver bloquearPersona): el INSERT
         // de abajo bloquea al prospecto por la llave foránea y luego puede
         // venir la tarea de seguimiento de una respuesta tardía.
-        const [duenoDeLaRespuesta] = await tx.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
+        const [duenoDeLaRespuesta] = await tx.select({ contactoId: prospectos.contactoId, campanaId: prospectos.campanaId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
         if (duenoDeLaRespuesta) await bloquearPersona(tx, duenoDeLaRespuesta.contactoId);
 
-        // Las ventanas abiertas de la PERSONA en este canal, no solo la del
-        // último envío de este prospecto: los 3 contactos se cuentan por
-        // persona, y si su último correo salió con otro prospecto (reingresó)
-        // y contesta un correo anterior, esa otra ventana seguía abierta y
-        // le llegaba el siguiente recordatorio (bloque "antes de encender",
-        // 5-oct-2026). Tardía = la persona no tenía ninguna abierta.
+        // Las ventanas abiertas de la PERSONA en este canal y campaña, no
+        // solo la del último envío de este prospecto: los 3 contactos se
+        // cuentan por persona, y si su último correo salió con otro prospecto
+        // (reingresó) y contesta un correo anterior, esa otra ventana seguía
+        // abierta y le llegaba el siguiente recordatorio (bloque "antes de
+        // encender", 5-oct-2026). Las de otra campaña no: una respuesta
+        // tardía a agua no detiene la serie de maquinaria (9-nov-2026; si es
+        // "me interesa", la clasificación sí la frena). Tardía = la persona no
+        // tenía ninguna abierta en esta campaña.
         const ventanasAbiertas = duenoDeLaRespuesta
           ? await tx
             .select({ id: envios.id })
             .from(envios)
             .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
-            .where(and(eq(prospectos.contactoId, duenoDeLaRespuesta.contactoId), eq(envios.canal, input.canal), eq(envios.ventanaEstado, "abierta")))
+            .where(and(eq(prospectos.contactoId, duenoDeLaRespuesta.contactoId), sql`${prospectos.campanaId} <=> ${duenoDeLaRespuesta.campanaId}`, eq(envios.canal, input.canal), eq(envios.ventanaEstado, "abierta")))
             .for("update")
           : [];
         const tardia = ventanasAbiertas.length === 0;

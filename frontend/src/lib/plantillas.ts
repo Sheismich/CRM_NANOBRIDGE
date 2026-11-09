@@ -3,6 +3,10 @@
 
 export interface PlantillaCorreo {
   id: number;
+  // Correos por campaña (9-nov-2026): "campana" = el propio de una campaña;
+  // "general" = el que usan las campañas que no tienen uno propio.
+  campana_id: number | null;
+  origen: "general" | "campana";
   giro: string;
   numero: 1 | 2 | 3;
   nombre: string;
@@ -13,6 +17,8 @@ export interface PlantillaCorreo {
 }
 
 export interface PlantillasRespuesta {
+  // La campaña pedida (GET ?campana_id=), o null = los generales.
+  campana: { id: number; nombre: string } | null;
   plantillas: PlantillaCorreo[];
   pie: { texto: string; actualizado_en: string | null };
   variables: { clave: string; descripcion: string }[];

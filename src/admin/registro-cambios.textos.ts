@@ -214,7 +214,8 @@ export function frase(fila: FilaAuditoria, quien: string, nombres: Nombres): str
     case "evento_pendiente:reintentar": return `${quien} reintentó el aviso #${fila.entidadId} a n8n.`;
     case "proceso_fallido:cambiar_estado": return `${quien} marcó el problema #${fila.entidadId} como ${legible("estado", despues.estado, nombres)}.`;
     case "reporte:exportar": return `${quien} exportó ${nombre} (${String(despues.formato ?? "csv").toUpperCase()}).`;
-    case "plantilla_correo:editar": return `${quien} editó el correo de prospección «${nombre}».`;
+    case "plantilla_correo:editar": return `${quien} editó el correo de prospección «${nombre}»${despues.campana ? ` de la campaña ${String(despues.campana)}` : ""}.`;
+    case "plantilla_correo:quitar": return `${quien} regresó «${nombre}» de la campaña ${String(despues.campana ?? "")} al correo general.`;
     case "pie_correo:editar": return `${quien} editó el pie de los correos de prospección.`;
     case "reparto_interesados:editar": return despues.activo ? `${quien} cambió el reparto de interesados (prendido, ${Array.isArray(despues.usuario_ids) ? despues.usuario_ids.length : 0} en la lista).` : `${quien} apagó el reparto de interesados.`;
     case "freno_dominio:pausar": return `Se pausaron los envíos de prospección. ${String(despues.motivo ?? "")}`.trim();

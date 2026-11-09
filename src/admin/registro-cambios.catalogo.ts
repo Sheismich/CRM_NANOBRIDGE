@@ -42,7 +42,7 @@ const REGLAS: Record<TipoRegistro, Record<string, Record<string, string>>> = {
   },
   configuracion: {
     campana: { crear: "Alta de campaña", editar: "Edición de campaña", activar: "Campaña activada", pausar: "Campaña pausada", finalizar: "Campaña finalizada" },
-    plantilla_correo: { editar: "Edición de correo de prospección" },
+    plantilla_correo: { editar: "Edición de correo de prospección", quitar: "Correo de campaña regresado al general" },
     pie_correo: { editar: "Edición del pie de correos" },
     reparto_interesados: { editar: "Cambio del reparto de interesados" },
     freno_dominio: { pausar: "Envíos pausados", reanudar: "Envíos reanudados" },

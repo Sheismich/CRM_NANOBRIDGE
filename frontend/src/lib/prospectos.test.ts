@@ -21,8 +21,14 @@ describe("Mandar a automatización", () => {
     expect(sePuedeMandar({ estado: "excluido", fila_tomado_en: null })).toBe(true);
     expect(sePuedeMandar({ estado: "en_fila", fila_tomado_en: null })).toBe(true);
     expect(sePuedeMandar({ estado: "en_fila", fila_tomado_en: "2026-10-20T15:00:00Z" })).toBe(false);
-    expect(sePuedeMandar({ estado: "validado", fila_tomado_en: null })).toBe(false);
     expect(sePuedeMandar({ estado: "baja", fila_tomado_en: null })).toBe(false);
+  });
+
+  it("a otra campaña también: los que van en su serie o la terminaron sin decir que sí (9-nov-2026)", () => {
+    for (const estado of ["validado", "en_revision", "inactivo", "no_interesado"]) expect(sePuedeMandar({ estado, fila_tomado_en: null })).toBe(true);
+    // Al interesado lo atiende un vendedor; el descartado es persona o correo equivocado.
+    for (const estado of ["interesado", "descartado"]) expect(sePuedeMandar({ estado, fila_tomado_en: null })).toBe(false);
+    expect(textoMotivo("interesado_en_otra_campana")).toBe("le interesó otra campaña y ya lo atiende un vendedor");
   });
 
   it("los motivos conocidos se explican y los desconocidos se enseñan tal cual", () => {

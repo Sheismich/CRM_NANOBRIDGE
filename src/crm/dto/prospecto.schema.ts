@@ -125,7 +125,11 @@ export type ListProspectosQuery = z.infer<typeof listProspectosQuerySchema>;
 // fila a los nuevos y le cambia la campaña a los que ya esperan en ella.
 export const mandarAutomatizacionInputSchema = z.object({
   prospectoIds: z.array(z.coerce.number().int().positive()).min(1).max(200),
-  campanaId: z.coerce.number().int().positive()
+  campanaId: z.coerce.number().int().positive(),
+  // Varias campañas (9-nov-2026): a uno que ya espera en la fila de otra
+  // campaña, "cambiar" lo pasa a esta (como antes) y "agregar" lo deja en
+  // las dos (otro prospecto de la misma persona).
+  modo: z.enum(["agregar", "cambiar"]).default("cambiar")
 });
 export type MandarAutomatizacionInput = z.infer<typeof mandarAutomatizacionInputSchema>;
 

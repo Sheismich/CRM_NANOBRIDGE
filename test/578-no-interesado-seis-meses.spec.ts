@@ -92,9 +92,11 @@ describe("no interesado: 6 meses de espera desde su respuesta", () => {
   });
 
   it("el botón Mandar a automatización lo dice en el momento", async () => {
-    const { nuevo } = await personaQueDijoNo(haceMeses(2));
+    const { anterior, nuevo } = await personaQueDijoNo(haceMeses(2));
     await db.update(prospectos).set({ estado: "capturado", executionId: null }).where(eq(prospectos.id, nuevo));
     const [campana] = await db.insert(campanas).values({ nombre: `Seis meses ${randomUUID().slice(0, 8)}`, canal: "correo", estado: "activa" });
+    // El "no" cuenta en su campaña (9-nov-2026; en otra sí entra, ver 590).
+    await db.update(prospectos).set({ campanaId: campana.insertId }).where(eq(prospectos.id, anterior));
 
     const res = await api().post("/api/v1/prospectos/automatizacion").set("Cookie", adminCookie).send({ prospectoIds: [nuevo], campanaId: campana.insertId });
     expect(res.status).toBe(200);

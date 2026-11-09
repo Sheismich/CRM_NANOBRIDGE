@@ -1,6 +1,6 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, prospectos } from "../database/schema.js";
+import { auditoria, envios, prospectos } from "../database/schema.js";
 import type { ClasificacionRespuesta } from "./clasificaciones.js";
 import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "./baja-prospecto.js";
 import { HttpError } from "./http-error.js";
@@ -57,7 +57,7 @@ export type OrigenClasificacion = {
  */
 export async function aplicarClasificacionAlProspecto(tx: DrizzleTx, prospectoId: number, clasificacion: ClasificacionRespuesta, origen: OrigenClasificacion) {
   const motivo = `Clasificada como ${clasificacion} (${origen.descripcion})`;
-  const [antes] = await tx.select({ estado: prospectos.estado, contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
+  const [antes] = await tx.select({ estado: prospectos.estado, contactoId: prospectos.contactoId, campanaId: prospectos.campanaId }).from(prospectos).where(eq(prospectos.id, prospectoId)).limit(1);
   if (!antes) throw new HttpError(404, "Prospecto no encontrado");
   // La persona antes que el prospecto (ver bloquearPersona): después de
   // esto puede venir el UPDATE del prospecto y la tarea de seguimiento.
@@ -91,6 +91,34 @@ export async function aplicarClasificacionAlProspecto(tx: DrizzleTx, prospectoId
       antes: { estado: antes?.estado ?? null },
       despues: { execution_id: origen.executionId, estado: estadoProspecto, motivo }
     });
+    if (estadoProspecto === "interesado") await frenarOtrasCampanas(tx, prospectoId, antes.contactoId, antes.campanaId, origen.usuarioId);
   }
   return { estadoProspecto, supresionIds: [] as number[], enBaja: false };
+}
+
+/**
+ * "Me interesa" en una campaña frena las demás de la persona (decisión de
+ * Fabián, 9-nov-2026): ya la atiende un vendedor. Las que esperaban en la
+ * fila regresan a capturado (como "Sacar de la fila") y no pueden volver a
+ * entrar mientras esta siga en interesado (listo-para-automatizacion.ts); a
+ * las que ya iban se les cierra la ventana para que PT4 no mande el
+ * siguiente. Las de esta misma campaña no se tocan: su ventana ya la cerró
+ * la respuesta.
+ */
+async function frenarOtrasCampanas(tx: DrizzleTx, prospectoId: number, contactoId: number, campanaId: number | null, usuarioId: number | null) {
+  const otrasCampanas = and(eq(prospectos.contactoId, contactoId), ne(prospectos.id, prospectoId), sql`NOT (${prospectos.campanaId} <=> ${campanaId})`);
+  const enFila = await tx.select({ id: prospectos.id, filaEstadoPrevio: prospectos.filaEstadoPrevio }).from(prospectos).where(and(otrasCampanas, eq(prospectos.estado, "en_fila"))).for("update");
+  for (const p of enFila) {
+    await tx.update(prospectos).set({ estado: "capturado", filaDesde: null, filaPor: null, filaTomadoEn: null, filaExecutionId: null, filaEstadoPrevio: null }).where(eq(prospectos.id, p.id));
+    await tx.insert(auditoria).values({
+      usuarioId,
+      entidad: "prospecto",
+      entidadId: p.id,
+      accion: "sacar_de_fila",
+      antes: { estado: "en_fila", estado_previo: p.filaEstadoPrevio },
+      despues: { estado: "capturado", motivo: `Le interesó otra campaña (prospecto ${prospectoId})` }
+    });
+  }
+  const abiertas = await tx.select({ id: envios.id }).from(envios).innerJoin(prospectos, eq(prospectos.id, envios.prospectoId)).where(and(otrasCampanas, eq(envios.ventanaEstado, "abierta")));
+  if (abiertas.length > 0) await tx.update(envios).set({ ventanaEstado: "cerrada" }).where(inArray(envios.id, abiertas.map((e) => e.id)));
 }

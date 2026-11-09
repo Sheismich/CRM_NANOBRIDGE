@@ -408,6 +408,9 @@ export const envios = mysqlTable("envios", {
 // general; numero 1 = inicial, 2 y 3 = recordatorios.
 export const plantillasCorreo = mysqlTable("plantillas_correo", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  // 042_plantillas_por_campana.sql: NULL = general. campana_clave (columna
+  // generada, solo para el UNIQUE) no se declara aquí: nunca se escribe.
+  campanaId: bigint("campana_id", { mode: "number", unsigned: true }),
   giro: varchar("giro", { length: 120 }).notNull().default(""),
   numero: tinyint("numero", { unsigned: true }).notNull(),
   asunto: varchar("asunto", { length: 200 }).notNull(),
@@ -415,9 +418,9 @@ export const plantillasCorreo = mysqlTable("plantillas_correo", {
   actualizadoPor: bigint("actualizado_por", { mode: "number", unsigned: true }),
   creadoEn: datetime("creado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   actualizadoEn: datetime("actualizado_en").notNull().default(sql`CURRENT_TIMESTAMP`)
-}, (table) => [
-  uniqueIndex("uq_plantillas_correo_giro_numero").on(table.giro, table.numero)
-]);
+  // UNIQUE (campana_clave, giro, numero) vive solo en la 042: campana_clave
+  // es columna generada y no se declara aquí.
+});
 
 // 034: avisos de la campanita (etapa 2 de las mejoras, 19-oct-2026).
 export const notificaciones = mysqlTable("notificaciones", {

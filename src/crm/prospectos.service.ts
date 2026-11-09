@@ -132,7 +132,9 @@ export class ProspectosService {
         .from(prospectos)
         .where(and(eq(prospectos.contactoId, contacto.id), notInArray(prospectos.estado, [...ESTADOS_PROSPECTO_CERRADO])))
         .limit(1);
-      if (enCurso) throw new HttpError(409, `Esta persona ya está en prospección (prospecto ${enCurso.id})`, CODIGO_PROSPECTO_YA_ABIERTO);
+      // Para meterla a otra campaña no hace falta otro prospecto a mano:
+      // "Mandar a automatización" lo crea (9-nov-2026).
+      if (enCurso) throw new HttpError(409, `Esta persona ya está en prospección (prospecto ${enCurso.id}). Para meterla a otra campaña, usa "Mandar a automatización" en ese prospecto y elige la campaña.`, CODIGO_PROSPECTO_YA_ABIERTO);
 
       const [prospecto] = await tx.insert(prospectos).values({ contactoId: contacto.id, estado: "capturado" });
       await tx.insert(auditoria).values({ usuarioId: user.id, entidad: "prospecto", entidadId: prospecto.insertId, accion: "crear_desde_contacto", despues: { contacto_id: contacto.id, empresa_id: contacto.empresaId } });
@@ -812,16 +814,23 @@ export class ProspectosService {
     const agregados: number[] = [];
     const cambiados: number[] = [];
     const rechazados: { id: number; motivos: string[] }[] = [];
+    // Prospectos nuevos de la misma persona para esta campaña (desde = el
+    // que se eligió); el elegido también va en agregados.
+    const nuevos: { desde: number; id: number }[] = [];
     for (const id of new Set(input.prospectoIds)) {
-      const resultado = await this.mandarUno(user, id, input.campanaId);
+      const resultado = await this.mandarUno(user, id, input.campanaId, input.modo);
       if (resultado === "agregado") agregados.push(id);
       else if (resultado === "cambiado") cambiados.push(id);
-      else rechazados.push({ id, motivos: resultado });
+      else if (Array.isArray(resultado)) rechazados.push({ id, motivos: resultado });
+      else {
+        agregados.push(id);
+        nuevos.push({ desde: id, id: resultado.nuevo });
+      }
     }
-    return { agregados, cambiados, rechazados };
+    return { agregados, cambiados, rechazados, nuevos };
   }
 
-  private async mandarUno(user: CurrentUser, id: number, campanaId: number): Promise<"agregado" | "cambiado" | string[]> {
+  private async mandarUno(user: CurrentUser, id: number, campanaId: number, modo: "agregar" | "cambiar"): Promise<"agregado" | "cambiado" | { nuevo: number } | string[]> {
     // Fuera de la transacción: solo para saber a quién bloquear. Adentro, lo
     // primero es el bloqueo de la persona (mismo orden que la baja, ver
     // bloquearPersona), así las lecturas que siguen ya ven una baja o un
@@ -832,17 +841,28 @@ export class ProspectosService {
     return this.db.transaction(async (tx) => {
       await bloquearPersona(tx, inicial.contactoId);
       const [p] = await tx
-        .select({ estado: prospectos.estado, campanaId: prospectos.campanaId, filaTomadoEn: prospectos.filaTomadoEn })
+        .select({ estado: prospectos.estado, campanaId: prospectos.campanaId, filaTomadoEn: prospectos.filaTomadoEn, contactoId: prospectos.contactoId, score: prospectos.score, prioridad: prospectos.prioridad, fuenteUrl: prospectos.fuenteUrl, confianza: prospectos.confianza })
         .from(prospectos)
         .where(eq(prospectos.id, id))
         .for("update");
       if (!p) return ["no_encontrado"];
+      const otraCampana = p.campanaId !== campanaId;
+
+      // Varias campañas (9-nov-2026): la misma persona entra a otra campaña
+      // con un prospecto nuevo cuando este ya está en la fila de otra y se
+      // pidió "agregar", o cuando este ya pasó por la automatización (va en
+      // su serie, o la terminó). Espera en la fila a que termine la otra.
+      // Un descartado (respuesta inválida: persona o correo equivocado) no
+      // va a ninguna campaña.
+      if (otraCampana && p.estado !== "descartado" && ((p.estado === "en_fila" && modo === "agregar") || !["en_fila", ...ESTADOS_QUE_ENTRAN_A_FILA].includes(p.estado))) {
+        return this.agregarACampana(tx, user, id, p, campanaId);
+      }
 
       // Ya en la fila: solo se le cambia la campaña, sin moverle fila_desde
       // (no pierde su lugar). Si PT1 ya lo tomó, ya va de salida.
       if (p.estado === "en_fila") {
         if (tomadoDeFilaHace(p.filaTomadoEn)) return ["ya_tomado"];
-        if (p.campanaId !== campanaId) {
+        if (otraCampana) {
           await tx.update(prospectos).set({ campanaId }).where(eq(prospectos.id, id));
           await tx.insert(auditoria).values({ usuarioId: user.id, entidad: "prospecto", entidadId: id, accion: "cambiar_campana_fila", antes: { campana_id: p.campanaId }, despues: { campana_id: campanaId } });
         }
@@ -851,10 +871,11 @@ export class ProspectosService {
 
       // capturado = nunca pasó por la automatización; excluido = uno al que
       // le faltaba un dato y ya se corrigió (P5). inactivo / descartado y los
-      // que ya respondieron no: volver a escribirles lo decide el negocio.
+      // que ya respondieron no, en su misma campaña: volver a escribirles lo
+      // decide el negocio.
       if (!ESTADOS_QUE_ENTRAN_A_FILA.includes(p.estado)) return ["estado_no_permitido"];
 
-      const motivos = await revisarListoParaAutomatizacion(tx, id);
+      const motivos = await revisarListoParaAutomatizacion(tx, id, campanaId);
       if (motivos.length > 0) return motivos;
 
       await tx.update(prospectos).set({
@@ -876,6 +897,48 @@ export class ProspectosService {
       });
       return "agregado";
     });
+  }
+
+  // El prospecto nuevo de la persona en otra campaña (ver mandarUno). Nace
+  // en la fila con los datos de captura del original; la serie de la otra
+  // campaña no lo rechaza (espera su turno en tomarDeFila).
+  private async agregarACampana(
+    tx: DrizzleTx,
+    user: CurrentUser,
+    desde: number,
+    p: { contactoId: number; score: string | null; prioridad: "alta" | "media" | "baja" | null; fuenteUrl: string | null; confianza: "alta" | "media" | "baja" | null },
+    campanaId: number
+  ): Promise<{ nuevo: number } | string[]> {
+    const [yaEnCampana] = await tx
+      .select({ id: prospectos.id })
+      .from(prospectos)
+      .where(and(eq(prospectos.contactoId, p.contactoId), eq(prospectos.campanaId, campanaId), notInArray(prospectos.estado, [...ESTADOS_PROSPECTO_CERRADO])))
+      .limit(1);
+    if (yaEnCampana) return ["ya_en_esta_campana"];
+
+    const motivos = await revisarListoParaAutomatizacion(tx, desde, campanaId);
+    if (motivos.length > 0) return motivos;
+
+    const [result] = await tx.insert(prospectos).values({
+      contactoId: p.contactoId,
+      campanaId,
+      estado: "en_fila",
+      score: p.score,
+      prioridad: p.prioridad,
+      fuenteUrl: p.fuenteUrl,
+      confianza: p.confianza,
+      filaDesde: sql`CURRENT_TIMESTAMP`,
+      filaPor: user.id,
+      filaEstadoPrevio: "capturado"
+    });
+    await tx.insert(auditoria).values({
+      usuarioId: user.id,
+      entidad: "prospecto",
+      entidadId: result.insertId,
+      accion: "agregar_a_campana",
+      despues: { estado: "en_fila", campana_id: campanaId, desde_prospecto: desde }
+    });
+    return { nuevo: result.insertId };
   }
 
   // Sacar de la fila (P4): mientras PT1 no lo haya tomado. Siempre regresa

@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { count, desc, eq } from "drizzle-orm";
+import { count, desc, eq, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
-import { auditoria, campanas, prospectos } from "../database/schema.js";
+import { auditoria, campanas, plantillasCorreo, prospectos } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { fechaMx } from "../shared/dia-habil.js";
@@ -37,12 +37,14 @@ export class CampanasService {
     return {
       campana: campanas,
       prospectos: count(prospectos.id),
+      // Cuántos de sus 3 correos son propios (9-nov-2026); los demás usan el general.
+      correosPropios: sql<number>`(SELECT COUNT(*) FROM ${plantillasCorreo} WHERE ${plantillasCorreo.campanaId} = ${campanas.id})`.mapWith(Number),
       yaEmpezo: campanaYaEmpezoSql(hoy),
       noHaTerminado: campanaNoHaTerminadoSql(hoy)
     };
   }
 
-  private toRow(r: { campana: typeof campanas.$inferSelect; prospectos: number; yaEmpezo: unknown; noHaTerminado: unknown }) {
+  private toRow(r: { campana: typeof campanas.$inferSelect; prospectos: number; correosPropios: number; yaEmpezo: unknown; noHaTerminado: unknown }) {
     const { vigencia, motivo } = vigenciaCampana(r.campana.estado, r.yaEmpezo as number, r.noHaTerminado as number);
     return {
       id: r.campana.id,
@@ -52,6 +54,7 @@ export class CampanasService {
       fecha_inicio: r.campana.fechaInicio,
       fecha_fin: r.campana.fechaFin,
       prospectos: Number(r.prospectos),
+      correos_propios: Number(r.correosPropios),
       activa_hoy: vigencia === "activa",
       motivo,
       creado_en: r.campana.creadoEn,

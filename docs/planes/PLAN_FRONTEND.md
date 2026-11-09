@@ -660,6 +660,27 @@ Backend con **migración 038** (`correos_cotizacion`), pruebas en `test/550-coti
 - **Ojo, no es de este cambio:** en la compu de Fabián falla `formato.test.ts` > `compacto` (sale `"120k$"`
   en vez de `"$120K"`): el Node de esa compu formatea distinto. Revisa si en la tuya pasa.
 
+## Correos por campaña y una persona en varias campañas (Fabián, 9 nov 2026)
+
+Los contactos de Carlos van a dos campañas de servicios distintos (agua y tratamiento de maquinaria).
+Ya hecho por Fabián (API + front, migración 042); para que lo sepas si tocas estas pantallas:
+
+- **Regla nueva:** los 3 correos y los 6 meses de un "no interesado" se cuentan por persona **y campaña**.
+  Corre una serie a la vez: la segunda campaña espera en la fila a que termine la primera. "Me interesa" en
+  una campaña saca a la persona de la fila de las demás y ya no la deja entrar. La baja sigue siendo de la persona.
+- **`POST /prospectos/automatizacion`:** acepta `modo: "agregar" | "cambiar"` (default `cambiar`, como antes)
+  para quien ya espera en la fila de otra campaña. A quien ya va o fue en otra campaña la API le crea un
+  prospecto nuevo; la respuesta trae `nuevos: [{ desde, id }]`. Motivos nuevos: `ya_en_esta_campana`,
+  `interesado_en_otra_campana` (textos en `lib/prospectos.ts`).
+- **`sePuedeMandar`** ahora también deja elegir `validado`, `en_revision`, `inactivo` y `no_interesado` (para
+  mandarlos a otra campaña). `MandarAutomatizacionModal` pregunta "Agregar también / Cambiar" y avisa si la
+  campaña sale con los correos generales (`avisoCorreos` en `lib/campanas.ts`, con prueba).
+- **`GET /campanas`** trae `correos_propios` (0-3). **`/plantillas`:** `GET ?campana_id=`, `PUT` con
+  `campana_id` y `DELETE /plantillas/:numero?campana_id=`; cada plantilla trae `origen` ("general" o "campana").
+  En Administración, "Correos de prospección" tiene el botón **Campañas**.
+- **Para ti (documentación):** diccionario con la migración 042 (`plantillas_correo.campana_id` y la columna
+  generada `campana_clave`, solo para el UNIQUE).
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.
