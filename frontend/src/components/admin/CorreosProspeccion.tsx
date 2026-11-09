@@ -3,9 +3,11 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { Button } from "../ui/Button";
 import { Field, ServerError, inputClass } from "../ui/Field";
 import { Icono } from "../ui/Icono";
+import { Modal } from "../ui/Modal";
 import { PanelLateral } from "../ui/PanelLateral";
 import { Pastilla } from "../ui/Pastilla";
 import { ApiError, api } from "../../lib/api";
+import { CLASE_ESTADO_CAMPANA, ETIQUETA_ESTADO_CAMPANA, useCampanas } from "../../lib/campanas";
 import { cuando } from "../../lib/documentos";
 import { CUANDO_SALE, type CorreoArmado, type PlantillaCorreo, type PlantillasRespuesta } from "../../lib/plantillas";
 
@@ -14,28 +16,43 @@ import { CUANDO_SALE, type CorreoArmado, type PlantillaCorreo, type PlantillasRe
 // que va en los tres. n8n ya no tiene texto propio: la API le da el correo
 // armado en cada envío, así que lo que se guarde aquí sale en el siguiente.
 // Administrador y supervisor editan; cada cambio queda en el Registro de
-// cambios.
+// cambios. Botón "Campañas" (9-nov-2026): cada campaña puede tener sus 3
+// correos; el número que no tenga sale con el general.
 
 type Edicion = { tipo: "plantilla"; plantilla: PlantillaCorreo } | { tipo: "pie" };
+type CampanaElegida = { id: number; nombre: string };
 
 export function CorreosProspeccion() {
   const ahora = new Date();
   const [edicion, setEdicion] = useState<Edicion | null>(null);
+  // Correos por campaña (9-nov-2026): null = los generales.
+  const [campana, setCampana] = useState<CampanaElegida | null>(null);
+  const [eligiendo, setEligiendo] = useState(false);
   const { data, isPending, isError } = useQuery({
-    queryKey: ["plantillas"],
-    queryFn: () => api.get<PlantillasRespuesta>("/api/v1/plantillas")
+    queryKey: ["plantillas", campana?.id ?? "generales"],
+    queryFn: () => api.get<PlantillasRespuesta>("/api/v1/plantillas", campana ? { campana_id: campana.id } : undefined)
   });
 
   return (
     <section className="tarjeta-blanca overflow-hidden !rounded-[18px]">
-      <header className="flex items-start gap-3 border-b border-border px-4 py-4 md:px-5">
+      <header className="flex flex-wrap items-start gap-3 border-b border-border px-4 py-4 md:px-5">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-info-bg text-info">
           <Icono nombre="correo" size={19} />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="font-heading text-[16px] font-extrabold text-strong">Correos de prospección</h2>
-          <p className="text-[12.5px] text-ink-3">Lo que reciben los prospectos. Un cambio sale desde el siguiente envío.</p>
+          <h2 className="font-heading text-[16px] font-extrabold text-strong">{campana ? `Correos de la campaña ${campana.nombre}` : "Correos de prospección"}</h2>
+          <p className="text-[12.5px] text-ink-3">
+            {campana ? "Los que no tengan texto propio salen con el general." : "Lo que reciben los prospectos. Un cambio sale desde el siguiente envío."}
+          </p>
+          {campana && (
+            <button type="button" onClick={() => setCampana(null)} className="mt-1 text-[12.5px] font-bold text-navy hover:underline">
+              Volver a los generales
+            </button>
+          )}
         </div>
+        <Button variant="outline" className="!px-3 !py-2" onClick={() => setEligiendo(true)}>
+          Campañas
+        </Button>
       </header>
       <div className="px-4 py-3 md:px-5">
         {isPending && <p className="py-2 text-[13px] text-ink-3">Cargando…</p>}
@@ -45,20 +62,28 @@ export function CorreosProspeccion() {
             <li key={p.id} className="border-t border-border first:border-t-0">
               <button type="button" onClick={() => setEdicion({ tipo: "plantilla", plantilla: p })} className="flex w-full items-center gap-3 py-3 text-left hover:bg-soft/60">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Pastilla tono={p.numero === 1 ? "navy" : "info"}>{p.nombre}</Pastilla>
+                    {campana && <Pastilla tono={p.origen === "campana" ? "ok" : "neutro"}>{p.origen === "campana" ? "Propio" : "General"}</Pastilla>}
                     <small className="truncate text-[11.5px] text-ink-3">{CUANDO_SALE[p.numero]}</small>
                   </div>
                   <b className="mt-1 block truncate text-[13.5px] text-strong">{p.asunto}</b>
                   <small className="block text-[11.5px] text-ink-3">
-                    {p.actualizado_por ? `Editado por ${p.actualizado_por.nombre} · ${cuando(p.actualizado_en, ahora).toLowerCase()}` : "Texto inicial, sin editar"}
+                    {campana && p.origen === "general"
+                      ? "Sale el general; al guardarlo aquí queda uno propio para esta campaña"
+                      : p.actualizado_por
+                        ? `Editado por ${p.actualizado_por.nombre} · ${cuando(p.actualizado_en, ahora).toLowerCase()}`
+                        : "Texto inicial, sin editar"}
                   </small>
                 </div>
                 <Icono nombre="flechaDerecha" size={16} className="shrink-0 text-ink-3" />
               </button>
             </li>
           ))}
-          {data && (
+          {data && campana && (
+            <li className="border-t border-border py-3 text-[12.5px] text-ink-3">El pie es el mismo para todas las campañas; se edita en los generales.</li>
+          )}
+          {data && !campana && (
             <li className="border-t border-border">
               <button type="button" onClick={() => setEdicion({ tipo: "pie" })} className="flex w-full items-center gap-3 py-3 text-left hover:bg-soft/60">
                 <div className="min-w-0 flex-1">
@@ -79,12 +104,58 @@ export function CorreosProspeccion() {
       <PanelLateral
         abierto={edicion !== null}
         onCerrar={() => setEdicion(null)}
-        titulo={edicion?.tipo === "plantilla" ? `Editar · ${edicion.plantilla.nombre}` : "Editar · Pie de los correos"}
+        titulo={edicion?.tipo === "plantilla" ? `Editar · ${edicion.plantilla.nombre}${campana ? ` · ${campana.nombre}` : ""}` : "Editar · Pie de los correos"}
         ancho={1000}
       >
-        {edicion && data && <Editor edicion={edicion} datos={data} onListo={() => setEdicion(null)} />}
+        {edicion && data && <Editor edicion={edicion} datos={data} campana={campana} onListo={() => setEdicion(null)} />}
       </PanelLateral>
+
+      <Modal abierto={eligiendo} onCerrar={() => setEligiendo(false)} titulo="Correos por campaña" descripcion="Elige una campaña para escribir sus correos. Los que no tenga propios salen con los generales." ancho={560}>
+        {eligiendo && (
+          <ListaCampanas
+            elegida={campana?.id ?? null}
+            onElegir={(c) => {
+              setCampana(c);
+              setEligiendo(false);
+            }}
+          />
+        )}
+      </Modal>
     </section>
+  );
+}
+
+// Campañas para elegir de cuál se editan los correos. Las finalizadas van al
+// final: ya no mandan, pero se pueden consultar.
+function ListaCampanas({ elegida, onElegir }: { elegida: number | null; onElegir: (c: CampanaElegida | null) => void }) {
+  const { data, isPending, isError } = useCampanas();
+  const campanas = [...(data?.data ?? [])].sort((a, b) => Number(a.estado === "finalizada") - Number(b.estado === "finalizada"));
+  return (
+    <div className="flex flex-col pb-2">
+      {isPending && <p className="py-2 text-[13px] text-ink-3">Cargando…</p>}
+      {isError && <p className="py-2 text-[13px] text-danger">No se pudieron cargar las campañas.</p>}
+      {data && campanas.length === 0 && <p className="py-2 text-[13px] text-ink-3">Todavía no hay campañas. Créalas en la pestaña Campañas de Prospectos.</p>}
+      <ul>
+        <li>
+          <button type="button" onClick={() => onElegir(null)} className="flex w-full items-center gap-3 rounded-[10px] px-2 py-2.5 text-left hover:bg-soft/60">
+            <b className="min-w-0 flex-1 text-[13.5px] text-strong">Correos generales</b>
+            {elegida === null && <Pastilla tono="navy">Viendo</Pastilla>}
+          </button>
+        </li>
+        {campanas.map((c) => (
+          <li key={c.id} className="border-t border-border">
+            <button type="button" onClick={() => onElegir({ id: c.id, nombre: c.nombre })} className="flex w-full flex-wrap items-center gap-2 rounded-[10px] px-2 py-2.5 text-left hover:bg-soft/60">
+              <span className="min-w-0 flex-1">
+                <b className="block truncate text-[13.5px] text-strong">{c.nombre}</b>
+                <small className="text-[11.5px] text-ink-3">{c.correos_propios === 0 ? "Usa los generales" : `${c.correos_propios} de 3 correos propios`}</small>
+              </span>
+              <span className={`rounded-full px-[9px] py-[3px] text-[11px] font-extrabold ${CLASE_ESTADO_CAMPANA[c.estado]}`}>{ETIQUETA_ESTADO_CAMPANA[c.estado]}</span>
+              {elegida === c.id && <Pastilla tono="navy">Viendo</Pastilla>}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -108,7 +179,7 @@ function useRetrasado<T>(valor: T, ms: number) {
   return retrasado;
 }
 
-function Editor({ edicion, datos, onListo }: { edicion: Edicion; datos: PlantillasRespuesta; onListo: () => void }) {
+function Editor({ edicion, datos, campana, onListo }: { edicion: Edicion; datos: PlantillasRespuesta; campana: CampanaElegida | null; onListo: () => void }) {
   const queryClient = useQueryClient();
   const esPie = edicion.tipo === "pie";
   // El pie se previsualiza dentro del correo 1, que es el que más gente recibe.
@@ -133,13 +204,24 @@ function Editor({ edicion, datos, onListo }: { edicion: Edicion; datos: Plantill
     retry: false
   });
 
+  // De una campaña: guardar crea o cambia su propio (aunque el texto sea el
+  // del general, "Guardar" lo deja propio).
+  const deCampana = campana && !esPie ? { campana_id: campana.id } : {};
+  const esGeneralEnCampana = campana !== null && !esPie && base.origen === "general";
+  const refrescar = async () => {
+    await Promise.all([queryClient.invalidateQueries({ queryKey: ["plantillas"] }), queryClient.invalidateQueries({ queryKey: ["campanas"] })]);
+    onListo();
+  };
   const guardar = useMutation({
-    mutationFn: () => (esPie ? api.put("/api/v1/plantillas/pie", { texto: pie }) : api.put(`/api/v1/plantillas/${base.numero}`, { asunto, cuerpo })),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["plantillas"] });
-      onListo();
-    },
+    mutationFn: () => (esPie ? api.put("/api/v1/plantillas/pie", { texto: pie }) : api.put(`/api/v1/plantillas/${base.numero}`, { asunto, cuerpo, ...deCampana })),
+    onSuccess: refrescar,
     onError: (err) => setError(err instanceof ApiError ? err.message : "No se pudo guardar")
+  });
+  // Quitar el propio: ese número vuelve a salir con el general.
+  const quitar = useMutation({
+    mutationFn: () => api.delete(`/api/v1/plantillas/${base.numero}?campana_id=${campana!.id}`),
+    onSuccess: refrescar,
+    onError: (err) => setError(err instanceof ApiError ? err.message : "No se pudo quitar")
   });
 
   function campo(c: CampoTexto) {
@@ -264,12 +346,20 @@ function Editor({ edicion, datos, onListo }: { edicion: Edicion; datos: Plantill
           </div>
           <p className="mt-1.5 text-[11.5px] text-ink-3">Si el prospecto no tiene ese dato, se quita solo (“Hola,” sin nombre).</p>
         </div>
+        {esGeneralEnCampana && (
+          <p className="rounded-[10px] bg-info-bg px-3.5 py-2.5 text-[12.5px] text-info">Este es el texto general. Lo que guardes aquí queda solo para la campaña {campana!.nombre}; las demás siguen con el general.</p>
+        )}
         <ServerError message={error} />
-        <div className="flex gap-2">
-          <Button disabled={!cambio || guardar.isPending} onClick={() => { setError(null); guardar.mutate(); }}>
-            {guardar.isPending ? "Guardando…" : "Guardar"}
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={(!cambio && !esGeneralEnCampana) || guardar.isPending || quitar.isPending} onClick={() => { setError(null); guardar.mutate(); }}>
+            {guardar.isPending ? "Guardando…" : esGeneralEnCampana ? "Guardar para esta campaña" : "Guardar"}
           </Button>
           <Button variant="outline" onClick={onListo}>Cancelar</Button>
+          {campana && !esPie && base.origen === "campana" && (
+            <Button variant="peligro" disabled={guardar.isPending || quitar.isPending} onClick={() => { setError(null); quitar.mutate(); }}>
+              {quitar.isPending ? "Quitando…" : "Usar el general"}
+            </Button>
+          )}
         </div>
       </div>
 

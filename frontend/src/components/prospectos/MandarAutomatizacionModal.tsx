@@ -4,15 +4,17 @@ import { Button } from "../ui/Button";
 import { Field, ServerError, inputClass } from "../ui/Field";
 import { Modal } from "../ui/Modal";
 import { ApiError, api } from "../../lib/api";
-import { useCampanas, type Campana } from "../../lib/campanas";
+import { avisoCorreos, useCampanas, type Campana } from "../../lib/campanas";
 import { fechaLocal, formatoFecha, plural } from "../../lib/formato";
-import { textoMotivos } from "../../lib/prospectos";
+import { ESTADOS_PARA_OTRA_CAMPANA, textoMotivos } from "../../lib/prospectos";
 
 // Botón "Mandar a automatización" (16-oct-2026, POST /prospectos/automatizacion):
 // el CRM solo forma la fila y la API se los va soltando a PT1, unos 6 a 10
 // por día hábil, para no pasar el tope diario de correos. Solo administrador
-// y supervisor. Los que no están listos regresan con su motivo; a los que ya
-// están en la fila solo se les cambia la campaña (no pierden su lugar).
+// y supervisor. Los que no están listos regresan con su motivo. A los que ya
+// están en la fila de otra campaña se les pregunta si se agregan también a
+// esta o se cambian (no pierden su lugar); a los que ya van o fueron en otra
+// campaña la API les crea su prospecto en esta (9-nov-2026).
 // Se monta solo mientras está abierto, así cada vez empieza de cero.
 
 export type ProspectoParaFila = {
@@ -24,7 +26,10 @@ export type ProspectoParaFila = {
   motivo_exclusion_anterior: string[] | null;
 };
 
-type Resultado = { agregados: number[]; cambiados: number[]; rechazados: { id: number; motivos: string[] }[] };
+// nuevos: a quien ya iba en otra campaña la API le creó un prospecto en esta
+// (9-nov-2026); su id también va en agregados.
+type Resultado = { agregados: number[]; cambiados: number[]; rechazados: { id: number; motivos: string[] }[]; nuevos?: { desde: number; id: number }[] };
+type Modo = "agregar" | "cambiar";
 
 // El mismo máximo que mandarAutomatizacionInputSchema (src/crm/dto/prospecto.schema.ts).
 const MAXIMO = 200;
@@ -70,7 +75,16 @@ export function MandarAutomatizacionModal({
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
 
+  const [modo, setModo] = useState<Modo | null>(null);
+
+  // Varias campañas (9-nov-2026). Al que ya espera en la fila de otra
+  // campaña hay que preguntarle si se agrega también a esta o se cambia; al
+  // que ya va (o fue) en otra, la API le crea su prospecto en esta.
+  const elegidaId = Number(campanaId);
   const yaEnFila = prospectos.filter((p) => p.estado === "en_fila").length;
+  const enFilaDeOtra = prospectos.filter((p) => p.estado === "en_fila" && p.campana_id !== elegidaId).length;
+  const deOtraCampana = prospectos.filter((p) => ESTADOS_PARA_OTRA_CAMPANA.includes(p.estado) && p.campana_id !== elegidaId).length;
+  const faltaModo = enFilaDeOtra > 0 && modo === null;
   const excluidosAntes = prospectos.filter((p) => p.estado === "excluido" && p.motivo_exclusion_anterior?.length);
   const nombre = (id: number) => {
     const p = prospectos.find((x) => x.id === id);
@@ -82,7 +96,7 @@ export function MandarAutomatizacionModal({
     setError(null);
     setEnviando(true);
     try {
-      const r = await api.post<Resultado>("/api/v1/prospectos/automatizacion", { prospectoIds: prospectos.map((p) => p.id), campanaId: Number(campanaId) });
+      const r = await api.post<Resultado>("/api/v1/prospectos/automatizacion", { prospectoIds: prospectos.map((p) => p.id), campanaId: elegidaId, ...(modo ? { modo } : {}) });
       setResultado(r);
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["prospectos"] }), queryClient.invalidateQueries({ queryKey: ["prospecto"] })]);
       onEnviado?.();
@@ -94,12 +108,13 @@ export function MandarAutomatizacionModal({
     }
   }
 
-  // Si todos ya esperan en la fila, lo único que hace es cambiarles la campaña.
-  const soloCambio = yaEnFila === prospectos.length;
-  const titulo = soloCambio ? "Cambiar de campaña" : prospectos.length === 1 ? "Mandar a automatización" : `Mandar ${prospectos.length} a automatización`;
+  // Si todos ya esperan en la fila y se eligió cambiar, solo les cambia la campaña.
+  const soloCambio = yaEnFila === prospectos.length && modo !== "agregar";
+  const titulo = yaEnFila === prospectos.length ? "Cambiar o agregar campaña" : prospectos.length === 1 ? "Mandar a automatización" : `Mandar ${prospectos.length} a automatización`;
 
   if (resultado) {
     const { agregados, cambiados, rechazados } = resultado;
+    const nuevos = resultado.nuevos ?? [];
     return (
       <Modal abierto onCerrar={onCerrar} titulo="Listo" acciones={<Button onClick={onCerrar}>Cerrar</Button>}>
         <div className="flex flex-col gap-3 text-[13.5px]">
@@ -107,6 +122,11 @@ export function MandarAutomatizacionModal({
             Entraron {agregados.length}. Cambiaron de campaña {cambiados.length}. No entraron {rechazados.length}.
           </p>
           {agregados.length > 0 && <p className="text-ink-2">Salen solos en el orden en que entraron; no hay que hacer nada más.</p>}
+          {nuevos.length > 0 && (
+            <p className="text-ink-2">
+              {nuevos.length === 1 ? "1 quedó" : `${nuevos.length} quedaron`} en esta campaña además de la que ya llevaba{nuevos.length === 1 ? "" : "n"}: sus correos empiezan cuando termine la otra.
+            </p>
+          )}
           {rechazados.length > 0 && (
             <div className="rounded-[10px] bg-warn-bg px-3.5 py-2.5 text-warn">
               <b className="block">No entraron:</b>
@@ -135,7 +155,7 @@ export function MandarAutomatizacionModal({
           <Button variant="ghost" onClick={onCerrar} disabled={enviando}>
             Cancelar
           </Button>
-          <Button onClick={() => void mandar()} disabled={enviando || !campana || demasiados}>
+          <Button onClick={() => void mandar()} disabled={enviando || !campana || demasiados || faltaModo}>
             {enviando ? "Guardando…" : soloCambio ? "Cambiar campaña" : "Mandar"}
           </Button>
         </>
@@ -157,14 +177,36 @@ export function MandarAutomatizacionModal({
           </Field>
         )}
         {avisoCampana(campana) && <div className="rounded-[10px] bg-info-bg px-3.5 py-2.5 text-info">{avisoCampana(campana)}</div>}
+        {avisoCorreos(campana) && <div className="rounded-[10px] bg-info-bg px-3.5 py-2.5 text-info">{avisoCorreos(campana)}</div>}
 
         <p className="text-ink-2">
           Salen solos, unos 6 a 10 por día hábil, en el orden en que entran.
           {enFila !== undefined && ` Hoy hay ${plural(enFila, "prospecto", "prospectos")} en la fila.`}
         </p>
-        {yaEnFila > 0 && (
+        {enFilaDeOtra > 0 && (
+          <fieldset className="flex flex-col gap-2 rounded-[10px] border border-border px-3.5 py-3">
+            <legend className="px-1 font-bold text-strong">
+              {enFilaDeOtra === 1 ? "1 ya está" : `${enFilaDeOtra} ya están`} en la fila de otra campaña. ¿Qué hago?
+            </legend>
+            {(
+              [
+                ["agregar", "Agregar también a esta campaña", "Queda en las dos. Los correos de esta empiezan cuando termine la otra."],
+                ["cambiar", "Cambiar a esta campaña", "Sale de la otra campaña y no pierde su lugar en la fila."]
+              ] as const
+            ).map(([valor, texto, detalle]) => (
+              <label key={valor} className="flex cursor-pointer items-start gap-2.5">
+                <input type="radio" name="modo-campana" value={valor} checked={modo === valor} onChange={() => setModo(valor)} className="mt-1 accent-navy" />
+                <span>
+                  <b className="block text-strong">{texto}</b>
+                  <small className="text-[12px] text-ink-3">{detalle}</small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        )}
+        {deOtraCampana > 0 && (
           <p className="text-ink-2">
-            {yaEnFila === 1 ? "1 ya está" : `${yaEnFila} ya están`} en la fila: solo se le{yaEnFila === 1 ? "" : "s"} cambia la campaña y no pierde{yaEnFila === 1 ? "" : "n"} su lugar.
+            {deOtraCampana === 1 ? "1 ya va o ya pasó" : `${deOtraCampana} ya van o ya pasaron`} por otra campaña: entra{deOtraCampana === 1 ? "" : "n"} a esta y sus correos empiezan cuando termine la otra.
           </p>
         )}
         {excluidosAntes.length > 0 && (

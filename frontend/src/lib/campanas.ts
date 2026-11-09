@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
+import { plural } from "./formato";
 import type { Paginated } from "../types";
 
 // Campañas (src/campanas, 1-oct-2026). Todos leen; solo administrador y
@@ -18,6 +19,8 @@ export type Campana = {
   fecha_inicio: string | null;
   fecha_fin: string | null;
   prospectos: number;
+  // Cuántos de sus 3 correos son propios (9-nov-2026); los demás salen con el general.
+  correos_propios: number;
   activa_hoy: boolean;
   motivo: MotivoCampana | null;
   creado_en: string;
@@ -54,6 +57,17 @@ export const ACCIONES_CAMPANA: Record<EstadoCampana, ("activar" | "pausar" | "fi
   pausada: ["activar", "finalizar"],
   finalizada: []
 };
+
+/**
+ * Aviso de "Mandar a automatización" sobre los correos que usará la campaña
+ * (9-nov-2026): null si tiene sus 3 propios.
+ */
+export function avisoCorreos(c: Pick<Campana, "correos_propios"> | undefined) {
+  if (!c || c.correos_propios >= 3) return null;
+  if (c.correos_propios === 0) return "Esta campaña todavía no tiene correos propios: saldrán los generales. Los suyos se escriben en Administración, Correos de prospección, botón Campañas.";
+  const faltan = 3 - c.correos_propios;
+  return `Esta campaña tiene ${plural(c.correos_propios, "correo propio", "correos propios")}; ${faltan === 1 ? "el otro saldrá" : `los otros ${faltan} saldrán`} con el general.`;
+}
 
 // El backend pagina de a 100 como máximo; para los selectores basta con las
 // 100 más recientes.

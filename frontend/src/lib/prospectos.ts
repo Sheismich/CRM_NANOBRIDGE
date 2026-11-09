@@ -80,11 +80,18 @@ export function tonoScore(score: number): Tono {
 
 // --- Fila de automatización (botón "Mandar a automatización", 16-oct-2026) ---
 
+// Varias campañas (9-nov-2026): a quien ya va en la serie de una campaña, o
+// la terminó sin contestar o diciendo que no, se le puede mandar a OTRA. La
+// API le crea un prospecto nuevo en esa campaña y espera a que termine la
+// que lleva. En su misma campaña la API lo rechaza (estado_no_permitido).
+export const ESTADOS_PARA_OTRA_CAMPANA: readonly string[] = ["validado", "en_revision", "inactivo", "no_interesado"];
+
 // Se pueden mandar los capturados y los excluidos (a uno excluido se le
 // corrigió el dato que faltaba). Uno que ya está en la fila sin que PT1 lo
-// haya tomado también entra, pero solo para cambiarle la campaña.
+// haya tomado también entra, para cambiarle la campaña o agregarlo a otra.
+// Y los de ESTADOS_PARA_OTRA_CAMPANA, a otra campaña.
 export function sePuedeMandar(p: { estado: string; fila_tomado_en: string | null }) {
-  return p.estado === "capturado" || p.estado === "excluido" || (p.estado === "en_fila" && p.fila_tomado_en === null);
+  return p.estado === "capturado" || p.estado === "excluido" || (p.estado === "en_fila" && p.fila_tomado_en === null) || ESTADOS_PARA_OTRA_CAMPANA.includes(p.estado);
 }
 
 // Por qué no entró a la fila (POST /prospectos/automatizacion → rechazados,
@@ -101,11 +108,13 @@ const TEXTO_MOTIVO: Record<string, string> = {
   prospecto_en_baja: "la persona pidió su baja",
   contacto_desactivado: "el contacto o la empresa están desactivados",
   maximo_contactos: "ya se le escribió 3 veces; hay que esperar 6 meses",
-  ventana_activa: "ya va en otra campaña esperando respuesta",
-  no_interesado_reciente: "respondió que no le interesa; hay que esperar 6 meses",
-  ya_en_fila: "la misma persona ya está en la fila con otro prospecto",
+  ventana_activa: "ya va en esta campaña esperando respuesta",
+  no_interesado_reciente: "respondió que no le interesa a esta campaña; hay que esperar 6 meses",
+  interesado_en_otra_campana: "le interesó otra campaña y ya lo atiende un vendedor",
+  ya_en_esta_campana: "la misma persona ya está en esta campaña con otro prospecto",
+  ya_en_fila: "la misma persona ya está en la fila de esta campaña con otro prospecto",
   ya_tomado: "la automatización ya lo tomó",
-  estado_no_permitido: "solo se mandan los capturados y los excluidos",
+  estado_no_permitido: "ya terminó en esta campaña (o se descartó); solo se puede mandar a otra",
   no_encontrado: "ya no existe"
 };
 
