@@ -1,16 +1,28 @@
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
 import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
 import { envios, listaSupresion, mediosContacto, prospectos, respuestas } from "../database/schema.js";
 
 // Política de contactos (PLAN_N8N_DEFINITIVO.md): máximo tres contactos
-// totales POR PERSONA (contacto), no por prospecto -- la misma persona
+// POR PERSONA (contacto) Y CAMPAÑA, no por prospecto -- la misma persona
 // puede entrar varias veces al flujo de ingesta y cada entrada crea un
 // prospecto nuevo. Tras MESES_ENFRIAMIENTO sin ningún contacto, la persona
 // puede arrancar un ciclo nuevo (decisión de negocio, 23-sep-2026).
+//
+// Varias campañas (9-nov-2026): la empresa corre campañas de servicios
+// distintos con los mismos contactos. Los 3 correos y los 6 meses de un "no
+// interesado" se cuentan dentro de cada campaña, pero corre UNA serie a la
+// vez (otraCampanaBloquea): la de B espera a que la de A termine. Un
+// prospecto sin campaña (campana_id NULL) cuenta como un grupo más.
+//
 // Compartido por la automatización (AutomatizacionService) y por el botón
 // "Mandar a automatización" del CRM (shared/listo-para-automatizacion.ts).
 export const MAX_CONTACTOS_POR_CICLO = 3;
 export const MESES_ENFRIAMIENTO = 6;
+
+// Uno que PT1 tomó de la fila y que en este tiempo no avanzó (sigue
+// en_fila: PT1 se cayó antes de Validaciones) se puede volver a tomar, y
+// mientras tanto también sacar o cambiar de campaña.
+export const HORAS_PARA_RETOMAR_DE_FILA = 24;
 
 // Estados en los que un prospecto ya terminó: respondió y se clasificó, pidió
 // la baja, o la automatización lo sacó del flujo. No recibe recordatorios
@@ -23,20 +35,26 @@ function sumarMeses(fecha: Date, meses: number): Date {
   return result;
 }
 
-// Envíos del ciclo actual de la PERSONA en este canal, sumando todos sus
-// prospectos, del más reciente al más antiguo. Antes se contaba por
-// prospecto_id, así que un reingreso de la misma persona (prospecto nuevo,
-// mismo contacto) arrancaba otra vez en 0 envíos y sin ventana abierta
-// (hallazgo de la auditoría del workflow "PT1. ingesta y scoring",
-// 22-sep-2026). El ciclo se corta en el primer hueco de MESES_ENFRIAMIENTO
-// o más: si el último envío ya tiene esa antigüedad, el ciclo está vacío y
-// la persona vuelve a empezar. Un envío fallido no cuenta: nunca llegó.
-export async function cicloActualDePersona(db: DrizzleDb | DrizzleTx, contactoId: number, canal: "correo" | "whatsapp") {
+// prospectos.campana_id igual a la campaña dada, con NULL igual a NULL.
+function mismaCampana(campanaId: number | null) {
+  return sql`${prospectos.campanaId} <=> ${campanaId}`;
+}
+
+// Envíos del ciclo actual de la PERSONA en esta campaña y canal, sumando
+// todos sus prospectos de la campaña, del más reciente al más antiguo. Antes
+// se contaba por prospecto_id, así que un reingreso de la misma persona
+// (prospecto nuevo, mismo contacto) arrancaba otra vez en 0 envíos y sin
+// ventana abierta (hallazgo de la auditoría del workflow "PT1. ingesta y
+// scoring", 22-sep-2026). El ciclo se corta en el primer hueco de
+// MESES_ENFRIAMIENTO o más: si el último envío ya tiene esa antigüedad, el
+// ciclo está vacío y la persona vuelve a empezar. Un envío fallido no
+// cuenta: nunca llegó.
+export async function cicloActualDePersona(db: DrizzleDb | DrizzleTx, contactoId: number, canal: "correo" | "whatsapp", campanaId: number | null) {
   const rows = await db
     .select({ id: envios.id, enviadoEn: envios.enviadoEn, ventanaEstado: envios.ventanaEstado, ventanaVenceEn: envios.ventanaVenceEn })
     .from(envios)
     .innerJoin(prospectos, eq(prospectos.id, envios.prospectoId))
-    .where(and(eq(prospectos.contactoId, contactoId), eq(envios.canal, canal), ne(envios.estado, "fallido")))
+    .where(and(eq(prospectos.contactoId, contactoId), mismaCampana(campanaId), eq(envios.canal, canal), ne(envios.estado, "fallido")))
     .orderBy(desc(envios.enviadoEn), desc(envios.id));
 
   const ciclo: typeof rows = [];
@@ -53,17 +71,65 @@ export async function cicloActualDePersona(db: DrizzleDb | DrizzleTx, contactoId
 // no recibe correo hasta 6 meses después de su última respuesta de ese tipo
 // (decisión de Carlos, 4-nov-2026). Sin esto, con menos de 3 correos en el
 // ciclo le saldría otro en cuanto volviera a entrar. Si esa respuesta se
-// corrigió, el prospecto ya no está en no_interesado y no hay espera.
-export async function noInteresadoReciente(db: DrizzleDb | DrizzleTx, contactoId: number) {
+// corrigió, el prospecto ya no está en no_interesado y no hay espera. Solo
+// cuenta el "no" a esta campaña: a otro servicio sí se le puede escribir
+// (9-nov-2026).
+export async function noInteresadoReciente(db: DrizzleDb | DrizzleTx, contactoId: number, campanaId: number | null) {
   const [ultima] = await db
     .select({ recibidoEn: respuestas.recibidoEn })
     .from(respuestas)
     .innerJoin(prospectos, eq(prospectos.id, respuestas.prospectoId))
-    .where(and(eq(prospectos.contactoId, contactoId), eq(prospectos.estado, "no_interesado"), eq(respuestas.clasificacion, "no_interesado")))
+    .where(and(eq(prospectos.contactoId, contactoId), mismaCampana(campanaId), eq(prospectos.estado, "no_interesado"), eq(respuestas.clasificacion, "no_interesado")))
     .orderBy(desc(respuestas.recibidoEn))
     .limit(1);
   return !!ultima && sumarMeses(ultima.recibidoEn, MESES_ENFRIAMIENTO) > new Date();
 }
+
+const ESTADOS_CERRADOS_SQL = sql.join(ESTADOS_PROSPECTO_CERRADO.map((e) => sql`${e}`), sql`, `);
+
+/**
+ * SQL: la persona `contacto` tiene un prospecto "interesado" en otra campaña
+ * que `campana`. Lo atiende un vendedor: las demás campañas no le escriben
+ * (9-nov-2026). `contacto` y `campana` pueden ser valores o columnas de la
+ * consulta de afuera (tomarDeFila).
+ */
+export function interesadoEnOtraCampanaSql(contacto: SQL | number, campana: SQL | number | null) {
+  return sql`EXISTS (SELECT 1 FROM prospectos pi WHERE pi.contacto_id = ${contacto} AND NOT (pi.campana_id <=> ${campana}) AND pi.estado = 'interesado')`;
+}
+
+/**
+ * SQL: la persona tiene una serie en curso en otra campaña. Un prospecto de
+ * otra campaña que no ha terminado (no cerrado) y que ya recibió un correo
+ * en los últimos MESES_ENFRIAMIENTO, o que PT1 acaba de tomar de la fila y
+ * va a recibirlo. Una serie termina cuando PT4 marca inactivo tras el
+ * tercero o cuando la persona contesta: entonces arranca la siguiente.
+ */
+export function serieEnCursoEnOtraCampanaSql(contacto: SQL | number, campana: SQL | number | null) {
+  return sql`EXISTS (SELECT 1 FROM prospectos ps WHERE ps.contacto_id = ${contacto} AND NOT (ps.campana_id <=> ${campana})
+    AND ps.estado NOT IN (${ESTADOS_CERRADOS_SQL})
+    AND (
+      EXISTS (SELECT 1 FROM envios es WHERE es.prospecto_id = ps.id AND es.estado <> 'fallido' AND es.enviado_en > CURRENT_TIMESTAMP - INTERVAL ${sql.raw(String(MESES_ENFRIAMIENTO))} MONTH)
+      OR (ps.estado = 'en_fila' AND ps.fila_tomado_en > CURRENT_TIMESTAMP - INTERVAL ${sql.raw(String(HORAS_PARA_RETOMAR_DE_FILA))} HOUR)
+    ))`;
+}
+
+export type BloqueoDeOtraCampana = "interesado_en_otra_campana" | "serie_en_curso";
+
+/**
+ * Por qué otra campaña de la persona no deja que esta le escriba, o null.
+ * El interesado frena todo (también los recordatorios); la serie en curso
+ * solo frena el primer correo: quien llama decide cuál revisar.
+ */
+export async function otraCampanaBloquea(db: DrizzleDb | DrizzleTx, contactoId: number, campanaId: number | null): Promise<BloqueoDeOtraCampana | null> {
+  const [filas] = await db.execute(sql`SELECT ${interesadoEnOtraCampanaSql(contactoId, campanaId)} AS interesado, ${serieEnCursoEnOtraCampanaSql(contactoId, campanaId)} AS serie`);
+  const fila = (filas as unknown as { interesado: number | string; serie: number | string }[])[0];
+  if (Number(fila?.interesado)) return "interesado_en_otra_campana";
+  if (Number(fila?.serie)) return "serie_en_curso";
+  return null;
+}
+
+export const MENSAJE_SERIE_EN_CURSO = "Otra campaña con esta persona sigue en curso";
+export const MENSAJE_INTERESADO_EN_OTRA = "Le interesó otra campaña; lo atiende un vendedor";
 
 // Bloquea los correos de la persona hasta que termine la transacción. Así dos
 // envíos de la misma persona se forman, y una supresión al mismo tiempo espera

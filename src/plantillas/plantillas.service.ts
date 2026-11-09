@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq } from "drizzle-orm";
-import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, parametrosAutomatizacion, plantillasCorreo, usuarios } from "../database/schema.js";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
+import { auditoria, campanas, parametrosAutomatizacion, plantillasCorreo, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { armarCorreo, enlacesInvalidos, ETIQUETA_BAJA, VARIABLES_PLANTILLA, variablesDesconocidas, type DatosPlantilla } from "../shared/plantillas.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
@@ -34,31 +34,49 @@ function exigirEnlacesValidos(...textos: string[]) {
 
 // Correos de prospección editables (etapa 1 de las mejoras, 19-oct-2026).
 // Los cambian administrador y supervisor; cada cambio queda en auditoria
-// con antes y después (Registro de cambios, filtro "configuración"). Por
-// ahora solo las 3 generales (giro ''); n8n las recibe ya armadas en
-// POST /automatizacion/envios (plantillas.correo.ts).
+// con antes y después (Registro de cambios, filtro "configuración"). Las 3
+// generales (campana_id NULL, giro '') y, desde el 9-nov-2026, las propias
+// de cada campaña; n8n las recibe ya armadas en POST /automatizacion/envios
+// (plantillas.correo.ts).
 @Injectable()
 export class PlantillasService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
 
-  async listar() {
+  // Sin campaña: las 3 generales. Con campaña (9-nov-2026): los 3 que se
+  // usarían en ella, el propio si lo tiene y si no el general (origen dice
+  // cuál es cuál). Las de giro no salen: no hay pantalla para ellas.
+  async listar(campanaId?: number) {
+    const campana = campanaId === undefined ? null : await this.campana(this.db, campanaId);
     const filas = await this.db
       .select({ plantilla: plantillasCorreo, autor: usuarios.nombre })
       .from(plantillasCorreo)
       .leftJoin(usuarios, eq(usuarios.id, plantillasCorreo.actualizadoPor))
-      .where(eq(plantillasCorreo.giro, ""))
+      .where(and(eq(plantillasCorreo.giro, ""), campana ? or(isNull(plantillasCorreo.campanaId), eq(plantillasCorreo.campanaId, campana.id)) : isNull(plantillasCorreo.campanaId)))
       .orderBy(asc(plantillasCorreo.numero));
+    const porNumero = new Map<number, (typeof filas)[number]>();
+    for (const f of filas) {
+      if (!porNumero.has(f.plantilla.numero) || f.plantilla.campanaId != null) porNumero.set(f.plantilla.numero, f);
+    }
     const [pie] = await this.db.select().from(parametrosAutomatizacion).where(eq(parametrosAutomatizacion.clave, CLAVE_PIE_CORREO)).limit(1);
     return {
-      plantillas: filas.map((f) => this.toRow(f.plantilla, f.autor)),
+      campana,
+      plantillas: [...porNumero.values()].map((f) => this.toRow(f.plantilla, f.autor)),
       pie: { texto: typeof pie?.valor === "string" ? pie.valor : "", actualizado_en: pie?.actualizadoEn ?? null },
       variables: VARIABLES_PLANTILLA
     };
   }
 
+  private async campana(db: DrizzleDb | DrizzleTx, id: number) {
+    const [c] = await db.select({ id: campanas.id, nombre: campanas.nombre }).from(campanas).where(eq(campanas.id, id)).limit(1);
+    if (!c) throw new HttpError(404, "Campaña no encontrada");
+    return c;
+  }
+
   private toRow(p: typeof plantillasCorreo.$inferSelect, autor: string | null) {
     return {
       id: p.id,
+      campana_id: p.campanaId,
+      origen: p.campanaId != null ? "campana" as const : "general" as const,
       giro: p.giro,
       numero: p.numero,
       nombre: NOMBRES_PLANTILLA[p.numero] ?? `Correo ${p.numero}`,
@@ -69,12 +87,47 @@ export class PlantillasService {
     };
   }
 
+  private async fila(id: number) {
+    const [fila] = await this.db
+      .select({ plantilla: plantillasCorreo, autor: usuarios.nombre })
+      .from(plantillasCorreo)
+      .leftJoin(usuarios, eq(usuarios.id, plantillasCorreo.actualizadoPor))
+      .where(eq(plantillasCorreo.id, id))
+      .limit(1);
+    return this.toRow(fila!.plantilla, fila!.autor);
+  }
+
+  private general(db: DrizzleDb | DrizzleTx, numero: number) {
+    return db.select().from(plantillasCorreo).where(and(isNull(plantillasCorreo.campanaId), eq(plantillasCorreo.giro, ""), eq(plantillasCorreo.numero, numero))).limit(1);
+  }
+
+  // Con campana_id edita el propio de la campaña, y lo crea la primera vez
+  // (antes = el general que tenía). En la auditoría va el nombre de la
+  // campaña, para que el Registro de cambios lo diga aunque luego cambie.
   async editar(user: CurrentUser, numero: number, input: EditarPlantillaInput) {
     exigirVariablesConocidas(input.asunto, input.cuerpo);
     exigirEnlacesValidos(input.cuerpo);
     const id = await this.db.transaction(async (tx) => {
-      const [actual] = await tx.select().from(plantillasCorreo).where(and(eq(plantillasCorreo.giro, ""), eq(plantillasCorreo.numero, numero))).limit(1).for("update");
-      if (!actual) throw new HttpError(404, "Plantilla no encontrada");
+      const campana = input.campana_id === undefined ? null : await this.campana(tx, input.campana_id);
+      const deCampana = campana ? { campana_id: campana.id, campana: campana.nombre } : {};
+      const [actual] = campana
+        ? await tx.select().from(plantillasCorreo).where(and(eq(plantillasCorreo.campanaId, campana.id), eq(plantillasCorreo.giro, ""), eq(plantillasCorreo.numero, numero))).limit(1).for("update")
+        : await this.general(tx, numero).for("update");
+
+      if (!actual) {
+        if (!campana) throw new HttpError(404, "Plantilla no encontrada");
+        const [general] = await this.general(tx, numero);
+        const [result] = await tx.insert(plantillasCorreo).values({ campanaId: campana.id, giro: "", numero, asunto: input.asunto, cuerpo: input.cuerpo, actualizadoPor: user.id });
+        await tx.insert(auditoria).values({
+          usuarioId: user.id,
+          entidad: "plantilla_correo",
+          entidadId: result.insertId,
+          accion: "editar",
+          antes: { numero, ...deCampana, asunto: general?.asunto ?? null, cuerpo: general?.cuerpo ?? null },
+          despues: { numero, ...deCampana, asunto: input.asunto, cuerpo: input.cuerpo }
+        });
+        return result.insertId;
+      }
       if (actual.asunto === input.asunto && actual.cuerpo === input.cuerpo) return actual.id;
 
       await tx.update(plantillasCorreo).set({ asunto: input.asunto, cuerpo: input.cuerpo, actualizadoPor: user.id }).where(eq(plantillasCorreo.id, actual.id));
@@ -83,18 +136,34 @@ export class PlantillasService {
         entidad: "plantilla_correo",
         entidadId: actual.id,
         accion: "editar",
-        antes: { numero, asunto: actual.asunto, cuerpo: actual.cuerpo },
-        despues: { numero, asunto: input.asunto, cuerpo: input.cuerpo }
+        antes: { numero, ...deCampana, asunto: actual.asunto, cuerpo: actual.cuerpo },
+        despues: { numero, ...deCampana, asunto: input.asunto, cuerpo: input.cuerpo }
       });
       return actual.id;
     });
-    const [fila] = await this.db
-      .select({ plantilla: plantillasCorreo, autor: usuarios.nombre })
-      .from(plantillasCorreo)
-      .leftJoin(usuarios, eq(usuarios.id, plantillasCorreo.actualizadoPor))
-      .where(eq(plantillasCorreo.id, id))
-      .limit(1);
-    return this.toRow(fila!.plantilla, fila!.autor);
+    return this.fila(id);
+  }
+
+  // El propio de una campaña se borra y ese número vuelve al general. Los
+  // envíos que ya salieron con él guardan su plantilla_id (sin FK): un
+  // reintento usa la que hoy toca (plantillas.correo.ts, correoDeEnvio).
+  async quitar(user: CurrentUser, numero: number, campanaId: number) {
+    await this.db.transaction(async (tx) => {
+      const campana = await this.campana(tx, campanaId);
+      const [actual] = await tx.select().from(plantillasCorreo).where(and(eq(plantillasCorreo.campanaId, campana.id), eq(plantillasCorreo.giro, ""), eq(plantillasCorreo.numero, numero))).limit(1).for("update");
+      if (!actual) throw new HttpError(404, "Esta campaña no tiene un correo propio para ese número");
+      await tx.delete(plantillasCorreo).where(eq(plantillasCorreo.id, actual.id));
+      await tx.insert(auditoria).values({
+        usuarioId: user.id,
+        entidad: "plantilla_correo",
+        entidadId: actual.id,
+        accion: "quitar",
+        antes: { numero, campana_id: campana.id, campana: campana.nombre, asunto: actual.asunto, cuerpo: actual.cuerpo },
+        despues: { numero, campana_id: campana.id, campana: campana.nombre, origen: "general" }
+      });
+    });
+    const [general] = await this.general(this.db, numero);
+    return this.fila(general!.id);
   }
 
   // El pie vive en parametros_automatizacion (no es una plantilla: va en los

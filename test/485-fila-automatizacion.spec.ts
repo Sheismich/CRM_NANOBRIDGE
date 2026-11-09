@@ -110,7 +110,7 @@ describe("fila de automatización", () => {
       const p = await prospecto();
       const res = await mandar(supervisorCookie, [p.id], activa);
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ agregados: [p.id], cambiados: [], rechazados: [] });
+      expect(res.body).toEqual({ agregados: [p.id], cambiados: [], rechazados: [], nuevos: [] });
       const row = await fila(p.id);
       expect(row.estado).toBe("en_fila");
       expect(row.campanaId).toBe(activa);
@@ -149,13 +149,18 @@ describe("fila de automatización", () => {
       await db.insert(listaSupresion).values({ tipo: "correo", valorNormalizado: normalizeEmail(suprimido.correo), motivo: "prueba fila" });
       const enBaja = await prospecto();
       await prospecto({ correo: enBaja.correo, estado: "baja" });
+      // El máximo y la ventana son de la campaña (9-nov-2026): los hermanos
+      // van en la misma a la que se manda (ver 590-varias-campanas).
       const conVentana = await prospecto();
-      const hermano = await prospecto({ correo: conVentana.correo, estado: "validado" });
+      const hermano = await prospecto({ correo: conVentana.correo, estado: "validado", campanaId: activa });
       await envio(hermano.id, 1, "abierta");
       const tresCorreos = await prospecto();
-      const otro = await prospecto({ correo: tresCorreos.correo, estado: "inactivo" });
+      const otro = await prospecto({ correo: tresCorreos.correo, estado: "inactivo", campanaId: activa });
       for (const n of [1, 2, 3]) await envio(otro.id, n, "cerrada");
-      const inactivo = await prospecto({ estado: "inactivo" });
+      // Inactivo en esta misma campaña: ya terminó su serie aquí. (En otra
+      // campaña sí entraría con un prospecto nuevo, ver 590.) El descartado
+      // no entra a ninguna.
+      const inactivo = await prospecto({ estado: "inactivo", campanaId: activa });
       const descartado = await prospecto({ estado: "descartado" });
 
       const res = await mandar(adminCookie, [listo.id, sinGiro.id, sinTamano.id, suprimido.id, enBaja.id, conVentana.id, tresCorreos.id, inactivo.id, descartado.id, 999_999_998], activa);
@@ -196,7 +201,7 @@ describe("fila de automatización", () => {
       const antes = await fila(p.id);
       const otra = await campana("activa");
       const res = await mandar(adminCookie, [p.id], otra);
-      expect(res.body).toEqual({ agregados: [], cambiados: [p.id], rechazados: [] });
+      expect(res.body).toEqual({ agregados: [], cambiados: [p.id], rechazados: [], nuevos: [] });
       const despues = await fila(p.id);
       expect(despues.campanaId).toBe(otra);
       expect(despues.filaDesde).toEqual(antes.filaDesde);

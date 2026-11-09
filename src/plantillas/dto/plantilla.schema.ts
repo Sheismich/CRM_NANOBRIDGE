@@ -3,9 +3,21 @@ import { z } from "zod";
 // Solo texto: asunto en una línea, cuerpo con párrafos (shared/plantillas.ts).
 export const numeroPlantillaSchema = z.coerce.number().int().min(1).max(3);
 
+// campana_id ausente = el general; con campaña = el propio de esa campaña
+// (9-nov-2026), que se crea la primera vez que se guarda.
 export const editarPlantillaSchema = z.object({
   asunto: z.string().trim().min(3).max(200).refine((a) => !/[\r\n]/.test(a), { message: "El asunto va en una sola línea" }),
-  cuerpo: z.string().trim().min(10).max(5000)
+  cuerpo: z.string().trim().min(10).max(5000),
+  campana_id: z.number().int().positive().optional()
+});
+
+export const plantillasQuerySchema = z.object({
+  campana_id: z.coerce.number().int().positive().optional()
+});
+
+// Quitar solo existe para el de una campaña: el general no se borra.
+export const quitarPlantillaQuerySchema = z.object({
+  campana_id: z.coerce.number().int().positive()
 });
 
 export const editarPieSchema = z.object({
@@ -22,5 +34,6 @@ export const vistaPreviaSchema = z.object({
 });
 
 export type EditarPlantillaInput = z.infer<typeof editarPlantillaSchema>;
+export type PlantillasQuery = z.infer<typeof plantillasQuerySchema>;
 export type EditarPieInput = z.infer<typeof editarPieSchema>;
 export type VistaPreviaInput = z.infer<typeof vistaPreviaSchema>;
