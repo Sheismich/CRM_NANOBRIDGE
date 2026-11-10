@@ -1,7 +1,7 @@
 # Manual del vendedor · CRM NANOBRIDGE
 
 **Para:** quien vende y da seguimiento a los clientes en el CRM (agentes y supervisores).
-**Versión:** 0.9.1 · 6 de noviembre de 2026 (con lo que entró el 5-nov). Pasa a 1.0 al cierre, con lo que salga del piloto. Las capturas son del CRM con
+**Versión:** 0.9.2 · 10 de noviembre de 2026 (con las campañas del 9-nov). Pasa a 1.0 al cierre, con lo que salga del piloto. Las capturas son del CRM con
 datos de ejemplo: ningún nombre ni correo es de un cliente real.
 
 El CRM está en **https://crm-prospeccion-outbound.web.app**. Funciona en la computadora y en el celular.
@@ -116,6 +116,10 @@ filtros dicen a quién se le puede escribir.
 - **Mandar a la automatización** (supervisor y administrador): elegir prospectos → «Mandar a automatización», con la
   campaña. Solo entran los que tienen giro, tamaño y correo; los demás regresan con su motivo. Uno de esos motivos
   es «respondió que no le interesa; hay que esperar 6 meses» (ver abajo).
+- **La misma persona en otra campaña** (por ejemplo, agua y tratamiento de maquinaria): también se puede mandar a
+  quien ya terminó o va en otra. Si ya espera en la fila de otra campaña, el CRM pregunta **«Agregar también a esta
+  campaña»** (va a las dos) o **«Cambiar a esta campaña»**. Recibe una serie a la vez: la segunda empieza cuando
+  termina la primera. Si la campaña no tiene correos propios, el CRM avisa que saldrán los generales.
 
 **Cuando un prospecto responde:**
 1. Su respuesta cae en la **cola de clasificación** (Tareas → Ver todas → «Cola de clasificación»; la ven supervisores
@@ -129,9 +133,10 @@ filtros dicen a quién se le puede escribir.
 3. **Para contestarle:** «Responder por correo». **Redactar con IA** te propone un borrador con lo que él escribió y el
    correo que se le mandó; revísalo y cámbialo antes de mandarlo. El correo sale con tu nombre y su respuesta te
    llega a ti.
-4. **No interesado:** la automatización no le vuelve a escribir en **6 meses** desde su respuesta, aunque se le vuelva a
-   mandar a la automatización (decisión de Carlos). Pasado ese tiempo, sí.
-5. **Baja:** no se le vuelve a escribir, nunca. No se deshace desde el CRM.
+4. **No interesado:** la automatización no le vuelve a escribir **de esa campaña** en **6 meses** desde su respuesta,
+   aunque se le vuelva a mandar (decisión de Carlos). De otra campaña sí se le puede escribir.
+   **Interesado** en una campaña, en cambio, la saca de las demás: ya la atiende un vendedor.
+5. **Baja:** no se le vuelve a escribir de ninguna campaña, nunca. No se deshace desde el CRM.
 
 **Si un correo no salió:** en el Historial de la ficha aparece «No se pudo enviar». No cuenta como uno de sus 3
 correos.

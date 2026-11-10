@@ -3,7 +3,7 @@
 **Entregable:** OB-01 (diccionario y reglas) y apoyo de OB-02 (base maestra controlada), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026).
 **Dueño:** T1 (datos y estandarización) · **Revisión:** T2 y Dirección General.
-**Versión:** 1.1 · generado el 6 de noviembre de 2026 desde la base real, con migraciones hasta `041_telefonos_sin_lada.sql` (41 en total). Cubre 36 tablas y 414 campos.
+**Versión:** 1.2 · generado el 10 de noviembre de 2026 desde la base real, con migraciones hasta `042_plantillas_por_campana.sql` (42 en total). Cubre 36 tablas y 416 campos.
 
 > Este documento se genera con `generar-diccionario.mjs` (misma carpeta) a partir de la estructura real de la
 > base y de las reglas del código. No editar las tablas a mano: cambiar el script y volver a generarlo (ver al final).
@@ -84,8 +84,9 @@ Un prospecto se valida igual por las dos vías (`src/crm/dto/prospecto.schema.ts
 En el CSV, cada error sale en español junto a su fila para corregirlo. Las filas no confirmadas expiran a los 30 días.
 
 **Para que la automatización le escriba** (`listo-para-automatizacion.ts`), además: la empresa necesita **giro y tamaño**, el contacto
-un **correo activo** que no esté en supresión, la persona no debe estar en baja, contacto y empresa activos, y menos de 3 correos en
-su ciclo de 6 meses.
+un **correo activo** que no esté en supresión, la persona no debe estar en baja, contacto y empresa activos, menos de 3 correos en
+su ciclo de 6 meses **en esa campaña**, sin un «no interesado» a esa campaña de hace menos de 6 meses, sin interés en otra campaña
+y sin una serie en curso en otra (desde el 9-nov-2026, migración 042).
 
 ## 6. Estados del prospecto
 
@@ -253,7 +254,7 @@ Correos, teléfonos, WhatsApp, LinkedIn o sitio web de un contacto o de una empr
 
 #### `prospectos`
 
-Un contacto dentro del proceso de prospección (una 'entrada' al embudo). La misma persona puede tener varios prospectos en el tiempo (ciclos de 6 meses).
+Un contacto dentro del proceso de prospección (una 'entrada' al embudo). La misma persona puede tener varios prospectos: en el tiempo (ciclos de 6 meses) y uno por cada campaña en la que va (desde el 9-nov-2026).
 
 - **Fuente:** CRM (pantallas, con sesión); Importación CSV del CRM; n8n (API /automatizacion, llave X-API-Key).
 - **Actualización:** El estado lo cambian n8n (validación, scoring, envíos, respuestas) y el CRM (clasificación, fila de automatización). Cada cambio de estado deja registro en auditoria.
@@ -294,7 +295,7 @@ Campaña de prospección: agrupa prospectos y tiene vigencia y estado.
 | `id` | entero | auto | Identificador interno, autonumérico. |
 | `nombre` | texto (máx. 160) | sí | Nombre. |
 | `canal` | uno de: correo, whatsapp | sí | Canal: correo o WhatsApp (WhatsApp todavía no se usa). Por omisión: `correo`. |
-| `estado` | uno de: borrador, activa, pausada, finalizada | sí | borrador, activa, pausada o finalizada. Solo una campaña vigente manda correos. Por omisión: `borrador`. |
+| `estado` | uno de: borrador, activa, pausada, finalizada | sí | borrador, activa, pausada o finalizada. Varias campañas pueden estar vigentes a la vez (desde el 9-nov-2026); una persona recibe una serie a la vez. Por omisión: `borrador`. |
 | `fecha_inicio` | fecha (AAAA-MM-DD) | no | Desde cuándo manda correos. Vacía = desde que se activa. |
 | `fecha_fin` | fecha (AAAA-MM-DD) | no | Hasta cuándo manda correos. Vacía = sin fin. |
 | `creado_en` | fecha y hora (UTC) | sí | Cuándo se creó el registro. |
@@ -338,7 +339,7 @@ Cada correo de prospección que salió (inicial o recordatorio) y su ventana de 
 | `id` | entero | auto | Identificador interno, autonumérico. |
 | `prospecto_id` | entero | sí | Prospecto relacionado. → `prospectos.id` |
 | `canal` | uno de: correo, whatsapp | sí | Canal: correo o WhatsApp (WhatsApp todavía no se usa). Por omisión: `correo`. |
-| `numero_contacto` | entero | sí | 1 = correo inicial; 2 y 3 = recordatorios. Máximo 3 por persona cada 6 meses. |
+| `numero_contacto` | entero | sí | 1 = correo inicial; 2 y 3 = recordatorios. Máximo 3 por persona y campaña cada 6 meses. |
 | `ventana_vence_en` | fecha y hora (UTC) | sí | Hasta cuándo se espera respuesta antes del siguiente recordatorio (5 días hábiles). |
 | `ventana_estado` | uno de: abierta, vencida, cerrada | sí | abierta = esperando; vencida = toca recordatorio; cerrada = ya respondió o terminó. Por omisión: `abierta`. |
 | `execution_id` | texto (máx. 100) | no | Identificador de la corrida de n8n que lo creó. Único: si n8n reintenta, no se duplica (idempotencia). |
@@ -387,17 +388,18 @@ Parámetros de la automatización que lee n8n (ej. pie de los correos).
 
 #### `plantillas_correo`
 
-Texto de los 3 correos de prospección (1 = inicial, 2 y 3 = recordatorios). giro vacío = general.
+Texto de los 3 correos de prospección (1 = inicial, 2 y 3 = recordatorios). giro vacío = general; campaña vacía = el general que usan las campañas sin correo propio.
 
 - **Fuente:** CRM (pantallas, con sesión); Migración (valores iniciales).
 - **Actualización:** Administrador o supervisor la edita en Administración → Correos de prospección.
 - **Identificador:** `id`.
-- **Únicos (no se pueden repetir):** `giro + numero`.
+- **Únicos (no se pueden repetir):** `campana_clave + giro + numero`.
 - **Regla en la base (`chk_plantillas_correo_numero`):** `(numero between 1 and 3)`
 
 | Campo | Formato | Obligatorio | Descripción |
 |---|---|---|---|
 | `id` | entero | auto | Identificador interno, autonumérico. |
+| `campana_id` | entero | no | Campaña a la que pertenece este correo (desde el 9-nov-2026, migración 042); vacío = el general, que usan las campañas sin correo propio para ese número. → `campanas.id` |
 | `giro` | texto (máx. 120) | sí | Giro al que aplica; vacío = la general. Por omisión: ``. |
 | `numero` | entero | sí | 1 = correo inicial; 2 y 3 = recordatorios. |
 | `asunto` | texto (máx. 200) | sí | Asunto del correo. |
@@ -405,6 +407,7 @@ Texto de los 3 correos de prospección (1 = inicial, 2 y 3 = recordatorios). gir
 | `actualizado_por` | entero | no | Quién lo cambió por última vez. → `usuarios.id` |
 | `creado_en` | fecha y hora (UTC) | sí | Cuándo se creó el registro. |
 | `actualizado_en` | fecha y hora (UTC) | sí | Última modificación. |
+| `campana_clave` | entero | no | Columna calculada (campana_id o 0) solo para que no haya dos correos generales del mismo número: en MySQL un UNIQUE deja repetir los vacíos. No se escribe. |
 
 #### `respuestas`
 

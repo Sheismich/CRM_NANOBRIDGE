@@ -66,7 +66,7 @@ Además hay 5 controles **propuestos que no entran en este corte** (§G). Se lis
 |---|---|---|---|
 | D-01 | **La lista de supresión manda:** a un correo o teléfono suprimido no se le escribe, aunque se vuelva a capturar | `src/shared/supresion.ts` | `190-supresion`, `265-crm-respeta-supresion` |
 | D-02 | **Baja por evento:** el link de baja, una queja de spam o un rebote dan de baja a la persona y cancelan sus seguimientos | `src/shared/baja-prospecto.ts` | `245-baja-por-evento`, `350-tareas-baja-carrera` |
-| D-03 | **Máximo 3 correos por persona** cada 6 meses, con 5 días hábiles entre uno y otro | `src/shared/ciclo-contacto.ts` | `140-envios-por-persona`, `360-ventana-por-persona`, `215-dia-habil-mx` |
+| D-03 | **Máximo 3 correos por persona y campaña** cada 6 meses, con 5 días hábiles entre uno y otro, y una serie a la vez (desde el 9-nov-2026) | `src/shared/ciclo-contacto.ts` | `140-envios-por-persona`, `360-ventana-por-persona`, `215-dia-habil-mx`, `590-varias-campanas` |
 | D-04 | **Solo se escribe a validados** | `src/automatizacion/automatizacion.service.ts` | `475-envio-solo-validados` |
 | D-05 | **Tope diario de correos** (20 al encender, para calentar el dominio) | `TOPE_DIARIO_CORREOS` | `365-tope-diario` |
 | D-06 | **Listo para automatización:** sin giro, tamaño o correo activo, o en baja, no entra a la fila | `src/shared/listo-para-automatizacion.ts` | `485-fila-automatizacion` |

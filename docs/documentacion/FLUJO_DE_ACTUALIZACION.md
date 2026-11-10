@@ -2,7 +2,7 @@
 
 **Entregable:** flujo de actualización de la base (OB-03), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026). **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n) y Dirección General.
-**Versión:** 1.1 · 5 de noviembre de 2026 (sin bandeja de salida; envíos confirmados, freno del dominio y tareas nuevas) · API `nanobridge-api-00049-7dm`, base en la migración `040_escalar_y_seguimiento.sql`.
+**Versión:** 1.2 · 10 de noviembre de 2026 (teléfonos sin lada, encendido del 6-nov y varias campañas del 9-nov) · API `nanobridge-api-00053-4wf`, base en la migración `042_plantillas_por_campana.sql`. La 1.1 (5-nov) quitó la bandeja de salida y agregó envíos confirmados, freno del dominio y tareas nuevas.
 
 Este documento explica cómo entran y cambian los registros de la base cuando interviene la automatización: qué
 crea cada paso, qué se rechaza, qué queda registrado, qué se puede deshacer y con qué pruebas se comprueba. Las
@@ -42,8 +42,9 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
 4. **PT1 lo valida.** Si no pasa, queda `excluido` con su motivo y no gasta Gemini. Si pasa, queda `validado`.
 5. **PT1 lo califica:** guarda el resultado en `resultados_scoring` y le pone score, prioridad y confianza. A Gemini no
    le llegan correos, teléfonos ni nombres de archivo (`D-07`).
-6. **PT1 revisa si se le puede escribir** (`envios/verificacion`): supresión, máximo de 3 correos en 6 meses, espera
-   de 5 días hábiles y campaña activa. Si no se puede, el prospecto se marca con el motivo.
+6. **PT1 revisa si se le puede escribir** (`envios/verificacion`): supresión, máximo de 3 correos en 6 meses en esa
+   campaña, espera de 5 días hábiles, campaña activa y que la persona no tenga una serie en curso en otra campaña ni le
+   haya interesado otra (desde el 9-nov). Si no se puede, el prospecto se marca con el motivo.
 7. **PT1 registra el envío** (`POST /envios`) **antes** de mandarlo; la API abre la espera de 5 días hábiles y
    devuelve el texto del correo. Luego PT1b lo manda.
 8. **PT4 manda los recordatorios** (correos 2 y 3) cuando vence la espera. Después del tercero, si nadie respondió,
@@ -95,7 +96,9 @@ Los estados posibles y quién pone cada uno están en el diccionario (§6). Los 
 | Campaña finalizada, en borrador o vencida | El botón responde que la campaña terminó; una pausada o que aún no empieza sí acepta (esperan) | `D-06` |
 | Prospecto sin validar | La API no registra el envío (`PROSPECTO_NO_VALIDADO`) | `D-04` |
 | Correo o teléfono en la lista de supresión | No se le escribe, aunque se vuelva a capturar | `D-01` |
-| Más de 3 correos en 6 meses o espera abierta | La verificación responde que no se puede enviar | `D-03` |
+| Más de 3 correos en 6 meses en la campaña o espera abierta | La verificación responde que no se puede enviar | `D-03` |
+| Serie en curso en otra campaña de la persona | El primer correo espera (`OTRA_CAMPANA_EN_CURSO`); sale cuando la otra termina | `590-varias-campanas` |
+| «Interesado» en otra campaña | No entra a la fila; PT4 omite su recordatorio (`interesado_en_otra_campana`) | `590-varias-campanas` |
 | Tope diario alcanzado | No se entregan más prospectos ni recordatorios ese día; esperan | `D-05` |
 | Freno del dominio activado | Nadie sale ni se marca excluido: la fila, la verificación, las esperas y el registro esperan hasta que un administrador reanude | `565-freno-dominio` |
 | Recordatorio de un prospecto cerrado, suprimido o sin correo | Se cancela con su motivo (`recordatorio_omitido` en la bitácora) | `D-01`, `D-03` |

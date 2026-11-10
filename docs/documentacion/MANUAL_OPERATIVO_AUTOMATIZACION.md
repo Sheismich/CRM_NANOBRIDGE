@@ -2,8 +2,8 @@
 
 **Para:** quien opere la prospección por correo después de la transferencia: el administrador o supervisor del CRM y
 la persona con acceso técnico (n8n, Google Cloud y SendGrid).
-**Versión:** 0.9 · 5 de noviembre de 2026 · servidor `nanobridge-api-00050-9v9` (6-nov). Pasa a 1.0 al cierre, con lo que
-deje el piloto y la lista de accesos de la transferencia (OB-07).
+**Versión:** 0.9.1 · 10 de noviembre de 2026 · servidor `nanobridge-api-00053-4wf` (9-nov, correos por campaña). Pasa a
+1.0 al cierre, con lo que deje la operación y la lista de accesos de la transferencia (OB-07).
 
 Este manual dice qué corre solo, qué revisar cada día, cómo prender, pausar y apagar, cómo cambiar los parámetros y
 qué hacer cuando algo falla. Cómo funciona por dentro está en el [flujo de actualización](FLUJO_DE_ACTUALIZACION.md)
@@ -44,11 +44,19 @@ En el correo:
 
 ## 3. Prender, pausar y apagar
 
-**Prender la campaña** (una sola vez, después de la autorización escrita de G5): recorrer completa la lista de
-encendido del [RUNBOOK](../RUNBOOK_DEPLOY.md), §10. Lo último es apagar `MODO_PRUEBAS` en PT1 y PT4.
+**Prender la prospección** ya se hizo el 6-nov-2026, con autorización escrita de Carlos, recorriendo la lista de
+encendido del [RUNBOOK](../RUNBOOK_DEPLOY.md), §10. Si alguna vez se apaga con `MODO_PRUEBAS` (abajo), se vuelve a
+prender con esa misma lista.
 
-**Meter prospectos a la campaña:** Prospectos → elegir → «Mandar a automatización», con la campaña. Solo entran los
-que están listos; los demás regresan con su motivo. Se pueden sacar de la fila mientras PT1 no los haya tomado.
+**Campañas:** Prospectos → Campañas → crear y activar. Pueden estar activas varias a la vez (hoy, agua y tratamiento
+de maquinaria). Sus correos se escriben en Administración → Correos de prospección → botón «Campañas»: elegir la
+campaña, escribir el correo y «Guardar para esta campaña»; «Usar el general» lo quita. El número que una campaña no
+tenga propio sale con el general, y el pie es uno para todas.
+
+**Meter prospectos a una campaña:** Prospectos → elegir → «Mandar a automatización», con la campaña. Solo entran los
+que están listos; los demás regresan con su motivo. Se pueden sacar de la fila mientras PT1 no los haya tomado. La
+misma persona puede ir a varias campañas: si ya espera en la fila de otra, el CRM pregunta si agregarla también o
+cambiarla. Recibe una serie a la vez, y «me interesa» en una la saca de las demás ([flujo de campaña](FLUJO_DE_CAMPANA.md) §4).
 
 **Pausar una campaña:** Prospectos → Campañas → Pausar. Nadie pierde su lugar ni se le cancela nada; al reanudar,
 los recordatorios salen repartidos por el tope diario.
@@ -70,7 +78,7 @@ reciben y prender «Repartir solo». Antes, el equipo de ventas tiene que estar 
 
 | Qué | Valor | Dónde se cambia |
 |---|---|---|
-| Textos de los 3 correos y el pie | Lo que apruebe Carlos | CRM: Administración → Correos de prospección |
+| Textos de los 3 correos y el pie | Lo que apruebe Carlos; generales y, si se escriben, propios de cada campaña | CRM: Administración → Correos de prospección (botón «Campañas» para los de cada una) |
 | Tope diario de correos | 20 al encender; se duplica cada semana si los rebotes quedan debajo de 2 % y las quejas debajo de 0.1 % | Google Cloud: `gcloud run services update nanobridge-api --update-env-vars TOPE_DIARIO_CORREOS=<n> --region=us-central1` |
 | Nuevos por día | 10 | Igual, con `NUEVOS_POR_DIA=<n>` |
 | Horarios de PT1a, PT4 y PT5 | §1 | n8n: el disparador de cada flujo |
@@ -116,7 +124,8 @@ el RUNBOOK, «Qué está en producción».
 | Cada cuándo | Qué | Dónde |
 |---|---|---|
 | Diario | Cola de clasificación, interesados, avisos de falla (§2) | CRM y correo |
-| Diario, durante el piloto | Auditoría de datos | [Procedimiento de auditoría](PROCEDIMIENTO_AUDITORIA.md) |
+| Diario, las primeras semanas | Auditoría de datos | [Procedimiento de auditoría](PROCEDIMIENTO_AUDITORIA.md) |
+| Cuando haga falta saber quién cambió algo | Registro de cambios, filtrado por persona y acción; «Exportar lo filtrado» saca el PDF y dice qué filtro se usó | CRM: Administración → Registro de cambios |
 | Semanal | Rebotes y quejas, y si se sube el tope diario | SendGrid |
 | Semanal | Auditoría de datos | Procedimiento de auditoría |
 | Con un mes de datos | Si la prioridad del score predice quién responde (M3) y los pesos del score | [Evaluación del modelo](EVALUACION_DEL_MODELO.md) |

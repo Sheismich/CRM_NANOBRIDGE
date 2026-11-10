@@ -3,7 +3,7 @@
 **Entregable:** OB-01 (diccionario y reglas) y apoyo de OB-02 (base maestra controlada), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026).
 **Dueño:** T1 (datos y estandarización) · **Revisión:** T2 y Dirección General.
-**Versión:** 1.1 · generado el {{FECHA}} desde la base real, con migraciones hasta `{{MIGRACION}}` ({{MIGRACIONES}} en total). Cubre {{TOTALES}}.
+**Versión:** 1.2 · generado el {{FECHA}} desde la base real, con migraciones hasta `{{MIGRACION}}` ({{MIGRACIONES}} en total). Cubre {{TOTALES}}.
 
 > Este documento se genera con `generar-diccionario.mjs` (misma carpeta) a partir de la estructura real de la
 > base y de las reglas del código. No editar las tablas a mano: cambiar el script y volver a generarlo (ver al final).
@@ -75,8 +75,9 @@ Un prospecto se valida igual por las dos vías (`src/crm/dto/prospecto.schema.ts
 En el CSV, cada error sale en español junto a su fila para corregirlo. Las filas no confirmadas expiran a los 30 días.
 
 **Para que la automatización le escriba** (`listo-para-automatizacion.ts`), además: la empresa necesita **giro y tamaño**, el contacto
-un **correo activo** que no esté en supresión, la persona no debe estar en baja, contacto y empresa activos, y menos de 3 correos en
-su ciclo de 6 meses.
+un **correo activo** que no esté en supresión, la persona no debe estar en baja, contacto y empresa activos, menos de 3 correos en
+su ciclo de 6 meses **en esa campaña**, sin un «no interesado» a esa campaña de hace menos de 6 meses, sin interés en otra campaña
+y sin una serie en curso en otra (desde el 9-nov-2026, migración 042).
 
 ## 6. Estados del prospecto
 

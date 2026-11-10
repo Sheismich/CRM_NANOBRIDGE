@@ -14,7 +14,7 @@ y la revisión periódica, en el [procedimiento de auditoría](PROCEDIMIENTO_AUD
 - **Medio de contacto:** el correo, teléfono o WhatsApp de una persona. Cada uno es **único en todo el CRM**: el mismo correo no
   puede ser de dos personas.
 - **Prospecto:** una persona dentro del proceso de prospección. Una misma persona puede tener varios a lo largo del
-  tiempo (cada 6 meses puede empezar un ciclo nuevo).
+  tiempo (cada 6 meses puede empezar un ciclo nuevo) y uno por cada campaña en la que va.
 - **Oportunidad, cotización, documento y tarea** cuelgan de la empresa.
 
 Quién ve qué: un **agente** solo ve las empresas de las que es responsable; **supervisor** y **administrador** ven todo.
@@ -107,8 +107,8 @@ Solo administrador y supervisor: Prospectos → elegir con las casillas → «Ma
 y la automatización toma de 6 a 10 por día hábil.
 
 No entran (y el CRM dice por qué): sin giro o tamaño, sin correo activo, en baja, empresa o contacto desactivados, o la
-persona ya recibió 3 correos en los últimos 6 meses. A cada persona se le escriben como máximo 3 correos (el inicial y
-dos recordatorios, con 5 días hábiles entre uno y otro), y nunca más de 20 al día en total al empezar.
+persona ya recibió 3 correos de esa campaña en los últimos 6 meses. A cada persona se le escriben como máximo 3 correos
+por campaña (el inicial y dos recordatorios, con 5 días hábiles entre uno y otro), una campaña a la vez,, y nunca más de 20 al día en total al empezar.
 
 ## 8. Limpiar los datos de prueba (antes del piloto)
 

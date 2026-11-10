@@ -1,12 +1,14 @@
 # Flujo de campaña · CRM NANOBRIDGE
 
 **Entregable:** flujo de campaña listo para decisión (OB-05), proyecto naranja · outbound.
-**Para:** revisión G5 · autorizar el piloto (semana 13, 23-27 nov 2026). **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n) y Dirección General.
-**Versión:** 0.5 · borrador · 3 de noviembre de 2026. Pasa a 1.0 cuando se cargue la lista de Carlos y se certifique la audiencia (semana 12).
+**Para:** Dirección General y quien opere la prospección. **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n).
+**Versión:** 0.9 · 10 de noviembre de 2026 (encendido del 6-nov y correos por campaña del 9-nov). Pasa a 1.0 con los
+contactos de Carlos cargados y la audiencia certificada por campaña (§2).
 
-Este documento junta lo que Dirección necesita para autorizar por escrito el piloto del 30 de noviembre al 4 de
-diciembre: a quién se le escribe, qué se le dice, con qué límites, qué se excluye, qué queda registrado, cómo se
-vigila y cómo se detiene. **Sin aprobación escrita no sale ningún correo a un prospecto real** (programa, G5).
+Este documento junta lo autorizado para la prospección: a quién se le escribe, qué se le dice, con qué límites, qué se
+excluye, qué queda registrado, cómo se vigila y cómo se detiene. **El encendido se adelantó al 6-nov-2026, con
+autorización escrita de Carlos** (en lugar de la revisión G5 del 23 al 27-nov que marcaba el programa); los envíos
+automáticos corren desde el lunes 9-nov.
 
 Cómo funciona cada pieza por dentro está en el [flujo de actualización](FLUJO_DE_ACTUALIZACION.md) (OB-03); aquí
 solo lo que hace falta para decidir.
@@ -26,16 +28,18 @@ solo lo que hace falta para decidir.
 | 9 | **Quién recibe los avisos** de respuestas (PT2) y de fallas (B4) | `pasante.tics002@` y `director.general@nano-bridge-mex.com` | Publicado (6-nov) |
 | 10 | **Cuenta de SendGrid** pagada, con Inbound Parse incluido | Plan de pago con la tarjeta de la empresa, antes del 24-nov | Carlos confirmó el pago (4-nov); falta hacerlo |
 | 11 | **Quién atiende a los interesados** | Reparto automático entre Carlos, Fabián y Mich (§6) | Prendido (6-nov) |
+| 12 | **Varias campañas con los mismos contactos** (agua y tratamiento de maquinaria) | Cada campaña con sus 3 correos; los límites se cuentan por persona y campaña; una serie a la vez; «me interesa» en una frena las demás (§4) | Decidido por Fabián (9-nov), en producción (`00053-4wf`) |
 
 ## 2. Audiencia
 
-**De dónde sale:** la lista de Carlos entra por la importación CSV del CRM, una persona revisa y confirma cada fila
-(duplicados contra la base y contra el archivo) y un administrador o supervisor la manda a la fila de automatización
-con la campaña del piloto. La automatización no crea prospectos por su cuenta.
+**De dónde sale:** los contactos de Carlos entran por la importación CSV del CRM (o uno por uno), una persona revisa y
+confirma cada fila (duplicados contra la base y contra el archivo) y un administrador o supervisor los manda a la fila
+de automatización con su campaña: hoy son dos servicios distintos, agua y tratamiento de maquinaria, y la misma
+persona puede ir a las dos. La automatización no crea prospectos por su cuenta. La base de ejemplo se borró el 6-nov.
 
 **Quién entra a la fila** (control `D-06`): solo quien tiene giro, tamaño y un correo usable, no está en baja ni en la
-lista de supresión, tiene menos de 3 correos en 6 meses, no tiene una espera abierta y no tiene otro prospecto de la
-misma persona en la fila. Los demás regresan con su motivo.
+lista de supresión, tiene menos de 3 correos en 6 meses **en esa campaña**, no tiene una espera abierta en ella, no está ya en esa
+campaña y no le interesó otra. Los demás regresan con su motivo.
 
 **Cómo se certifica:** la [auditoría de datos](PROCEDIMIENTO_AUDITORIA.md) (§5 del reporte) da, por campaña, cuántos
 prospectos están listos y por qué no los demás (desactivado, sin giro, sin tamaño, sin correo utilizable, en baja o
@@ -45,20 +49,26 @@ certificar sin que salga ningún correo está en [Carga de la lista de Carlos](C
 
 | Campaña | En espera | Listos | Fuera, y por qué |
 |---|---|---|---|
-| ⏳ Piloto | Se llena en la semana 12 | | |
+| ⏳ Agua | Se llena cuando Carlos cargue sus contactos | | |
+| ⏳ Tratamiento de maquinaria | Se llena cuando Carlos cargue sus contactos | | |
 
-**Lo que falta para que la lista de Carlos pueda entrar:**
+**Lo que hace falta para que un contacto de Carlos pueda entrar:**
 - **Tamaño de la empresa.** La lista no lo trae y sin él nadie entra a la fila. Se le pide a Carlos.
 - **Giros escritos como los reconoce el sistema.** El score solo da puntos a los giros de su tabla (sin acentos ni
   mayúsculas), y las plantillas por giro solo se usan si el giro coincide. Uno escrito distinto vale 0 puntos
   ([evaluación del modelo](EVALUACION_DEL_MODELO.md), §7).
-- **Borrar antes los datos de ejemplo** con `limpiar-datos-prueba.mjs`, para que no se mezclen.
+- **Correo de persona:** los de área (`info@`, `ventas@`) quedaron fuera al inicio (decisión 8).
+
+La plantilla de Excel para Carlos («Lista de prospectos para el piloto.xlsx», 6-nov) trae listas para giro y tamaño y
+cuenta lo que falta; cómo pasarla a CSV está en [Carga de la lista](CARGA_DE_LA_LISTA.md) §2, paso 5. Si Carlos manda
+una lista por campaña, se importa cada una con su campaña.
 
 ## 3. Mensaje
 
-- **Tres correos por persona:** el inicial y dos recordatorios. Se escriben en el CRM (Administración → Correos de
-  prospección) y la API se los da armados a n8n. Hoy hay tres generales en borrador; se pueden agregar versiones por
-  giro, que se usan cuando el giro de la empresa coincide.
+- **Tres correos por persona y campaña:** el inicial y dos recordatorios. Se escriben en el CRM (Administración →
+  Correos de prospección) y la API se los da armados a n8n. Hay tres **generales**, y desde el 9-nov cada campaña puede
+  tener los **suyos** (botón «Campañas»): el número que una campaña no tenga propio sale con el general. Al mandar a
+  una campaña sin correos propios, el CRM avisa que saldrán los generales. El pie es uno para todas.
 - **Datos del prospecto en el texto:** el nombre de la persona, de la empresa y el giro, que el CRM pone en la
   plantilla. El texto **no** lo escribe la IA.
 - **Pie:** domicilio y aviso de privacidad, en la misma sección del CRM, y la línea «¿Ya no quieres recibir estos
@@ -78,27 +88,30 @@ responde, así que el resultado del piloto depende de esto (T2).
 
 | Regla | Valor | Control |
 |---|---|---|
-| Correos por persona | Máximo 3 cada 6 meses | `D-03` |
+| Correos por persona | Máximo 3 cada 6 meses **en cada campaña**; una serie a la vez | `D-03`, `590-varias-campanas` |
 | Espera entre correos | 5 días hábiles, a la misma hora; el recordatorio sale el día hábil siguiente al vencimiento | `D-03` |
 | Días hábiles | Lunes a viernes, sin los feriados de la Ley Federal del Trabajo | `215-dia-habil-mx` |
 | Tope diario de correos | 20 al encender (incluye recordatorios, que van primero) | `D-05` |
 | Nuevos por día | Hasta 10, sin pasar del tope | `D-05` |
 | Solo prospectos validados | Uno sin validar no recibe correo | `D-04` |
-| Campaña | Solo una activa manda; pausar = esperar (nadie pierde su lugar) | `230-recordatorios` |
+| Campaña | Varias pueden estar activas; pausar una = esperar (nadie pierde su lugar) | `230-recordatorios` |
 
-**Qué cabe en el piloto.** La semana del piloto (30-nov a 4-dic) son 5 días hábiles. Sin recordatorios todavía, el
-tope de 20 no se alcanza y el límite es de 10 nuevos al día: una lista de unos 30 prospectos listos sale en 3 días.
+**Una persona en varias campañas** (desde el 9-nov, `00053-4wf`):
+- Los 3 correos y los 6 meses de un «no interesado» se cuentan **dentro de cada campaña**: a quien dijo que no al
+  servicio de agua sí se le puede escribir del de maquinaria.
+- **Una serie a la vez:** si la persona tiene otra campaña en curso (le salió un correo en los últimos 6 meses y no ha
+  terminado, o PT1 la acaba de tomar), el primer correo de la nueva espera en la fila. Arranca cuando la otra termina:
+  al contestar la persona o al marcarla inactiva PT4 después del tercero.
+- **«Me interesa» en una campaña frena las demás:** sale de la fila de las otras, se les cierra la espera (PT4 ya no
+  manda su recordatorio) y no puede volver a entrar a ellas. Ya la atiende un vendedor.
+- **La baja es de la persona:** vale para todas las campañas.
+- **Mandar a otra campaña** a quien ya espera en la fila de una: el CRM pregunta «Agregar también a esta campaña» o
+  «Cambiar a esta campaña». A quien ya pasó por otra se le crea un prospecto nuevo para la nueva campaña.
 
-**Los recordatorios casi no caben antes del cierre (9-dic).** Calculado con la regla de días hábiles del sistema:
-
-| Correo inicial | Primer recordatorio |
-|---|---|
-| Lunes 30-nov | Martes 8-dic |
-| Martes 1-dic | Miércoles 9-dic (día del cierre) |
-| Del 2 al 4-dic | Después del cierre |
-
-Ningún segundo recordatorio cae dentro del proyecto. **El piloto mide sobre todo la respuesta al primer correo.** Si
-Dirección quiere ver la secuencia completa, hay que empezar antes o seguir después del cierre.
+**Cuánto cabe antes del cierre (9-dic).** Con la regla de días hábiles del sistema, cada recordatorio sale el día
+hábil siguiente a 5 días hábiles del anterior. Para que una persona reciba los 3 correos antes del cierre, el primero
+tiene que salir **a más tardar el viernes 20-nov** (segundo el 30-nov y tercero el 8-dic). Lo que empiece después
+mide sobre todo la respuesta al primer correo.
 
 ## 5. Exclusiones
 
@@ -110,9 +123,11 @@ A nadie de esta lista le sale un correo, aunque esté en la campaña:
 | Persona en baja | Se le dio de baja por respuesta o por evento de SendGrid; no se deshace | `D-02` |
 | Prospecto cerrado | `interesado`, `no_interesado`, `descartado`, `excluido` o `inactivo` | `230-recordatorios` |
 | Sin correo utilizable | No hay a dónde escribir | `D-06` |
-| Ya con 3 correos en 6 meses o con una espera abierta | Límite de contacto | `D-03` |
+| Ya con 3 correos en 6 meses en esta campaña, o con una espera abierta en ella | Límite de contacto | `D-03` |
+| Dijo «no interesado» a esta campaña hace menos de 6 meses | Decisión de Carlos (decisión 7) | `578-no-interesado-seis-meses` |
+| Le interesó otra campaña | Ya lo atiende un vendedor | `590-varias-campanas` |
+| Tiene una serie en curso en otra campaña | Solo espera el primer correo; sale cuando la otra termine | `590-varias-campanas` |
 | Respondió | Su respuesta cierra la espera y detiene los recordatorios | `200-respuestas-recibidas` |
-| Cualquiera mientras siga el modo de prueba | Solo salen correos a los buzones del equipo | §7 |
 
 ## 6. Registros y vigilancia
 
@@ -188,9 +203,8 @@ encender, después de la autorización. Resumen al 3-nov:
 
 ## 10. Para pasar a v1.0
 
-1. Certificación de audiencia con la lista de Carlos cargada (§2).
-2. Textos aprobados de los 3 correos y el domicilio (§3).
-3. Las decisiones abiertas del §1.
-4. Las pruebas en vivo que faltan (§7).
+1. Certificación de audiencia por campaña con los contactos de Carlos cargados (§2).
+2. Correos propios de cada campaña escritos y aprobados por Carlos, o la decisión de usar los generales (§3).
+3. El pago de SendGrid antes del 24-nov (decisión 10).
+4. El primer rebote y el primer recordatorio real de PT4 revisados (§7).
 5. Qué se hará con lo de Promociones (§3).
-6. La lista del reparto de interesados (§1, decisión 11).
