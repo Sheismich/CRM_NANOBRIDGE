@@ -15,17 +15,17 @@ solo lo que hace falta para decidir.
 
 | # | Decisión | Propuesta | Estado |
 |---|---|---|---|
-| 1 | **Audiencia** | Los prospectos de la lista de Carlos que la auditoría certifique como listos (§2) | ⏳ Se certifica en la semana 12 |
-| 2 | **Textos de los 3 correos** (inicial y 2 recordatorios) | Los que apruebe Carlos, escritos en Administración → Correos de prospección (§3) | ✅ Carlos los aprobó (5-nov) |
-| 3 | **Pie del correo:** domicilio de la empresa y aviso de privacidad | Ignacio T Chávez 328, Obraje, 20230, Aguascalientes, Ags. (Carlos, 4-nov); el aviso ya está publicado | ⏳ Falta escribirlo en Administración y en el remitente de SendGrid |
-| 4 | **Tope diario** de correos | 20 al día, para calentar el dominio; se duplica cada semana si los rebotes quedan debajo de 2 % y las quejas debajo de 0.1 % | Propuesto (25-sep) |
+| 1 | **Audiencia** | Los contactos que Carlos cargue en sus campañas, con correo de persona, giro y tamaño | ⏳ Encendido sin lista (6-nov); falta que Carlos los cargue |
+| 2 | **Textos de los 3 correos** (inicial y 2 recordatorios) | Los actuales, en Administración → Correos de prospección (§3) | Carlos los aprobó por escrito (6-nov); los cambios se hacen desde Administración |
+| 3 | **Pie del correo:** domicilio de la empresa y aviso de privacidad | Ignacio T Chávez 328, Obraje, 20230, Aguascalientes, Ags. (Carlos, 4-nov); el aviso ya está publicado | Hecho (pie y remitente, 6-nov) |
+| 4 | **Tope diario** de correos | 20 al día, para calentar el dominio; se duplica cada semana si los rebotes quedan debajo de 2 % y las quejas debajo de 0.1 % | Aplicado (6-nov, `00051-wn9`) |
 | 5 | **Nuevos por día** | 10 como máximo (`NUEVOS_POR_DIA`) | Valor actual |
-| 6 | **Horario** | Lunes a viernes: recordatorios (PT4) a las 9:00 y nuevos (PT1) a las 10:00. Hoy PT4 corre a las 10:00 | ⏳ Decidir |
+| 6 | **Horario** | Lunes a viernes: recordatorios (PT4) a las 9:00 y nuevos (PT1a) a las 10:00, hora de México | Publicado (6-nov) |
 | 7 | **Un «no interesado»** ¿bloquea para siempre o 6 meses? | 6 meses desde su respuesta: puede volver a entrar, pero el correo espera (`578-no-interesado-seis-meses`) | Carlos decidió (4-nov) |
-| 8 | **Correos de área** (`info@`, `ventas@`): 9 de los 25 de la lista | Incluirlos o excluirlos | ⏳ Decidir |
-| 9 | **Quién recibe los avisos** de respuestas (PT2) y de fallas (B4) | Hoy llegan al Gmail de Fabián; cambiarlos al supervisor que clasifica y a quien atienda las fallas | ⏳ Decidir nombres |
+| 8 | **Correos de área** (`info@`, `ventas@`) | Fuera al inicio: solo correos de persona | Decidido (6-nov) |
+| 9 | **Quién recibe los avisos** de respuestas (PT2) y de fallas (B4) | `pasante.tics002@` y `director.general@nano-bridge-mex.com` | Publicado (6-nov) |
 | 10 | **Cuenta de SendGrid** pagada, con Inbound Parse incluido | Plan de pago con la tarjeta de la empresa, antes del 24-nov | Carlos confirmó el pago (4-nov); falta hacerlo |
-| 11 | **Quién atiende a los interesados** | Reparto automático entre el equipo de ventas (2 o 3 personas), elegidas en Administración → «Reparto de interesados» (§6). Hoy está apagado | ⏳ Dar de alta al equipo y elegir la lista |
+| 11 | **Quién atiende a los interesados** | Reparto automático entre Carlos, Fabián y Mich (§6) | Prendido (6-nov) |
 
 ## 2. Audiencia
 
@@ -143,8 +143,8 @@ procesos fallidos). Nada de esto se borra.
 
 ## 7. Modo de prueba
 
-Hoy **todo está en modo de prueba**: `MODO_PRUEBAS` encendido en PT1 y PT4, y solo salen correos a una lista corta de
-buzones del equipo; cualquier otro destinatario se descarta. Así se probó en vivo:
+Hasta el 6-nov **todo estuvo en modo de prueba**: `MODO_PRUEBAS` encendido en PT1 y PT4, y solo salían correos a una
+lista corta de buzones del equipo. Desde esa fecha está apagado. Así se probó en vivo:
 
 | Fecha | Prueba | Resultado |
 |---|---|---|
@@ -164,16 +164,18 @@ encender, después de la autorización. Resumen al 3-nov:
 
 | Paso | Estado |
 |---|---|
-| Textos aprobados y domicilio en el pie y en el remitente | ⏳ Carlos |
+| Textos aprobados y domicilio en el pie y en el remitente | ✅ Hecho (6-nov) |
 | SendGrid pagado con Inbound Parse | ⏳ Dirección, antes del 24-nov |
-| Datos de ejemplo borrados y lista de Carlos cargada | ⏳ Semana 12 |
-| Pruebas en vivo que faltan (fuera de oficina, sin firma, rebote) | ⏳ T2 |
-| Prompts de n8n para usar el correo de la API y confirmar cada envío (`docs/n8n/confirmacion-envios/`) | ⏳ T2 |
-| Avisos de PT2 y B4 a las personas correctas | ⏳ Decidir nombres |
-| Equipo de ventas dado de alta y reparto de interesados prendido | ⏳ Antes de encender |
-| Tope diario a 20 | ⏳ El día de encender |
-| Horario de PT1a (y PT4, si se mueve a las 9:00) | ⏳ El día de encender |
-| Apagar `MODO_PRUEBAS` en PT1 y PT4 | ⏳ Lo último, el día de encender |
+| Datos de ejemplo borrados | ✅ Hecho (6-nov) |
+| Contactos de Carlos cargados en una campaña activa | ⏳ Carlos |
+| Pruebas en vivo: fuera de oficina y firma incorrecta | ✅ Hecho (6-nov) |
+| Primer rebote y primer recordatorio real de PT4 | ⏳ Revisar cuando ocurran |
+| Prompts de n8n para usar el correo de la API y confirmar cada envío (`docs/n8n/confirmacion-envios/`) | ✅ Hecho (6-nov) |
+| Avisos de PT2 y B4 a las personas correctas | ✅ Hecho (6-nov) |
+| Equipo de ventas dado de alta y reparto de interesados prendido | ✅ Hecho (6-nov) |
+| Tope diario a 20 | ✅ Hecho (6-nov) |
+| Horario de PT1a y PT4 | ✅ Hecho (6-nov) |
+| Apagar `MODO_PRUEBAS` en PT1 y PT4 | ✅ Hecho (6-nov) |
 | Link y página de baja, respaldos, feriados, PT5, botón «Mandar a automatización» | ✅ Hechos |
 
 ## 9. Cómo se detiene

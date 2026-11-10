@@ -511,12 +511,15 @@ parches hasta abril de 2027; antes de esa fecha hay que pasar a Node 24.
 
 ## 10. Lista de encendido (antes de salir en vivo)
 
+**Encendido el 6-nov-2026**, con autorización escrita de Carlos y sin lista cargada: la base quedó en cero y
+las primeras corridas automáticas son el lunes 9-nov. Lo que sigue sin marcar está pendiente.
+
 Nada de esto se hace hasta que todo esté listo: el día que se encienda, se
 recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 ("Pendientes en orden").
 
-- [ ] Apagar `MODO_PRUEBAS` en PT1 y PT4.
-- [ ] Textos reales en los correos. Desde el 19-oct-2026 se escriben en el
+- [x] Apagar `MODO_PRUEBAS` en PT1 y PT4 (6-nov-2026; `SANDBOX` también en false).
+- [x] Textos reales en los correos (Carlos los aprobó por escrito el 6-nov-2026). Desde el 19-oct-2026 se escriben en el
       CRM (Administración → Correos de prospección, migración 033) y la API
       se los da armados a n8n (`docs/n8n/pt1b-plantillas/`). Hoy tienen un
       borrador: cambiarlo por los textos aprobados por Carlos. El pie
@@ -531,7 +534,7 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       viene de la API dentro del pie (etiqueta `[darte_de_baja]`) y PT1b
       solo manda `substitution_tag` (prompt 4 de `docs/n8n/pt1b-plantillas/`).
       Las respuestas desde el CRM también la llevan.
-- [ ] Domicilio de la empresa (Carlos, 4-nov-2026: Ignacio T Chávez 328, Obraje, 20230,
+- [x] Domicilio de la empresa (Carlos, 4-nov-2026; visto en el correo de prueba del 6-nov: Ignacio T Chávez 328, Obraje, 20230,
       Aguascalientes, Ags.): se escribe en Administración → Correos de prospección →
       "Pie de los tres", no en n8n.
 - [x] Página de baja en español (29-oct-2026): Settings → Tracking →
@@ -550,11 +553,12 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       prospecto 35 quedó en `baja` y su correo en `no_contactar`. Igual con
       +prueba10 (prospecto 34, envío 21). Falta ver que PT4 no les escriba
       cuando les toque el contacto 2.
-- [ ] Pruebas en vivo que faltan: respuesta automática (fuera de
-      oficina), correo sin firma y rebote. Además: el 13-oct después de las 3 pm
+- [ ] Pruebas en vivo: fuera de oficina, respuesta de persona y firma incorrecta pasaron el 6-nov-2026
+      (PT2 #305, #307 y #311). Faltan el primer rebote y el primer recordatorio real de PT4.
+      Antes se había anotado: Además: el 13-oct después de las 3 pm
       correr PT4 (contacto 3 a +prueba1..3) y el 20-oct (deben quedar inactivos).
 - [x] Respaldos automáticos de Cloud SQL activos (ya lo estaban; revisado el 7-oct-2026, §9).
-- [ ] Tope diario a 20 para calentar el dominio:
+- [x] Tope diario a 20 para calentar el dominio (6-nov-2026, `00051-wn9`):
       `--update-env-vars TOPE_DIARIO_CORREOS=20`.
 - [x] Cupo apartado para recordatorios y fila de espera de correos iniciales
       (16-oct-2026): lo resuelve la fila del botón de abajo. Los recordatorios
@@ -572,12 +576,12 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       Prospectos y PT1 arrancando desde la fila con el flujo nuevo "PT1a. tomar
       de la fila". El correo de prueba llegó a Gmail. Detalle en
       `PLAN_N8N_DEFINITIVO.md` punto 7.
-- [ ] `NUEVOS_POR_DIA` (10 por defecto, ya en el código): cuántos nuevos toma
+- [x] `NUEVOS_POR_DIA` se queda en 10 (6-nov-2026). (10 por defecto, ya en el código): cuántos nuevos toma
       PT1 de la fila al día. Se cambia con `--update-env-vars NUEVOS_POR_DIA=…`,
       nunca con `--set-env-vars`. Con tope 20 y 3 correos por persona, el
       ritmo real se queda en unos **6-7 nuevos al día**: la lista de 30 de
       Carlos sale en unos 3 días hábiles.
-- [ ] Horario de PT1: lunes a viernes a las **10:00** (después de PT4). El
+- [x] Horario publicado el 6-nov-2026: PT4 a las 9:00 y PT1a a las **10:00**, lunes a viernes, hora de México. El
       horario va en **PT1a** (cambiar su Manual Trigger por un Schedule), no en
       PT1, que ahora solo se ejecuta llamado por PT1a. Mientras sigan las
       pruebas, PT1a se corre a mano.
@@ -595,21 +599,22 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 - Nota, no es error: el primer recordatorio sale al **6.º día hábil**, no al
       5.º. La ventana vence a la misma hora del primer correo (10:05 + 5 días
       hábiles) y PT4 pasa a las 9:00, así que lo toma al día siguiente.
-- [ ] Decidir `min-instances=1` en Cloud Run: sin él la API se apaga cuando
+- [x] `min-instances=1`: por ahora no (6-nov-2026); se revisa tras una semana. Sin él sin él la API se apaga cuando
       nadie la usa y la primera petición tarda 5-10 s en despertarla (visto el
       15-oct-2026: Administración marcó 9,540 ms; las siguientes, 0.25 s).
       Cuesta aunque nadie la use: revisarlo con la calculadora de Google
       cuando el equipo lo use a diario. Se pone con
       `gcloud run services update nanobridge-api --min-instances=1 --region=us-central1`.
-- [ ] Borrar los datos de prueba (incluye el PDF de pantallas subido a
+- [x] Datos de prueba borrados el 6-nov-2026, con respaldo «antes de limpieza 6-nov». Se conservaron usuarios, catálogos,
+      plantillas, parámetros, supresión y auditoría; quedan 6 archivos sin registro en Cloud Storage. (Incluía el PDF de pantallas subido a
       "Empresa Prueba Envio 1" el 15-oct y las cotizaciones/oportunidades de
       prueba "NO SE", "NO SE 2").
-- [ ] Domicilio de la empresa en el remitente de SendGrid: Ignacio T Chávez 328, Obraje,
-      20230, Aguascalientes, Ags. (hoy el remitente de pruebas tiene el de la casa de Fabián).
-- [ ] Prender el **reparto de interesados** (Administración → "Reparto de interesados", 3-nov-2026)
+- [x] Domicilio de la empresa en el remitente de SendGrid: Ignacio T Chávez 328, Obraje,
+      20230, Aguascalientes, Ags. (6-nov-2026).
+- [x] Reparto prendido el 6-nov-2026 con Carlos, Fabián y Mich. **Reparto de interesados** (Administración → "Reparto de interesados", 3-nov-2026)
       cuando el equipo de ventas ya esté dado de alta: marcar a quiénes reciben y "Repartir solo".
       Empieza apagado a propósito, para que ningún interesado real le caiga a una cuenta de prueba.
-- [ ] Cambiar `DESTINOS` de los avisos (hoy el Gmail de Fabián): en B4 ("armar correo de error") a
+- [x] `DESTINOS` cambiados el 6-nov-2026 a `pasante.tics002@` y `director.general@nano-bridge-mex.com`: en B4 ("armar correo de error") a
       quien atienda los errores, y en PT2 ("armar aviso de respuesta") al supervisor que clasifica.
 - [x] **IA en la API (etapas 3 y 4: "Redactar con IA" y "Resumir con IA").**
       Encendida el 21-oct-2026 (`nanobridge-api-00036-jvl`), después de publicar el
@@ -634,7 +639,7 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       Teammate administrador, para que la cuenta no dependa de la pasantía.
 - [x] Nombre del admin corregido a "Fabián" (7-oct-2026). Desde la revisión `00021-xq8` un
       JSON que no es UTF-8 se rechaza (400 `TEXTO_NO_UTF8`), así que no se repite.
-- [ ] "No interesado" (Carlos, 4-nov-2026): se le puede volver a escribir después de 6 meses,
+- [x] "No interesado" (Carlos, 4-nov-2026): se le puede volver a escribir después de 6 meses,
       no es para siempre. El sistema lo cumple desde el commit de la espera: puede volver a entrar,
       pero el correo no sale hasta 6 meses después de su respuesta.
 - [x] Los 2 usuarios `root` de MySQL (host `%` y host vacío): contraseña
