@@ -1,8 +1,9 @@
-// Números del reporte del piloto (OB-06). Solo LEE la base y escribe un reporte
+// Números del reporte de la prospección (OB-06; el piloto se convirtió en operación real el 9-nov-2026). Solo LEE la base y escribe un reporte
 // con fecha en docs/documentacion/piloto/. Sin datos personales: cantidades e IDs.
 //
 //   PILOTO_DB_URL="mysql://usuario:contraseña@host:3306/base" node docs/documentacion/reporte-piloto.mjs
-//   Opciones: --desde=2026-11-30 --hasta=2026-12-04 (días de México, incluidos) y --campana=<id>.
+//   Opciones: --desde=AAAA-MM-DD --hasta=AAAA-MM-DD (días de México, incluidos; por omisión del 9-nov-2026,
+//   primer día de envíos reales, a hoy) y --campana=<id>.
 //
 // Contra producción: autorizar la IP y leer DATABASE_URL como en RUNBOOK §6, y
 // revocar al terminar. Qué significa cada número: REPORTE_DEL_PILOTO.md.
@@ -16,8 +17,8 @@ const require = createRequire(join(AQUI, "..", "..", "package.json"));
 const mysql = require("mysql2/promise");
 
 const arg = (nombre, omision) => process.argv.find((a) => a.startsWith(`--${nombre}=`))?.split("=")[1] ?? omision;
-const desde = arg("desde", "2026-11-30");
-const hasta = arg("hasta", "2026-12-04");
+const desde = arg("desde", "2026-11-09");
+const hasta = arg("hasta", new Date().toLocaleDateString("sv-SE", { timeZone: "America/Mexico_City" }));
 const campana = arg("campana", null);
 if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) || (campana && !/^\d+$/.test(campana))) {
   console.error("Uso: --desde=AAAA-MM-DD --hasta=AAAA-MM-DD [--campana=<id>]");
@@ -70,10 +71,26 @@ r.enviados = await uno(`SELECT COUNT(*) ${ENVIOS} AND v.estado = 'enviado'`, PER
 r.sinConfirmar = await uno(`SELECT COUNT(*) ${ENVIOS} AND v.estado = 'registrado'`, PERIODO);
 r.fallidos = await uno(`SELECT COUNT(*) ${ENVIOS} AND v.estado = 'fallido'`, PERIODO);
 // Controles que deben dar 0.
-r.masDeTres = await filas(`SELECT p.contacto_id, COUNT(*) n FROM envios v JOIN prospectos p ON p.id = v.prospecto_id
-  WHERE v.canal = 'correo' AND v.estado <> 'fallido' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH GROUP BY p.contacto_id HAVING n > 3`);
+// Por persona y campaña (desde el 9-nov-2026 la misma persona puede recibir la serie de dos campañas).
+r.masDeTres = await filas(`SELECT p.contacto_id, p.campana_id, COUNT(*) n FROM envios v JOIN prospectos p ON p.id = v.prospecto_id
+  WHERE v.canal = 'correo' AND v.estado <> 'fallido' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH GROUP BY p.contacto_id, p.campana_id HAVING n > 3`);
+// Personas que recibieron dos series a la vez (no debería pasar: una serie a la vez).
+r.dosSeriesALaVez = await filas(`SELECT p1.contacto_id, COUNT(DISTINCT p1.campana_id) campanas FROM envios v1 JOIN prospectos p1 ON p1.id = v1.prospecto_id
+  JOIN envios v2 ON v2.id <> v1.id JOIN prospectos p2 ON p2.id = v2.prospecto_id
+  WHERE p2.contacto_id = p1.contacto_id AND NOT (p2.campana_id <=> p1.campana_id) AND v1.numero_contacto = 1 AND v2.numero_contacto = 1
+    AND v1.estado <> 'fallido' AND v2.estado <> 'fallido' AND v1.enviado_en >= ? AND v1.enviado_en < ?
+    AND v2.enviado_en BETWEEN v1.enviado_en - INTERVAL 7 DAY AND v1.enviado_en + INTERVAL 7 DAY
+  GROUP BY p1.contacto_id`, PERIODO);
 r.aSuprimidos = await filas(`SELECT v.id ${ENVIOS} AND v.estado <> 'fallido' AND EXISTS (SELECT 1 FROM lista_supresion s
   WHERE s.tipo = 'correo' AND s.valor_normalizado = LOWER(TRIM(v.destinatario)) AND s.creado_en < v.enviado_en)`, PERIODO);
+
+// Desglose por campaña.
+r.porCampana = await filas(`SELECT COALESCE(cp.nombre, 'sin campaña') campana, COUNT(*) correos, COUNT(DISTINCT p.contacto_id) personas,
+    COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM respuestas rr WHERE rr.prospecto_id = p.id AND (rr.clasificacion IS NULL OR rr.clasificacion <> 'automatica')) THEN p.contacto_id END) respondieron,
+    COUNT(DISTINCT CASE WHEN p.estado = 'interesado' THEN p.contacto_id END) interesadas
+  FROM envios v JOIN prospectos p ON p.id = v.prospecto_id LEFT JOIN campanas cp ON cp.id = p.campana_id
+  WHERE v.canal = 'correo' AND v.estado <> 'fallido' AND v.enviado_en >= ? AND v.enviado_en < ? ${filtroCampana}
+  GROUP BY campana ORDER BY correos DESC`, PERIODO);
 
 // --- 2. Respuestas de las personas del piloto (recibidas desde el inicio, aunque sea después del periodo)
 const RESP = `FROM respuestas r JOIN prospectos p ON p.id = r.prospecto_id WHERE r.prospecto_id IN (${PROSPECTOS_DEL_PILOTO}) AND r.recibido_en >= ?`;
@@ -129,7 +146,7 @@ const m4Total = r.m4.reduce((s, x) => s + Number(x.n), 0);
 const m4Reglas = Number(r.m4.find((x) => x.metodo === "reglas")?.n ?? 0);
 const clases = (lista) => CLASES.map((c) => [c, Number(lista.find((x) => x.c === c)?.n ?? 0)]).filter(([, n]) => n > 0);
 
-const md = `# Números del piloto · ${desde} al ${hasta}
+const md = `# Números de la prospección · ${desde} al ${hasta}
 
 Generado el ${cuando} con \`reporte-piloto.mjs\` sobre la base \`${url.pathname.slice(1)}\` (migración \`${r.migracion}\`)${campana ? `, solo la campaña ${campana}` : ""}.
 Solo lectura. Sin datos personales. Días en hora de México. Qué significa cada número: [REPORTE_DEL_PILOTO.md](../REPORTE_DEL_PILOTO.md).
@@ -141,7 +158,10 @@ Solo lectura. Sin datos personales. Días en hora de México. Qué significa cad
 ${filasDia.map((x) => `| ${x.join(" | ")} |`).join("\n") || "| — | 0 | 0 | 0 | 0 |"}
 
 - Correos que salieron: **${totalCorreos}** (${r.enviados} confirmados por SendGrid y ${r.sinConfirmar} sin confirmar), a **${r.personas}** personas. Fallidos: ${r.fallidos}.
-- Personas con más de 3 correos en 6 meses: **${r.masDeTres.length}** (debe ser 0)${r.masDeTres.length ? `: contactos ${r.masDeTres.map((x) => x.contacto_id).join(", ")}` : ""}.
+- Personas con más de 3 correos en 6 meses en una misma campaña: **${r.masDeTres.length}** (debe ser 0)${r.masDeTres.length ? `: contactos ${r.masDeTres.map((x) => `${x.contacto_id} (campaña ${x.campana_id ?? "sin campaña"})`).join(", ")}` : ""}.
+- Personas a las que les empezaron dos campañas con menos de una semana de diferencia: **${r.dosSeriesALaVez.length}** (debe ser 0: una serie a la vez)${r.dosSeriesALaVez.length ? `: contactos ${r.dosSeriesALaVez.map((x) => x.contacto_id).join(", ")}` : ""}.
+
+${tabla(["Campaña", "Correos", "Personas", "Respondieron", "Interesadas"], r.porCampana.map((x) => [x.campana, String(x.correos), String(x.personas), `${x.respondieron} (${pct(Number(x.respondieron), Number(x.personas))})`, `${x.interesadas} (${pct(Number(x.interesadas), Number(x.personas))})`]))}
 - Correos a una dirección que ya estaba suprimida: **${r.aSuprimidos.length}** (debe ser 0)${r.aSuprimidos.length ? `: envíos ${r.aSuprimidos.map((x) => x.id).join(", ")}` : ""}.
 
 ## 2. Respuestas
@@ -202,4 +222,4 @@ let archivo = join(carpeta, `numeros-${hasta}.md`);
 for (let n = 2; existsSync(archivo); n++) archivo = join(carpeta, `numeros-${hasta}-${n}.md`);
 writeFileSync(archivo, md);
 console.log(`Reporte: ${archivo}`);
-console.log(`Correos ${totalCorreos} a ${r.personas} personas · respondieron ${r.respondieron} · interesadas ${r.interesados} · rebotes ${r.rebotes} · quejas ${r.quejas} · >3 correos ${r.masDeTres.length} · a suprimidos ${r.aSuprimidos.length}`);
+console.log(`Correos ${totalCorreos} a ${r.personas} personas · respondieron ${r.respondieron} · interesadas ${r.interesados} · rebotes ${r.rebotes} · quejas ${r.quejas} · >3 correos ${r.masDeTres.length} · dos series ${r.dosSeriesALaVez.length} · a suprimidos ${r.aSuprimidos.length}`);

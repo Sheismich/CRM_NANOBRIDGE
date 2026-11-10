@@ -12,8 +12,8 @@ Qué revisar, cuándo, cómo y qué hacer con cada hallazgo, para que la base se
 |---|---|---|
 | **Cada semana** (antes de la revisión con Dirección) | Medir T1.1 y T1.2 y llevar la tendencia | Resumen y §2 Completitud |
 | **Después de cargar una lista** (importación CSV) | Ver que entró limpia antes de mandarla a automatización | §3 Duplicados y §5 Audiencia |
-| **Antes de G5** (semana 13) | Certificar la audiencia y las exclusiones de la campaña | §5 Audiencia por campaña |
-| **Cada día del piloto** (semana 14) | Detectar a tiempo un correo que no debió salir | Los dos controles rojos de §4 |
+| **Al cargar contactos a una campaña** | Certificar la audiencia y las exclusiones de cada campaña | §5 Audiencia por campaña |
+| **Cada día hábil, las primeras semanas de envíos** (desde el 9-nov-2026) | Detectar a tiempo un correo que no debió salir | Los dos controles rojos de §4 |
 | **Antes del cierre** | Reporte final de T1 | Todo |
 
 ## 2. Cómo se corre
@@ -63,7 +63,7 @@ Dirección con un plan. Los dos controles **rojos** detienen la campaña sin esp
 
 | Hallazgo | Qué significa | Qué hacer | Dónde |
 |---|---|---|---|
-| 🔴 **Personas con más de 3 correos en 6 meses** | Se rompió el límite de contacto | **Detener la campaña** (pausarla), avisar a T2 y a Dirección, revisar el flujo antes de reanudar | Prospectos → Campañas → Pausar |
+| 🔴 **Personas con más de 3 correos en 6 meses en una misma campaña** (desde el 9-nov la misma persona puede recibir la serie de dos campañas, una a la vez) | Se rompió el límite de contacto | **Detener la campaña** (pausarla), avisar a T2 y a Dirección, revisar el flujo antes de reanudar | Prospectos → Campañas → Pausar |
 | 🔴 **Medio activo que está en la lista de supresión** | El dato está mal: alguien que pidió su baja aparece como contactable. La API no le escribe (la lista manda), pero no debería pasar | Avisar a T2 y a Dirección; T2 revisa cómo volvió a quedar activo y lo corrige con un cambio revisado (desde el CRM no se marca «no contactar» a mano: solo lo hace una baja) | — |
 | Empresa activa sin giro o sin tamaño | La automatización no le escribe | Completarlos en la ficha, o desactivarla si no sirve | Ficha → Editar |
 | Contacto sin ningún medio | No se le puede contactar | Agregar correo o teléfono, o desactivarlo | Ficha → Contactos |

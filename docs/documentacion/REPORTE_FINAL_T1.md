@@ -3,7 +3,8 @@
 **Entregable:** reporte final de T1 (cierre del proyecto naranja · outbound).
 **Para:** revisión de cierre (G6, 9 de diciembre de 2026). **Redacta:** T1 · **Revisión:** T2 y Dirección General.
 **Versión:** 0.1 · esqueleto del 5 de noviembre de 2026. Lo marcado ⏳ se llena con la auditoría después de cargar
-la lista de Carlos (semana 12), con las auditorías diarias del piloto (30-nov al 4-dic) y al cierre.
+los contactos de Carlos, con las auditorías de las primeras semanas de envíos (desde el 9-nov; el encendido se adelantó
+al 6-nov) y al cierre.
 
 ## 1. Resumen
 
@@ -58,8 +59,8 @@ datos reales. Los números que cuentan son los de la columna «Tras cargar la li
 | Fecha | Momento | T1.1 | T1.2 | Hallazgos | Reporte |
 |---|---|---|---|---|---|
 | 28-oct | Línea base (datos de ejemplo) | 98.4 % | 96.8 % | Duplicados solo de pruebas; 2 empresas sin giro ni tamaño, también de ejemplo | [calidad-2026-10-28](auditorias/calidad-2026-10-28.md) |
-| ⏳ | Después de borrar los datos de ejemplo y cargar la lista de Carlos | | | | |
-| ⏳ | Días 1 a 5 del piloto | | | | |
+| ⏳ | Después de cargar los contactos de Carlos (la base de ejemplo se borró el 6-nov) | | | | |
+| ⏳ | Primeras semanas de envíos | | | | |
 | ⏳ | Cierre | | | | |
 
 ## 6. Incidentes de datos

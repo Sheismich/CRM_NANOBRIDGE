@@ -90,12 +90,12 @@ Pruebas automáticas (sin llamar a Gemini): `535-automatizacion-scoring-incidenc
 `510-responder-prospecto`, `515-resumen-ficha`, `530-historial-documentos`.
 
 **Plan para medir:**
-1. **Semana 12 (prepiloto):** con la lista de Carlos cargada, calcular M4 y revisar a mano el score de una muestra de
-   prospectos con T2.
-2. **Piloto (30-nov al 4-dic):** cada respuesta real deja su sugerencia y la decisión de la persona. Calcular M1, M2 y
-   M5 al terminar, y M3 con lo que haya.
-3. **Reporte del piloto (OB-06, 11-dic):** resultados con el número de casos. Con 6 o 7 correos nuevos al día, en una
-   semana habrá pocas respuestas: se reporta cuántas fueron y no se sacan conclusiones que los datos no aguanten.
+1. **Al cargar los contactos de Carlos:** calcular M4 y revisar a mano el score de una muestra de prospectos con T2.
+2. **Operación real (envíos desde el 9-nov; el encendido se adelantó al 6-nov):** cada respuesta real deja su
+   sugerencia y la decisión de la persona. `reporte-piloto.mjs` calcula M1 a M5 en cualquier momento, también por
+   campaña.
+3. **Reporte del piloto (OB-06, 4 y 11-dic):** resultados con el número de casos. Con hasta 10 correos nuevos al día
+   habrá pocas respuestas: se reporta cuántas fueron y no se sacan conclusiones que los datos no aguanten.
 
 ## 6. Pasar la clasificación a modo directo
 

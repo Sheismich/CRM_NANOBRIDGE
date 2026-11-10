@@ -1,6 +1,6 @@
 # Bitácora del proyecto — CRM NANOBRIDGE
 
-Proyecto naranja (outbound) · Documentación y entregables · Corte al 6 de noviembre de 2026 · Semana 10 del programa (revisión G4)
+Proyecto naranja (outbound) · Documentación y entregables · Corte al 10 de noviembre de 2026 · Semana 11 del programa
 
 ## Cómo leer esta bitácora
 
@@ -18,13 +18,12 @@ Junta en un solo lugar lo que pide el programa de 16 semanas, lo que ya existe y
 
 ## 1. Dónde estamos
 
-- Estamos en la semana 10 de 16: revisión G4 (CDR). El equipo trabaja contra el cierre del 9 de diciembre; el PDF del programa marca G6 del 14 al 18 de diciembre. Falta que Dirección confirme por escrito el 9 de diciembre.
-- El sistema está construido y funcionando en modo de pruebas: 13 pantallas y 887 pruebas automáticas (853 del servidor y 34 de las pantallas), que pasan todas y corren solas en GitHub en cada cambio (6-nov). En producción: servidor `00050-9v9`.
-- En producción desde el 3-nov: servidor `00044-5fh` y pantallas en Firebase, con el aviso y la fusión de empresas repetidas (G-01 y G-05).
-- Datos: listos para G4. Hay diccionario, reporte de controles, auditoría de calidad (línea base sobre datos de ejemplo), procedimiento de auditoría y manual de datos.
-- Automatización: el sistema funciona. Desde el 3-nov Daniela se encarga de toda la documentación, también la de automatización. El 3-nov quedaron el flujo de actualización (OB-03) y la evaluación del modelo (OB-04 v1.0, con la fórmula, el modelo y el prompt que confirmó Fabián; los resultados sobre muestra salen del piloto). El flujo de campaña (OB-05, para G5) está en borrador v0.5: se completa con la lista de Carlos.
-- Encendido el 6-nov con autorización escrita de Carlos, antes de lo planeado y sin lista cargada: base en cero, `MODO_PRUEBAS` apagado, servidor `00051-wn9` con tope de 20 al día. Primeras corridas automáticas el lunes 9-nov.
-- Lo que sigue: Carlos crea sus campañas y carga sus contactos; vigilar el primer rebote y el primer recordatorio real; pagar SendGrid antes del 24-nov.
+- Semana 11 de 16. El equipo trabaja contra el cierre del 9 de diciembre; el PDF del programa marca G6 del 14 al 18 de diciembre. Falta que Dirección confirme por escrito el 9 de diciembre.
+- **Encendido el 6-nov** con autorización escrita de Carlos, antes de lo planeado (el programa lo ponía en G5, 23 al 27-nov) y sin lista cargada: base de ejemplo borrada con respaldo, `MODO_PRUEBAS` apagado, tope de 20 al día, prompts de n8n aplicados y reparto de interesados prendido. Envíos automáticos de lunes a viernes desde el 9-nov.
+- **9-nov: varias campañas** (Fabián, PR #4, migración 042, servidor `00053-4wf`): los contactos de Carlos van a dos servicios (agua y tratamiento de maquinaria); cada campaña puede tener sus 3 correos, los límites se cuentan por persona y campaña, una serie a la vez, y «me interesa» en una frena las demás.
+- En producción: servidor `00053-4wf` y pantallas en Firebase. 13 pantallas; las pruebas pasan todas y corren solas en GitHub en cada cambio.
+- Documentación al 10-nov: diccionario 1.2, flujo de actualización 1.2, flujo de campaña 0.9, manuales 0.9.x, reporte del piloto (esqueleto 0.2, con su script) y reporte final de T1 (esqueleto); los scripts de auditoría y del reporte ya cuentan por persona y campaña.
+- Lo que sigue: Carlos carga sus contactos en sus campañas (guía en CARGA_DE_LA_LISTA.md) y se certifica la audiencia por campaña; vigilar el primer rebote y el primer recordatorio real; pagar SendGrid antes del 24-nov. Para que alguien reciba los 3 correos antes del cierre, el primero tiene que salir a más tardar el 20-nov.
 
 ## 2. Avance semana por semana
 
@@ -53,12 +52,12 @@ Estado: Hecho = existe lo que pedía el programa. Parcial = el trabajo está hec
 
 | Código | Entregable | Versión | Fecha | Dónde está | Dueño | Estado |
 |---|---|---|---|---|---|---|
-| OB-01 | Diccionario y reglas | v1.0 | 28-oct-2026 | docs/documentacion/DICCIONARIO_DE_DATOS.md (se regenera con generar-diccionario.mjs). Versión en Word: Diccionario_de_datos_v1_NANOBRIDGE.docx | Daniela | Listo para G4 |
+| OB-01 | Diccionario y reglas | v1.2 | 10-nov-2026 | docs/documentacion/DICCIONARIO_DE_DATOS.md (se regenera con generar-diccionario.mjs). Versión en Word: Diccionario_de_datos_v1_NANOBRIDGE.docx | Daniela | Listo para G4 |
 | OB-02 | Base maestra controlada | v0.1 · v1.0 | 25-sep · 28-oct | Esquema y plan de pruebas (S3_ESQUEMA…, 14-sep); documento G2 (25-sep); REPORTE_DE_CONTROLES.md (28-oct; el 29-oct se marcan como hechos G-01 y G-05, que estaban propuestos fuera de este corte); auditoría calidad-2026-10-28; reporte de calidad de la lista de Carlos (Word, 28-oct) | Daniela | Listo para G4 |
-| OB-03 | Flujo de actualización | v1.0 | 3-nov-2026 | docs/documentacion/FLUJO_DE_ACTUALIZACION.md: alta, cambio, rechazo, registro, reversión, fallas y las pruebas de cada caso. Se apoya en PLAN_N8N_DEFINITIVO.md y en el código | Daniela (con los flujos de Fabián) | Listo para G4 |
+| OB-03 | Flujo de actualización | v1.2 | 10-nov-2026 | docs/documentacion/FLUJO_DE_ACTUALIZACION.md: alta, cambio, rechazo, registro, reversión, fallas y las pruebas de cada caso. Se apoya en PLAN_N8N_DEFINITIVO.md y en el código | Daniela (con los flujos de Fabián) | Listo para G4 |
 | OB-04 | Red neuronal evaluada | v1.0 | 3-nov-2026 | docs/documentacion/EVALUACION_DEL_MODELO.md: los 4 usos de Gemini con su modelo, datos que recibe, revisión humana, fórmula del score, 5 métricas (en G3 no se aprobó ninguna), pruebas hechas y plan para medir en el piloto. Prompt y fórmula de PT1 en docs/n8n/pt1-scoring/ | Daniela (con los datos de Fabián) | Listo para G4; resultados sobre muestra en el piloto |
-| OB-05 | Flujo de campaña | v0.5 | 3-nov-2026 | docs/documentacion/FLUJO_DE_CAMPANA.md: las 11 decisiones que se piden en G5, audiencia, mensaje, límites, exclusiones, registros y vigilancia, modo de prueba, lista de encendido y cómo se detiene | Daniela (con los flujos de Fabián) | Borrador; v1.0 con la audiencia certificada (semana 12) |
-| OB-06 | Piloto y reporte | v0.1 (esqueleto) | 6-nov-2026 | docs/documentacion/REPORTE_DEL_PILOTO.md, con los números de reporte-piloto.mjs; se llena entre el 30 de nov y el 11 de dic | Fabián y Daniela | Esqueleto listo; v0.8 el 4-dic |
+| OB-05 | Flujo de campaña | v0.9 | 10-nov-2026 | docs/documentacion/FLUJO_DE_CAMPANA.md: las 11 decisiones que se piden en G5, audiencia, mensaje, límites, exclusiones, registros y vigilancia, modo de prueba, lista de encendido y cómo se detiene | Daniela (con los flujos de Fabián) | Borrador; v1.0 con la audiencia certificada (semana 12) |
+| OB-06 | Piloto y reporte | v0.2 (esqueleto) | 10-nov-2026 | docs/documentacion/REPORTE_DEL_PILOTO.md, con los números de reporte-piloto.mjs; se llena entre el 30 de nov y el 11 de dic | Fabián y Daniela | Esqueleto listo; v0.8 el 4-dic |
 | OB-07 | Paquete final y transferencia | — | — | Se arma en la semana 16, con el inventario de la semana 15 | Equipo | Pendiente |
 | Apoyo | Procedimiento de auditoría y actualización | v1.0 | 28-oct-2026 | docs/documentacion/PROCEDIMIENTO_AUDITORIA.md | Daniela | Hecho |
 | Apoyo | Manual de datos | v1.0 | 28-oct-2026 | docs/documentacion/MANUAL_DE_DATOS.md | Daniela | Hecho |
@@ -73,17 +72,17 @@ Revisión y decisión de Dirección: Por registrar para todos los entregables. E
 | # | Documento | Gate | Dueño | Cuándo | Qué lleva |
 |---|---|---|---|---|---|
 | 1 | Resultados del modelo sobre muestra (OB-04) | OB-06 | Daniela, con los datos de Fabián | 11-dic | El documento v1.0 quedó el 3-nov; faltan los resultados de las 5 métricas, que salen del piloto, y registrar las métricas con Dirección. |
-| 2 | Flujo de campaña (OB-05): de v0.5 a v1.0 | G5 | Daniela | Semana 12-13 | Certificación de audiencia, textos aprobados, domicilio, decisiones abiertas del §1 y pruebas en vivo que faltan (§10 del documento). |
+| 2 | Flujo de campaña (OB-05): de v0.9 a v1.0 | Encendido | Daniela | Al cargar los contactos | v0.9 del 10-nov con el encendido y las dos campañas. Falta: certificación de audiencia por campaña, correos propios de cada campaña (o usar los generales), pago de SendGrid, primer rebote y primer recordatorio real (§10 del documento). |
 | 3 | Confirmación escrita de la fecha de cierre | Ya | Dirección | Esta semana | El equipo trabaja contra el 9 de diciembre; el PDF del programa dice el 18. Que Dirección lo confirme por escrito, porque cambia cuándo vencen los puntos 9 a 13. |
-| 4 | Evidencia de prepiloto y lista de ajustes | Semana 12 | Datos y Automatización | 16 al 20 nov | Lista de Carlos limpia y cargada, auditoría después de la carga, piloto interno sin envíos externos y ajustes pendientes. |
-| 5 | Certificación de audiencia | G5 | Datos | 23 al 27 nov | Cuántos prospectos de cada campaña recibirían correo y por qué no los demás. Sale de la auditoría de datos después de cargar la lista. |
-| 6 | Autorización escrita de Dirección para el piloto | G5 | Dirección | Antes del 30 nov | Audiencia, mensaje, infraestructura y límites aprobados por escrito. El programa dice que sin aprobación escrita no hay ejecución externa. |
-| 7 | Monitoreo del piloto | Semana 14 | Datos | 30 nov al 4 dic | Una auditoría por día, anotada en el registro del procedimiento de auditoría. |
+| 4 | Evidencia de prepiloto y lista de ajustes | Semana 12 | Datos y Automatización | — | Lo reemplaza el encendido del 6-nov: el ensayo de la carga (CARGA_DE_LA_LISTA.md §4, 6-nov) y las pruebas en vivo de Fabián (RUNBOOK §10) son la evidencia. Confirmar con Dirección. |
+| 5 | Certificación de audiencia | — | Datos | Al cargar los contactos | Cuántos prospectos de cada campaña recibirían correo y por qué no los demás. Sale de la auditoría de datos (§5) después de cargar cada lista. |
+| 6 | Autorización escrita de Dirección para el piloto | G5 | Dirección | Hecho (6-nov) | Carlos autorizó por escrito el encendido. Falta guardar la evidencia (correo o mensaje) junto con el expediente. |
+| 7 | Monitoreo de la operación | Semana 14 | Datos | Desde que salgan los primeros correos | Una auditoría por día hábil las primeras semanas, anotada en el registro del procedimiento de auditoría. |
 | 8 | Reporte del piloto (OB-06) | Semanas 14 y 15 | Daniela, con los datos de Fabián | 4 y 11 dic | Reporte factual: qué se envió, qué respondieron, fallas e incidentes. Sin conclusiones que no estén respaldadas por datos. Esqueleto del 6-nov (docs/documentacion/REPORTE_DEL_PILOTO.md) y script que saca los números de la base (reporte-piloto.mjs), probado con un piloto simulado. |
-| 9 | Manual operativo de la automatización | G6 | Daniela | Semana 15 | v0.9 adelantada el 4-nov (docs/documentacion/MANUAL_OPERATIVO_AUTOMATIZACION.md). Falta la lista de accesos (con OB-07) y lo que deje el piloto. |
-| 10 | Manual para el vendedor | G6 | Daniela | Semana 15 | v0.9.1 del 6-nov (docs/documentacion/MANUAL_DEL_VENDEDOR.md), con 15 capturas y lo que entró con los PR #1 y #2 (escalar interesados, seguimiento de cotizaciones, 6 meses tras un «no interesado»). Falta lo que deje el piloto. |
+| 9 | Manual operativo de la automatización | G6 | Daniela | Semana 15 | v0.9.1 del 10-nov (docs/documentacion/MANUAL_OPERATIVO_AUTOMATIZACION.md), con el encendido y las campañas. Falta la lista de accesos (con OB-07) y lo que deje la operación. |
+| 10 | Manual para el vendedor | G6 | Daniela | Semana 15 | v0.9.2 del 10-nov (docs/documentacion/MANUAL_DEL_VENDEDOR.md), con 15 capturas y lo de los PR #1, #2 y #4 (varias campañas). Faltan capturas de las pantallas del 9-nov y lo que deje la operación. |
 | 11 | Inventario de entregables, pendientes y lecciones aprendidas | Semana 15 | Equipo | 7 al 11 dic | Se arma a partir de esta bitácora. |
-| 12 | Reporte final de Datos | G6 | Daniela | Semana 15 o 16 | Esqueleto del 5-nov (docs/documentacion/REPORTE_FINAL_T1.md) con la línea base, los controles, pendientes y transferencia; faltan los números de la semana 12 y del piloto, y las metas del programa para T1.1 a T1.3. |
+| 12 | Reporte final de Datos | G6 | Daniela | Semana 15 o 16 | Esqueleto del 5-nov (docs/documentacion/REPORTE_FINAL_T1.md) con la línea base, los controles, pendientes y transferencia; faltan los números tras cargar los contactos de Carlos y de las primeras semanas de envíos, y las metas del programa para T1.1 a T1.3. |
 | 13 | Paquete final y transferencia operativa (OB-07) | G6 | Equipo | Semana 16 | Índice de todo lo anterior, respaldos y quién mantiene cada parte. Los accesos ya están en docs/documentacion/INVENTARIO_DE_ACCESOS.md (v0.9, 4-nov), con 7 pasos para antes del cierre. |
 | 14 | Entregables de las semanas 5, 7 y 8 sin documento propio | — | Equipo y Dirección | Esta semana | Reporte de carga, paquete PDR y base v0.8. Confirmar con Dirección si se aceptaron con lo que hay o si piden un documento. |
 | 15 | Actas y tablero semanal de compromisos | Continuo | Equipo | Cada semana | Lo pide el KPI C4. La primera es la del G4 (docs/documentacion/actas/2026-11-G4.md, para llenar en la junta); sirve de plantilla para las demás. |
@@ -161,6 +160,8 @@ Hitos del trabajo, con su evidencia. El historial completo está en el repositor
 | 6-nov | Suite completa en local (845 de 845, en UTC) y en GitHub; revisión externa de producción sin hallazgos. Ensayo completo de la carga de la semana 12 en una base local: el script de limpieza fallaba con las cotizaciones mandadas por correo y no podía borrar las empresas de ejemplo que parecen reales (corregido, con `--de-ejemplo`); la auditoría ya cuenta los 6 meses tras un «no interesado», los giros que el score no reconoce y los correos de área. Guía de la carga (CARGA_DE_LA_LISTA.md). Esqueleto del reporte del piloto (OB-06) y `reporte-piloto.mjs`, que saca de la base envíos, respuestas, bajas, rebotes, interesados, fallas y las métricas M1 a M5; probado con un piloto simulado. | Daniela | ver git log |
 | 6-nov | Teléfonos con y sin lada de México («+52», «+52 1», «0052») se guardan igual y sin la extensión del final; la migración 041 pasa a esa forma lo guardado (medios, lista de supresión y filas importadas). El CSV separado por punto y coma ya se acepta. 853 de 853 pruebas. En producción el mismo día: servidor 00050-9v9 con la migración 041 (no cambió ningún dato: no había teléfonos con lada) y pantallas en Firebase, con el contraste de Importaciones. Respaldos de Cloud SQL revisados: diarios, todos correctos, se guardan 7. | Daniela | 1c2120d |
 | 6-nov | Prompts de n8n aplicados y encendido: prueba de punta a punta con `+prueba31`, pruebas de respuestas en PT2 (#305, #307 y #311), base en cero, tope de 20 (00051-wn9) y `MODO_PRUEBAS` apagado. Primeras corridas el lunes 9-nov. | Fabián | RUNBOOK §6 y §10 |
+| 9-nov | Varias campañas con los mismos contactos (agua y tratamiento de maquinaria): correos propios por campaña, límites por persona y campaña, una serie a la vez. En producción: servidor 00053-4wf con la migración 042 y pantallas. | Fabián | eddd2fa · 5acfd6d |
+| 10-nov | Documentación al día con el encendido y las campañas: PR #3 de Fabián combinado; diccionario 1.2 (migración 042), flujo de campaña 0.9, flujo de actualización 1.2, manuales, guía de carga 1.1 y reporte del piloto 0.2. `auditar-datos.mjs` y `reporte-piloto.mjs` cuentan por persona y campaña (probados con dos campañas simuladas); el control de «más de 3 correos» ya no cuenta los envíos fallidos. | Daniela | c6768d1 · 82a272e · ver git log |
 
 ## 7. Decisiones y riesgos abiertos
 

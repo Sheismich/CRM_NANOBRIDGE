@@ -89,14 +89,16 @@ r.med = {
 r.pro = {
   porEstado: await filas("SELECT estado, COUNT(*) n FROM prospectos GROUP BY estado ORDER BY n DESC"),
   estadoInvalido: (await filas(`SELECT id FROM prospectos WHERE estado NOT IN (${lista(ESTADOS_VALIDOS)})`)).map((f) => f.id),
-  variosAbiertosMismaPersona: await filas(`SELECT contacto_id, GROUP_CONCAT(id ORDER BY id) ids, COUNT(*) n FROM prospectos WHERE estado NOT IN (${lista(CERRADOS)}) GROUP BY contacto_id HAVING n > 1`),
+  // Por persona y campaña: desde el 9-nov-2026 la misma persona puede ir abierta en varias campañas.
+  variosAbiertosMismaPersona: await filas(`SELECT contacto_id, GROUP_CONCAT(id ORDER BY id) ids, COUNT(*) n FROM prospectos WHERE estado NOT IN (${lista(CERRADOS)}) GROUP BY contacto_id, campana_id HAVING n > 1`),
   abiertoConContactoInactivo: (await filas(`SELECT p.id FROM prospectos p JOIN contactos c ON c.id = p.contacto_id JOIN empresas e ON e.id = c.empresa_id WHERE p.estado NOT IN (${lista(CERRADOS)}) AND (c.activo = 0 OR e.activo = 0)`)).map((f) => f.id),
   enCampanaSinCorreo: (await filas(`SELECT p.id FROM prospectos p WHERE p.estado IN ('validado','en_fila') AND NOT EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = p.contacto_id AND m.tipo = 'correo' AND m.estado_contacto = 'activo')`)).map((f) => f.id),
   enCampanaSinGiroTamano: (await filas("SELECT p.id FROM prospectos p JOIN contactos c ON c.id = p.contacto_id JOIN empresas e ON e.id = c.empresa_id WHERE p.estado IN ('validado','en_fila') AND (e.giro IS NULL OR TRIM(e.giro) = '' OR e.tamano IS NULL)")).map((f) => f.id)
 };
 
 // --- Envíos: máximo 3 por persona en 6 meses
-r.masDeTresEnvios = await filas("SELECT p.contacto_id, COUNT(*) n FROM envios v JOIN prospectos p ON p.id = v.prospecto_id WHERE v.canal = 'correo' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH GROUP BY p.contacto_id HAVING n > 3");
+// Por persona y campaña (9-nov-2026); un envío fallido no cuenta: nunca llegó.
+r.masDeTresEnvios = await filas("SELECT p.contacto_id, p.campana_id, COUNT(*) n FROM envios v JOIN prospectos p ON p.id = v.prospecto_id WHERE v.canal = 'correo' AND v.estado <> 'fallido' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH GROUP BY p.contacto_id, p.campana_id HAVING n > 3");
 
 // --- Área de carga
 r.borradores = {
@@ -111,7 +113,13 @@ r.borradores = {
 // ventana de espera (solo aplica a quien ya recibió un correo) y "ya en fila".
 // Los 6 meses tras un "no interesado" (PR #2, 5-nov-2026) se cuentan aparte.
 const NO_INTERESADO_RECIENTE = `EXISTS (SELECT 1 FROM respuestas rn JOIN prospectos pn ON pn.id = rn.prospecto_id
-  WHERE pn.contacto_id = c.id AND pn.estado = 'no_interesado' AND rn.clasificacion = 'no_interesado' AND rn.recibido_en > NOW() - INTERVAL 6 MONTH)`;
+  WHERE pn.contacto_id = c.id AND pn.campana_id <=> p.campana_id AND pn.estado = 'no_interesado' AND rn.clasificacion = 'no_interesado' AND rn.recibido_en > NOW() - INTERVAL 6 MONTH)`;
+// Varias campañas (9-nov-2026, ciclo-contacto.ts): "interesado" en otra campaña deja fuera; una serie en curso en
+// otra solo hace esperar el primer correo (se cuenta aparte, no resta de «Listos»).
+const CORREOS_EN_ESTA_CAMPANA = `(SELECT COUNT(*) FROM envios v JOIN prospectos pv ON pv.id = v.prospecto_id WHERE pv.contacto_id = c.id AND pv.campana_id <=> p.campana_id AND v.canal = 'correo' AND v.estado <> 'fallido' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH)`;
+const INTERESADO_EN_OTRA = `EXISTS (SELECT 1 FROM prospectos pi WHERE pi.contacto_id = c.id AND NOT (pi.campana_id <=> p.campana_id) AND pi.estado = 'interesado')`;
+const SERIE_EN_OTRA = `EXISTS (SELECT 1 FROM prospectos ps WHERE ps.contacto_id = c.id AND NOT (ps.campana_id <=> p.campana_id) AND ps.estado NOT IN (${lista(CERRADOS)})
+  AND EXISTS (SELECT 1 FROM envios es WHERE es.prospecto_id = ps.id AND es.estado <> 'fallido' AND es.enviado_en > NOW() - INTERVAL 6 MONTH))`;
 r.audiencia = await filas(`
   SELECT cp.id, cp.nombre, cp.estado,
     COUNT(*) total,
@@ -121,14 +129,16 @@ r.audiencia = await filas(`
     SUM(NOT EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.tipo = 'correo' AND m.estado_contacto = 'activo'
       AND NOT EXISTS (SELECT 1 FROM lista_supresion s WHERE s.tipo = 'correo' AND s.valor_normalizado = m.valor_normalizado))) sin_correo_utilizable,
     SUM(EXISTS (SELECT 1 FROM prospectos pb WHERE pb.contacto_id = c.id AND pb.estado = 'baja')) en_baja,
-    SUM((SELECT COUNT(*) FROM envios v JOIN prospectos pv ON pv.id = v.prospecto_id WHERE pv.contacto_id = c.id AND v.canal = 'correo' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH) >= 3) maximo_contactos,
+    SUM(${CORREOS_EN_ESTA_CAMPANA} >= 3) maximo_contactos,
+    SUM(${INTERESADO_EN_OTRA}) interesado_en_otra,
+    SUM(${SERIE_EN_OTRA}) serie_en_otra,
     SUM(${NO_INTERESADO_RECIENTE}) no_interesado_reciente,
     SUM(e.activo = 1 AND c.activo = 1 AND e.giro IS NOT NULL AND TRIM(e.giro) <> '' AND e.tamano IS NOT NULL
       AND EXISTS (SELECT 1 FROM medios_contacto m WHERE m.contacto_id = c.id AND m.tipo = 'correo' AND m.estado_contacto = 'activo'
         AND NOT EXISTS (SELECT 1 FROM lista_supresion s WHERE s.tipo = 'correo' AND s.valor_normalizado = m.valor_normalizado))
       AND NOT EXISTS (SELECT 1 FROM prospectos pb WHERE pb.contacto_id = c.id AND pb.estado = 'baja')
-      AND (SELECT COUNT(*) FROM envios v JOIN prospectos pv ON pv.id = v.prospecto_id WHERE pv.contacto_id = c.id AND v.canal = 'correo' AND v.enviado_en >= NOW() - INTERVAL 6 MONTH) < 3
-      AND NOT ${NO_INTERESADO_RECIENTE}) listos
+      AND ${CORREOS_EN_ESTA_CAMPANA} < 3
+      AND NOT ${NO_INTERESADO_RECIENTE} AND NOT ${INTERESADO_EN_OTRA}) listos
   FROM prospectos p
   JOIN contactos c ON c.id = p.contacto_id
   JOIN empresas e ON e.id = c.empresa_id
@@ -263,7 +273,7 @@ ${tabla(["Control", "Casos", "IDs"], [
   fila("Prospectos validados o en fila sin correo activo", r.pro.enCampanaSinCorreo.length, `prospectos ${ids(r.pro.enCampanaSinCorreo)}`),
   fila("Prospectos validados o en fila sin giro o tamaño", r.pro.enCampanaSinGiroTamano.length, `prospectos ${ids(r.pro.enCampanaSinGiroTamano)}`),
   fila("Prospectos abiertos con contacto o empresa desactivados", r.pro.abiertoConContactoInactivo.length, `prospectos ${ids(r.pro.abiertoConContactoInactivo)}`),
-  fila("Personas con más de 3 correos en 6 meses (no debería pasar)", r.masDeTresEnvios.length, `contactos ${ids(r.masDeTresEnvios.map((x) => x.contacto_id))}`)
+  fila("Personas con más de 3 correos en 6 meses en una misma campaña (no debería pasar)", r.masDeTresEnvios.length, `contactos ${ids(r.masDeTresEnvios.map((x) => `${x.contacto_id} (campaña ${x.campana_id ?? "sin campaña"})`))}`)
 ])}
 
 ### Giros escritos de varias formas
@@ -279,7 +289,7 @@ ${tabla(["Control", "Grupos", "IDs por grupo"], [
   fila("Contactos con el mismo nombre en la misma empresa", r.con.mismoNombreMismaEmpresa.length, r.con.mismoNombreMismaEmpresa.map((d) => `[${d.ids}]`).join(" ")),
   fila("Mismo teléfono con distinto formato (últimos 10 dígitos)", r.med.telefonoMismoNumero.length, r.med.telefonoMismoNumero.map((d) => `[${d.ids}]`).join(" ")),
   fila("Mismo buzón de Gmail con puntos o «+»", r.med.gmailMismoBuzon.length, r.med.gmailMismoBuzon.map((d) => `[${d.ids}]`).join(" ")),
-  fila("Personas con más de un prospecto abierto a la vez", r.pro.variosAbiertosMismaPersona.length, r.pro.variosAbiertosMismaPersona.map((d) => `contacto ${d.contacto_id}: [${d.ids}]`).join(" ")),
+  fila("Personas con más de un prospecto abierto a la vez en la misma campaña", r.pro.variosAbiertosMismaPersona.length, r.pro.variosAbiertosMismaPersona.map((d) => `contacto ${d.contacto_id}: [${d.ids}]`).join(" ")),
   fila("Filas importadas marcadas «duplicado» sin resolver", r.borradores.duplicadosSinResolver, "Prospectos → Importaciones")
 ])}
 
@@ -295,12 +305,13 @@ Filas pendientes de revisar con más de 7 días: ${r.borradores.pendientesViejos
 
 ${tabla(["Medio", "Estado", "Cantidad"], r.med.porTipoEstado.map((x) => [x.tipo, x.estado_contacto, String(x.n)]))}
 
-## 5. Audiencia por campaña (certificación de T1 antes de G5)
+## 5. Audiencia por campaña (certificación de T1)
 
 Prospectos que esperan correo (en fila o validados) en campañas no finalizadas, y cuántos lo recibirían hoy.
-Un prospecto puede tener varios motivos; «Listos» cumple todo.
+Un prospecto puede tener varios motivos; «Listos» cumple todo. Los límites se cuentan por persona y campaña. «Esperan
+otra campaña» sí están listos: su primer correo sale cuando termine la serie de la otra.
 
-${r.audiencia.length ? tabla(["Campaña", "Estado", "En espera", "Listos", "Desactivado", "Sin giro", "Sin tamaño", "Sin correo utilizable", "En baja", "Ya con 3 correos", "No interesado (6 meses)"], r.audiencia.map((a) => [`${a.id} · ${a.nombre}`, a.estado, String(a.total), `**${a.listos}**`, String(a.desactivado), String(a.sin_giro), String(a.sin_tamano), String(a.sin_correo_utilizable), String(a.en_baja), String(a.maximo_contactos), String(a.no_interesado_reciente)])) : "No hay prospectos esperando correo en campañas abiertas."}
+${r.audiencia.length ? tabla(["Campaña", "Estado", "En espera", "Listos", "Desactivado", "Sin giro", "Sin tamaño", "Sin correo utilizable", "En baja", "Ya con 3 correos", "No interesado (6 meses)", "Interesado en otra", "Esperan otra campaña"], r.audiencia.map((a) => [`${a.id} · ${a.nombre}`, a.estado, String(a.total), `**${a.listos}**`, String(a.desactivado), String(a.sin_giro), String(a.sin_tamano), String(a.sin_correo_utilizable), String(a.en_baja), String(a.maximo_contactos), String(a.no_interesado_reciente), String(a.interesado_en_otra), String(a.serie_en_otra)])) : "No hay prospectos esperando correo en campañas abiertas."}
 
 Prospectos en espera sin campaña: ${r.audienciaSinCampana}.
 
