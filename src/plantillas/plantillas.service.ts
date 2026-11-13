@@ -3,7 +3,8 @@ import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, parametrosAutomatizacion, plantillasCorreo, usuarios } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
-import { armarCorreo, enlacesInvalidos, ETIQUETA_BAJA, VARIABLES_PLANTILLA, variablesDesconocidas, type DatosPlantilla } from "../shared/plantillas.js";
+import { armarCorreo, enlacesInvalidos, VARIABLES_PLANTILLA, variablesDesconocidas, type DatosPlantilla } from "../shared/plantillas.js";
+import { URL_BAJA_EJEMPLO } from "../shared/link-baja.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { CLAVE_PIE_CORREO, datosDelProspecto, leerPie } from "./plantillas.correo.js";
 import type { EditarPieInput, EditarPlantillaInput, VistaPreviaInput } from "./dto/plantilla.schema.js";
@@ -190,8 +191,9 @@ export class PlantillasService {
     exigirVariablesConocidas(input.asunto, input.cuerpo, pie);
     exigirEnlacesValidos(input.cuerpo, pie);
     const datos = input.prospecto_id ? await datosDelProspecto(this.db, input.prospecto_id) : DATOS_EJEMPLO;
-    const correo = armarCorreo({ asunto: input.asunto, cuerpo: input.cuerpo }, datos, pie, { linkDeBaja: true });
-    // En la pantalla el link de baja no lleva a ningún lado: la URL la pone SendGrid al mandar.
-    return { ...correo, html: correo.html.replaceAll(`href="${ETIQUETA_BAJA}"`, 'href="#"') };
+    // En la pantalla el link de baja no lleva a ningún lado: el de verdad va
+    // firmado para cada prospecto (shared/link-baja.ts) y se arma al mandar.
+    const correo = armarCorreo({ asunto: input.asunto, cuerpo: input.cuerpo }, datos, pie, { linkDeBaja: URL_BAJA_EJEMPLO });
+    return { ...correo, html: correo.html.replaceAll(`href="${URL_BAJA_EJEMPLO}"`, 'href="#"') };
   }
 }

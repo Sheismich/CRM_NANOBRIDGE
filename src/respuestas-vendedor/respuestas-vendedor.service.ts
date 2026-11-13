@@ -9,6 +9,7 @@ import { HttpError } from "../shared/http-error.js";
 import { recortarTexto, sinDatosDeContacto } from "../shared/texto.js";
 import { armarCorreo } from "../shared/plantillas.js";
 import { firmarReplyTo } from "../shared/reply-to.js";
+import { urlDeBaja } from "../shared/link-baja.js";
 import { fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
 import { vendedorDeLaConversacion } from "../shared/conversacion.js";
 import { correoDeEnvio, leerPie } from "../plantillas/plantillas.correo.js";
@@ -260,8 +261,7 @@ export class RespuestasVendedorService {
         nombreRemitente: `${user.nombre} · NANOBRIDGE`,
         replyTo: firmarReplyTo(c.envioId!),
         ...(c.messageId ? { cabeceras: { "In-Reply-To": c.messageId, References: c.messageId } } : {}),
-        categoria: CATEGORIA,
-        linkDeBaja: true
+        categoria: CATEGORIA
       }));
     } catch (error) {
       const detalle = error instanceof Error ? error.message : String(error);
@@ -314,6 +314,6 @@ export class RespuestasVendedorService {
     const nombre = { nombre: c.contactoNombre, empresa: c.empresaNombre, giro: c.giro };
     const cuando = new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" }).format(c.recibidoEn);
     const cita = c.contenido ? { encabezado: `El ${cuando}, ${c.contactoNombre} escribió:`, contenido: c.contenido } : undefined;
-    return armarCorreo({ asunto: c.asunto, cuerpo: texto }, nombre, await leerPie(this.db), { firma: user.nombre, logo: true, linkDeBaja: true, cita });
+    return armarCorreo({ asunto: c.asunto, cuerpo: texto }, nombre, await leerPie(this.db), { firma: user.nombre, logo: true, linkDeBaja: urlDeBaja(c.prospectoId), cita });
   }
 }

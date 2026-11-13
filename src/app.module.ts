@@ -17,10 +17,11 @@ import { RespuestasVendedorModule } from "./respuestas-vendedor/respuestas-vende
 import { ResumenFichaModule } from "./resumen-ficha/resumen-ficha.module.js";
 import { AdminModule } from "./admin/admin.module.js";
 import { BuscadorModule } from "./buscador/buscador.module.js";
+import { BajaModule } from "./baja/baja.module.js";
 import { HealthController } from "./health/health.controller.js";
 
 @Module({
-  imports: [DatabaseModule, AuthModule, CrmModule, TareasModule, ProcesosFallidosModule, AutomatizacionModule, ComercialModule, ReportesModule, DocumentosModule, UsuariosModule, CampanasModule, PlantillasModule, NotificacionesModule, RespuestasVendedorModule, ResumenFichaModule, JobsModule, AdminModule, BuscadorModule],
+  imports: [DatabaseModule, AuthModule, CrmModule, TareasModule, ProcesosFallidosModule, AutomatizacionModule, ComercialModule, ReportesModule, DocumentosModule, UsuariosModule, CampanasModule, PlantillasModule, NotificacionesModule, RespuestasVendedorModule, ResumenFichaModule, JobsModule, AdminModule, BuscadorModule, BajaModule],
   controllers: [HealthController]
 })
 export class AppModule {}

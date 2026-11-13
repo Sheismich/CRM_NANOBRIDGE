@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { RUTA_BAJA } from "./link-baja.js";
 
 export const CODIGO_ORIGEN_NO_PERMITIDO = "ORIGEN_NO_PERMITIDO";
 
@@ -40,6 +41,10 @@ export function origenPermitido(peticion: Peticion, origenesPermitidos: readonly
 // responde él mismo con la forma de HttpExceptionFilter en vez de lanzar.
 export function revisarOrigen(origenesPermitidos: readonly string[]) {
   return (request: Request, response: Response, next: NextFunction) => {
+    // La página de baja (src/baja/) no usa la sesión: lo que autoriza es la
+    // firma del link. Y su botón tiene que funcionar aunque el programa de
+    // correo abra la página con un origen raro ("null").
+    if (request.path.startsWith(`${RUTA_BAJA}/`)) return next();
     const permitido = origenPermitido(
       { metodo: request.method, origin: request.headers.origin, secFetchSite: request.get("sec-fetch-site"), host: request.headers.host },
       origenesPermitidos

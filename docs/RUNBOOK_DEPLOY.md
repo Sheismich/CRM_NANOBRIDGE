@@ -290,6 +290,8 @@ Actualiza esta tabla en cada deploy.
 | 6-nov-2026 | `nanobridge-api-00051-wn9` | `1c2120d` (misma imagen) | ninguna | Encendido: `TOPE_DIARIO_CORREOS=20` con `--update-env-vars`, sin build. |
 | 6-nov-2026 | `nanobridge-api-00052-7mh` | `09e711f` | ninguna | Filtros del Registro de cambios (`GET /admin/registro-cambios/filtros`; filtro por persona y acción, y el PDF indica a qué se redujo). Front en Firebase. |
 | 9-nov-2026 | `nanobridge-api-00053-4wf` | `ec49040` (= main `eddd2fa`, PR 4) | `042_plantillas_por_campana.sql` | Correos por campaña y una persona en varias campañas: `plantillas_correo.campana_id`; `/plantillas` con `campana_id` (GET, PUT, DELETE); `correos_propios` en `/campanas`; los 3 correos y el "no interesado" se cuentan por persona y campaña, una serie a la vez (`tomarDeFila` uno por persona, `OTRA_CAMPANA_EN_CURSO`), "interesado" frena las demás campañas; `POST /prospectos/automatizacion` con `modo` y `nuevos`. Migración primero desde Cloud Shell (`Applied 042…`, IP revocada), build y deploy con `git checkout ec49040`. `/health` ok. Ese mismo día PT1a mandó los primeros 10 correos reales (envíos 37-46, campañas 4 y 5), antes del deploy (9 Delivered en SendGrid, 1 en reintento). Front en Firebase desde la compu de Fabián (`login --reauth`), revisado: botón Campañas en Correos de prospección |
+| 10-nov-2026 | `nanobridge-api-00054-qxb` | `ec49040` (misma imagen) | ninguna | `TOPE_DIARIO_CORREOS=100` con `--update-env-vars`, sin build. SendGrid Email API ya pagado (Essentials 50K, 50,000 correos al mes). `NUEVOS_POR_DIA` sigue en 10. |
+| 10-nov-2026 | `nanobridge-api-00055` | `ec49040` (misma imagen) | ninguna | `NUEVOS_POR_DIA=75` con `--update-env-vars`, sin build (antes 10). Cuando empiecen los recordatorios manda el tope de 100: van primero y los nuevos usan lo que sobra. |
 
 **Variables que deben seguir puestas en Cloud Run** (`gcloud run deploy --image=…` las
 conserva; no uses `--set-env-vars`, que borra las que no menciones):
@@ -300,8 +302,12 @@ conserva; no uses `--set-env-vars`, que borra las que no menciones):
 - `CORREO_DRIVER=sendgrid` y el secreto `SENDGRID_API_KEY` (desde la etapa 2 de las
   mejoras, avisos del CRM; ver §8b) — sin ellas la campanita sigue, pero no sale
   ningún correo de aviso (el driver "falso" solo los guarda en memoria).
-- `TOPE_DIARIO_CORREOS=20` (desde `00051-wn9`, encendido del 6-nov-2026; calentamiento
-  del dominio, PLAN_N8N_DEFINITIVO.md). Se cambia con `--update-env-vars`.
+- `TOPE_DIARIO_CORREOS=100` (desde `00054-qxb`, 10-nov-2026; antes 20 desde `00051-wn9`,
+  encendido del 6-nov). Se cambia con `--update-env-vars`. 
+- `NUEVOS_POR_DIA=75` (desde `00055`, 10-nov-2026; antes 10, el default de
+  `src/config/env.ts`). Prospectos nuevos que PT1a toma de la fila al día, sin pasarse
+  del tope: los recordatorios van primero, así que con recordatorios entran menos.
+  Se cambia con `--update-env-vars`.
 
 ### Consultar la base desde Cloud Shell sin escribir la contraseña
 
@@ -534,6 +540,15 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
       viene de la API dentro del pie (etiqueta `[darte_de_baja]`) y PT1b
       solo manda `substitution_tag` (prompt 4 de `docs/n8n/pt1b-plantillas/`).
       Las respuestas desde el CRM también la llevan.
+      **13-nov-2026:** el link ya no es de SendGrid. El 12-nov el escáner de
+      links de Microsoft 365 lo abrió solo y dio de baja a dos prospectos
+      (SendGrid da de baja con solo abrirlo). Ahora la API pone un link
+      firmado a su propia página (`/api/v1/baja/<prospecto>.<firma>`,
+      `src/baja/`): abrirla muestra el botón "Confirmar baja" y solo el botón
+      da de baja. PT1b manda `subscription_tracking: { enable: false }`
+      (prompt 5 de `docs/n8n/pt1b-plantillas/`). La firma usa
+      `REPLY_TO_SIGNING_SECRET`: rotarlo también invalida los links de baja de
+      los correos ya enviados. PT3 sigue atendiendo los links viejos.
 - [x] Domicilio de la empresa (Carlos, 4-nov-2026; visto en el correo de prueba del 6-nov: Ignacio T Chávez 328, Obraje, 20230,
       Aguascalientes, Ags.): se escribe en Administración → Correos de prospección →
       "Pie de los tres", no en n8n.

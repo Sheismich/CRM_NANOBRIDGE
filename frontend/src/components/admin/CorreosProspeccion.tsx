@@ -376,7 +376,7 @@ function Editor({ edicion, datos, campana, onListo }: { edicion: Edicion; datos:
             // El html lo arma la API con todo el texto escapado (shared/plantillas.ts).
             <div className="space-y-3 px-4 py-4 text-[13.5px] leading-relaxed text-ink [&_a]:text-navy [&_a]:underline [&_strong]:font-bold" dangerouslySetInnerHTML={{ __html: vista.data?.html ?? "" }} />
           )}
-          <p className="border-t border-dashed border-border px-4 py-2.5 text-[11.5px] text-ink-3">Al final, SendGrid agrega el enlace para darse de baja.</p>
+          <p className="border-t border-dashed border-border px-4 py-2.5 text-[11.5px] text-ink-3">Al final va el enlace para darse de baja: lleva a una página donde la persona lo confirma con un botón.</p>
         </div>
       </div>
     </div>
