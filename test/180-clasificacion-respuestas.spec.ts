@@ -465,7 +465,9 @@ describe("respuestas: clasificación automática y manual", () => {
       // valor exacto depende de la hora a la que corra la prueba.
       const limite = tarea!.fechaLimite!.getTime();
       expect(limite).toBeGreaterThan(antes.getTime());
-      expect(limite).toBeLessThanOrEqual(antes.getTime() + 4 * 86_400_000);
+      // Hasta 5 días: un viernes antes de un lunes feriado (13-nov-2026) el
+      // siguiente día hábil es el martes.
+      expect(limite).toBeLessThanOrEqual(antes.getTime() + 5 * 86_400_000);
     }
 
     it("clasificado por n8n: una tarea 'Contactar prospecto interesado' sin asignar, prioridad alta, con fecha límite", async () => {
