@@ -97,7 +97,6 @@ describe("mandar la cotización por correo", () => {
     expect(enviado.nombrePara).toBe("Laura Gómez");
     expect(enviado.nombreRemitente).toBe("Admin Semilla · NANOBRIDGE");
     expect(enviado.replyTo).toBe((await yo(admin)).correo);
-    expect(enviado.linkDeBaja).toBeFalsy();
     expect(enviado.html).toContain("Hola Laura, le comparto la cotización.");
     expect(enviado.html).toContain("Admin Semilla");
     expect(enviado.html).not.toContain("Darte de baja");

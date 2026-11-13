@@ -104,3 +104,37 @@ un día hábil (PT4 corre solo a esa hora).
 llega con la firma con logo, el pie gris y "Darte de baja" como link (al pasar
 el mouse debe apuntar a SendGrid, no decir `[darte_de_baja]`), y sin un
 segundo pie al final.
+
+## Prompt 5 · PT1b, el link de baja ya no es de SendGrid (13-nov-2026)
+
+El 12-nov dos prospectos con correo en Microsoft 365 quedaron en baja 7
+segundos después de recibir el correo: el escáner de seguridad de Microsoft
+abre todos los links, y el de SendGrid da de baja con solo abrirlo. Desde la
+API con la página de baja propia (`src/baja/`), el html y el texto que regresa
+`POST /automatizacion/envios` ya traen el link completo y firmado
+(`…/api/v1/baja/<prospecto>.<firma>`), que lleva a una página con el botón
+"Confirmar baja". SendGrid ya no tiene que poner nada.
+
+**Orden:** primero el deploy de la API, luego este cambio. Con PT1a pausada no
+sale nada a medias. PT4 usa el mismo subflujo: queda arreglado con este cambio.
+
+> En el subflujo PT1b, nodo Code "Armar correo SendGrid", cambia
+> `tracking_settings.subscription_tracking` para que quede exactamente así:
+>
+> ```js
+> subscription_tracking: { enable: false }
+> ```
+>
+> No cambies nada más (ni `content`, ni `click_tracking`, ni `open_tracking`).
+
+**Prueba:** correr PT1a con un prospecto de prueba (`+pruebaN`).
+1. En el correo, "Darte de baja" apunta a
+   `crm-prospeccion-outbound.web.app/api/v1/baja/…` (no a SendGrid).
+2. Abrir el link: sale la página con el botón y el prospecto SIGUE activo en
+   el CRM.
+3. Apretar "Confirmar baja": el prospecto queda en baja, sus medios en "no
+   contactar" y el Historial dice "Baja confirmada en la página de baja".
+4. En SendGrid → Activity ese correo no tiene evento "Unsubscribe".
+
+Los correos que salieron antes de este cambio conservan el link de SendGrid:
+PT3 sigue igual y atiende esas bajas.

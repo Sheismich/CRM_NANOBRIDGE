@@ -3,6 +3,7 @@ import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
 import { contactos, empresas, envios, parametrosAutomatizacion, plantillasCorreo, prospectos } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { armarCorreo, type CorreoArmado, type DatosPlantilla } from "../shared/plantillas.js";
+import { urlDeBaja } from "../shared/link-baja.js";
 
 export const CLAVE_PIE_CORREO = "pie_correo";
 
@@ -47,7 +48,7 @@ export async function elegirPlantilla(db: Db, campanaId: number | null, giro: st
 export async function correoParaEnvio(db: Db, prospectoId: number, numeroEnCiclo: number): Promise<{ plantillaId: number; correo: CorreoArmado }> {
   const datos = await datosDelProspecto(db, prospectoId);
   const plantilla = await elegirPlantilla(db, datos.campanaId, datos.giro, Math.min(Math.max(numeroEnCiclo, 1), 3));
-  return { plantillaId: plantilla.id, correo: armarCorreo(plantilla, datos, await leerPie(db), { linkDeBaja: true }) };
+  return { plantillaId: plantilla.id, correo: armarCorreo(plantilla, datos, await leerPie(db), { linkDeBaja: urlDeBaja(prospectoId) }) };
 }
 
 /**
@@ -62,5 +63,5 @@ export async function correoDeEnvio(db: Db, envioId: number): Promise<CorreoArma
   const datos = await datosDelProspecto(db, envio.prospectoId);
   const [guardada] = envio.plantillaId != null ? await db.select().from(plantillasCorreo).where(eq(plantillasCorreo.id, envio.plantillaId)).limit(1) : [];
   const plantilla = guardada ?? (await elegirPlantilla(db, datos.campanaId, null, Math.min(envio.numeroContacto, 3)));
-  return armarCorreo(plantilla, datos, await leerPie(db), { linkDeBaja: true });
+  return armarCorreo(plantilla, datos, await leerPie(db), { linkDeBaja: urlDeBaja(envio.prospectoId) });
 }

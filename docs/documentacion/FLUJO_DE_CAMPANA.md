@@ -72,7 +72,9 @@ una lista por campaña, se importa cada una con su campaña.
 - **Datos del prospecto en el texto:** el nombre de la persona, de la empresa y el giro, que el CRM pone en la
   plantilla. El texto **no** lo escribe la IA.
 - **Pie:** domicilio y aviso de privacidad, en la misma sección del CRM, y la línea «¿Ya no quieres recibir estos
-  correos? Darte de baja». La página de baja está en español.
+  correos? Darte de baja». El enlace lleva a una página del CRM, en español, con el botón «Confirmar baja»: la baja
+  ocurre al apretar el botón, no al abrir la página (desde el 13-nov; antes era el enlace de SendGrid, que daba de baja
+  con solo abrirlo y los filtros de seguridad de Microsoft 365 lo abrían solos).
 - **Respuestas:** cada correo lleva su propia dirección de respuesta (`r+<prospecto>@respuestas.contacto…`), así que
   cada respuesta se liga a su prospecto y detiene sus recordatorios.
 - **Remitente:** desde el subdominio `contacto.nano-bridge-mex.com`, verificado en SendGrid desde el 29-sep, para no
