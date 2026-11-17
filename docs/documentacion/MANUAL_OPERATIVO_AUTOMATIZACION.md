@@ -108,7 +108,9 @@ el RUNBOOK, «Qué está en producción».
   link de SendGrid y PT3 lo sigue atendiendo.
 - El link va firmado con `REPLY_TO_SIGNING_SECRET`: si ese secreto se rota, los links de baja de los correos ya
   enviados dejan de servir (la página dice «Enlace no válido»), igual que el Reply-To.
-- **Una baja no se deshace desde el CRM.** Si alguien pide volver a recibir correos, lo decide Dirección.
+- **Una baja no se deshace desde el CRM:** no hay botón. Si alguien pide volver a recibir correos, o quedó en baja sin
+  pedirlo, lo decide Dirección y se hace directo en la base, con los pasos del [manual de datos](MANUAL_DE_DATOS.md)
+  §6.1 (incluye quitarla también en SendGrid si vino de su link).
 - **Si alguien pide la baja por teléfono o en persona,** sin contestar el correo: en la ficha de la empresa, en el
   contacto, «Dar de baja», con el motivo («Lo pidió por teléfono al vendedor»). Hace lo mismo que el link del pie:
   suprime todos sus medios, pasa sus prospectos a baja y cancela sus seguimientos. Queda en el Historial de la ficha y

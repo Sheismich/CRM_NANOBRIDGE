@@ -1,7 +1,8 @@
 # Manual de datos · CRM NANOBRIDGE
 
 **Entregable:** manual de datos (T1, paquete final OB-07). **Para:** quien cargue, revise y mantenga los datos del CRM
-(supervisor o el responsable de datos que siga). **Versión:** 1.0.1 · 17 de noviembre de 2026 (página de baja y topes del 10-nov; la 1.0 es del 28-oct).
+(supervisor o el responsable de datos que siga). **Versión:** 1.0.2 · 17 de noviembre de 2026 (página de baja, topes del 10-nov y cómo reactivar a alguien directo en la
+base; la 1.0 es del 28-oct).
 
 Este manual explica el trabajo con los datos en el día a día. El detalle de cada campo está en el
 [diccionario](DICCIONARIO_DE_DATOS.md); las reglas que protegen la base, en el [reporte de controles](REPORTE_DE_CONTROLES.md),
@@ -99,8 +100,58 @@ teléfonos **siguen apartados**, así que no se pueden volver a capturar para ot
 - Al darse de baja: sus medios pasan a «no contactar», entra a la **lista de supresión**, se cancelan sus seguimientos y
   su prospecto queda en «baja».
 - **La lista de supresión manda sobre todo:** aunque alguien vuelva a capturar ese correo, nunca se le escribe.
-- **Una baja no se revierte desde el CRM.** Si alguien pide volver a recibir correos, lo decide Dirección y lo hace el
-  responsable técnico, dejando constancia.
+- **Una baja no se revierte desde el CRM:** no hay botón. Si alguien pide volver a recibir correos, o quedó en baja
+  sin pedirlo (como las dos del 12-nov-2026, §6.1), lo decide Dirección y el responsable técnico lo hace directo en la
+  base, dejando constancia.
+
+### 6.1 Reactivar a alguien directo en la base
+
+Solo con la autorización de Dirección por escrito. Se conecta a la base como dice el RUNBOOK §6 (IP autorizada solo
+mientras dura, o Cloud Shell). Cloud SQL guarda un respaldo diario de los últimos 7 días.
+
+**1. Ver qué dejó la baja.** Con el id del contacto (sale en la ficha o en el Registro de cambios):
+
+```sql
+SET @c := <contacto_id>;
+-- Los prospectos que la baja cambió y en qué estado estaban antes.
+SELECT a.entidad_id AS prospecto_id, a.antes->>'$.estado' AS estado_anterior, a.despues->>'$.motivo' AS motivo, a.creado_en
+  FROM auditoria a JOIN prospectos p ON p.id = a.entidad_id
+ WHERE a.entidad = 'prospecto' AND p.contacto_id = @c AND a.despues->>'$.estado' = 'baja';
+-- Sus filas en la lista de supresión.
+SELECT s.id, s.tipo, s.motivo, s.evento, s.creado_en
+  FROM lista_supresion s JOIN medios_contacto m ON m.tipo = s.tipo AND m.valor_normalizado = s.valor_normalizado
+ WHERE m.contacto_id = @c;
+```
+
+Se quitan solo las filas de supresión de esa baja (misma fecha y motivo). Si un medio estaba suprimido de antes, por
+ejemplo por un rebote, esa fila se queda.
+
+**2. Deshacerla, todo en una transacción:**
+
+```sql
+START TRANSACTION;
+DELETE FROM lista_supresion WHERE id IN (<ids del paso 1>);
+-- Los medios vuelven a «activo» solo si ya no quedan en la lista de supresión.
+UPDATE medios_contacto m SET m.estado_contacto = 'activo'
+ WHERE m.contacto_id = @c AND m.estado_contacto = 'no_contactar'
+   AND NOT EXISTS (SELECT 1 FROM lista_supresion s WHERE s.tipo = m.tipo AND s.valor_normalizado = m.valor_normalizado);
+-- Un UPDATE y un INSERT por cada prospecto del paso 1, con su estado anterior.
+UPDATE prospectos SET estado = '<estado_anterior>' WHERE id = <prospecto_id> AND estado = 'baja';
+INSERT INTO auditoria (entidad, entidad_id, accion, antes, despues)
+VALUES ('prospecto', <prospecto_id>, 'revertir_baja', JSON_OBJECT('estado', 'baja'),
+        JSON_OBJECT('estado', '<estado_anterior>', 'motivo', '<por qué, quién lo autorizó y cuándo>'));
+COMMIT;
+```
+
+**3. En SendGrid, si la baja vino del link de SendGrid** (correos anteriores al 13-nov-2026): SendGrid también guarda esa
+baja y descarta los correos a esa dirección aunque la base ya los permita. Quitarla en Suppressions → Global
+Unsubscribes (o en el grupo de bajas, si está ahí). Las bajas por la página propia del CRM (desde el 13-nov) solo viven
+en la base.
+
+**4. Después:**
+- Las tareas de seguimiento que la baja canceló no se reabren; si hace falta una, se crea nueva desde la ficha.
+- Correr la auditoría (`auditar-datos.mjs`) y anotar la reactivación en la bitácora (§5, control de cambios) y, si fue
+  por un error del sistema, en el reporte del piloto (§7).
 
 ## 7. Mandar a automatización
 

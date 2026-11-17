@@ -210,6 +210,7 @@ encender, después de la autorización. Resumen al 3-nov:
 1. Certificación de audiencia por campaña con los contactos de Carlos cargados (§2).
 2. Correos propios de cada campaña escritos y aprobados por Carlos, o la decisión de usar los generales (§3).
 3. Registrar quién autorizó los topes del 10-nov (decisiones 4 y 5) y qué se decide con las dos bajas del 12-nov que
-   nadie pidió (las abrió el escáner de Microsoft 365).
+   nadie pidió (las abrió el escáner de Microsoft 365). Reactivarlas se hace directo en la base y en SendGrid (manual de
+   datos §6.1).
 4. El primer rebote y el primer recordatorio real de PT4 revisados (§7).
 5. Qué se hará con lo de Promociones (§3).

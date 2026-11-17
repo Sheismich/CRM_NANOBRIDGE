@@ -80,7 +80,7 @@ y cuántas se escalaron por llevar un día hábil sin atender. Si el reparto aut
 
 | Fecha | Qué pasó | A quién afectó | Qué se hizo | Quedó resuelto |
 |---|---|---|---|---|
-| 12-nov-2026 | El escáner de links de Microsoft 365 abrió el link de baja de SendGrid (que daba de baja con solo abrirlo) y dos prospectos quedaron en baja 7 segundos después de recibir el correo, sin pedirlo | 2 prospectos | Página de baja propia con botón (13-nov, PR #5): abrir el link ya no da de baja | Para los correos nuevos, sí. ⏳ Dirección decide si esas dos personas se reactivan (una baja no se deshace desde el CRM) |
+| 12-nov-2026 | El escáner de links de Microsoft 365 abrió el link de baja de SendGrid (que daba de baja con solo abrirlo) y dos prospectos quedaron en baja 7 segundos después de recibir el correo, sin pedirlo | 2 prospectos | Página de baja propia con botón (13-nov, PR #5): abrir el link ya no da de baja | Para los correos nuevos, sí. ⏳ Dirección decide si esas dos personas se reactivan. No hay botón: se hace directo en la base y en SendGrid (manual de datos §6.1) |
 | ⏳ | | | | |
 
 Se anota: cada aviso «[NANOBRIDGE] Falló …» de B4 y cada «CRM caído», las incidencias y procesos fallidos (§5 de
