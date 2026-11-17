@@ -2,7 +2,8 @@
 
 **Para:** la transferencia operativa (OB-07): quién tiene acceso a qué, qué depende de cuentas de los pasantes y qué hay
 que pasar a alguien de planta antes del cierre (9-dic-2026).
-**Versión:** 0.9 · 4 de noviembre de 2026. Los permisos de Google Cloud se leyeron del proyecto ese día; lo marcado
+**Versión:** 0.9.1 · 17 de noviembre de 2026 (SendGrid pagado y link de baja firmado). Los permisos de Google Cloud se
+leyeron del proyecto el 4-nov; lo marcado
 ⏳ hay que confirmarlo con quien administra esa cuenta.
 
 Aquí no hay contraseñas ni llaves: solo dónde viven y quién las puede leer.
@@ -50,7 +51,7 @@ Los leen las tres personas de §2 y la cuenta de la API. Cómo consultarlos o ro
 | `DATABASE_URL` | La API entra a la base | Cambiar también la contraseña de `appuser` en Cloud SQL (RUNBOOK §6) |
 | `CRM_CALLBACK_API_KEY` | Llave con la que n8n llama a la API | Cambiarla también en la credencial «Nanobridge-ApiKey» de n8n |
 | `WEBHOOK_ENTRADA_API_KEY` | Llave para que la API llame a n8n (B3, sin usar) | Sin efecto hoy |
-| `REPLY_TO_SIGNING_SECRET` | Firma el Reply-To de cada correo | **Las respuestas a correos ya enviados llegan como «no identificadas»**: rotarlo solo si se filtró |
+| `REPLY_TO_SIGNING_SECRET` | Firma el Reply-To de cada correo y, desde el 13-nov, el link de baja | **Las respuestas a correos ya enviados llegan como «no identificadas» y sus links de baja dejan de servir**: rotarlo solo si se filtró |
 | `SENDGRID_API_KEY` | La API manda avisos, respuestas y cotizaciones | Crear la llave nueva en SendGrid primero |
 | `GEMINI_API_KEY` | La IA del CRM (borrador y resumen) | Crear la llave nueva en Google AI Studio primero |
 
@@ -75,7 +76,7 @@ Los leen las tres personas de §2 y la cuenta de la API. Cómo consultarlos o ro
 | Qué | Estado |
 |---|---|
 | Cuenta | La de `pasante.tics002@nano-bridge-mex.com` (decidido el 22-oct-2026). El jefe tiene acceso a ese correo |
-| Plan | Prueba que vence el 24-nov; Carlos confirmó el pago (4-nov) |
+| Plan | Essentials 50K (50,000 correos al mes), pagado el 10-nov-2026 · ⏳ con qué tarjeta y quién recibe la factura |
 | Dominio | `contacto.nano-bridge-mex.com`, verificado; respuestas en `respuestas.contacto.nano-bridge-mex.com` |
 | Inbound Parse y Event Webhook | Apuntan a n8n (PT2 y PT3) |
 | Llaves | Una para n8n (en su credencial) y otra para la API (`SENDGRID_API_KEY`) |

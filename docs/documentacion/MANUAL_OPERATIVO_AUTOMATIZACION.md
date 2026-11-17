@@ -2,7 +2,7 @@
 
 **Para:** quien opere la prospección por correo después de la transferencia: el administrador o supervisor del CRM y
 la persona con acceso técnico (n8n, Google Cloud y SendGrid).
-**Versión:** 0.9.1 · 10 de noviembre de 2026 · servidor `nanobridge-api-00053-4wf` (9-nov, correos por campaña). Pasa a
+**Versión:** 0.9.2 · 17 de noviembre de 2026 · topes de 100 y 75 (10-nov) y página de baja propia (13-nov, `80b2a57`). Pasa a
 1.0 al cierre, con lo que deje la operación y la lista de accesos de la transferencia (OB-07).
 
 Este manual dice qué corre solo, qué revisar cada día, cómo prender, pausar y apagar, cómo cambiar los parámetros y
@@ -18,9 +18,10 @@ no entrega nada a PT1 ni a PT4: corren, no mandan nada, y todo sale el siguiente
 |---|---|---|---|
 | 7:00 (todos los días) | **PT5 · trabajos diarios** | n8n | Vence importaciones sin confirmar (30 días) y cotizaciones con cierre pasado, avisa de tareas vencidas y documentos sin revisar, calcula las métricas del día anterior |
 | 9:00 | **PT4 · recordatorios** | n8n | Manda los correos 2 y 3 a quien ya cumplió su espera de 5 días hábiles; marca inactivo a quien ya recibió 3 |
-| 10:00, después de PT4 | **PT1a → PT1 · nuevos** | n8n | Toma de la fila hasta 10 prospectos (sin pasar del tope diario), los valida, los califica y les manda el primer correo |
+| 10:00, después de PT4 | **PT1a → PT1 · nuevos** | n8n | Toma de la fila hasta 75 prospectos (`NUEVOS_POR_DIA`), con lo que dejen del tope diario los recordatorios, los valida, los califica y les manda el primer correo |
 | Cada vez que alguien responde | **PT2 · respuestas** | n8n | Registra la respuesta, detiene los recordatorios de esa persona, la pone en la cola de clasificación, pide la sugerencia a la IA y avisa al supervisor |
-| Cada evento de SendGrid | **PT3 · bajas, spam y rebotes** | n8n | Da de baja a la persona (o solo el correo, si rebotó) |
+| Cada evento de SendGrid | **PT3 · bajas, spam y rebotes** | n8n | Da de baja a la persona si marcó spam (o solo el correo, si rebotó). Atiende también el link de baja de SendGrid de los correos anteriores al 13-nov |
+| Cuando alguien aprieta «Confirmar baja» | **Página de baja** | API | Da de baja a la persona. Abrir el link no cambia nada; solo el botón (§5) |
 | Cuando algo falla | **B4 · avisos de falla** | n8n | Registra la falla en el CRM y manda un correo «[NANOBRIDGE] Falló …» |
 | Con cada queja o rebote | **Freno del dominio** | API | Con 2 quejas o 5 rebotes en 7 días pausa la prospección y avisa a administradores y supervisores |
 | Cada 5 minutos | **Revisión de que la API responde** | Google Cloud Monitoring | Si la API no responde 5 minutos seguidos, manda un correo; otro cuando se recupera |
@@ -79,13 +80,14 @@ reciben y prender «Repartir solo». Antes, el equipo de ventas tiene que estar 
 | Qué | Valor | Dónde se cambia |
 |---|---|---|
 | Textos de los 3 correos y el pie | Lo que apruebe Carlos; generales y, si se escriben, propios de cada campaña | CRM: Administración → Correos de prospección (botón «Campañas» para los de cada una) |
-| Tope diario de correos | 20 al encender; se duplica cada semana si los rebotes quedan debajo de 2 % y las quejas debajo de 0.1 % | Google Cloud: `gcloud run services update nanobridge-api --update-env-vars TOPE_DIARIO_CORREOS=<n> --region=us-central1` |
-| Nuevos por día | 10 | Igual, con `NUEVOS_POR_DIA=<n>` |
+| Tope diario de correos | 100 desde el 10-nov (20 al encender, el 6-nov). Los recordatorios van primero | Google Cloud: `gcloud run services update nanobridge-api --update-env-vars TOPE_DIARIO_CORREOS=<n> --region=us-central1` |
+| Nuevos por día | 75 desde el 10-nov (antes 10) | Igual, con `NUEVOS_POR_DIA=<n>` |
+| Link «Darte de baja» del pie | Página propia con botón desde el 13-nov | Código: `src/baja/`. En n8n, PT1b manda `subscription_tracking: { enable: false }` (prompt 5 de `docs/n8n/pt1b-plantillas/`) |
 | Horarios de PT1a, PT4 y PT5 | §1 | n8n: el disparador de cada flujo |
 | Modo de prueba | Apagado desde el 6-nov-2026 | n8n: `MODO_PRUEBAS` y la lista `PERMITIDOS` en PT1 y PT4 |
 | IA que sugiere la clasificación | `abierto` (todas las respuestas) | n8n: `IA_MODO` en PT2a (`abierto`, `pruebas` o `apagado`) |
 | IA del CRM (borrador y resumen) | Encendida | Google Cloud: `IA_DRIVER=gemini`; para apagarla, `IA_DRIVER=falso` |
-| Reparto de interesados | Apagado | CRM: Administración → Reparto de interesados |
+| Reparto de interesados | Prendido desde el 6-nov (Carlos, Fabián y Mich) | CRM: Administración → Reparto de interesados |
 | Límites del freno del dominio | 2 quejas o 5 rebotes en 7 días | Google Cloud: `FRENO_QUEJAS_7D` y `FRENO_REBOTES_7D` con `--update-env-vars` |
 | A quién avisa B4 y a quién avisa PT2 | `pasante.tics002@` y `director.general@nano-bridge-mex.com` | n8n: `DESTINOS` en «armar correo de error» (B4) y en «armar aviso de respuesta» (PT2) |
 | A quién avisa Cloud Monitoring | Hoy a las cuentas de los pasantes | Google Cloud: Monitoring → Alerting → la alerta → Notifications |
@@ -99,6 +101,13 @@ el RUNBOOK, «Qué está en producción».
 - Una persona se da de baja sola con el link del pie, al marcar el correo como spam, o al contestar y que se
   clasifique «baja». En todos los casos se suprimen **todos** sus medios, se cancelan sus seguimientos y no se le
   vuelve a escribir.
+- **El link del pie lleva a una página del CRM con el botón «Confirmar baja»** (desde el 13-nov-2026). Abrir la
+  página no cambia nada; la baja ocurre al apretar el botón y queda en el Historial como «Baja confirmada en la página
+  de baja». Antes el link era de SendGrid y daba de baja con solo abrirlo: el 12-nov el escáner de links de Microsoft
+  365 lo abrió solo y dio de baja a dos prospectos que no lo pidieron. Los correos anteriores al 13-nov conservan el
+  link de SendGrid y PT3 lo sigue atendiendo.
+- El link va firmado con `REPLY_TO_SIGNING_SECRET`: si ese secreto se rota, los links de baja de los correos ya
+  enviados dejan de servir (la página dice «Enlace no válido»), igual que el Reply-To.
 - **Una baja no se deshace desde el CRM.** Si alguien pide volver a recibir correos, lo decide Dirección.
 - **Si alguien pide la baja por teléfono o en persona,** sin contestar el correo: en la ficha de la empresa, en el
   contacto, «Dar de baja», con el motivo («Lo pidió por teléfono al vendedor»). Hace lo mismo que el link del pie:

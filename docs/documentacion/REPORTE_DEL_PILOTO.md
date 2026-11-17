@@ -1,14 +1,14 @@
 # Reporte del piloto · CRM NANOBRIDGE (OB-06)
 
 **Para:** Dirección, para decidir qué sigue.
-**Versión:** 0.2 · esqueleto del 10 de noviembre de 2026. El encendido se adelantó al 6-nov con autorización escrita de
+**Versión:** 0.3 · esqueleto del 17 de noviembre de 2026 (topes del 10-nov e incidente de bajas del 12-nov). El encendido se adelantó al 6-nov con autorización escrita de
 Carlos, así que el «piloto» es la operación real desde el primer envío (9-nov) y no la semana del 30-nov al 4-dic que
 marcaba el programa. La v0.8 se entrega en la semana 14 (4-dic) y la final con los ajustes de la semana 15 (11-dic).
 **Quién:** Datos (Daniela) y Automatización (Fabián).
 
 Es un reporte de hechos: qué se envió, qué respondieron, qué falló y qué pasó con los datos. **No lleva conclusiones
-que los números no respalden.** Con hasta 10 correos nuevos al día habrá pocas respuestas, así que cada porcentaje va
-con su número de casos, y todo se reporta también por campaña (hoy agua y tratamiento de maquinaria).
+que los números no respalden.** Cada porcentaje va con su número de casos (con pocas respuestas un porcentaje
+engaña), y todo se reporta también por campaña (hoy agua y tratamiento de maquinaria).
 
 **De dónde salen los números:** [`reporte-piloto.mjs`](reporte-piloto.mjs) los calcula de la base de producción y
 deja el detalle en `piloto/numeros-<fecha>.md` (§10). Lo marcado ⏳ se llena con eso.
@@ -25,7 +25,7 @@ están interesadas, si algún control falló y qué se propone.
 | Autorización escrita | Carlos, 6-nov-2026 (encendido adelantado, sin lista cargada) | ⏳ dónde quedó guardada |
 | Audiencia | Los contactos que Carlos cargue en sus campañas, certificados por campaña ([flujo de campaña](FLUJO_DE_CAMPANA.md) §2) | ⏳ cuántos recibieron correo, por campaña |
 | Mensaje | Los 3 correos aprobados por Carlos; los propios de cada campaña si se escriben (flujo de campaña §3) | ⏳ ¿se cambió algo? |
-| Límites | 20 correos al día en total, 10 nuevos; 3 por persona y campaña, una serie a la vez | ⏳ ¿se respetaron? (§3) |
+| Límites | 20 correos al día en total y 10 nuevos al encender; desde el 10-nov, 100 y 75 nuevos. 3 por persona y campaña, una serie a la vez | ⏳ ¿se respetaron? (§3) · ⏳ quién autorizó subir los topes |
 | Fechas | Envíos de lunes a viernes desde el 9-nov | ⏳ periodo reportado |
 
 ## 3. Qué se envió
@@ -61,9 +61,13 @@ automáticas), personas interesadas y cuánto tardó la clasificación.
 
 | | Casos | % de los correos | Límite |
 |---|---|---|---|
-| Rebotes | ⏳ | ⏳ | debajo de 2 % para subir el tope |
+| Rebotes | ⏳ | ⏳ | debajo de 2 % |
 | Quejas de spam | ⏳ | ⏳ | debajo de 0.1 % |
 | ¿Se activó el freno del dominio? | ⏳ | — | 2 quejas o 5 rebotes en 7 días |
+
+Las dos bajas del 12-nov no las pidieron las personas (§7): se reportan aparte de las bajas reales. Desde el 13-nov,
+las bajas por la página salen en el detalle con el motivo «Baja confirmada en la página de baja»; las de antes, con el
+evento de SendGrid.
 
 ⏳ ¿Cayeron los correos en Promociones de Gmail? (revisar los buzones de prueba del equipo cada día).
 
@@ -76,6 +80,7 @@ y cuántas se escalaron por llevar un día hábil sin atender. Si el reparto aut
 
 | Fecha | Qué pasó | A quién afectó | Qué se hizo | Quedó resuelto |
 |---|---|---|---|---|
+| 12-nov-2026 | El escáner de links de Microsoft 365 abrió el link de baja de SendGrid (que daba de baja con solo abrirlo) y dos prospectos quedaron en baja 7 segundos después de recibir el correo, sin pedirlo | 2 prospectos | Página de baja propia con botón (13-nov, PR #5): abrir el link ya no da de baja | Para los correos nuevos, sí. ⏳ Dirección decide si esas dos personas se reactivan (una baja no se deshace desde el CRM) |
 | ⏳ | | | | |
 
 Se anota: cada aviso «[NANOBRIDGE] Falló …» de B4 y cada «CRM caído», las incidencias y procesos fallidos (§5 de

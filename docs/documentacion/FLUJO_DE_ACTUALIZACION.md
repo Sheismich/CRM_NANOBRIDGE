@@ -2,7 +2,7 @@
 
 **Entregable:** flujo de actualización de la base (OB-03), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026). **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n) y Dirección General.
-**Versión:** 1.2 · 10 de noviembre de 2026 (teléfonos sin lada, encendido del 6-nov y varias campañas del 9-nov) · API `nanobridge-api-00053-4wf`, base en la migración `042_plantillas_por_campana.sql`. La 1.1 (5-nov) quitó la bandeja de salida y agregó envíos confirmados, freno del dominio y tareas nuevas.
+**Versión:** 1.3 · 17 de noviembre de 2026 (topes del 10-nov y página de baja propia del 13-nov, sin migración) · base en la migración `042_plantillas_por_campana.sql`. La 1.2 (10-nov) trajo los teléfonos sin lada, el encendido del 6-nov y las varias campañas del 9-nov. La 1.1 (5-nov) quitó la bandeja de salida y agregó envíos confirmados, freno del dominio y tareas nuevas.
 
 Este documento explica cómo entran y cambian los registros de la base cuando interviene la automatización: qué
 crea cada paso, qué se rechaza, qué queda registrado, qué se puede deshacer y con qué pruebas se comprueba. Las
@@ -20,13 +20,14 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
 | Pieza | Qué hace | Cuándo corre | Estado al 3-nov |
 |---|---|---|---|
 | **Botón «Mandar a automatización»** (CRM) | Un administrador o supervisor elige prospectos y una campaña; los que están listos entran a la fila | A mano | En producción desde el 16-oct |
-| **PT1a · tomar de la fila** (n8n) | Pide a la API los prospectos que tocan hoy y llama a PT1 una vez por cada uno | A mano mientras siguen las pruebas; al encender, lunes a viernes a las 10:00 | Probado en vivo el 16-oct |
-| **PT1 · ingesta y scoring** (n8n) | Valida al prospecto, lo califica con Gemini (o por reglas si Gemini falla), revisa si se le puede escribir y registra el envío | Lo llama PT1a | Probado en vivo; con `MODO_PRUEBAS` solo escribe a buzones de prueba |
+| **PT1a · tomar de la fila** (n8n) | Pide a la API los prospectos que tocan hoy y llama a PT1 una vez por cada uno | Lunes a viernes a las 10:00 | En operación desde el 9-nov |
+| **PT1 · ingesta y scoring** (n8n) | Valida al prospecto, lo califica con Gemini (o por reglas si Gemini falla), revisa si se le puede escribir y registra el envío | Lo llama PT1a | En operación; `MODO_PRUEBAS` apagado desde el 6-nov |
 | **PT1b · plantillas** (n8n) | Arma y manda el correo con SendGrid, con el texto que devuelve la API | Lo llaman PT1 y PT4 | Publicado |
 | **PT2 · respuestas** (n8n) | Recibe las respuestas (Inbound Parse de SendGrid), las registra y avisa al supervisor | Cada vez que llega un correo | Publicado y probado el 7-oct |
 | **PT2a · sugerencia de IA** (n8n) | Propone una clasificación para cada respuesta; una persona la confirma | Lo llama PT2 | Construido el 19-oct (modo sugerencia) |
-| **PT3 · eventos de SendGrid** (n8n) | Bajas por link, quejas de spam y rebotes | Cada evento de SendGrid | Probado en vivo (baja del 8-oct) |
-| **PT4 · recordatorios** (n8n) | Manda los correos 2 y 3 al vencer la espera de 5 días hábiles, o marca inactivo al que ya recibió 3 | Lunes a viernes a las 10:00 | Publicado el 19-oct, con `MODO_PRUEBAS` |
+| **PT3 · eventos de SendGrid** (n8n) | Quejas de spam, rebotes y las bajas por el link de SendGrid de los correos anteriores al 13-nov | Cada evento de SendGrid | Probado en vivo (baja del 8-oct) |
+| **Página de baja** (API) | El link «Darte de baja» del pie lleva a `/api/v1/baja/<prospecto>.<firma>`: abrirla solo muestra el botón «Confirmar baja» y el botón da de baja a la persona | Cuando la persona aprieta el botón | En producción desde el 13-nov (`src/baja/`) |
+| **PT4 · recordatorios** (n8n) | Manda los correos 2 y 3 al vencer la espera de 5 días hábiles, o marca inactivo al que ya recibió 3 | Lunes a viernes a las 9:00 | Publicado el 19-oct; en operación desde el 9-nov |
 | **PT5 · trabajos diarios** (n8n) | Llama a la API para los trabajos de cada día: vencer las filas importadas sin confirmar (30 días) y las cotizaciones con cierre pasado, avisar de tareas vencidas y de documentos sin revisar, y calcular las métricas del día anterior | Todos los días a las 7:00 (hora de México) | Publicado (confirmado por T2 el 3-nov; RUNBOOK §10). API: `POST /automatizacion/jobs/:nombre`, prueba `290-jobs-por-endpoint` |
 | **B4 · Error Workflow global** (n8n) | Registra en la API cualquier falla de un flujo y avisa por correo | Cuando algo falla | Publicado y probado el 23-sep |
 | **Freno del dominio** (API) | Con 2 quejas de spam o 5 rebotes en 7 días pausa toda la prospección y avisa a administradores y supervisores. Se reanuda a mano en Administración | Con cada queja o rebote | En producción desde el 5-nov (`00048-7x5`) |
@@ -37,8 +38,8 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
    persona lo confirma; al confirmar nace la empresa, el contacto y el prospecto en estado `capturado` (§4).
 2. **Se manda a la fila** con el botón. Solo entran los listos: giro, tamaño, correo usable, sin baja, con menos de 3
    correos, sin espera abierta y sin otro prospecto de la misma persona en la fila. Queda `en_fila`.
-3. **PT1a lo toma.** La API entrega en orden de llegada, solo de campañas activas, hasta `NUEVOS_POR_DIA` (10) al
-   día sin pasar del tope diario de correos. En feriado no entrega nada.
+3. **PT1a lo toma.** La API entrega en orden de llegada, solo de campañas activas, hasta `NUEVOS_POR_DIA` (75 desde el 10-nov) al
+   día sin pasar del tope diario de correos (100), que gastan primero los recordatorios. En feriado no entrega nada.
 4. **PT1 lo valida.** Si no pasa, queda `excluido` con su motivo y no gasta Gemini. Si pasa, queda `validado`.
 5. **PT1 lo califica:** guarda el resultado en `resultados_scoring` y le pone score, prioridad y confianza. A Gemini no
    le llegan correos, teléfonos ni nombres de archivo (`D-07`).
@@ -52,8 +53,9 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
 9. **Si responde,** PT2 registra la respuesta, cierra la espera de esa persona y crea una tarea en la cola de
    clasificación. Una persona clasifica (la IA solo sugiere): `interesado` crea una tarea para un vendedor;
    `baja` suprime todos los medios de la persona.
-10. **Si pide la baja por link o marca spam,** PT3 avisa a la API, que da de baja a la persona completa y cancela sus
-    seguimientos. Un rebote solo suprime ese correo.
+10. **Si pide la baja,** la API da de baja a la persona completa y cancela sus seguimientos: con el botón de la página
+    de baja (desde el 13-nov) o, si marca spam, por aviso de PT3. Un rebote solo suprime ese correo. Abrir el link de
+    baja no cambia nada: los escáneres de correo (Microsoft 365) abren todos los links al recibirlos.
 
 ## 4. Alta: cómo entra un registro
 
@@ -81,6 +83,7 @@ le entrega la fila, así que la base tiene una sola lista de prospectos y todo e
 | Respuesta | Fila en `respuestas`, espera cerrada, tarea de clasificación | `POST /automatizacion/respuestas` |
 | Clasificación | Estado del prospecto; con `baja`, supresión de todos sus medios y cancelación de seguimientos | `POST /automatizacion/respuestas/clasificacion` o la cola del CRM |
 | Baja, spam o rebote de SendGrid | Supresión (persona completa o solo el correo) y prospectos en `baja` | `POST /automatizacion/supresion` |
+| Baja en la página de baja | Lo mismo que una baja por evento, con el motivo «Baja confirmada en la página de baja». Abrir la página no cambia nada y un link con la firma alterada no da de baja a nadie | `POST /api/v1/baja/<prospecto>.<firma>` (sin sesión; el link va firmado) |
 | Falla de un flujo | Incidencia y, si es crítica, proceso fallido | `POST /automatizacion/errores-workflow` |
 
 Los estados posibles y quién pone cada uno están en el diccionario (§6). Los estados cerrados (`baja`, `interesado`,
@@ -159,7 +162,7 @@ en vivo con n8n y SendGrid están fechadas en `PLAN_N8N_DEFINITIVO.md`.
 | **Alta a automatización** | Quién puede mandar, quién entra a la fila y por qué no, misma persona una sola vez, orden, cupo diario y feriados | `485-fila-automatizacion`, `365-tope-diario` |
 | **Cambio** | Calificación, envío solo a validados, espera por persona, recordatorios, respuestas a tiempo y tardías, clasificación | `535-automatizacion-scoring-incidencias`, `475-envio-solo-validados`, `140-envios-por-persona`, `360-ventana-por-persona`, `230-recordatorios`, `200-respuestas-recibidas`, `180-clasificacion-respuestas`, `220-sugerencia-clasificacion` |
 | **Rechazo** | Supresión, máximo de 3 correos, prospecto sin validar, recordatorios cancelados con su motivo | `190-supresion`, `265-crm-respeta-supresion`, `140-envios-por-persona`, `475-envio-solo-validados`, `230-recordatorios` |
-| **Baja** | La baja es de la persona, cancela seguimientos y no se deshace | `245-baja-por-evento`, `350-tareas-baja-carrera`, `180-clasificacion-respuestas` |
+| **Baja** | La baja es de la persona, cancela seguimientos y no se deshace; abrir el link de baja no da de baja, solo el botón, y un link alterado no sirve | `245-baja-por-evento`, `350-tareas-baja-carrera`, `180-clasificacion-respuestas`, `595-pagina-de-baja` |
 | **Reversión** | Rechazar y expirar filas, sacar de la fila (vuelve a `capturado`), fusión con su bitácora | `200-prospectos-lotes`, `290-jobs-por-endpoint`, `485-fila-automatizacion`, `546-fusion-empresas` |
 | **Registro** | Bitácora con antes y después, reintentos sin duplicar, fallas de flujo y procesos fallidos | `455-registro-cambios`, `130-procesos-fallidos-auditoria`, `535-automatizacion-scoring-incidencias`, `60-error-workflow-promotion`, `562-envio-destinatario-y-estado` |
 | **Fallas** | Un envío fallido se reintenta sin gastar el contacto (también el recordatorio, con el id de PT4), ocupa el tope y para a los 3 intentos; el freno pausa con quejas o rebotes y no se traba con dos a la vez | `562-envio-destinatario-y-estado`, `565-freno-dominio` |

@@ -1,12 +1,13 @@
 # Carga de los contactos de Carlos
 
 **Para:** quien cargue contactos a las campañas en producción (Datos, o un supervisor o administrador).
-**Versión:** 1.1 · 10 de noviembre de 2026. La 1.0 (6-nov) planeaba la carga para la semana 12, antes de autorizar el
+**Versión:** 1.2 · 17 de noviembre de 2026 (75 nuevos al día desde el 10-nov). La 1.0 (6-nov) planeaba la carga para la semana 12, antes de autorizar el
 piloto; el encendido se adelantó al 6-nov con autorización escrita de Carlos y la base de ejemplo ya se borró ese día.
 
 Cómo meter los contactos de Carlos a sus campañas (hoy, agua y tratamiento de maquinaria) y certificar la audiencia de
 cada una. **Ojo: las campañas ya están activas y el modo de prueba está apagado.** Quien entre a la fila de una campaña
 activa puede recibir su primer correo en la siguiente corrida de PT1a (10:00, de lunes a viernes).
+Desde el 10-nov PT1a toma hasta 75 nuevos al día: una lista de ese tamaño sale casi completa en una sola mañana.
 
 ## 1. Antes: qué pedirle a Carlos
 

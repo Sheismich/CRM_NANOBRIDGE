@@ -1,7 +1,7 @@
 # Manual de datos · CRM NANOBRIDGE
 
 **Entregable:** manual de datos (T1, paquete final OB-07). **Para:** quien cargue, revise y mantenga los datos del CRM
-(supervisor o el responsable de datos que siga). **Versión:** 1.0 · 28 de octubre de 2026.
+(supervisor o el responsable de datos que siga). **Versión:** 1.0.1 · 17 de noviembre de 2026 (página de baja y topes del 10-nov; la 1.0 es del 28-oct).
 
 Este manual explica el trabajo con los datos en el día a día. El detalle de cada campo está en el
 [diccionario](DICCIONARIO_DE_DATOS.md); las reglas que protegen la base, en el [reporte de controles](REPORTE_DE_CONTROLES.md),
@@ -92,7 +92,8 @@ teléfonos **siguen apartados**, así que no se pueden volver a capturar para ot
 ## 6. Bajas y lista de supresión
 
 - Una persona se da de baja sola con el enlace «Darte de baja» del pie de los correos, marcando el correo como spam, o
-  si su correo rebota. También al clasificar su respuesta como «baja».
+  si su correo rebota. El enlace lleva a una página donde confirma con un botón: abrirla no da de baja (desde el
+  13-nov-2026; antes los escáneres de correo de Microsoft 365 la abrían solos). También al clasificar su respuesta como «baja».
 - **Si lo pide por teléfono o en persona:** en la ficha de la empresa, en el contacto, «Dar de baja», y escribir cómo
   lo pidió. Hace exactamente lo mismo que el enlace del pie (desde el 4-nov-2026).
 - Al darse de baja: sus medios pasan a «no contactar», entra a la **lista de supresión**, se cancelan sus seguimientos y
@@ -104,11 +105,11 @@ teléfonos **siguen apartados**, así que no se pueden volver a capturar para ot
 ## 7. Mandar a automatización
 
 Solo administrador y supervisor: Prospectos → elegir con las casillas → «Mandar a automatización». Entran a la **fila**
-y la automatización toma de 6 a 10 por día hábil.
+y la automatización toma hasta 75 por día hábil (desde el 10-nov), con lo que dejen del tope diario los recordatorios.
 
 No entran (y el CRM dice por qué): sin giro o tamaño, sin correo activo, en baja, empresa o contacto desactivados, o la
 persona ya recibió 3 correos de esa campaña en los últimos 6 meses. A cada persona se le escriben como máximo 3 correos
-por campaña (el inicial y dos recordatorios, con 5 días hábiles entre uno y otro), una campaña a la vez,, y nunca más de 20 al día en total al empezar.
+por campaña (el inicial y dos recordatorios, con 5 días hábiles entre uno y otro), una campaña a la vez, y nunca más del tope diario (100 en total desde el 10-nov).
 
 ## 8. Limpiar los datos de prueba (antes del piloto)
 

@@ -94,8 +94,8 @@ Pruebas automáticas (sin llamar a Gemini): `535-automatizacion-scoring-incidenc
 2. **Operación real (envíos desde el 9-nov; el encendido se adelantó al 6-nov):** cada respuesta real deja su
    sugerencia y la decisión de la persona. `reporte-piloto.mjs` calcula M1 a M5 en cualquier momento, también por
    campaña.
-3. **Reporte del piloto (OB-06, 4 y 11-dic):** resultados con el número de casos. Con hasta 10 correos nuevos al día
-   habrá pocas respuestas: se reporta cuántas fueron y no se sacan conclusiones que los datos no aguanten.
+3. **Reporte del piloto (OB-06, 4 y 11-dic):** resultados con el número de casos. Cada resultado va con su número de
+   casos: se reporta cuántas respuestas fueron y no se sacan conclusiones que los datos no aguanten.
 
 ## 6. Pasar la clasificación a modo directo
 
