@@ -362,6 +362,21 @@ describe("fila de automatización", () => {
       expect((await fila(b.id)).filaTomadoEn).toBeNull();
     });
 
+    // 17-nov-2026: NUEVOS_POR_DIA subió a 75 el 10-nov, pero PT1a seguía
+    // pidiendo 10 y el esquema no dejaba pedir más de 50: salían 10 al día.
+    // El límite de la corrida solo es un tope de cordura; los que mandan son
+    // NUEVOS_POR_DIA y TOPE_DIARIO_CORREOS.
+    it("acepta que PT1a pida 75 en una corrida; más de 200 es 400", async () => {
+      const p = await prospecto();
+      await mandar(adminCookie, [p.id], activa);
+      env.NUEVOS_POR_DIA = (await tomadosHoy()) + 75;
+      env.TOPE_DIARIO_CORREOS = (await correosDeHoy()) + 100;
+      const res = await tomar(randomUUID(), 75);
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((d: { prospecto_id: number }) => d.prospecto_id)).toEqual([p.id]);
+      expect((await tomar(randomUUID(), 201)).status).toBe(400);
+    });
+
     it("no pasa de NUEVOS_POR_DIA en el día, aunque PT1 corra dos veces", async () => {
       const ps = [await prospecto(), await prospecto(), await prospecto()];
       await mandar(adminCookie, ps.map((p) => p.id), activa);

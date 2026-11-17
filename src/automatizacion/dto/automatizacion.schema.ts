@@ -91,10 +91,12 @@ export type RegistroProspectoInput = z.infer<typeof registroProspectoInputSchema
 
 // --- Fila de automatización (16-oct-2026) ---------------------------------------
 // PT1 pide los que le tocan hoy. limite = lo más que quiere en esta corrida;
-// la API entrega menos si ya se acabó el cupo del día.
+// la API entrega menos si ya se acabó el cupo del día. El máximo (200) solo es
+// de cordura: el cupo real lo ponen NUEVOS_POR_DIA y TOPE_DIARIO_CORREOS. Con
+// máximo 50, PT1a no podía pedir los 75 de NUEVOS_POR_DIA (17-nov-2026).
 export const tomarDeFilaInputSchema = z.object({
   execution_id: z.string().trim().min(1).max(100),
-  limite: z.coerce.number().int().min(1).max(50).default(10)
+  limite: z.coerce.number().int().min(1).max(200).default(10)
 });
 export type TomarDeFilaInput = z.infer<typeof tomarDeFilaInputSchema>;
 

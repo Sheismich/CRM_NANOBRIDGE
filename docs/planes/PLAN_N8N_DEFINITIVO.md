@@ -68,7 +68,7 @@ n8n nunca accede a MySQL. Toda lectura y escritura pasa por la API HTTP.
        `test/485-fila-automatizacion.spec.ts`, revisiones 00030-gq4 y 00031-rww), pantalla de
        Prospectos y n8n:
        - Flujo nuevo **"PT1a. tomar de la fila"** (`mYFI6MsAUcuvsDte`): Manual Trigger → POST
-         `fila/tomar` (`limite: 10`, Retry On Fail) → Split Out de `data` → Execute Workflow de PT1
+         `fila/tomar` (`limite: 75` desde el 17-nov-2026 (máximo 200; antes 10 y la API no aceptaba más de 50), Retry On Fail) → Split Out de `data` → Execute Workflow de PT1
          una vez por prospecto (On Error = Continue; error workflow B4). Fila vacía = termina sin error.
        - **PT1** arranca con "When Executed by Another Workflow" → Code "Datos del prospecto" (arma
          el mismo `prospecto` que antes armaba "validacion de Formato", con el giro normalizado) →
