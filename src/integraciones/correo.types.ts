@@ -6,6 +6,9 @@ export const CORREO_SERVICE = Symbol("CORREO_SERVICE");
 export type CorreoSaliente = {
   para: string;
   nombrePara?: string;
+  // Con copia (CC), p. ej. a otras personas de la empresa al responder
+  // (18-nov-2026). Nunca repetir aquí el de `para`: SendGrid lo rechaza.
+  copia?: { correo: string; nombre?: string }[];
   asunto: string;
   texto: string;
   html: string;

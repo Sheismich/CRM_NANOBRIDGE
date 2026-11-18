@@ -29,7 +29,10 @@ export class CorreoSendgridDriver implements CorreoService {
 
 export function cuerpoSendgrid(correo: CorreoSaliente) {
   return {
-    personalizations: [{ to: [{ email: correo.para, ...(correo.nombrePara ? { name: correo.nombrePara } : {}) }] }],
+    personalizations: [{
+      to: [{ email: correo.para, ...(correo.nombrePara ? { name: correo.nombrePara } : {}) }],
+      ...(correo.copia?.length ? { cc: correo.copia.map((c) => ({ email: c.correo, ...(c.nombre ? { name: c.nombre } : {}) })) } : {})
+    }],
     from: { email: env.CORREO_REMITENTE, name: correo.nombreRemitente ?? env.CORREO_REMITENTE_NOMBRE },
     ...(correo.replyTo ? { reply_to: { email: correo.replyTo } } : {}),
     subject: correo.asunto,

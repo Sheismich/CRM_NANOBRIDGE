@@ -113,6 +113,8 @@ export type ContextoCorreoCotizacion = {
   archivo: string;
 };
 
+export type CorreoDeEmpresa = { medio_id: number; contacto_id: number; nombre: string; puesto: string | null; correo: string; motivo: string | null };
+
 export type ContextoRespuesta = {
   respuesta_id: number;
   prospecto_id: number;
@@ -123,6 +125,10 @@ export type ContextoRespuesta = {
   clasificacion: string | null;
   recibido_en: string;
   para: string | null;
+  // Para y copia (18-nov-2026): los correos de los contactos de la empresa;
+  // los que traen `motivo` no se pueden usar. para_medio_id = el que se propone.
+  para_medio_id: number | null;
+  correos: CorreoDeEmpresa[];
   asunto: string;
   firma: string;
   en_conversacion: boolean;

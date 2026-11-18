@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, contactos, correosRespuesta, empresas, listaSupresion, mediosContacto, prospectos, respuestas, tareas, usoIa } from "../database/schema.js";
+import { auditoria, contactos, correosRespuesta, empresas, prospectos, respuestas, tareas, usoIa } from "../database/schema.js";
+import { correosDeLaEmpresa, type CorreoDeEmpresa } from "../shared/correos-empresa.js";
 import { CORREO_SERVICE, type CorreoService } from "../integraciones/correo.types.js";
 import { IA_SERVICE, type IaService } from "../integraciones/ia.types.js";
 import { iaActiva } from "../integraciones/ia-activa.js";
@@ -15,7 +16,7 @@ import { vendedorDeLaConversacion } from "../shared/conversacion.js";
 import { correoDeEnvio, leerPie } from "../plantillas/plantillas.correo.js";
 import { TITULO_TAREA_INTERESADO, TareasService } from "../tareas/tareas.service.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
-import type { ContestarInput } from "./dto/respuestas-vendedor.schema.js";
+import type { BorradorInput, ContestarInput } from "./dto/respuestas-vendedor.schema.js";
 
 // Responder al prospecto desde el CRM (etapa 3 de las mejoras, plan aprobado
 // por Fabián el 20-oct-2026). El correo sale como "<vendedor> · NANOBRIDGE"
@@ -29,6 +30,8 @@ const CLASIFICACIONES_CONTESTABLES = new Set(["interesado", "reagendar", "ambigu
 const CLASIFICACIONES_NUNCA = new Set(["baja", "no_interesado", "invalido", "automatica"]);
 export const CODIGO_NO_SE_PUEDE_RESPONDER = "NO_SE_PUEDE_RESPONDER";
 export const CODIGO_RESPUESTA_ENVIANDO = "RESPUESTA_ENVIANDO";
+// Un correo elegido en Para o copia que no se puede usar (18-nov-2026).
+export const CODIGO_CORREO_NO_SE_PUEDE = "CORREO_NO_SE_PUEDE";
 // Un 'enviando' solo traba la respuesta estos minutos (revisión de Fabián,
 // 21-oct-2026). Si Cloud Run reinicia entre el insert y el update, la fila se
 // quedaría en 'enviando' y daría 409 para siempre; pasados estos minutos se
@@ -113,27 +116,48 @@ export class RespuestasVendedorService {
       throw new HttpError(404, "Respuesta no encontrada");
     }
 
-    const [medio] = await this.db
-      .select({ valor: mediosContacto.valor, valorNormalizado: mediosContacto.valorNormalizado, estado: mediosContacto.estadoContacto })
-      .from(mediosContacto)
-      .where(and(eq(mediosContacto.contactoId, fila.contactoId), eq(mediosContacto.tipo, "correo")))
-      .orderBy(sql`${mediosContacto.estadoContacto} = 'activo' DESC`, asc(mediosContacto.id))
-      .limit(1);
-    const [suprimido] = medio
-      ? await this.db.select({ id: listaSupresion.id }).from(listaSupresion).where(and(eq(listaSupresion.tipo, "correo"), eq(listaSupresion.valorNormalizado, medio.valorNormalizado))).limit(1)
-      : [];
+    // Para y copia (18-nov-2026): los correos de toda la empresa. Un correo
+    // bloqueado solo se desactiva en la lista; el Para arranca en el de quien
+    // contestó si se puede, si no en el primero que sí.
+    const correos = await correosDeLaEmpresa(this.db, fila.empresaId);
+    const usables = correos.filter((m) => m.motivo === null);
+    const paraPorDefecto = usables.find((m) => m.contacto_id === fila.contactoId) ?? usables[0] ?? null;
     const enConversacion = (await vendedorDeLaConversacion(this.db, fila.prospectoId)) !== null;
 
     let motivo: string | null = null;
     if (fila.estadoProspecto === "baja") motivo = "El prospecto pidió la baja: no se le puede escribir.";
-    else if (!medio) motivo = "El contacto no tiene correo.";
-    else if (medio.estado !== "activo" || suprimido) motivo = "El correo del contacto está en no contactar.";
     else if (fila.envioId === null) motivo = "La respuesta no está ligada a un correo enviado.";
     else if (fila.clasificacion !== null && CLASIFICACIONES_NUNCA.has(fila.clasificacion)) motivo = `A una respuesta "${fila.clasificacion}" no se le contesta.`;
     else if (!enConversacion && (fila.clasificacion === null || !CLASIFICACIONES_CONTESTABLES.has(fila.clasificacion))) motivo = "Primero hay que clasificar la respuesta.";
+    else if (!paraPorDefecto) motivo = "No hay a quién escribirle: ningún correo de la empresa se puede usar. Agrega un contacto con correo en la ficha.";
 
     const asunto = await this.asuntoDe(fila.asunto, fila.envioId);
-    return { ...fila, tarea, para: medio?.valor ?? null, asunto, enConversacion, motivo };
+    return { ...fila, tarea, correos, paraPorDefecto, para: paraPorDefecto?.correo ?? null, asunto, enConversacion, motivo };
+  }
+
+  // Valida el Para y las copias contra los correos de la empresa. Sin
+  // `para_medio_id`, el Para que propone el contexto.
+  private destinatarios(c: Contexto, input: { para_medio_id?: number; copia_medio_ids?: number[] }) {
+    const buscar = (medioId: number) => {
+      const m = c.correos.find((x) => x.medio_id === medioId);
+      if (!m) throw new HttpError(404, "Correo no encontrado: tiene que ser de un contacto de la empresa");
+      if (m.motivo) throw new HttpError(409, `${m.correo}: ${m.motivo}`, CODIGO_CORREO_NO_SE_PUEDE);
+      return m;
+    };
+    const para = input.para_medio_id !== undefined ? buscar(input.para_medio_id) : c.paraPorDefecto!;
+    const copia = (input.copia_medio_ids ?? []).map(buscar);
+    const todos = [para, ...copia].map((m) => m.correo_normalizado);
+    if (new Set(todos).size !== todos.length) throw new HttpError(400, "Un correo no puede ir dos veces (ni en Para y en copia a la vez).");
+    return { para, copia };
+  }
+
+  // El link de baja es de quien va en Para: si es quien contestó, su
+  // prospecto; si es otro contacto, su prospecto más reciente; si no tiene,
+  // sin link (como la cotización). Nadie en copia da de baja a otro.
+  private async prospectoDeBaja(c: Contexto, para: CorreoDeEmpresa): Promise<number | null> {
+    if (para.contacto_id === c.contactoId) return c.prospectoId;
+    const [p] = await this.db.select({ id: prospectos.id }).from(prospectos).where(eq(prospectos.contactoId, para.contacto_id)).orderBy(desc(prospectos.id)).limit(1);
+    return p?.id ?? null;
   }
 
   // "Re: <asunto>": el del correo del cliente si PT2 lo mandó, o el del
@@ -160,6 +184,10 @@ export class RespuestasVendedorService {
       clasificacion: c.clasificacion,
       recibido_en: c.recibidoEn,
       para: c.para,
+      // Para y copia (18-nov-2026): los correos de la empresa y el Para que se
+      // propone. Los que tienen `motivo` salen desactivados.
+      para_medio_id: c.paraPorDefecto?.medio_id ?? null,
+      correos: c.correos.map((m) => ({ medio_id: m.medio_id, contacto_id: m.contacto_id, nombre: m.nombre, puesto: m.puesto, correo: m.correo, motivo: m.motivo })),
       asunto: c.asunto,
       firma: this.firma(user),
       // Con la IA apagada, "Redactar con IA" se enseña desactivado (21-oct-2026).
@@ -177,9 +205,10 @@ export class RespuestasVendedorService {
   }
 
   // P3.7: lo que ve la IA. Sin montos ni cotizaciones.
-  async borrador(user: CurrentUser, respuestaId: number) {
+  async borrador(user: CurrentUser, respuestaId: number, input: BorradorInput = {}) {
     const c = await this.cargar(user, respuestaId);
     this.exigirQueSePueda(c);
+    const { para } = this.destinatarios(c, input);
 
     const [{ hoy }] = await this.db
       .select({ hoy: sql<number>`COUNT(*)` })
@@ -192,7 +221,9 @@ export class RespuestasVendedorService {
     const correoMandado = c.envioId !== null ? await correoDeEnvio(this.db, c.envioId) : null;
     const texto = [
       `Vendedor: ${user.nombre}`,
-      `Cliente: ${c.contactoNombre}`,
+      `Cliente: ${para.nombre}`,
+      // Cuando el cliente pasó la plática a otra persona de su empresa.
+      ...(para.contacto_id !== c.contactoId ? [`Quien escribió el correo de abajo: ${c.contactoNombre} (de la misma empresa)`] : []),
       `Empresa del cliente: ${c.empresaNombre}`,
       `Giro: ${c.giro ?? "(sin giro)"}`,
       "",
@@ -222,6 +253,7 @@ export class RespuestasVendedorService {
   async contestar(user: CurrentUser, respuestaId: number, input: ContestarInput) {
     const c = await this.cargar(user, respuestaId);
     this.exigirQueSePueda(c);
+    const { para, copia } = this.destinatarios(c, input);
     const usoDeIa = await this.usoDeIa(user, respuestaId, input);
     const textoVendedor = input.texto.trim();
 
@@ -239,22 +271,25 @@ export class RespuestasVendedorService {
         respuestaId,
         prospectoId: c.prospectoId,
         usuarioId: user.id,
-        para: c.para!,
+        contactoId: para.contacto_id,
+        para: para.correo,
+        copia: copia.map((m) => m.correo),
         asunto: c.asunto,
         texto: textoVendedor,
         usoIa: usoDeIa,
         estado: "enviando"
       });
-      await tx.insert(auditoria).values({ usuarioId: user.id, entidad: "respuesta", entidadId: respuestaId, accion: "contestar", despues: { correo_respuesta_id: fila.insertId, uso_ia: usoDeIa } });
+      await tx.insert(auditoria).values({ usuarioId: user.id, entidad: "respuesta", entidadId: respuestaId, accion: "contestar", despues: { correo_respuesta_id: fila.insertId, uso_ia: usoDeIa, para: para.correo, copia: copia.map((m) => m.correo) } });
       return fila.insertId;
     });
 
-    const mensaje = await this.armar(user, c, textoVendedor);
+    const mensaje = await this.armar(user, c, textoVendedor, para, await this.prospectoDeBaja(c, para));
     let proveedorId: string | null;
     try {
       ({ id: proveedorId } = await this.correo.enviar({
-        para: c.para!,
-        nombrePara: c.contactoNombre,
+        para: para.correo,
+        nombrePara: para.nombre,
+        ...(copia.length ? { copia: copia.map((m) => ({ correo: m.correo, nombre: m.nombre })) } : {}),
         asunto: c.asunto,
         texto: mensaje.texto,
         html: mensaje.html,
@@ -309,11 +344,17 @@ export class RespuestasVendedorService {
   }
 
   // El texto del vendedor + su firma con logo + el pie de siempre + el link
-  // de baja que el pie promete, y abajo lo que escribió el cliente, citado.
-  private async armar(user: CurrentUser, c: Contexto, texto: string) {
-    const nombre = { nombre: c.contactoNombre, empresa: c.empresaNombre, giro: c.giro };
+  // de baja (del de Para, si tiene prospecto) y abajo lo que escribió el
+  // cliente, citado.
+  private async armar(user: CurrentUser, c: Contexto, texto: string, para: CorreoDeEmpresa, prospectoDeBaja: number | null) {
+    const nombre = { nombre: para.nombre, empresa: c.empresaNombre, giro: c.giro };
     const cuando = new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" }).format(c.recibidoEn);
     const cita = c.contenido ? { encabezado: `El ${cuando}, ${c.contactoNombre} escribió:`, contenido: c.contenido } : undefined;
-    return armarCorreo({ asunto: c.asunto, cuerpo: texto }, nombre, await leerPie(this.db), { firma: user.nombre, logo: true, linkDeBaja: urlDeBaja(c.prospectoId), cita });
+    return armarCorreo({ asunto: c.asunto, cuerpo: texto }, nombre, await leerPie(this.db), {
+      firma: user.nombre,
+      logo: true,
+      ...(prospectoDeBaja !== null ? { linkDeBaja: urlDeBaja(prospectoDeBaja) } : {}),
+      cita
+    });
   }
 }

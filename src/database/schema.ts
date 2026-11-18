@@ -485,7 +485,10 @@ export const correosRespuesta = mysqlTable("correos_respuesta", {
   respuestaId: bigint("respuesta_id", { mode: "number", unsigned: true }).notNull(),
   prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }).notNull(),
   usuarioId: bigint("usuario_id", { mode: "number", unsigned: true }).notNull(),
+  // 043: a qué contacto fue y quiénes fueron en copia (NULL en las de antes).
+  contactoId: bigint("contacto_id", { mode: "number", unsigned: true }),
   para: varchar("para", { length: 320 }).notNull(),
+  copia: json("copia").$type<string[]>(),
   asunto: varchar("asunto", { length: 500 }).notNull(),
   texto: text("texto").notNull(),
   usoIa: mysqlEnum("uso_ia", ["sin_ia", "tal_cual", "editado"]).notNull().default("sin_ia"),
