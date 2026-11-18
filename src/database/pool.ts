@@ -1,7 +1,24 @@
 import mysql from "mysql2/promise";
 import { env } from "../config/env.js";
 
-export const pool = mysql.createPool(env.DATABASE_URL);
+// Con las opciones por defecto, mysql2 guarda hasta 10 conexiones y nunca
+// cierra las que se quedan sin usar (maxIdle = connectionLimit), y siempre
+// reusa la última que se devolvió. Las demás se quedaban horas paradas,
+// MySQL las cortaba de su lado (wait_timeout) y la API lo descubría hasta
+// usarlas: PROTOCOL_CONNECTION_LOST en una petición real y /health fallando
+// 10 veces seguidas, una por conexión muerta (alerta "CRM caído", 17 y
+// 18-nov-2026). Ahora, pasado el pico, quedan a lo más 2 abiertas, y
+// cualquiera que lleve 60 s sin usarse se cierra; la siguiente petición
+// abre una nueva (unos milisegundos). enableKeepAlive ya viene encendido
+// por defecto; se deja explícito. Las opciones del DATABASE_URL (ssl) se
+// siguen leyendo de `uri`.
+export const pool = mysql.createPool({
+  uri: env.DATABASE_URL,
+  connectionLimit: 10,
+  maxIdle: 2,
+  idleTimeout: 60_000,
+  enableKeepAlive: true
+});
 
 // Drizzle lee y escribe los DATETIME como UTC (sin zona en la columna), y el
 // SQL de la app usa CURRENT_TIMESTAMP/DATE_ADD del lado del servidor -- los
