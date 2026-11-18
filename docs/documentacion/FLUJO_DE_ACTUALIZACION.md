@@ -39,7 +39,9 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
 2. **Se manda a la fila** con el botón. Solo entran los listos: giro, tamaño, correo usable, sin baja, con menos de 3
    correos, sin espera abierta y sin otro prospecto de la misma persona en la fila. Queda `en_fila`.
 3. **PT1a lo toma.** La API entrega en orden de llegada, solo de campañas activas, hasta `NUEVOS_POR_DIA` (75 desde el 10-nov) al
-   día sin pasar del tope diario de correos (100), que gastan primero los recordatorios. En feriado no entrega nada.
+   día sin pasar del tope diario de correos (100), que gastan primero los recordatorios, y sin pasar del `limite` que
+   pide PT1a en cada corrida (75 desde el 17-nov; la API acepta hasta 200, `00058-nfq`; antes PT1a pedía 10 y la API
+   no aceptaba más de 50). En feriado no entrega nada.
 4. **PT1 lo valida.** Si no pasa, queda `excluido` con su motivo y no gasta Gemini. Si pasa, queda `validado`.
 5. **PT1 lo califica:** guarda el resultado en `resultados_scoring` y le pone score, prioridad y confianza. A Gemini no
    le llegan correos, teléfonos ni nombres de archivo (`D-07`).

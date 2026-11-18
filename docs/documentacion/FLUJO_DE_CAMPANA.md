@@ -2,7 +2,7 @@
 
 **Entregable:** flujo de campaña listo para decisión (OB-05), proyecto naranja · outbound.
 **Para:** Dirección General y quien opere la prospección. **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n).
-**Versión:** 0.9.1 · 17 de noviembre de 2026 (topes del 10-nov y página de baja del 13-nov; la 0.9 del 10-nov trajo
+**Versión:** 0.9.2 · 18 de noviembre de 2026 (PT1a pide 75 y bajas falsas revertidas); 0.9.1 · 17 de noviembre de 2026 (topes del 10-nov y página de baja del 13-nov; la 0.9 del 10-nov trajo
 el encendido y los correos por campaña). Pasa a 1.0 con los
 contactos de Carlos cargados y la audiencia certificada por campaña (§2).
 
@@ -22,7 +22,7 @@ solo lo que hace falta para decidir.
 | 2 | **Textos de los 3 correos** (inicial y 2 recordatorios) | Los actuales, en Administración → Correos de prospección (§3) | Carlos los aprobó por escrito (6-nov); los cambios se hacen desde Administración |
 | 3 | **Pie del correo:** domicilio de la empresa y aviso de privacidad | Ignacio T Chávez 328, Obraje, 20230, Aguascalientes, Ags. (Carlos, 4-nov); el aviso ya está publicado | Hecho (pie y remitente, 6-nov) |
 | 4 | **Tope diario** de correos | 100 al día en total; los recordatorios van primero. Se encendió con 20 para calentar el dominio, con la idea de duplicarlo cada semana si los rebotes quedaban debajo de 2 % y las quejas debajo de 0.1 %; se subió a 100 el 10-nov, al pagar SendGrid | Aplicado (10-nov, `00054-qxb`; 20 del 6 al 10-nov) · ⏳ quién lo autorizó |
-| 5 | **Nuevos por día** | 75 como máximo (`NUEVOS_POR_DIA`), con lo que dejen del tope los recordatorios | Aplicado (10-nov, `00055`; antes 10) |
+| 5 | **Nuevos por día** | 75 como máximo (`NUEVOS_POR_DIA`), con lo que dejen del tope los recordatorios | Variable desde el 10-nov (`00055`); salen 75 desde el 17-nov, cuando PT1a pasó a pedir 75 por corrida y la API a aceptar hasta 200 (`00058-nfq`). Del 10 al 16-nov salieron 10 |
 | 6 | **Horario** | Lunes a viernes: recordatorios (PT4) a las 9:00 y nuevos (PT1a) a las 10:00, hora de México | Publicado (6-nov) |
 | 7 | **Un «no interesado»** ¿bloquea para siempre o 6 meses? | 6 meses desde su respuesta: puede volver a entrar, pero el correo espera (`578-no-interesado-seis-meses`) | Carlos decidió (4-nov) |
 | 8 | **Correos de área** (`info@`, `ventas@`) | Fuera al inicio: solo correos de persona | Decidido (6-nov) |
@@ -195,7 +195,7 @@ encender, después de la autorización. Resumen al 3-nov:
 | Horario de PT1a y PT4 | ✅ Hecho (6-nov) |
 | Apagar `MODO_PRUEBAS` en PT1 y PT4 | ✅ Hecho (6-nov) |
 | Link y página de baja, respaldos, feriados, PT5, botón «Mandar a automatización» | ✅ Hechos |
-| Página de baja propia con botón (el link de SendGrid daba de baja al abrirlo) | ✅ En producción (13-nov) · ⏳ confirmar con T2 el prompt 5 de PT1b |
+| Página de baja propia con botón (el link de SendGrid daba de baja al abrirlo) | ✅ En producción (13-nov, `00057-2tv`), con el prompt 5 de PT1b aplicado |
 
 ## 9. Cómo se detiene
 
@@ -209,8 +209,6 @@ encender, después de la autorización. Resumen al 3-nov:
 
 1. Certificación de audiencia por campaña con los contactos de Carlos cargados (§2).
 2. Correos propios de cada campaña escritos y aprobados por Carlos, o la decisión de usar los generales (§3).
-3. Registrar quién autorizó los topes del 10-nov (decisiones 4 y 5) y qué se decide con las dos bajas del 12-nov que
-   nadie pidió (las abrió el escáner de Microsoft 365). Reactivarlas se hace directo en la base y en SendGrid (manual de
-   datos §6.1).
+3. Registrar quién autorizó los topes del 10-nov (decisiones 4 y 5).
 4. El primer rebote y el primer recordatorio real de PT4 revisados (§7).
 5. Qué se hará con lo de Promociones (§3).

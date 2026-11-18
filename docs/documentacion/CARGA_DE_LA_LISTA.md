@@ -7,7 +7,8 @@ piloto; el encendido se adelantó al 6-nov con autorización escrita de Carlos y
 Cómo meter los contactos de Carlos a sus campañas (hoy, agua y tratamiento de maquinaria) y certificar la audiencia de
 cada una. **Ojo: las campañas ya están activas y el modo de prueba está apagado.** Quien entre a la fila de una campaña
 activa puede recibir su primer correo en la siguiente corrida de PT1a (10:00, de lunes a viernes).
-Desde el 10-nov PT1a toma hasta 75 nuevos al día: una lista de ese tamaño sale casi completa en una sola mañana.
+Desde el 17-nov PT1a toma hasta 75 nuevos al día (`NUEVOS_POR_DIA`): una lista de ese tamaño sale casi completa en una
+sola mañana. Del 10 al 16-nov salían solo 10, porque PT1a pedía `limite: 10`.
 
 ## 1. Antes: qué pedirle a Carlos
 

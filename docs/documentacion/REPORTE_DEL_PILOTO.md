@@ -1,7 +1,8 @@
 # Reporte del piloto · CRM NANOBRIDGE (OB-06)
 
 **Para:** Dirección, para decidir qué sigue.
-**Versión:** 0.3 · esqueleto del 17 de noviembre de 2026 (topes del 10-nov e incidente de bajas del 12-nov). El encendido se adelantó al 6-nov con autorización escrita de
+**Versión:** 0.4 · esqueleto del 18 de noviembre de 2026 (topes del 10-nov, bajas falsas del 11 y 12-nov y caídas del
+17-nov). El encendido se adelantó al 6-nov con autorización escrita de
 Carlos, así que el «piloto» es la operación real desde el primer envío (9-nov) y no la semana del 30-nov al 4-dic que
 marcaba el programa. La v0.8 se entrega en la semana 14 (4-dic) y la final con los ajustes de la semana 15 (11-dic).
 **Quién:** Datos (Daniela) y Automatización (Fabián).
@@ -25,7 +26,7 @@ están interesadas, si algún control falló y qué se propone.
 | Autorización escrita | Carlos, 6-nov-2026 (encendido adelantado, sin lista cargada) | ⏳ dónde quedó guardada |
 | Audiencia | Los contactos que Carlos cargue en sus campañas, certificados por campaña ([flujo de campaña](FLUJO_DE_CAMPANA.md) §2) | ⏳ cuántos recibieron correo, por campaña |
 | Mensaje | Los 3 correos aprobados por Carlos; los propios de cada campaña si se escriben (flujo de campaña §3) | ⏳ ¿se cambió algo? |
-| Límites | 20 correos al día en total y 10 nuevos al encender; desde el 10-nov, 100 y 75 nuevos. 3 por persona y campaña, una serie a la vez | ⏳ ¿se respetaron? (§3) · ⏳ quién autorizó subir los topes |
+| Límites | 20 correos al día en total y 10 nuevos al encender; desde el 10-nov, 100 y 75 nuevos en las variables, pero hasta el 16-nov salieron 10 nuevos al día porque PT1a pedía 10 (desde el 17-nov pide 75). 3 por persona y campaña, una serie a la vez | ⏳ ¿se respetaron? (§3) · ⏳ quién autorizó subir los topes |
 | Fechas | Envíos de lunes a viernes desde el 9-nov | ⏳ periodo reportado |
 
 ## 3. Qué se envió
@@ -65,7 +66,8 @@ automáticas), personas interesadas y cuánto tardó la clasificación.
 | Quejas de spam | ⏳ | ⏳ | debajo de 0.1 % |
 | ¿Se activó el freno del dominio? | ⏳ | — | 2 quejas o 5 rebotes en 7 días |
 
-Las dos bajas del 12-nov no las pidieron las personas (§7): se reportan aparte de las bajas reales. Desde el 13-nov,
+Las tres bajas del 11 y 12-nov no las pidieron las personas (§7) y se revirtieron el 13-nov: se reportan aparte de las
+bajas reales, igual que la que hizo por error la prueba de la página de baja. Desde el 13-nov,
 las bajas por la página salen en el detalle con el motivo «Baja confirmada en la página de baja»; las de antes, con el
 evento de SendGrid.
 
@@ -80,7 +82,10 @@ y cuántas se escalaron por llevar un día hábil sin atender. Si el reparto aut
 
 | Fecha | Qué pasó | A quién afectó | Qué se hizo | Quedó resuelto |
 |---|---|---|---|---|
-| 12-nov-2026 | El escáner de links de Microsoft 365 abrió el link de baja de SendGrid (que daba de baja con solo abrirlo) y dos prospectos quedaron en baja 7 segundos después de recibir el correo, sin pedirlo | 2 prospectos | Página de baja propia con botón (13-nov, PR #5): abrir el link ya no da de baja | Para los correos nuevos, sí. ⏳ Dirección decide si esas dos personas se reactivan. No hay botón: se hace directo en la base y en SendGrid (manual de datos §6.1) |
+| 11 y 12-nov-2026 | El escáner de links de Microsoft 365 abrió el link de baja de SendGrid (que daba de baja con solo abrirlo) y tres prospectos quedaron en baja segundos después de recibir el correo, sin pedirlo (prospectos 70, 86 y 89) | 3 prospectos | Página de baja propia con botón (13-nov, PR #5, `00057-2tv`). Las tres bajas se revirtieron en la base (de vuelta a `validado`, medios activos, fuera de la lista de supresión, nota en `auditoria`) y se quitaron de Global Unsubscribes de SendGrid | Sí (13-nov) |
+| 13-nov-2026 | La prueba de la página de baja en producción dio de baja por error a un prospecto real (147) | 1 prospecto | Se revirtió a mano en la base | Sí (13-nov) |
+| 13 al 16-nov-2026 | PT1a estuvo pausada mientras se cambiaba el link de baja: no salieron primeros correos esos días | Toda la fila | Se prendió de nuevo; primera corrida el 17-nov | Sí (17-nov) |
+| 17-nov-2026 | La API falló al reusar conexiones a la base que MySQL ya había cortado (`PROTOCOL_CONNECTION_LOST` en una petición real a las 12:24) y la revisión de la API falló 10 veces seguidas: alerta «CRM caído» a las 23:27. Otra alerta a las 12:29 fue del lado de Google (la API respondía bien) | ⏳ qué peticiones fallaron | El pool de conexiones cierra las inactivas (18-nov, `00059-rzt`) | Sí (18-nov) |
 | ⏳ | | | | |
 
 Se anota: cada aviso «[NANOBRIDGE] Falló …» de B4 y cada «CRM caído», las incidencias y procesos fallidos (§5 de

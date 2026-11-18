@@ -101,7 +101,7 @@ teléfonos **siguen apartados**, así que no se pueden volver a capturar para ot
   su prospecto queda en «baja».
 - **La lista de supresión manda sobre todo:** aunque alguien vuelva a capturar ese correo, nunca se le escribe.
 - **Una baja no se revierte desde el CRM:** no hay botón. Si alguien pide volver a recibir correos, o quedó en baja
-  sin pedirlo (como las dos del 12-nov-2026, §6.1), lo decide Dirección y el responsable técnico lo hace directo en la
+  sin pedirlo (como las tres del 11 y 12-nov-2026, que se revirtieron así el 13-nov), lo decide Dirección y el responsable técnico lo hace directo en la
   base, dejando constancia.
 
 ### 6.1 Reactivar a alguien directo en la base
@@ -156,7 +156,7 @@ en la base.
 ## 7. Mandar a automatización
 
 Solo administrador y supervisor: Prospectos → elegir con las casillas → «Mandar a automatización». Entran a la **fila**
-y la automatización toma hasta 75 por día hábil (desde el 10-nov), con lo que dejen del tope diario los recordatorios.
+y la automatización toma hasta 75 por día hábil (desde el 17-nov), con lo que dejen del tope diario los recordatorios.
 
 No entran (y el CRM dice por qué): sin giro o tamaño, sin correo activo, en baja, empresa o contacto desactivados, o la
 persona ya recibió 3 correos de esa campaña en los últimos 6 meses. A cada persona se le escriben como máximo 3 correos
