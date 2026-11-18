@@ -151,8 +151,14 @@ export function HistorialTab({ empresaId, contactos }: { empresaId: number; cont
                     {(evento.tipo === "correo_respondido" || evento.tipo === "cotizacion_enviada") && typeof evento.detalle.usuario_nombre === "string" && <span className="text-[12px] text-ink-3">{evento.detalle.usuario_nombre} desde el CRM</span>}
                     {ES_DOCUMENTO.has(evento.tipo) && typeof evento.detalle.usuario_nombre === "string" && <span className="text-[12px] text-ink-3">{evento.detalle.usuario_nombre}</span>}
                   </div>
+                  {evento.tipo === "correo_respondido" && typeof evento.detalle.para === "string" && (
+                    <p className="mt-1 break-words text-[12px] text-ink-3">
+                      Para: {evento.detalle.para}
+                      {Array.isArray(evento.detalle.copia) && evento.detalle.copia.length > 0 && ` · Copia: ${evento.detalle.copia.join(", ")}`}
+                    </p>
+                  )}
                   {texto && <p className="mt-1 whitespace-pre-line text-[13px] text-ink-2">{texto}</p>}
-                  {libre && <p className="mt-1 text-xs text-ink-2">Resultado: {libre}</p>}
+                  {libre &&<p className="mt-1 text-xs text-ink-2">Resultado: {libre}</p>}
                   {evento.proxima_accion && <p className="mt-1 text-xs text-ink-3">Próxima acción: {evento.proxima_accion}</p>}
                   {evento.tipo === "documento_revisado" && typeof evento.detalle.motivo === "string" && (
                     <p className="mt-1 text-xs text-ink-2">

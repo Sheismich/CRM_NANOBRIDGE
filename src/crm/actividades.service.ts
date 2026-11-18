@@ -66,7 +66,8 @@ function correoRespondidoToEvento(row: typeof correosRespuesta.$inferSelect & { 
     canal: "correo",
     resultado: null,
     proxima_accion: null,
-    detalle: { correo_respuesta_id: row.id, respuesta_id: row.respuestaId, prospecto_id: row.prospectoId, asunto: row.asunto, texto: row.texto, usuario_nombre: row.usuarioNombre, uso_ia: row.usoIa }
+    // para/copia (18-nov-2026): a quién fue. copia es null en las de antes.
+    detalle: { correo_respuesta_id: row.id, respuesta_id: row.respuestaId, prospecto_id: row.prospectoId, para: row.para, copia: row.copia, asunto: row.asunto, texto: row.texto, usuario_nombre: row.usuarioNombre, uso_ia: row.usoIa }
   };
 }
 

@@ -681,6 +681,22 @@ Ya hecho por Fabián (API + front, migración 042); para que lo sepas si tocas e
 - **Para ti (documentación):** diccionario con la migración 042 (`plantillas_correo.campana_id` y la columna
   generada `campana_clave`, solo para el UNIQUE).
 
+## Responder por correo: elegir a quién y con copia (Fabián, 18 nov 2026)
+
+Cuando el cliente pasa la plática a otra persona de su empresa. Ya hecho por Fabián (API + front, migración 043);
+para que lo sepas si tocas estas pantallas:
+
+- **`GET /respuestas/:id/contestar`** trae `correos` (todos los correos de los contactos de la empresa, cada uno con
+  `medio_id`, `contacto_id`, `nombre`, `puesto`, `correo` y `motivo` si no se puede usar) y `para_medio_id` (el que se
+  propone). Que el correo de quien contestó esté en no contactar ya no bloquea todo: solo se desactiva ese.
+- **`POST /respuestas/:id/contestar`** acepta `para_medio_id` y `copia_medio_ids` (hasta 10). `POST .../borrador-ia`
+  acepta `para_medio_id` para que el saludo sea de quien va en Para.
+- **`ResponderCorreo.tsx`:** Para es una lista y hay "Agregar copia" con casillas.
+- **Tu pantalla, una línea:** en `HistorialTab.tsx`, "Respuesta por correo" muestra "Para: … · Copia: …"
+  (`detalle.para` y `detalle.copia`; en las de antes de la 043 `copia` viene `null`).
+- **Para ti (documentación):** diccionario con la migración 043 (`correos_respuesta.contacto_id` y `copia`); las
+  descripciones ya están en `generar-diccionario.mjs`.
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.

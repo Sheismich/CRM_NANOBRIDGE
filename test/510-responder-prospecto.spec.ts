@@ -269,6 +269,147 @@ describe("responder al prospecto desde el CRM", () => {
     });
   });
 
+  // Fabián, 18-nov-2026: cuando el cliente te pasa con otra persona de la
+  // empresa, elegir a quién va (Para) y poner a otras en copia. Solo correos
+  // de contactos de la misma empresa; el link de baja es del de Para.
+  describe("Para y copia", () => {
+    type CorreoEmpresa = { medio_id: number; contacto_id: number; nombre: string; correo: string; motivo: string | null };
+
+    async function agregarContacto(empresaId: number, nombre: string) {
+      const correoNuevo = `${nombre.split(" ")[0]!.toLowerCase()}.${randomUUID()}@prospeccion.test`;
+      const res = await api().post("/api/v1/contactos").set("Cookie", admin).send({ empresaId, nombre, correo: correoNuevo });
+      expect(res.status).toBe(201);
+      const [medio] = await db.select({ id: mediosContacto.id }).from(mediosContacto).where(eq(mediosContacto.valorNormalizado, correoNuevo.toLowerCase()));
+      return { contactoId: res.body.id as number, correo: correoNuevo, medioId: medio!.id };
+    }
+
+    async function medioDe(correoValor: string) {
+      const [medio] = await db.select({ id: mediosContacto.id, contactoId: mediosContacto.contactoId }).from(mediosContacto).where(eq(mediosContacto.valorNormalizado, correoValor.toLowerCase()));
+      return { medioId: medio!.id, contactoId: medio!.contactoId! };
+    }
+
+    const contexto = async (respuestaId: number) => (await api().get(`/api/v1/respuestas/${respuestaId}/contestar`).set("Cookie", admin)).body as { correos: CorreoEmpresa[]; para_medio_id: number | null; puede_responder: boolean; motivo: string | null };
+
+    it("el contexto trae todos los correos de la empresa, con su motivo, y el Para arranca en quien contestó", async () => {
+      const r = await respuestaDe();
+      const laura = await medioDe(r.correoContacto);
+      const esteban = await agregarContacto(r.empresaId, "Esteban Hernández");
+      const bloqueado = await agregarContacto(r.empresaId, "Rosa Bloqueada");
+      await db.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(eq(mediosContacto.id, bloqueado.medioId));
+      // Un segundo correo de Laura también sale en la lista.
+      const otroDeLaura = `laura.compras.${randomUUID()}@prospeccion.test`;
+      await db.insert(mediosContacto).values({ contactoId: laura.contactoId, tipo: "correo", valor: otroDeLaura, valorNormalizado: otroDeLaura });
+
+      const c = await contexto(r.respuestaId);
+      expect(c.puede_responder).toBe(true);
+      expect(c.para_medio_id).toBe(laura.medioId);
+      expect(c.correos).toHaveLength(4);
+      expect(c.correos).toEqual(expect.arrayContaining([
+        expect.objectContaining({ medio_id: laura.medioId, nombre: "Laura Gómez", correo: r.correoContacto, motivo: null }),
+        expect.objectContaining({ contacto_id: laura.contactoId, correo: otroDeLaura, motivo: null }),
+        expect.objectContaining({ medio_id: esteban.medioId, contacto_id: esteban.contactoId, nombre: "Esteban Hernández", motivo: null }),
+        expect.objectContaining({ medio_id: bloqueado.medioId, motivo: expect.stringMatching(/no contactar/) })
+      ]));
+    });
+
+    it("manda a otro contacto con copia: CC en SendGrid, mismo Reply-To, y sin link de baja si el de Para no tiene prospecto", async () => {
+      const r = await respuestaDe();
+      const laura = await medioDe(r.correoContacto);
+      const esteban = await agregarContacto(r.empresaId, "Esteban Hernández");
+      const res = await contestar(admin, r.respuestaId, { texto: "Hola Esteban, le escribo de parte de Laura.", para_medio_id: esteban.medioId, copia_medio_ids: [laura.medioId], cerrar_tarea: false });
+      expect(res.status).toBe(201);
+
+      const enviado = correo.enviados.find((c) => c.para === esteban.correo)!;
+      expect(enviado).toBeDefined();
+      expect(enviado.nombrePara).toBe("Esteban Hernández");
+      expect(enviado.copia).toEqual([{ correo: r.correoContacto, nombre: "Laura Gómez" }]);
+      // Si contesta cualquiera de los dos, regresa al CRM por el mismo envío.
+      expect(enviado.replyTo).toBe(firmarReplyTo(r.envioId));
+      expect(cuerpoSendgrid(enviado).personalizations).toEqual([
+        { to: [{ email: esteban.correo, name: "Esteban Hernández" }], cc: [{ email: r.correoContacto, name: "Laura Gómez" }] }
+      ]);
+      // Esteban no tiene prospecto: sin link de baja, y nunca el de Laura.
+      expect(enviado.html).not.toContain("Darte de baja");
+      expect(enviado.html).not.toContain(urlDeBaja(r.prospectoId));
+
+      const [fila] = await db.select().from(correosRespuesta).where(eq(correosRespuesta.respuestaId, r.respuestaId));
+      expect(fila).toEqual(expect.objectContaining({ estado: "enviado", para: esteban.correo, contactoId: esteban.contactoId, copia: [r.correoContacto] }));
+
+      // El Historial dice a quién se mandó.
+      const historial = await api().get("/api/v1/actividades").set("Cookie", admin).query({ empresaId: r.empresaId });
+      const evento = historial.body.data.find((e: { tipo: string }) => e.tipo === "correo_respondido");
+      expect(evento.detalle).toEqual(expect.objectContaining({ para: esteban.correo, copia: [r.correoContacto] }));
+    });
+
+    it("sin copia, la fila guarda copia vacía y SendGrid no recibe cc; el link de baja es de quien contestó", async () => {
+      const r = await respuestaDe();
+      const laura = await medioDe(r.correoContacto);
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola Laura.", para_medio_id: laura.medioId })).status).toBe(201);
+      const enviado = correo.enviados.find((c) => c.para === r.correoContacto)!;
+      expect(cuerpoSendgrid(enviado).personalizations[0]).not.toHaveProperty("cc");
+      expect(enviado.html).toContain(urlDeBaja(r.prospectoId));
+      const [fila] = await db.select().from(correosRespuesta).where(eq(correosRespuesta.respuestaId, r.respuestaId));
+      expect(fila).toEqual(expect.objectContaining({ contactoId: laura.contactoId, copia: [] }));
+    });
+
+    it("si el de Para tiene su propio prospecto, el link de baja es el suyo", async () => {
+      const r = await respuestaDe();
+      const esteban = await agregarContacto(r.empresaId, "Esteban Hernández");
+      const [nuevo] = await db.insert(prospectos).values({ contactoId: esteban.contactoId, estado: "capturado" });
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola Esteban.", para_medio_id: esteban.medioId })).status).toBe(201);
+      const enviado = correo.enviados.find((c) => c.para === esteban.correo)!;
+      expect(enviado.html).toContain(urlDeBaja(nuevo.insertId));
+      expect(enviado.html).not.toContain(urlDeBaja(r.prospectoId));
+    });
+
+    it("rechaza correos de otra empresa (404), bloqueados (409), repetidos o el de Para en copia (400) y más de 10 copias (400)", async () => {
+      const r = await respuestaDe();
+      const otra = await respuestaDe();
+      const laura = await medioDe(r.correoContacto);
+      const ajeno = await medioDe(otra.correoContacto);
+      const esteban = await agregarContacto(r.empresaId, "Esteban Hernández");
+      const bloqueado = await agregarContacto(r.empresaId, "Rosa Bloqueada");
+      await db.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(eq(mediosContacto.id, bloqueado.medioId));
+
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola", para_medio_id: ajeno.medioId })).status).toBe(404);
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola", copia_medio_ids: [ajeno.medioId] })).status).toBe(404);
+      const paraBloqueado = await contestar(admin, r.respuestaId, { texto: "Hola", para_medio_id: bloqueado.medioId });
+      expect(paraBloqueado.status).toBe(409);
+      expect(paraBloqueado.body.message).toMatch(/no contactar/);
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola", copia_medio_ids: [bloqueado.medioId] })).status).toBe(409);
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola", para_medio_id: laura.medioId, copia_medio_ids: [laura.medioId] })).status).toBe(400);
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola", copia_medio_ids: [esteban.medioId, esteban.medioId] })).status).toBe(400);
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola", copia_medio_ids: Array.from({ length: 11 }, (_, i) => i + 1) })).status).toBe(400);
+      expect(correo.enviados.some((c) => c.para === r.correoContacto || c.para === bloqueado.correo)).toBe(false);
+    });
+
+    it("con el correo de quien contestó en no contactar, se puede escribir a otro de la empresa", async () => {
+      const r = await respuestaDe();
+      const laura = await medioDe(r.correoContacto);
+      await db.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(eq(mediosContacto.id, laura.medioId));
+      const esteban = await agregarContacto(r.empresaId, "Esteban Hernández");
+      const c = await contexto(r.respuestaId);
+      expect(c.puede_responder).toBe(true);
+      expect(c.para_medio_id).toBe(esteban.medioId);
+      expect((await contestar(admin, r.respuestaId, { texto: "Hola Esteban.", para_medio_id: esteban.medioId })).status).toBe(201);
+    });
+
+    it("si ningún correo de la empresa se puede usar, no se puede responder", async () => {
+      const r = await respuestaDe();
+      await db.update(mediosContacto).set({ estadoContacto: "no_contactar" }).where(eq(mediosContacto.valorNormalizado, r.correoContacto.toLowerCase()));
+      const c = await contexto(r.respuestaId);
+      expect(c.puede_responder).toBe(false);
+      expect(c.motivo).toMatch(/Agrega un contacto con correo/);
+    });
+
+    it("el borrador de IA saluda a quien va en Para", async () => {
+      const r = await respuestaDe();
+      const esteban = await agregarContacto(r.empresaId, "Esteban Hernández");
+      expect((await api().post(`/api/v1/respuestas/${r.respuestaId}/borrador-ia`).set("Cookie", admin).send({ para_medio_id: esteban.medioId })).status).toBe(201);
+      expect(ia.preguntas.at(-1)!.texto).toContain("Cliente: Esteban Hernández");
+    });
+  });
+
   describe("cuando SendGrid falla", () => {
     it("la fila queda 'fallido', responde 502 y la tarea sigue abierta; se puede reintentar", async () => {
       const r = await respuestaDe();

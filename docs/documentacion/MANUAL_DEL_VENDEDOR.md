@@ -133,6 +133,12 @@ filtros dicen a quién se le puede escribir.
 3. **Para contestarle:** «Responder por correo». **Redactar con IA** te propone un borrador con lo que él escribió y el
    correo que se le mandó; revísalo y cámbialo antes de mandarlo. El correo sale con tu nombre y su respuesta te
    llega a ti.
+   - **Si te pasan con otra persona de la empresa** (por ejemplo, «escríbale a Compras»): en **Para** elige a quién
+     le escribes; salen todos los correos de los contactos de esa empresa. Con **Agregar copia** marcas a otros de la
+     misma empresa para que les llegue en copia. Si contesta cualquiera de ellos, la respuesta regresa al CRM.
+   - Si la persona no está en la lista, primero agrégala como contacto en la ficha de la empresa (nombre y correo) y
+     vuelve a abrir «Responder por correo».
+   - Los correos que no se pueden usar (pidió la baja o está en no contactar) salen en gris con el motivo.
 4. **No interesado:** la automatización no le vuelve a escribir **de esa campaña** en **6 meses** desde su respuesta,
    aunque se le vuelva a mandar (decisión de Carlos). De otra campaña sí se le puede escribir.
    **Interesado** en una campaña, en cambio, la saca de las demás: ya la atiende un vendedor.

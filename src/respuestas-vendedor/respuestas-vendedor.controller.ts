@@ -5,7 +5,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { RespuestasVendedorService } from "./respuestas-vendedor.service.js";
-import { contestarInputSchema, respuestaIdSchema } from "./dto/respuestas-vendedor.schema.js";
+import { borradorInputSchema, contestarInputSchema, respuestaIdSchema } from "./dto/respuestas-vendedor.schema.js";
 
 // Responder al prospecto desde el CRM (etapa 3). Los permisos finos (un
 // agente solo lo suyo) van en el servicio.
@@ -22,8 +22,8 @@ export class RespuestasVendedorController {
 
   @Post(":id/borrador-ia")
   @Roles("administrador", "supervisor", "agente")
-  borrador(@Param("id") id: string, @CurrentUser() user: CurrentUserType) {
-    return this.service.borrador(user, respuestaIdSchema.parse(id));
+  borrador(@Param("id") id: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    return this.service.borrador(user, respuestaIdSchema.parse(id), borradorInputSchema.parse(body));
   }
 
   @Post(":id/contestar")

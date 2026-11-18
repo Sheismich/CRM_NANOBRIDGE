@@ -14,11 +14,17 @@ export function useContextoRespuesta(respuestaId: number | null) {
   });
 }
 
-export function pedirBorrador(respuestaId: number) {
-  return api.post<{ borrador_id: number; texto: string }>(`/api/v1/respuestas/${respuestaId}/borrador-ia`);
+// El borrador saluda a quien va en Para.
+export function pedirBorrador(respuestaId: number, paraMedioId: number | null) {
+  return api.post<{ borrador_id: number; texto: string }>(`/api/v1/respuestas/${respuestaId}/borrador-ia`, paraMedioId !== null ? { para_medio_id: paraMedioId } : {});
 }
 
-export async function contestarRespuesta(queryClient: QueryClient, respuestaId: number, cuerpo: { texto: string; borrador_id?: number; cerrar_tarea: boolean }, empresaId: number) {
+export async function contestarRespuesta(
+  queryClient: QueryClient,
+  respuestaId: number,
+  cuerpo: { texto: string; borrador_id?: number; cerrar_tarea: boolean; para_medio_id?: number; copia_medio_ids?: number[] },
+  empresaId: number
+) {
   const res = await api.post<{ id: number; estado: "enviado"; tarea_cerrada: boolean }>(`/api/v1/respuestas/${respuestaId}/contestar`, cuerpo);
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["timeline", empresaId] }),

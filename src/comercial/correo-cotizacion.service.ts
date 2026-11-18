@@ -1,12 +1,12 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
-import { auditoria, contactos, correosCotizacion, empresas, listaSupresion, mediosContacto, oportunidades } from "../database/schema.js";
+import { auditoria, correosCotizacion, empresas, oportunidades } from "../database/schema.js";
 import { CORREO_SERVICE, type CorreoService } from "../integraciones/correo.types.js";
 import { HttpError } from "../shared/http-error.js";
 import { recortarTexto } from "../shared/texto.js";
 import { armarCorreo } from "../shared/plantillas.js";
-import { personaEnBaja } from "../shared/baja-prospecto.js";
+import { correosDeLaEmpresa } from "../shared/correos-empresa.js";
 import { leerPie } from "../plantillas/plantillas.correo.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { CotizacionesService } from "./cotizaciones.service.js";
@@ -59,26 +59,12 @@ export class CorreoCotizacionService {
 
   // Un correo por contacto (el activo primero). No se le puede mandar si ese
   // correo está en no contactar o en la lista de supresión, o si la persona
-  // pidió la baja.
+  // pidió la baja (shared/correos-empresa.ts).
   private async contactosConCorreo(empresaId: number): Promise<ContactoConCorreo[]> {
-    const filas = await this.db
-      .select({ id: contactos.id, nombre: contactos.nombre, correo: mediosContacto.valor, valorNormalizado: mediosContacto.valorNormalizado, estado: mediosContacto.estadoContacto })
-      .from(contactos)
-      .innerJoin(mediosContacto, and(eq(mediosContacto.contactoId, contactos.id), eq(mediosContacto.tipo, "correo")))
-      .where(and(eq(contactos.empresaId, empresaId), eq(contactos.activo, true)))
-      .orderBy(asc(contactos.id), sql`${mediosContacto.estadoContacto} = 'activo' DESC`, asc(mediosContacto.id));
-    const unoPorContacto = filas.filter((f, i) => filas.findIndex((g) => g.id === f.id) === i);
-    if (unoPorContacto.length === 0) return [];
-    const suprimidos = new Set(
-      (await this.db.select({ valor: listaSupresion.valorNormalizado }).from(listaSupresion)
-        .where(and(eq(listaSupresion.tipo, "correo"), inArray(listaSupresion.valorNormalizado, unoPorContacto.map((f) => f.valorNormalizado))))).map((s) => s.valor)
-    );
-    return Promise.all(unoPorContacto.map(async (f) => {
-      let motivo: string | null = null;
-      if (await personaEnBaja(this.db, f.id)) motivo = "Pidió la baja: no se le puede escribir.";
-      else if (f.estado !== "activo" || suprimidos.has(f.valorNormalizado)) motivo = "El correo está en no contactar.";
-      return { id: f.id, nombre: f.nombre, correo: f.correo, motivo };
-    }));
+    const correos = await correosDeLaEmpresa(this.db, empresaId);
+    return correos
+      .filter((f, i) => correos.findIndex((g) => g.contacto_id === f.contacto_id) === i)
+      .map((f) => ({ id: f.contacto_id, nombre: f.nombre, correo: f.correo, motivo: f.motivo }));
   }
 
   private textoListo(cotizacion: { id: number; oportunidad_titulo: string | null }, nombre: string | null) {
