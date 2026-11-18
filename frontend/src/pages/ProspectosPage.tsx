@@ -564,6 +564,9 @@ function textoFila(fila: DatosFila & { estado: string }): { texto: string; alert
   if (fila.fila_tomado_en) return { texto: "Ya lo tomó la automatización", alerta: false };
   if (fila.campana_vigencia === "inactiva") return { texto: "Campaña terminada", alerta: true };
   if (fila.campana_vigencia === "en_espera") return { texto: "Esperando a la campaña", alerta: false };
+  // Caso DTC (18-nov-2026): la fila no lo suelta hasta que termine su otra campaña.
+  if (fila.fila_espera === "serie_en_curso") return { texto: `Espera a que termine ${fila.fila_espera_campana ? `«${fila.fila_espera_campana}»` : "su otra campaña"}`, alerta: false };
+  if (fila.fila_espera === "interesado_en_otra_campana") return { texto: "Le interesó otra campaña: no sale", alerta: true };
   const desde = fila.fila_desde ? `Desde ${formatoDiaMes.format(fechaUtc(fila.fila_desde))}` : null;
   return { texto: [desde, fila.fila_posicion && `lugar ${fila.fila_posicion}`].filter(Boolean).join(" · "), alerta: false };
 }
@@ -571,7 +574,11 @@ function textoFila(fila: DatosFila & { estado: string }): { texto: string; alert
 function LineaFila({ fila }: { fila: DatosFila & { estado: string } }) {
   const t = textoFila(fila);
   if (!t?.texto) return null;
-  return <small className={clsx("whitespace-nowrap text-[11.5px]", t.alerta ? "font-bold text-danger" : "text-ink-3")}>{t.texto}</small>;
+  return (
+    <small className={clsx("block max-w-[240px] truncate whitespace-nowrap text-[11.5px]", t.alerta ? "font-bold text-danger" : "text-ink-3")} title={t.texto}>
+      {t.texto}
+    </small>
+  );
 }
 
 // Barrita de los 3 correos de la secuencia (inicial + 2 recordatorios).
@@ -685,7 +692,6 @@ function AutomatizacionDetalle({ p, puedeMandar, enFila }: { p: ProspectoDetalle
   const [error, setError] = useState<string | null>(null);
   const enLaFila = p.estado === "en_fila";
   const aOtraCampana = ESTADOS_PARA_OTRA_CAMPANA.includes(p.estado);
-  const fila = textoFila(p);
   const puede = puedeMandar && sePuedeMandar(p);
   if (!enLaFila && !puede) return null;
 
@@ -710,12 +716,16 @@ function AutomatizacionDetalle({ p, puedeMandar, enFila }: { p: ProspectoDetalle
       <div className="font-heading text-[11px] font-extrabold uppercase tracking-[1px] text-ink-3">Automatización</div>
       {enLaFila ? (
         <p className="text-[13px] text-strong">
-          {fila?.alerta ? (
+          {!p.fila_tomado_en && p.campana_vigencia === "inactiva" ? (
             <span className="font-bold text-danger">La campaña ya terminó: cámbialo de campaña o sácalo de la fila.</span>
           ) : p.fila_tomado_en ? (
             `La automatización ya lo tomó (${formatoFechaHora.format(fechaUtc(p.fila_tomado_en))}); ya va de salida.`
           ) : p.campana_vigencia === "en_espera" ? (
             "Está en la fila esperando a que su campaña empiece o se reanude."
+          ) : p.fila_espera === "serie_en_curso" ? (
+            `Está en la fila, pero esta persona todavía va en ${p.fila_espera_campana ? `la campaña «${p.fila_espera_campana}»` : "otra campaña"}. Sale solo cuando esa termine (sus 3 correos o si contesta), para no recibir dos campañas a la vez.`
+          ) : p.fila_espera === "interesado_en_otra_campana" ? (
+            <span className="font-bold text-danger">Le interesó {p.fila_espera_campana ? `la campaña «${p.fila_espera_campana}»` : "otra campaña"} y ya lo atiende un vendedor: de esta no le sale nada.</span>
           ) : (
             `En la fila${p.fila_desde ? ` desde el ${formatoFecha.format(fechaUtc(p.fila_desde))}` : ""}${p.fila_posicion ? `, lugar ${p.fila_posicion}` : ""}. Sale solo.`
           )}
@@ -723,7 +733,7 @@ function AutomatizacionDetalle({ p, puedeMandar, enFila }: { p: ProspectoDetalle
       ) : aOtraCampana ? (
         <p className="text-[13px] text-ink-2">Ya pasó por su campaña. Puedes mandarlo también a otra: entra a la fila y sus correos empiezan cuando termine la que lleva.</p>
       ) : (
-        <p className="text-[13px] text-ink-2">Todavía no recibe correos. Al mandarlo a automatización entra a la fila y sale solo, unos 6 a 10 por día hábil.</p>
+        <p className="text-[13px] text-ink-2">Todavía no recibe correos. Al mandarlo a automatización entra a la fila y sale solo, en orden, cada día hábil.</p>
       )}
       <ServerError message={error} />
       {puede && (

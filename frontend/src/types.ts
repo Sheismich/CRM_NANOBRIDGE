@@ -339,6 +339,11 @@ export type DatosFila = {
   fila_desde: string | null;
   fila_tomado_en: string | null;
   fila_posicion: number | null;
+  // 18-nov-2026: la persona tiene la serie de otra campaña en curso (o le
+  // interesó otra): la fila no la suelta y no tiene lugar. fila_espera_campana
+  // = el nombre de esa otra campaña (null si no se sabe).
+  fila_espera: "serie_en_curso" | "interesado_en_otra_campana" | null;
+  fila_espera_campana: string | null;
   campana_vigencia: "activa" | "en_espera" | "inactiva" | null;
   // Solo en los excluidos: por qué se excluyó la vez pasada (claves de
   // Validaciones o el texto de PT1); null si no se sabe.

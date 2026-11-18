@@ -12,7 +12,7 @@ import { decodificarArchivoTexto } from "../shared/texto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { agregarAlIndice, indiceDeEmpresas, parecidasEn, type EmpresaParecida } from "../shared/empresas-parecidas.js";
 import { CODIGO_PERSONA_EN_BAJA, bloquearPersona, personaEnBaja, personaEnBajaBloqueando } from "../shared/baja-prospecto.js";
-import { ESTADOS_PROSPECTO_CERRADO } from "../shared/ciclo-contacto.js";
+import { ESTADOS_PROSPECTO_CERRADO, campanaQueHaceEsperarSql, esperaPorOtraCampanaSql } from "../shared/ciclo-contacto.js";
 import { campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { fechaMx } from "../shared/dia-habil.js";
 import { revisarListoParaAutomatizacion, tomadoDeFilaHace } from "../shared/listo-para-automatizacion.js";
@@ -56,14 +56,24 @@ const tieneEnvios = () => sql`EXISTS (SELECT 1 FROM ${envios} WHERE ${envios.pro
 // todos los que esperan sin que PT1 los haya tomado; null si no está en la
 // fila o si ya lo tomaron. La vigencia de la campaña la arma quien llama con
 // vigenciaCampana (activa / en_espera / inactiva = "campaña terminada").
+//
+// fila_espera (18-nov-2026, caso DTC): la persona tiene la serie de otra
+// campaña en curso (o le interesó otra), así que la fila no la suelta aunque
+// le toque: no tiene lugar, y tampoco cuenta para el lugar de los demás.
+// fila_espera_campana = el nombre de esa otra campaña.
+const esperaDeEste = esperaPorOtraCampanaSql(sql`${prospectos.contactoId}`, sql`${prospectos.campanaId}`);
+const esperandoEnFila = sql`${prospectos.estado} = 'en_fila' AND ${prospectos.filaTomadoEn} IS NULL`;
 const columnasDeFila = (hoy: string) => ({
   fila_desde: prospectos.filaDesde,
   fila_tomado_en: prospectos.filaTomadoEn,
-  fila_posicion: sql<number | null>`CASE WHEN ${prospectos.estado} = 'en_fila' AND ${prospectos.filaTomadoEn} IS NULL THEN 1 + (
+  fila_posicion: sql<number | null>`CASE WHEN ${esperandoEnFila} AND (${esperaDeEste}) IS NULL THEN 1 + (
     SELECT COUNT(*) FROM prospectos f
     WHERE f.estado = 'en_fila' AND f.fila_tomado_en IS NULL
       AND (f.fila_desde < ${prospectos.filaDesde} OR (f.fila_desde = ${prospectos.filaDesde} AND f.id < ${prospectos.id}))
+      AND (${esperaPorOtraCampanaSql(sql`f.contacto_id`, sql`f.campana_id`)}) IS NULL
   ) END`.mapWith(Number),
+  fila_espera: sql<"serie_en_curso" | "interesado_en_otra_campana" | null>`CASE WHEN ${esperandoEnFila} THEN ${esperaDeEste} END`,
+  fila_espera_campana: sql<string | null>`CASE WHEN ${esperandoEnFila} THEN ${campanaQueHaceEsperarSql(sql`${prospectos.contactoId}`, sql`${prospectos.campanaId}`)} END`,
   campanaEstado: campanas.estado,
   campanaYaEmpezo: campanaYaEmpezoSql(hoy),
   campanaNoHaTerminado: campanaNoHaTerminadoSql(hoy)
@@ -786,6 +796,8 @@ export class ProspectosService {
       fila_desde: row.fila_desde,
       fila_tomado_en: row.fila_tomado_en,
       fila_posicion: row.fila_posicion,
+      fila_espera: row.fila_espera,
+      fila_espera_campana: row.fila_espera_campana,
       motivo_exclusion_anterior: row.estado === "excluido" ? (await this.motivosExclusionAnterior([row.id])).get(row.id) ?? null : null,
       contacto: { id: row.contactoId, nombre: row.contactoNombre, puesto: row.contactoPuesto, medios },
       empresa: { id: row.empresaId, nombre_legal: row.empresaNombreLegal }

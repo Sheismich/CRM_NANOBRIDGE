@@ -97,6 +97,17 @@ export function interesadoEnOtraCampanaSql(contacto: SQL | number, campana: SQL 
   return sql`EXISTS (SELECT 1 FROM prospectos pi WHERE pi.contacto_id = ${contacto} AND NOT (pi.campana_id <=> ${campana}) AND pi.estado = 'interesado')`;
 }
 
+// La condición de "serie en curso" sobre un prospecto con alias `p` (lo
+// comparten serieEnCursoEnOtraCampanaSql y campanaQueHaceEsperarSql).
+function serieEnCursoDe(p: string) {
+  const a = sql.raw(p);
+  return sql`(${a}.estado NOT IN (${ESTADOS_CERRADOS_SQL})
+    AND (
+      EXISTS (SELECT 1 FROM envios es WHERE es.prospecto_id = ${a}.id AND es.estado <> 'fallido' AND es.enviado_en > CURRENT_TIMESTAMP - INTERVAL ${sql.raw(String(MESES_ENFRIAMIENTO))} MONTH)
+      OR (${a}.estado = 'en_fila' AND ${a}.fila_tomado_en > CURRENT_TIMESTAMP - INTERVAL ${sql.raw(String(HORAS_PARA_RETOMAR_DE_FILA))} HOUR)
+    ))`;
+}
+
 /**
  * SQL: la persona tiene una serie en curso en otra campaña. Un prospecto de
  * otra campaña que no ha terminado (no cerrado) y que ya recibió un correo
@@ -105,12 +116,28 @@ export function interesadoEnOtraCampanaSql(contacto: SQL | number, campana: SQL 
  * tercero o cuando la persona contesta: entonces arranca la siguiente.
  */
 export function serieEnCursoEnOtraCampanaSql(contacto: SQL | number, campana: SQL | number | null) {
-  return sql`EXISTS (SELECT 1 FROM prospectos ps WHERE ps.contacto_id = ${contacto} AND NOT (ps.campana_id <=> ${campana})
-    AND ps.estado NOT IN (${ESTADOS_CERRADOS_SQL})
-    AND (
-      EXISTS (SELECT 1 FROM envios es WHERE es.prospecto_id = ps.id AND es.estado <> 'fallido' AND es.enviado_en > CURRENT_TIMESTAMP - INTERVAL ${sql.raw(String(MESES_ENFRIAMIENTO))} MONTH)
-      OR (ps.estado = 'en_fila' AND ps.fila_tomado_en > CURRENT_TIMESTAMP - INTERVAL ${sql.raw(String(HORAS_PARA_RETOMAR_DE_FILA))} HOUR)
-    ))`;
+  return sql`EXISTS (SELECT 1 FROM prospectos ps WHERE ps.contacto_id = ${contacto} AND NOT (ps.campana_id <=> ${campana}) AND ${serieEnCursoDe("ps")})`;
+}
+
+/**
+ * SQL: por qué la fila no suelta a este prospecto aunque esté en_fila
+ * (lista y detalle de Prospectos, 18-nov-2026): 'interesado_en_otra_campana',
+ * 'serie_en_curso' o NULL. Lo mismo que revisa tomarDeFila.
+ */
+export function esperaPorOtraCampanaSql(contacto: SQL | number, campana: SQL | number | null) {
+  return sql`CASE WHEN ${interesadoEnOtraCampanaSql(contacto, campana)} THEN 'interesado_en_otra_campana'
+    WHEN ${serieEnCursoEnOtraCampanaSql(contacto, campana)} THEN 'serie_en_curso' END`;
+}
+
+/**
+ * SQL: el nombre de la campaña que hace esperar a la persona (donde le
+ * interesó o donde va su serie), o NULL si ninguna (o si esa no tiene campaña).
+ */
+export function campanaQueHaceEsperarSql(contacto: SQL | number, campana: SQL | number | null) {
+  return sql`(SELECT cw.nombre FROM prospectos pw JOIN campanas cw ON cw.id = pw.campana_id
+    WHERE pw.contacto_id = ${contacto} AND NOT (pw.campana_id <=> ${campana})
+      AND (pw.estado = 'interesado' OR ${serieEnCursoDe("pw")})
+    ORDER BY pw.estado = 'interesado' DESC, pw.id LIMIT 1)`;
 }
 
 export type BloqueoDeOtraCampana = "interesado_en_otra_campana" | "serie_en_curso";

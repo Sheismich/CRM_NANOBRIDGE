@@ -63,7 +63,7 @@ export type GrupoEmbudo = {
 
 export const GRUPOS_EMBUDO: GrupoEmbudo[] = [
   { id: "capturados", etiqueta: "Capturados", estados: ["capturado"], detalle: "falta validar", tono: "neutro" },
-  { id: "en_fila", etiqueta: "En fila", estados: ["en_fila"], detalle: "salen solos, unos 6 a 10 al día", tono: "info" },
+  { id: "en_fila", etiqueta: "En fila", estados: ["en_fila"], detalle: "salen solos cada día hábil", tono: "info" },
   { id: "validados", etiqueta: "Validados", estados: ["validado"], detalle: "listos para campaña", tono: "info" },
   { id: "en_campana", etiqueta: "En campaña", estados: [EN_CAMPANA], detalle: "esperan respuesta", tono: "navy" },
   { id: "respondieron", etiqueta: "Respondieron", estados: ["interesado", "no_interesado", "en_revision"], detalle: "", tono: "ok" },
