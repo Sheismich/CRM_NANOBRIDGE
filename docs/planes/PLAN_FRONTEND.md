@@ -697,6 +697,19 @@ para que lo sepas si tocas estas pantallas:
 - **Para ti (documentación):** diccionario con la migración 043 (`correos_respuesta.contacto_id` y `copia`); las
   descripciones ya están en `generar-diccionario.mjs`.
 
+## "Lugar 1" que no salía: espera a su otra campaña (Fabián, 18 nov 2026)
+
+Caso DTC: la misma persona estaba en la fila de una campaña con la serie de otra en curso. La lista decía
+"lugar 1", pero la API no la suelta hasta que termina la otra serie (regla del 9-nov). Ya hecho por Fabián
+(API + front, sin migración); para que lo sepas si tocas Prospectos:
+
+- **Lista y detalle de prospectos** traen `fila_espera` (`serie_en_curso`, `interesado_en_otra_campana` o `null`)
+  y `fila_espera_campana` (el nombre de la otra campaña). El que espera trae `fila_posicion: null` y ya no cuenta
+  para el lugar de los demás.
+- **`ProspectosPage.tsx`:** la línea de la fila dice "Espera a que termine «Campaña»" en vez de "lugar N", y el
+  panel de Automatización lo explica. La caja roja de "La campaña ya terminó" ahora revisa
+  `campana_vigencia === "inactiva"` directo (antes usaba la alerta de `textoFila`).
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.

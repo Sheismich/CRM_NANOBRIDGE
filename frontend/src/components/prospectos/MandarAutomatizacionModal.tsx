@@ -9,8 +9,9 @@ import { fechaLocal, formatoFecha, plural } from "../../lib/formato";
 import { ESTADOS_PARA_OTRA_CAMPANA, textoMotivos } from "../../lib/prospectos";
 
 // Botón "Mandar a automatización" (16-oct-2026, POST /prospectos/automatizacion):
-// el CRM solo forma la fila y la API se los va soltando a PT1, unos 6 a 10
-// por día hábil, para no pasar el tope diario de correos. Solo administrador
+// el CRM solo forma la fila y la API se los va soltando a PT1 cada día hábil
+// (NUEVOS_POR_DIA, 75 desde el 10-nov-2026), para no pasar el tope diario de
+// correos. Los textos de pantalla no dicen la cifra: cambia por env. Solo administrador
 // y supervisor. Los que no están listos regresan con su motivo. A los que ya
 // están en la fila de otra campaña se les pregunta si se agregan también a
 // esta o se cambian (no pierden su lugar); a los que ya van o fueron en otra
@@ -180,7 +181,7 @@ export function MandarAutomatizacionModal({
         {avisoCorreos(campana) && <div className="rounded-[10px] bg-info-bg px-3.5 py-2.5 text-info">{avisoCorreos(campana)}</div>}
 
         <p className="text-ink-2">
-          Salen solos, unos 6 a 10 por día hábil, en el orden en que entran.
+          Salen solos cada día hábil, en el orden en que entran.
           {enFila !== undefined && ` Hoy hay ${plural(enFila, "prospecto", "prospectos")} en la fila.`}
         </p>
         {enFilaDeOtra > 0 && (

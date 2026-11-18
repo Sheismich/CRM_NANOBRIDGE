@@ -133,6 +133,35 @@ describe("una persona en varias campañas", () => {
       expect((await verificar(enMaquinaria)).body.puede_enviar).toBe(true);
     });
 
+    // Caso DTC (18-nov-2026): en la lista decía "lugar 1" a uno que la API no
+    // suelta porque su serie de otra campaña sigue en curso. Ahora no tiene
+    // lugar, dice qué campaña espera y no les quita lugar a los demás.
+    it("el que espera la serie de otra campaña no tiene lugar en la fila y dice qué campaña espera", async () => {
+      await db.update(prospectos).set({ estado: "capturado" }).where(eq(prospectos.estado, "en_fila"));
+      const correo = persona();
+      const enAgua = await prospecto(correo, agua);
+      await sembrarEnvio(enAgua, 1, 2, "abierta");
+      const espera = await prospecto(correo, maquinaria, "capturado");
+      const libre = await prospecto(persona(), maquinaria, "capturado");
+      expect((await mandar([espera], maquinaria)).body.agregados).toEqual([espera]);
+      expect((await mandar([libre], maquinaria)).body.agregados).toEqual([libre]);
+      // `espera` entró primero.
+      await db.update(prospectos).set({ filaDesde: new Date(Date.now() - 60_000) }).where(eq(prospectos.id, espera));
+      const [{ nombre: nombreAgua }] = await db.select({ nombre: campanas.nombre }).from(campanas).where(eq(campanas.id, agua));
+
+      const detalle = async (id: number) => (await api().get(`/api/v1/prospectos/${id}`).set("Cookie", adminCookie)).body;
+      expect(await detalle(espera)).toMatchObject({ estado: "en_fila", fila_posicion: null, fila_espera: "serie_en_curso", fila_espera_campana: nombreAgua });
+      expect(await detalle(libre)).toMatchObject({ fila_posicion: 1, fila_espera: null, fila_espera_campana: null });
+
+      const lista = await api().get("/api/v1/prospectos").set("Cookie", adminCookie).query({ estado: "en_fila", limit: 100 });
+      expect(lista.body.data.find((p: { id: number }) => p.id === espera)).toMatchObject({ fila_posicion: null, fila_espera: "serie_en_curso", fila_espera_campana: nombreAgua });
+
+      // Termina la serie de agua: vuelve a tener lugar (el primero) y el otro baja.
+      await db.update(prospectos).set({ estado: "inactivo" }).where(eq(prospectos.id, enAgua));
+      expect(await detalle(espera)).toMatchObject({ fila_posicion: 1, fila_espera: null, fila_espera_campana: null });
+      expect(await detalle(libre)).toMatchObject({ fila_posicion: 2 });
+    });
+
     it("un envío fallido no cuenta como serie en curso", async () => {
       const correo = persona();
       const enAgua = await prospecto(correo, agua);
