@@ -3,7 +3,7 @@
 **Entregable:** OB-01 (diccionario y reglas) y apoyo de OB-02 (base maestra controlada), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026).
 **Dueño:** T1 (datos y estandarización) · **Revisión:** T2 y Dirección General.
-**Versión:** 1.3 · generado el 20 de noviembre de 2026 desde la base real, con migraciones hasta `043_responder_con_copia.sql` (43 en total). Cubre 36 tablas y 418 campos.
+**Versión:** 1.4 · generado el 20 de noviembre de 2026 desde la base real, con migraciones hasta `044_rebotes_sendgrid.sql` (44 en total). Cubre 37 tablas y 435 campos.
 
 > Este documento se genera con `generar-diccionario.mjs` (misma carpeta) a partir de la estructura real de la
 > base y de las reglas del código. No editar las tablas a mano: cambiar el script y volver a generarlo (ver al final).
@@ -20,7 +20,7 @@
 ## 2. Mapa de tablas
 
 - **Clientes y prospección:** `borradores_captura`, `contactos`, `empresas`, `medios_contacto`, `prospectos`
-- **Campañas y correo:** `campanas`, `correos_respuesta`, `envios`, `lista_supresion`, `parametros_automatizacion`, `plantillas_correo`, `respuestas`
+- **Campañas y correo:** `campanas`, `correos_respuesta`, `envios`, `eventos_sendgrid`, `lista_supresion`, `parametros_automatizacion`, `plantillas_correo`, `respuestas`
 - **Automatización (n8n):** `eventos_pendientes`, `incidencias`, `procesos_fallidos`, `resultados_scoring`
 - **Ventas:** `correos_cotizacion`, `cotizacion_partidas`, `cotizaciones`, `historial_etapa_oportunidad`, `oportunidades`
 - **Documentos:** `catalogo_tipo_documento`, `documentos`
@@ -103,8 +103,9 @@ y sin una serie en curso en otra (desde el 9-nov-2026, migración 042).
 | `interesado` · `no_interesado` | Respondió y se clasificó así | n8n / CRM |
 | `en_revision` | Respuesta ambigua: la clasifica una persona | n8n |
 | `baja` | Pidió no recibir más correos; sus medios pasan a no_contactar y a supresión | n8n / CRM |
+| `rebotado` | Su correo rebotó (rebote duro, o 3 suaves seguidos); solo ese prospecto. Se reactiva en Administración (vuelve a `capturado`) | API (Event Webhook de SendGrid, desde el 20-nov-2026) |
 
-Estados cerrados (no reciben más correos): `baja`, `interesado`, `no_interesado`, `descartado`, `excluido`, `inactivo`.
+Estados cerrados (no reciben más correos): `baja`, `interesado`, `no_interesado`, `descartado`, `excluido`, `inactivo`, `rebotado`.
 
 ## 7. Reglas de actualización y trazabilidad
 
@@ -279,6 +280,10 @@ Un contacto dentro del proceso de prospección (una 'entrada' al embudo). La mis
 | `fila_tomado_en` | fecha y hora (UTC) | no | Cuándo lo tomó n8n de la fila. |
 | `fila_execution_id` | texto (máx. 100) | no | Corrida de n8n que lo tomó de la fila. |
 | `fila_estado_previo` | texto (máx. 60) | no | Estado que tenía antes de entrar a la fila (para regresarlo si se saca). |
+| `tipo_rebote` | uno de: duro, suave | no | Rebote que lo desactivó (estado rebotado): duro (el correo no existe) o suave (bloqueos repetidos). |
+| `motivo_rebote` | texto (máx. 300) | no | Lo que respondió el servidor de correo (reason de SendGrid). |
+| `fecha_rebote` | fecha y hora (UTC) | no | Cuándo rebotó (fecha de SendGrid). |
+| `estado_previo_rebote` | texto (máx. 60) | no | Estado que tenía antes de rebotar. |
 
 ### Campañas y correo
 
@@ -353,6 +358,31 @@ Cada correo de prospección que salió (inicial o recordatorio) y su ventana de 
 | `proveedor_id` | texto (máx. 255) | no | Identificador del correo en SendGrid; lo manda n8n al confirmar el envío. |
 | `error` | texto (máx. 300) | no | Error, si falló. |
 | `intentos` | entero | sí | Cuántas veces se intentó este correo. Un fallido se reintenta sobre la misma fila, hasta 3 veces, sin gastar otro número de contacto. Por omisión: `1`. |
+
+#### `eventos_sendgrid`
+
+Cada evento del Event Webhook de SendGrid (rebote, bloqueo, queja, baja, entregado...), una sola vez por sg_event_id. De aquí salen la cuenta de rebotes suaves seguidos y el freno del dominio.
+
+- **Fuente:** La API sola (trabajos programados o efectos de otra acción).
+- **Actualización:** Lo escribe la API al recibir el webhook firmado. Solo se inserta; no se edita.
+- **Identificador:** `id`.
+- **Únicos (no se pueden repetir):** `sg_event_id`.
+
+| Campo | Formato | Obligatorio | Descripción |
+|---|---|---|---|
+| `id` | entero | auto | Identificador interno, autonumérico. |
+| `sg_event_id` | texto (máx. 255) | sí | Id del evento en SendGrid. Único: un evento repetido no se procesa dos veces. |
+| `evento` | texto (máx. 40) | sí | Nombre del evento de SendGrid (bounce, delivered, deferred, spamreport, unsubscribe...). |
+| `tipo` | texto (máx. 20) | no | En un rebote: bounce (duro) o blocked (suave). |
+| `motivo` | texto (máx. 300) | no | Respuesta del servidor de correo (reason), recortada a 300. |
+| `estado_smtp` | texto (máx. 20) | no | Código SMTP del rebote (status, ej. 5.1.1). |
+| `clasificacion` | texto (máx. 60) | no | Clasificación del rebote según SendGrid (bounce_classification). |
+| `correo` | texto (máx. 512) | no | Correo electrónico. |
+| `prospecto_id` | entero | no | Prospecto del custom_arg prospecto_id. Vacío si el correo no era de prospección. |
+| `envio_id` | entero | no | Envío al que responde. |
+| `ocurrio_en` | fecha y hora (UTC) | sí | Cuándo pasó según SendGrid (los eventos llegan en desorden). |
+| `recibido_en` | fecha y hora (UTC) | sí | Fecha: recibido en. |
+| `resultado` | uno de: desactivado, contado, suprimido, baja_persona, ignorado | sí | Qué hizo la API: desactivado, contado (suave), suprimido, baja_persona o ignorado. |
 
 #### `lista_supresion`
 

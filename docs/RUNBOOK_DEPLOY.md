@@ -694,3 +694,43 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
    --region=us-central1`).
 3. Si los registros hablan de la base: Cloud SQL → `nanobridge-db` (que esté
    RUNNABLE; en Operaciones, si hay mantenimiento). Respaldos y recuperación en §9.
+
+## 12. Event Webhook de SendGrid directo a la API (migración 044, 20-nov-2026)
+
+Antes los rebotes y quejas llegaban a n8n (PT3) y PT3 llamaba a `POST /automatizacion/supresion`.
+Desde la 044 SendGrid le avisa directo a la API (`POST /api/v1/webhooks/sendgrid/eventos`), que:
+pasa a `rebotado` **solo** el prospecto al que rebotó el correo (duro, o 3 suaves seguidos),
+da de baja a la persona con una queja o baja, y lleva el freno por porcentaje. El freno nuevo
+**solo cuenta lo que llega por aquí**: lo que siga mandando PT3 suprime, pero ya no pausa.
+
+Variables nuevas (todas con `--update-env-vars`, nunca `--set-env-vars`):
+
+| Variable | Valor | Qué hace |
+|---|---|---|
+| `SENDGRID_WEBHOOK_PUBLIC_KEY` | la que da SendGrid al activar la firma | Sin ella la puerta responde 503 |
+| `FRENO_TASA_REBOTE_7D` | 2 (default) | Por ciento de rebotes que pausa |
+| `FRENO_MIN_ENVIOS_7D` | 100 (default) | Envíos en 7 días para usar el porcentaje (con menos, `FRENO_REBOTES_7D`) |
+| `REBOTES_SUAVES_PARA_DESACTIVAR` | 3 (default) | Suaves seguidos que desactivan |
+
+Encendido, en orden:
+
+1. Migrar la 044 (§6) y desplegar la API y Firebase. Sin la llave la puerta responde 503: no pasa nada.
+2. Revisar en n8n, PT1b, nodo que arma el correo: que `custom_args` lleve `prospecto_id` y `envio_id`
+   (como texto). Sin ellos, un rebote solo suprime el correo y no desactiva ni cuenta para el freno.
+3. SendGrid → Settings → Mail Settings → Event Webhooks → **Create new webhook**:
+   - URL: `https://nanobridge-api-165032456965.us-central1.run.app/api/v1/webhooks/sendgrid/eventos`
+     (directo a Cloud Run; SendGrid no sigue redirecciones).
+   - Eventos: Bounced (incluye Blocked), Dropped, Deferred, Delivered, Spam Reports, Unsubscribe y
+     Group Unsubscribe.
+   - **Signed Event Webhook** activado. Copiar la llave pública (Verification Key) y ponerla:
+     `gcloud run services update nanobridge-api --region=us-central1 --update-env-vars=SENDGRID_WEBHOOK_PUBLIC_KEY=<llave>`
+   - "Test Integration" y revisar que aparezca la fila en `eventos_sendgrid`.
+   - Si el plan no deja un segundo webhook, se cambia la URL del de PT3 (y se apaga PT3 en el mismo momento).
+4. Unos días con los dos (PT3 y la API). No cuenta doble: la supresión es una por correo y la API
+   salta los `sg_event_id` repetidos.
+5. Apagar PT3 en n8n y borrar su webhook en SendGrid.
+
+**Reactivar un rebotado** (Administración → aviso de pausa → "Ver los contactos que rebotaron" →
+Reactivar): vuelve a `capturado` y, si fue rebote duro, sale de la lista de supresión. SendGrid tiene
+su propia lista: hay que quitarlo también en SendGrid → Suppressions → Bounces (la llave de la API
+solo tiene permiso de Mail Send).

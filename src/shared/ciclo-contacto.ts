@@ -27,7 +27,8 @@ export const HORAS_PARA_RETOMAR_DE_FILA = 24;
 // Estados en los que un prospecto ya terminó: respondió y se clasificó, pidió
 // la baja, o la automatización lo sacó del flujo. No recibe recordatorios
 // (PT4) y la persona puede volver a entrar a prospección (salvo la baja).
-export const ESTADOS_PROSPECTO_CERRADO: readonly string[] = ["baja", "interesado", "no_interesado", "descartado", "excluido", "inactivo"];
+// rebotado (044, 20-nov-2026): su correo rebotó; se reactiva en Administración.
+export const ESTADOS_PROSPECTO_CERRADO: readonly string[] = ["baja", "interesado", "no_interesado", "descartado", "excluido", "inactivo", "rebotado"];
 
 function sumarMeses(fecha: Date, meses: number): Date {
   const result = new Date(fecha);

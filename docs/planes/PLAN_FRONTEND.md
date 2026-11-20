@@ -710,6 +710,20 @@ Caso DTC: la misma persona estaba en la fila de una campaña con la serie de otr
   panel de Automatización lo explica. La caja roja de "La campaña ya terminó" ahora revisa
   `campana_vigencia === "inactiva"` directo (antes usaba la alerta de `textoFila`).
 
+## Estado nuevo `rebotado` (Fabián, 20 nov 2026)
+
+Rebotes de SendGrid directo a la API (migración 044, rama `rebotes-webhook`). Lo hizo Fabián (API +
+Administración); para que lo sepas si tocas Prospectos o Empresas:
+
+- **Estado nuevo `rebotado`:** su correo rebotó (rebote duro, o 3 suaves seguidos). Solo ese prospecto; es un
+  estado cerrado (no recibe recordatorios). Se reactiva en Administración y vuelve a `capturado`.
+- **Ya agregado** en `lib/prospectos.ts` (etiqueta "Rebotado", tono `danger`, dentro del grupo "Excluidos" del
+  embudo) y en `lib/empresas.ts` ("Rebotó"). Si en alguna pantalla tuya hay un `switch` o lista de estados a mano,
+  agrégalo ahí.
+- **Por qué rebotó** (tipo, motivo, fecha) solo se ve por ahora en Administración (`GET /admin/rebotes`). Si
+  lo quieres en el detalle del prospecto, pídeselo a Fabián: las columnas ya existen (`tipo_rebote`,
+  `motivo_rebote`, `fecha_rebote`), solo falta agregarlas a la respuesta.
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.

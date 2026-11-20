@@ -3,7 +3,7 @@
 **Entregable:** OB-01 (diccionario y reglas) y apoyo de OB-02 (base maestra controlada), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026).
 **Dueño:** T1 (datos y estandarización) · **Revisión:** T2 y Dirección General.
-**Versión:** 1.3 · generado el {{FECHA}} desde la base real, con migraciones hasta `{{MIGRACION}}` ({{MIGRACIONES}} en total). Cubre {{TOTALES}}.
+**Versión:** 1.4 · generado el {{FECHA}} desde la base real, con migraciones hasta `{{MIGRACION}}` ({{MIGRACIONES}} en total). Cubre {{TOTALES}}.
 
 > Este documento se genera con `generar-diccionario.mjs` (misma carpeta) a partir de la estructura real de la
 > base y de las reglas del código. No editar las tablas a mano: cambiar el script y volver a generarlo (ver al final).
@@ -94,8 +94,9 @@ y sin una serie en curso en otra (desde el 9-nov-2026, migración 042).
 | `interesado` · `no_interesado` | Respondió y se clasificó así | n8n / CRM |
 | `en_revision` | Respuesta ambigua: la clasifica una persona | n8n |
 | `baja` | Pidió no recibir más correos; sus medios pasan a no_contactar y a supresión | n8n / CRM |
+| `rebotado` | Su correo rebotó (rebote duro, o 3 suaves seguidos); solo ese prospecto. Se reactiva en Administración (vuelve a `capturado`) | API (Event Webhook de SendGrid, desde el 20-nov-2026) |
 
-Estados cerrados (no reciben más correos): `baja`, `interesado`, `no_interesado`, `descartado`, `excluido`, `inactivo`.
+Estados cerrados (no reciben más correos): `baja`, `interesado`, `no_interesado`, `descartado`, `excluido`, `inactivo`, `rebotado`.
 
 ## 7. Reglas de actualización y trazabilidad
 

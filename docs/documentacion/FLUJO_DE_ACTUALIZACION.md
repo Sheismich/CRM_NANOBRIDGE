@@ -25,12 +25,13 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
 | **PT1b · plantillas** (n8n) | Arma y manda el correo con SendGrid, con el texto que devuelve la API | Lo llaman PT1 y PT4 | Publicado |
 | **PT2 · respuestas** (n8n) | Recibe las respuestas (Inbound Parse de SendGrid), las registra y avisa al supervisor | Cada vez que llega un correo | Publicado y probado el 7-oct |
 | **PT2a · sugerencia de IA** (n8n) | Propone una clasificación para cada respuesta; una persona la confirma | Lo llama PT2 | Construido el 19-oct (modo sugerencia) |
-| **PT3 · eventos de SendGrid** (n8n) | Quejas de spam, rebotes y las bajas por el link de SendGrid de los correos anteriores al 13-nov | Cada evento de SendGrid | Probado en vivo (baja del 8-oct) |
+| **PT3 · eventos de SendGrid** (n8n) | Quejas de spam, rebotes y las bajas por el link de SendGrid de los correos anteriores al 13-nov | Cada evento de SendGrid | Probado en vivo (baja del 8-oct). Lo reemplaza el Event Webhook directo a la API (20-nov, rama `rebotes-webhook`): unos días los dos juntos y después se apaga |
+| **Event Webhook de SendGrid** (API) | Recibe los eventos firmados de SendGrid en `POST /api/v1/webhooks/sendgrid/eventos`: rebotes duros y suaves, quejas, bajas, entregados. Cada evento una vez (`sg_event_id`) | Cada lote de SendGrid (~30 s) | Rama `rebotes-webhook` (20-nov), falta deploy |
 | **Página de baja** (API) | El link «Darte de baja» del pie lleva a `/api/v1/baja/<prospecto>.<firma>`: abrirla solo muestra el botón «Confirmar baja» y el botón da de baja a la persona | Cuando la persona aprieta el botón | En producción desde el 13-nov (`src/baja/`) |
 | **PT4 · recordatorios** (n8n) | Manda los correos 2 y 3 al vencer la espera de 5 días hábiles, o marca inactivo al que ya recibió 3 | Lunes a viernes a las 9:00 | Publicado el 19-oct; en operación desde el 9-nov |
 | **PT5 · trabajos diarios** (n8n) | Llama a la API para los trabajos de cada día: vencer las filas importadas sin confirmar (30 días) y las cotizaciones con cierre pasado, avisar de tareas vencidas y de documentos sin revisar, y calcular las métricas del día anterior | Todos los días a las 7:00 (hora de México) | Publicado (confirmado por T2 el 3-nov; RUNBOOK §10). API: `POST /automatizacion/jobs/:nombre`, prueba `290-jobs-por-endpoint` |
 | **B4 · Error Workflow global** (n8n) | Registra en la API cualquier falla de un flujo y avisa por correo | Cuando algo falla | Publicado y probado el 23-sep |
-| **Freno del dominio** (API) | Con 2 quejas de spam o 5 rebotes en 7 días pausa toda la prospección y avisa a administradores y supervisores. Se reanuda a mano en Administración | Con cada queja o rebote | En producción desde el 5-nov (`00048-7x5`) |
+| **Freno del dominio** (API) | Con 2 quejas de spam en 7 días, o con 2% de rebotes si salieron al menos 100 correos (con menos, 5 rebotes), pausa toda la prospección. Solo cuentan correos de prospección: rebotes duros y prospectos desactivados por suaves (desde 044) y avisa a administradores y supervisores. Se reanuda a mano en Administración | Con cada queja o rebote | En producción desde el 5-nov (`00048-7x5`) |
 
 ## 3. Recorrido de un prospecto
 
@@ -58,7 +59,7 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
    clasificación. Una persona clasifica (la IA solo sugiere): `interesado` crea una tarea para un vendedor;
    `baja` suprime todos los medios de la persona.
 10. **Si pide la baja,** la API da de baja a la persona completa y cancela sus seguimientos: con el botón de la página
-    de baja (desde el 13-nov) o, si marca spam, por aviso de PT3. Un rebote solo suprime ese correo. Abrir el link de
+    de baja (desde el 13-nov) o, si marca spam, por aviso de PT3 (o del webhook directo). Un rebote no es una baja: suprime ese correo y pasa **solo ese** prospecto a `rebotado`. Abrir el link de
     baja no cambia nada: los escáneres de correo (Microsoft 365) abren todos los links al recibirlos.
 
 ## 4. Alta: cómo entra un registro
@@ -86,12 +87,13 @@ le entrega la fila, así que la base tiene una sola lista de prospectos y todo e
 | Recordatorio vencido | La espera se reclama; sale el siguiente correo o el prospecto pasa a `inactivo` | `GET /automatizacion/envios/vencidas` |
 | Respuesta | Fila en `respuestas`, espera cerrada, tarea de clasificación | `POST /automatizacion/respuestas` |
 | Clasificación | Estado del prospecto; con `baja`, supresión de todos sus medios y cancelación de seguimientos | `POST /automatizacion/respuestas/clasificacion` o la cola del CRM |
-| Baja, spam o rebote de SendGrid | Supresión (persona completa o solo el correo) y prospectos en `baja` | `POST /automatizacion/supresion` |
+| Baja o spam de SendGrid | Supresión de todos los medios de la persona y sus prospectos en `baja` | `POST /api/v1/webhooks/sendgrid/eventos` (Event Webhook firmado, desde el 20-nov-2026; antes PT3 → `POST /automatizacion/supresion`) |
+| Rebote de SendGrid | Duro: el correo a supresión y **solo ese** prospecto a `rebotado`. Suave: con 3 seguidos (sin un entregado entre medio) también a `rebotado`, sin suprimir el correo. `deferred` no cuenta | `POST /api/v1/webhooks/sendgrid/eventos` |
 | Baja en la página de baja | Lo mismo que una baja por evento, con el motivo «Baja confirmada en la página de baja». Abrir la página no cambia nada y un link con la firma alterada no da de baja a nadie | `POST /api/v1/baja/<prospecto>.<firma>` (sin sesión; el link va firmado) |
 | Falla de un flujo | Incidencia y, si es crítica, proceso fallido | `POST /automatizacion/errores-workflow` |
 
 Los estados posibles y quién pone cada uno están en el diccionario (§6). Los estados cerrados (`baja`, `interesado`,
-`no_interesado`, `descartado`, `excluido`, `inactivo`) ya no reciben correos.
+`no_interesado`, `descartado`, `excluido`, `inactivo`, `rebotado`) ya no reciben correos.
 
 ## 6. Rechazo: qué se detiene y por qué
 
@@ -153,7 +155,7 @@ Los estados posibles y quién pone cada uno están en el diccionario (§6). Los 
   n8n.
 - **Correo que SendGrid rechaza:** n8n lo confirma como `fallido` y la API lo reprograma, hasta 3 intentos, sin gastar
   el contacto de la persona. Si SendGrid rechaza todo un día, el tope diario detiene la fila.
-- **Una lista mala:** el freno del dominio pausa la prospección con 2 quejas o 5 rebotes en 7 días (§6).
+- **Una lista mala:** el freno del dominio pausa la prospección con 2 quejas, o 2% de rebotes con al menos 100 envíos (5 rebotes con menos), en 7 días (§6).
 
 ## 10. Pruebas
 
@@ -169,7 +171,7 @@ en vivo con n8n y SendGrid están fechadas en `PLAN_N8N_DEFINITIVO.md`.
 | **Baja** | La baja es de la persona, cancela seguimientos y no se deshace; abrir el link de baja no da de baja, solo el botón, y un link alterado no sirve | `245-baja-por-evento`, `350-tareas-baja-carrera`, `180-clasificacion-respuestas`, `595-pagina-de-baja` |
 | **Reversión** | Rechazar y expirar filas, sacar de la fila (vuelve a `capturado`), fusión con su bitácora | `200-prospectos-lotes`, `290-jobs-por-endpoint`, `485-fila-automatizacion`, `546-fusion-empresas` |
 | **Registro** | Bitácora con antes y después, reintentos sin duplicar, fallas de flujo y procesos fallidos | `455-registro-cambios`, `130-procesos-fallidos-auditoria`, `535-automatizacion-scoring-incidencias`, `60-error-workflow-promotion`, `562-envio-destinatario-y-estado` |
-| **Fallas** | Un envío fallido se reintenta sin gastar el contacto (también el recordatorio, con el id de PT4), ocupa el tope y para a los 3 intentos; el freno pausa con quejas o rebotes y no se traba con dos a la vez | `562-envio-destinatario-y-estado`, `565-freno-dominio` |
+| **Fallas** | Un envío fallido se reintenta sin gastar el contacto (también el recordatorio, con el id de PT4), ocupa el tope y para a los 3 intentos; el freno pausa con quejas o rebotes y no se traba con dos a la vez | `562-envio-destinatario-y-estado`, `565-freno-dominio`, `605-webhook-sendgrid` |
 | **Tareas nuevas** | Interesados sin atender se escalan; seguimiento de cotizaciones a los 5 días hábiles, que se cancela al cerrarse | `570-escalar-interesados`, `575-seguimiento-cotizaciones` |
 | **Concurrencia** | Dos corridas a la vez no toman el mismo prospecto ni la misma espera, ni mandan dos correos a la misma persona | `485-fila-automatizacion`, `230-recordatorios` |
 

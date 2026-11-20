@@ -142,11 +142,17 @@ export const prospectos = mysqlTable("prospectos", {
   filaPor: bigint("fila_por", { mode: "number", unsigned: true }),
   filaTomadoEn: datetime("fila_tomado_en"),
   filaExecutionId: varchar("fila_execution_id", { length: 100 }),
-  filaEstadoPrevio: varchar("fila_estado_previo", { length: 60 })
+  filaEstadoPrevio: varchar("fila_estado_previo", { length: 60 }),
+  // 044_rebotes_sendgrid.sql: el rebote que lo desactivó (estado 'rebotado').
+  tipoRebote: mysqlEnum("tipo_rebote", ["duro", "suave"]),
+  motivoRebote: varchar("motivo_rebote", { length: 300 }),
+  fechaRebote: datetime("fecha_rebote"),
+  estadoPrevioRebote: varchar("estado_previo_rebote", { length: 60 })
 }, (table) => [
   index("idx_prospectos_contacto").on(table.contactoId),
   index("idx_prospectos_fila").on(table.estado, table.filaDesde),
-  index("idx_prospectos_fila_execution").on(table.filaExecutionId)
+  index("idx_prospectos_fila_execution").on(table.filaExecutionId),
+  index("idx_prospectos_fecha_rebote").on(table.fechaRebote)
 ]);
 
 export const catalogoEtapaEmbudo = mysqlTable("catalogo_etapa_embudo", {
@@ -402,6 +408,27 @@ export const envios = mysqlTable("envios", {
   index("idx_envios_prospecto_canal").on(table.prospectoId, table.canal),
   index("idx_envios_ventana").on(table.ventanaEstado, table.ventanaVenceEn),
   index("idx_envios_estado").on(table.estado, table.enviadoEn)
+]);
+
+// 044_rebotes_sendgrid.sql: cada evento del Event Webhook de SendGrid, una vez.
+export const eventosSendgrid = mysqlTable("eventos_sendgrid", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  sgEventId: varchar("sg_event_id", { length: 255 }).notNull(),
+  evento: varchar("evento", { length: 40 }).notNull(),
+  tipo: varchar("tipo", { length: 20 }),
+  motivo: varchar("motivo", { length: 300 }),
+  estadoSmtp: varchar("estado_smtp", { length: 20 }),
+  clasificacion: varchar("clasificacion", { length: 60 }),
+  correo: varchar("correo", { length: 512 }),
+  prospectoId: bigint("prospecto_id", { mode: "number", unsigned: true }),
+  envioId: bigint("envio_id", { mode: "number", unsigned: true }),
+  ocurrioEn: datetime("ocurrio_en").notNull(),
+  recibidoEn: datetime("recibido_en").notNull().default(sql`CURRENT_TIMESTAMP`),
+  resultado: mysqlEnum("resultado", ["desactivado", "contado", "suprimido", "baja_persona", "ignorado"]).notNull()
+}, (table) => [
+  uniqueIndex("uq_eventos_sendgrid_sg_event_id").on(table.sgEventId),
+  index("idx_eventos_sendgrid_prospecto").on(table.prospectoId, table.ocurrioEn),
+  index("idx_eventos_sendgrid_evento").on(table.evento, table.tipo, table.recibidoEn)
 ]);
 
 // 033_plantillas_correo.sql: texto de los correos de prospección. giro '' =
