@@ -9,7 +9,7 @@ import { ApiError, api } from "../../lib/api";
 import { hora } from "../../lib/mi-dia";
 import { isoDia } from "../../lib/inicio";
 import { plural } from "../../lib/formato";
-import type { SaludSistema } from "../../types";
+import type { ProspectoRebotado, ReactivacionRebote, SaludSistema } from "../../types";
 
 // Franja "Estado del sistema" de Administración (capturas
 // administracion-centro-control*.png): los servicios con su semáforo. El
@@ -82,14 +82,18 @@ export function EstadoSistema() {
       </div>
       {salud.isError && <p className="relative z-[1] mt-4 text-[13px] text-[#ffb1b9]">No se pudo revisar el estado. Se vuelve a intentar en un minuto.</p>}
       {freno?.pausado && (
-        <div className="relative z-[1] mt-4 flex flex-wrap items-center gap-3 rounded-[14px] border border-[#f4c06a]/70 bg-[#f4c06a]/[0.08] px-4 py-3">
-          <p className="min-w-0 flex-1 text-[13px] text-white/85">
-            {freno.motivo} Revisa la lista antes de reanudar: los correos siguen esperando su turno.
-            {errorFreno && <span className="mt-1 block text-[#ffb1b9]">{errorFreno}</span>}
-          </p>
-          <Button disabled={reanudando} onClick={() => void reanudar()}>
-            {reanudando ? "…" : "Reanudar envíos"}
-          </Button>
+        <div className="relative z-[1] mt-4 rounded-[14px] border border-[#f4c06a]/70 bg-[#f4c06a]/[0.08] px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="min-w-0 flex-1 text-[13px] text-white/85">
+              {freno.pausado_en && <b className="mb-0.5 block text-[#f4c06a]">En pausa desde {momento(freno.pausado_en)}</b>}
+              {freno.motivo} Revisa la lista antes de reanudar: los correos siguen esperando su turno.
+              {errorFreno && <span className="mt-1 block text-[#ffb1b9]">{errorFreno}</span>}
+            </p>
+            <Button disabled={reanudando} onClick={() => void reanudar()}>
+              {reanudando ? "…" : "Reanudar envíos"}
+            </Button>
+          </div>
+          <ListaRebotados />
         </div>
       )}
       <div className="relative z-[1] mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -109,16 +113,16 @@ export function EstadoSistema() {
           sub="envío de campañas"
           etiqueta="Enviados hoy"
           valor={correos ? String(correos.enviados_hoy) : "…"}
-          pie={(correos?.sin_confirmar ?? 0) > 0 ? plural(correos!.sin_confirmar, "correo sin confirmar", "correos sin confirmar") : correos?.ultimo_envio_en ? `Último envío ${isoDia(new Date(correos.ultimo_envio_en)) === isoDia(new Date()) ? hora(new Date(correos.ultimo_envio_en)) : new Date(correos.ultimo_envio_en).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}` : "Hoy no ha salido ninguno"}
-          ok={(correos?.sin_confirmar ?? 0) === 0}
+          pie={freno?.pausado ? (freno.pausado_en ? `En pausa desde ${momento(freno.pausado_en)}` : "Envíos en pausa") : (correos?.sin_confirmar ?? 0) > 0 ? plural(correos!.sin_confirmar, "correo sin confirmar", "correos sin confirmar") : correos?.ultimo_envio_en ? `Último envío ${momento(correos.ultimo_envio_en)}` : "Hoy no ha salido ninguno"}
+          ok={!freno?.pausado && (correos?.sin_confirmar ?? 0) === 0}
         />
         <Servicio
           icono="aviso"
           titulo="Reputación del dominio"
-          sub="quejas y rebotes en 7 días"
-          etiqueta="Quejas · rebotes"
-          valor={freno ? `${freno.quejas_7d} · ${freno.rebotes_7d}` : "…"}
-          pie={!freno ? "…" : freno.pausado ? "Envíos en pausa" : `Se pausa con ${freno.limite_quejas} quejas o ${freno.limite_rebotes} rebotes`}
+          sub={freno ? `${freno.rebotes_duros_7d} ${freno.rebotes_duros_7d === 1 ? "duro" : "duros"} · ${freno.rebotes_suaves_7d} ${freno.rebotes_suaves_7d === 1 ? "suave" : "suaves"} · ${plural(freno.quejas_7d, "queja", "quejas")} en 7 días` : "rebotes y quejas en 7 días"}
+          etiqueta="Rebotes"
+          valor={freno ? `${freno.rebotes_7d}${freno.tasa_rebote_7d != null ? ` · ${freno.tasa_rebote_7d}%` : ""}` : "…"}
+          pie={!freno ? "…" : freno.pausado ? "Envíos en pausa" : reglaDePausa(freno)}
           ok={!freno?.pausado}
         />
       </div>
@@ -146,6 +150,100 @@ function Servicio({ icono, titulo, sub, etiqueta, valor, pie, ok }: { icono: Nom
         <Icono nombre={ok ? "checkCirculo" : "aviso"} size={15} />
         <span className="min-w-0">{pie}</span>
       </div>
+    </div>
+  );
+}
+
+// "10:02" si es de hoy; si no, "18 nov".
+function momento(iso: string) {
+  const fecha = new Date(iso);
+  return isoDia(fecha) === isoDia(new Date()) ? hora(fecha) : fecha.toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+}
+
+// Con pocos envíos el porcentaje engaña, así que la regla cambia (ver
+// src/shared/freno-dominio.ts).
+function reglaDePausa(f: NonNullable<SaludSistema["freno"]>) {
+  const quejas = plural(f.limite_quejas, "queja", "quejas");
+  return f.enviados_7d >= f.min_envios
+    ? `Se pausa con ${f.limite_tasa}% de rebotes o ${quejas}`
+    : `Se pausa con ${f.limite_rebotes} rebotes o ${quejas} (${f.enviados_7d} de ${f.min_envios} envíos para usar el %)`;
+}
+
+// Los contactos que rebotaron (044): correo, tipo y motivo, con "Reactivar"
+// para cuando se corrigió el correo. Se carga al abrirla.
+function ListaRebotados() {
+  const queryClient = useQueryClient();
+  const [abierta, setAbierta] = useState(false);
+  const [confirmando, setConfirmando] = useState<number | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const rebotes = useQuery({
+    queryKey: ["admin", "rebotes"],
+    queryFn: () => api.get<{ data: ProspectoRebotado[] }>("/api/v1/admin/rebotes"),
+    enabled: abierta
+  });
+  const filas = rebotes.data?.data ?? [];
+
+  async function reactivar(id: number) {
+    setError(null);
+    setAviso(null);
+    try {
+      const res = await api.post<ReactivacionRebote>(`/api/v1/admin/rebotes/${id}/reactivar`);
+      setAviso(res.quitar_de_sendgrid
+        ? `Reactivado. Quita también ${res.quitar_de_sendgrid} de Suppressions → Bounces en SendGrid; si no, SendGrid no le vuelve a mandar.`
+        : "Reactivado. Ya se puede volver a mandar a automatización.");
+      setConfirmando(null);
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+    }
+  }
+
+  return (
+    <div className="mt-3 border-t border-white/10 pt-3">
+      <button type="button" className="text-[13px] font-bold text-mint underline-offset-2 hover:underline" aria-expanded={abierta} onClick={() => setAbierta((v) => !v)}>
+        {abierta ? "Ocultar los contactos que rebotaron" : "Ver los contactos que rebotaron"}
+      </button>
+      {abierta && (
+        <div className="mt-2 text-[13px] text-white/85">
+          {rebotes.isLoading && <p className="text-white/60">Cargando…</p>}
+          {rebotes.isError && <p className="text-[#ffb1b9]">No se pudo cargar la lista.</p>}
+          {rebotes.isSuccess && filas.length === 0 && <p className="text-white/60">Ningún contacto rebotado en los últimos 7 días.</p>}
+          {aviso && <p className="mb-2 text-mint">{aviso}</p>}
+          {error && <p className="mb-2 text-[#ffb1b9]">{error}</p>}
+          <ul className="flex flex-col gap-2">
+            {filas.map((f) => (
+              <li key={f.prospecto_id} className="flex flex-wrap items-start gap-x-3 gap-y-1 rounded-[10px] bg-white/[0.05] px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <b className="block break-all">{f.correo ?? "(sin correo)"}</b>
+                  <small className="block text-white/60">
+                    {f.contacto} · {f.empresa}{f.campana ? ` · ${f.campana}` : ""}
+                  </small>
+                  <small className="block text-white/75">
+                    <span className={clsx("font-bold", f.tipo_rebote === "duro" ? "text-[#ffb1b9]" : "text-[#f4c06a]")}>{f.tipo_rebote === "suave" ? "Rebote suave repetido" : "Rebote duro"}</span>
+                    {f.motivo_rebote ? ` · ${f.motivo_rebote}` : ""}
+                    {f.fecha_rebote ? ` · ${momento(f.fecha_rebote)}` : ""}
+                  </small>
+                </div>
+                {confirmando === f.prospecto_id ? (
+                  <span className="flex items-center gap-2">
+                    <button type="button" className="rounded-[8px] bg-mint px-2.5 py-1 text-[12px] font-bold text-navy-ink" onClick={() => void reactivar(f.prospecto_id)}>
+                      Sí, reactivar
+                    </button>
+                    <button type="button" className="rounded-[8px] px-2.5 py-1 text-[12px] font-bold text-white/70 hover:bg-white/10" onClick={() => setConfirmando(null)}>
+                      No
+                    </button>
+                  </span>
+                ) : (
+                  <button type="button" className="rounded-[8px] border border-white/20 px-2.5 py-1 text-[12px] font-bold text-white/85 hover:bg-white/10" onClick={() => setConfirmando(f.prospecto_id)}>
+                    Reactivar
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

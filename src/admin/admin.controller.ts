@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Query, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { contentDispositionAdjunto } from "../shared/content-disposition.js";
 import { RegistroCambiosService } from "./registro-cambios.service.js";
@@ -11,7 +11,8 @@ import { ProblemasService } from "./problemas.service.js";
 import { SaludService } from "./salud.service.js";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { reanudarFreno } from "../shared/freno-dominio.js";
-import { claveProblemaSchema, problemasQuerySchema, registroCambiosExportQuerySchema, registroCambiosQuerySchema } from "./dto/admin.schema.js";
+import { listarRebotados, reactivarRebote } from "../shared/rebotes.js";
+import { claveProblemaSchema, problemasQuerySchema, prospectoIdParamSchema, rebotesQuerySchema, registroCambiosExportQuerySchema, registroCambiosQuerySchema } from "./dto/admin.schema.js";
 
 // Pantalla de Administración del rediseño (12-oct-2026): todo solo para el
 // administrador -- es el "control" (quién movió qué, si todo funciona), no
@@ -48,6 +49,19 @@ export class AdminController {
   @HttpCode(200)
   reanudarFreno(@CurrentUser() actor: CurrentUserType) {
     return reanudarFreno(this.db, actor);
+  }
+
+  // Los prospectos que un rebote desactivó (044, 20-nov-2026): la lista de
+  // "Revisa la lista antes de reanudar".
+  @Get("rebotes")
+  async rebotes(@Query() query: Record<string, unknown>) {
+    return { data: await listarRebotados(this.db, rebotesQuerySchema.parse(query).dias) };
+  }
+
+  @Post("rebotes/:prospectoId/reactivar")
+  @HttpCode(200)
+  reactivarRebote(@Param("prospectoId") prospectoId: string, @CurrentUser() actor: CurrentUserType) {
+    return reactivarRebote(this.db, prospectoIdParamSchema.parse(prospectoId), actor);
   }
 
   @Get("registro-cambios")

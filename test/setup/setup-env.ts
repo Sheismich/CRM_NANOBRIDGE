@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { ENV_FILE } from "./shared-env-path.js";
 
@@ -47,4 +48,12 @@ process.env.SESSION_TTL_HOURS = "12";
 // (565-freno-dominio.spec.ts los baja a mano).
 process.env.FRENO_QUEJAS_7D = "1000000";
 process.env.FRENO_REBOTES_7D = "1000000";
+process.env.FRENO_TASA_REBOTE_7D = "100";
+process.env.FRENO_MIN_ENVIOS_7D = "1000000";
+// Llave de prueba del Signed Event Webhook de SendGrid: la pública va como la
+// da SendGrid (base64 de SPKI en DER); la privada la usa test/support/sendgrid.ts
+// para firmar los lotes.
+const llavesSendgrid = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+process.env.SENDGRID_WEBHOOK_PUBLIC_KEY = llavesSendgrid.publicKey.export({ format: "der", type: "spki" }).toString("base64");
+process.env.TEST_SENDGRID_PRIVATE_KEY = llavesSendgrid.privateKey.export({ format: "pem", type: "pkcs8" }).toString();
 process.env.STORAGE_MAX_FILE_SIZE_MB = "25";

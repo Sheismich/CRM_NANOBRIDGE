@@ -475,9 +475,41 @@ export type SaludSistema = {
   api: { estado: "ok"; revision: string | null };
   base_datos: { estado: "ok" | "error"; responde_ms: number | null };
   correos: { enviados_hoy: number; ultimo_envio_en: string | null; sin_confirmar: number } | null;
-  freno: { pausado: boolean; motivo: string | null; pausado_en: string | null; quejas_7d: number; rebotes_7d: number; limite_quejas: number; limite_rebotes: number } | null;
+  // 044 (20-nov-2026): rebotes duros/suaves, envíos y tasa en por ciento
+  // (null sin envíos). Con enviados_7d >= min_envios pausa por limite_tasa;
+  // con menos, por limite_rebotes.
+  freno: {
+    pausado: boolean;
+    motivo: string | null;
+    pausado_en: string | null;
+    quejas_7d: number;
+    rebotes_7d: number;
+    rebotes_duros_7d: number;
+    rebotes_suaves_7d: number;
+    enviados_7d: number;
+    tasa_rebote_7d: number | null;
+    limite_quejas: number;
+    limite_rebotes: number;
+    limite_tasa: number;
+    min_envios: number;
+  } | null;
   resumen: { problemas_abiertos: number } | null;
 };
+
+// GET /admin/rebotes → { data }: prospectos que un rebote desactivó.
+export type ProspectoRebotado = {
+  prospecto_id: number;
+  correo: string | null;
+  contacto: string;
+  empresa: string;
+  campana: string | null;
+  tipo_rebote: "duro" | "suave" | null;
+  motivo_rebote: string | null;
+  fecha_rebote: string | null;
+};
+
+// POST /admin/rebotes/:id/reactivar
+export type ReactivacionRebote = { prospecto_id: number; estado: "capturado"; supresion_quitada: boolean; quitar_de_sendgrid: string | null };
 
 // GET /admin/problemas → { grupos }
 export type GrupoProblemas = {

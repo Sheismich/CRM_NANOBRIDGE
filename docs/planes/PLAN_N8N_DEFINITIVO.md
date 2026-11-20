@@ -529,6 +529,11 @@ Los puntos 1 a 5 se construyen y prueban ya; el punto 6 bloquea **encender**, no
      no duplique la respuesta. Como un `Message-ID` puede pasar de 100 caracteres (el máximo
      de la API), n8n manda un hash corto de él (por ejemplo `msg-` + SHA-256 recortado).
 4. **PT3, eventos de SendGrid:**
+   - **Se reemplaza (20-nov-2026, migración 044):** el Event Webhook va directo a la API
+     (`POST /api/v1/webhooks/sendgrid/eventos`, firma verificada en la API). Un rebote pasa a
+     `rebotado` solo a ese prospecto, los `blocked` cuentan como suaves y el freno es por
+     porcentaje. PT3 convive unos días y después se apaga (RUNBOOK_DEPLOY.md §12). Lo de abajo es
+     cómo funcionaba PT3.
    - Event Webhook **firmado**, con verificación de la firma en n8n.
    - Bajas por link (`unsubscribe`, `group_unsubscribe`) y quejas de spam van a
      `POST /automatizacion/supresion`. De los rebotes solo cuentan los definitivos (`bounce`

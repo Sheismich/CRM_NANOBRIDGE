@@ -6,9 +6,10 @@ import { and, desc, eq } from "drizzle-orm";
 import { createTestApp } from "./support/create-app.js";
 import { closeTestDb, testDb } from "./support/db.js";
 import { crearAgente, ensureSeedAdmin } from "./support/seed.js";
-import { auditoria, envios, listaSupresion, notificaciones, parametrosAutomatizacion, prospectos } from "../src/database/schema.js";
+import { auditoria, envios, eventosSendgrid, notificaciones, parametrosAutomatizacion, prospectos } from "../src/database/schema.js";
 import { env } from "../src/config/env.js";
-import { evaluarFreno } from "../src/shared/freno-dominio.js";
+import { evaluarFreno, motivoDePausa } from "../src/shared/freno-dominio.js";
+import { evento, mandarLote } from "./support/sendgrid.js";
 
 const API_KEY = "test_crm_callback_api_key_0001";
 
@@ -23,6 +24,8 @@ describe("freno automático del dominio", () => {
   const conLlave = <T extends { set: (k: string, v: string) => T }>(r: T) => r.set("X-API-Key", API_KEY);
   const quejasOriginal = env.FRENO_QUEJAS_7D;
   const rebotesOriginal = env.FRENO_REBOTES_7D;
+  const tasaOriginal = env.FRENO_TASA_REBOTE_7D;
+  const minEnviosOriginal = env.FRENO_MIN_ENVIOS_7D;
 
   async function prospecto() {
     const correo = `freno.${randomUUID()}@destino.test`;
@@ -35,8 +38,17 @@ describe("freno automático del dominio", () => {
     return { id: res.body.id as number, correo };
   }
 
-  const supresion = (evento: "bounce" | "spamreport" | undefined) =>
-    conLlave(api().post("/api/v1/automatizacion/supresion")).send({ execution_id: randomUUID(), tipo: "correo", valor: `evento.${randomUUID()}@destino.test`, motivo: "Evento de SendGrid", evento });
+  // Desde 044 el freno cuenta lo que llega por el Event Webhook directo, de
+  // correos de prospección. Sin evento = una supresión a mano por PT3/API.
+  const supresion = async (ev: "bounce" | "spamreport" | undefined) => {
+    if (ev === undefined) {
+      return conLlave(api().post("/api/v1/automatizacion/supresion")).send({ execution_id: randomUUID(), tipo: "correo", valor: `evento.${randomUUID()}@destino.test`, motivo: "Evento de SendGrid" });
+    }
+    const p = await prospecto();
+    const res = await mandarLote(app, [evento({ event: ev, type: ev === "bounce" ? "bounce" : undefined, email: p.correo, prospecto_id: p.id })]);
+    expect(res.status).toBe(200);
+    return res;
+  };
   const registrar = (prospectoId: number) => conLlave(api().post("/api/v1/automatizacion/envios")).send({ execution_id: randomUUID(), prospecto_id: prospectoId, canal: "correo" });
   const verificar = (prospectoId: number) => conLlave(api().get("/api/v1/automatizacion/envios/verificacion")).query({ prospecto_id: prospectoId, canal: "correo" });
   const salud = async () => (await api().get("/api/v1/admin/salud").set("Cookie", adminCookie)).body.freno as { pausado: boolean; motivo: string | null; quejas_7d: number; rebotes_7d: number };
@@ -59,6 +71,8 @@ describe("freno automático del dominio", () => {
     if ((await salud()).pausado) await reanudar();
     env.FRENO_QUEJAS_7D = quejasOriginal;
     env.FRENO_REBOTES_7D = rebotesOriginal;
+    env.FRENO_TASA_REBOTE_7D = tasaOriginal;
+    env.FRENO_MIN_ENVIOS_7D = minEnviosOriginal;
   });
 
   afterAll(async () => {
@@ -110,11 +124,11 @@ describe("freno automático del dominio", () => {
     await limitesA(2, 50);
     await db.transaction(async (tx) => {
       // Una lectura cualquiera fija la "foto" de esta transacción (REPEATABLE READ).
-      await tx.select({ id: listaSupresion.id }).from(listaSupresion).limit(1);
-      // Otra queja llega por la API y se confirma en otra conexión.
+      await tx.select({ id: eventosSendgrid.id }).from(eventosSendgrid).limit(1);
+      // Otra queja llega por el webhook y se confirma en otra conexión.
       await supresion("spamreport");
       // La de esta transacción: con ella son 2, el límite.
-      await tx.insert(listaSupresion).values({ tipo: "correo", valorNormalizado: `foto.${randomUUID()}@destino.test`, motivo: "Evento de SendGrid", evento: "spamreport" });
+      await tx.insert(eventosSendgrid).values({ sgEventId: randomUUID(), evento: "spamreport", correo: `foto.${randomUUID()}@destino.test`, prospectoId: 1, ocurrioEn: new Date(), resultado: "baja_persona" });
       await evaluarFreno(tx);
     });
     expect((await salud()).pausado).toBe(true);
@@ -196,7 +210,7 @@ describe("freno automático del dominio", () => {
     expect((await reanudar()).status).toBe(409);
 
     // Lo de antes de reanudar ya no cuenta: un evento más no la vuelve a pausar...
-    await db.update(listaSupresion).set({ creadoEn: new Date(Date.now() - 2 * 60 * 1000) });
+    await db.update(eventosSendgrid).set({ recibidoEn: new Date(Date.now() - 2 * 60 * 1000) });
     const [fila] = await db.select({ valor: parametrosAutomatizacion.valor }).from(parametrosAutomatizacion).where(eq(parametrosAutomatizacion.clave, "freno_dominio"));
     await db.update(parametrosAutomatizacion).set({ valor: { ...(fila!.valor as object), reanudado_en: new Date(Date.now() - 60 * 1000).toISOString() } }).where(eq(parametrosAutomatizacion.clave, "freno_dominio"));
     env.FRENO_REBOTES_7D = 2;
@@ -205,5 +219,60 @@ describe("freno automático del dominio", () => {
     // ...y el siguiente, que sí llega al límite, sí.
     await supresion("bounce");
     expect((await salud()).pausado).toBe(true);
+  });
+
+  describe("por porcentaje (044)", () => {
+    it("la regla: abajo del mínimo de envíos cuenta fija; arriba, porcentaje", () => {
+      env.FRENO_QUEJAS_7D = 2;
+      env.FRENO_REBOTES_7D = 5;
+      env.FRENO_TASA_REBOTE_7D = 2;
+      env.FRENO_MIN_ENVIOS_7D = 100;
+      expect(motivoDePausa({ duros: 4, suaves: 0, quejas: 0, enviados: 99 })).toBeNull();
+      expect(motivoDePausa({ duros: 4, suaves: 1, quejas: 0, enviados: 99 })).toMatch(/5 rebotes/);
+      expect(motivoDePausa({ duros: 1, suaves: 0, quejas: 0, enviados: 100 })).toBeNull();
+      expect(motivoDePausa({ duros: 1, suaves: 1, quejas: 0, enviados: 100 })).toBe("Rebotó el 2% de los correos (2 de 100) en 7 días.");
+      // Con 500 envíos, 9 rebotes (1.8%) no pausan aunque pasen de 5.
+      expect(motivoDePausa({ duros: 9, suaves: 0, quejas: 0, enviados: 500 })).toBeNull();
+      expect(motivoDePausa({ duros: 0, suaves: 0, quejas: 2, enviados: 500 })).toMatch(/2 quejas/);
+    });
+
+    it("con suficientes envíos pausa por porcentaje y el panel muestra la tasa", async () => {
+      const p = await prospecto();
+      const envio = await registrar(p.id);
+      await conLlave(api().post(`/api/v1/automatizacion/envios/${envio.body.id}/confirmacion`)).send({ estado: "enviado", proveedor_id: "msg-tasa" });
+      const hoy = (await api().get("/api/v1/admin/salud").set("Cookie", adminCookie)).body.freno as { rebotes_7d: number; enviados_7d: number; quejas_7d: number };
+      expect(hoy.enviados_7d).toBeGreaterThan(0);
+      env.FRENO_QUEJAS_7D = hoy.quejas_7d + 50;
+      env.FRENO_MIN_ENVIOS_7D = hoy.enviados_7d;
+      // Justo debajo de la tasa con un rebote más.
+      env.FRENO_TASA_REBOTE_7D = ((hoy.rebotes_7d + 1) / hoy.enviados_7d) * 100 - 0.0001;
+      await supresion("bounce");
+
+      const freno = (await api().get("/api/v1/admin/salud").set("Cookie", adminCookie)).body.freno;
+      expect(freno.pausado).toBe(true);
+      expect(freno.motivo).toMatch(/^Rebotó el .*% de los correos/);
+      expect(freno).toEqual(expect.objectContaining({ rebotes_duros_7d: expect.any(Number), rebotes_suaves_7d: expect.any(Number), tasa_rebote_7d: expect.any(Number), pausado_en: expect.any(String) }));
+    });
+
+    it("un rebote de un correo sin prospecto no cuenta", async () => {
+      await limitesA(50, 1);
+      const res = await mandarLote(app, [evento({ event: "bounce", type: "bounce", email: `suelto.${randomUUID()}@destino.test` })]);
+      expect(res.status).toBe(200);
+      expect((await salud()).pausado).toBe(false);
+    });
+
+    it("un rebote suave suelto no cuenta; el que desactiva al prospecto sí", async () => {
+      await limitesA(50, 1);
+      const p = await prospecto();
+      env.REBOTES_SUAVES_PARA_DESACTIVAR = 2;
+      try {
+        await mandarLote(app, [evento({ event: "bounce", type: "blocked", email: p.correo, prospecto_id: p.id })]);
+        expect((await salud()).pausado).toBe(false);
+        await mandarLote(app, [evento({ event: "bounce", type: "blocked", email: p.correo, prospecto_id: p.id })]);
+        expect((await salud()).pausado).toBe(true);
+      } finally {
+        env.REBOTES_SUAVES_PARA_DESACTIVAR = 3;
+      }
+    });
   });
 });

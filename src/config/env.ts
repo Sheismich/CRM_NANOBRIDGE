@@ -55,6 +55,18 @@ const schema = z.object({
   // rebotes en 7 días que pausan la prospección.
   FRENO_QUEJAS_7D: z.coerce.number().int().positive().default(2),
   FRENO_REBOTES_7D: z.coerce.number().int().positive().default(5),
+  // Desde 044 (20-nov-2026) el freno va por porcentaje: con al menos
+  // FRENO_MIN_ENVIOS_7D correos enviados en 7 días pausa al llegar a
+  // FRENO_TASA_REBOTE_7D por ciento de rebotes. Con menos envíos el
+  // porcentaje engaña (1 de 40 = 2.5%) y se queda FRENO_REBOTES_7D.
+  FRENO_TASA_REBOTE_7D: z.coerce.number().positive().max(100).default(2),
+  FRENO_MIN_ENVIOS_7D: z.coerce.number().int().positive().default(100),
+  // Rebotes suaves (blocked) seguidos que desactivan a un prospecto.
+  REBOTES_SUAVES_PARA_DESACTIVAR: z.coerce.number().int().positive().default(3),
+  // Llave pública del Event Webhook firmado de SendGrid (la da SendGrid al
+  // activar la firma; base64, no es secreta). Sin ella la puerta
+  // POST /webhooks/sendgrid/eventos responde 503 y no procesa nada.
+  SENDGRID_WEBHOOK_PUBLIC_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().trim().min(40).optional()),
   // Expediente documental (PLAN_CRM_DEFINITIVO.md #8). STORAGE_DRIVER
   // decide en runtime qué StorageService implementa
   // src/documentos/storage/storage.provider.ts:

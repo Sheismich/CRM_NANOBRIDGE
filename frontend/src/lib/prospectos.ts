@@ -17,6 +17,8 @@ export const ETIQUETA_ESTADO_PROSPECTO: Record<string, string> = {
   descartado: "Descartado",
   inactivo: "Inactivo",
   baja: "Baja",
+  // 044 (20-nov-2026): su correo rebotó; se reactiva en Administración.
+  rebotado: "Rebotado",
   // No es un estado guardado (ver EN_CAMPANA): solo para el selector de Estado.
   en_campana: "En campaña"
 };
@@ -31,7 +33,8 @@ export const TONO_ESTADO_PROSPECTO: Record<string, Tono> = {
   en_revision: "warn",
   descartado: "warn",
   inactivo: "neutro",
-  baja: "danger"
+  baja: "danger",
+  rebotado: "danger"
 };
 
 export function etiquetaEstadoProspecto(estado: string) {
@@ -67,7 +70,7 @@ export const GRUPOS_EMBUDO: GrupoEmbudo[] = [
   { id: "validados", etiqueta: "Validados", estados: ["validado"], detalle: "listos para campaña", tono: "info" },
   { id: "en_campana", etiqueta: "En campaña", estados: [EN_CAMPANA], detalle: "esperan respuesta", tono: "navy" },
   { id: "respondieron", etiqueta: "Respondieron", estados: ["interesado", "no_interesado", "en_revision"], detalle: "", tono: "ok" },
-  { id: "excluidos", etiqueta: "Excluidos", estados: ["excluido", "descartado", "inactivo"], detalle: "sin giro o medio", tono: "warn", aparte: true },
+  { id: "excluidos", etiqueta: "Excluidos", estados: ["excluido", "descartado", "inactivo", "rebotado"], detalle: "sin giro o medio, o rebotó", tono: "warn", aparte: true },
   { id: "baja", etiqueta: "Baja", estados: ["baja"], detalle: "no volver a escribir", tono: "danger", aparte: true }
 ];
 

@@ -27,7 +27,10 @@ export function configurarApp(app: NestExpressApplication) {
   // primer admin, "Fabi�n", creado desde una terminal; 7-oct-2026).
   app.use(express.json({
     limit: "1mb",
-    verify: (_req, _res, bytes) => {
+    verify: (req, _res, bytes) => {
+      // El Event Webhook de SendGrid firma los bytes tal como llegan: volver
+      // a serializar el JSON no da la misma firma (shared/firma-sendgrid.ts).
+      (req as { rawBody?: Buffer }).rawBody = bytes;
       if (!esUtf8Valido(bytes)) throw new HttpError(400, "El texto no viene en UTF-8 y los acentos llegarían rotos; mándalo como UTF-8", "TEXTO_NO_UTF8");
     }
   }));

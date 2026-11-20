@@ -14,6 +14,7 @@ export function prospeccionEmpresa(p: EmpresaFila["prospeccion"]): { texto: stri
   if (p.estado === "descartado") return { texto: "Descartada", tono: "warn" };
   if (p.estado === "inactivo") return { texto: "Inactiva", tono: "neutro" };
   if (p.estado === "baja") return { texto: "Baja", tono: "danger" };
+  if (p.estado === "rebotado") return { texto: "Rebotó", tono: "danger" };
   if (p.estado === "validado") return { texto: "Validada", tono: "info" };
   return { texto: etiquetaEstadoProspecto(p.estado), tono: "neutro" };
 }

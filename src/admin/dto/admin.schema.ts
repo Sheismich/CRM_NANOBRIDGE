@@ -34,3 +34,9 @@ export const registroCambiosExportQuerySchema = filtrosRegistro.extend({
   formato: z.enum(["pdf", "csv"]).default("pdf")
 }).refine(rangoValido, ERROR_RANGO);
 export type RegistroCambiosExportQuery = z.infer<typeof registroCambiosExportQuerySchema>;
+
+// Rebotados (044, 20-nov-2026): los de los últimos `dias` días.
+export const rebotesQuerySchema = z.object({
+  dias: z.coerce.number().int().min(1).max(90).default(7)
+});
+export const prospectoIdParamSchema = z.coerce.number().int().positive();

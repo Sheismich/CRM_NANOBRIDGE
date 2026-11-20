@@ -25,7 +25,7 @@ const REGLAS: Record<TipoRegistro, Record<string, Record<string, string>>> = {
     oportunidad: { crear: "Alta de oportunidad", cambiar_etapa: "Cambio de etapa de oportunidad", reabrir: "Reapertura de oportunidad" },
     cotizacion: { crear: "Alta de cotización", nueva_version: "Versión nueva de cotización", cambiar_estado: "Cambio de estado de cotización" },
     documento: { subir: "Documento subido", nueva_version: "Versión nueva de documento", cambiar_estado: "Cambio de estado de documento", revisar: "Documento revisado", aprobar: "Documento aprobado", rechazar: "Documento rechazado" },
-    prospecto: { importar_borrador: "Prospecto importado" }
+    prospecto: { importar_borrador: "Prospecto importado", rebote: "Prospecto desactivado por rebote", reactivar_rebote: "Prospecto rebotado reactivado" }
   },
   borrados: {
     documento: { eliminar: "Documento eliminado" },

@@ -1,16 +1,17 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb, type DrizzleTx } from "../database/drizzle.constants.js";
 import { auditoria, campanas, contactos, empresas, envios, incidencias, listaSupresion, mediosContacto, parametrosAutomatizacion, procesosFallidos, prospectos, respuestas, resultadosScoring } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { insertarMediosContacto } from "../shared/medios-contacto.js";
-import { normalizarValorSupresion, registrarSupresion, suprimirMediosDeContacto } from "../shared/supresion.js";
-import { bloquearPersona, darDeBajaPersona, personaEnBaja } from "../shared/baja-prospecto.js";
+import { normalizarValorSupresion, registrarSupresion } from "../shared/supresion.js";
+import { darDeBajaPorEvento } from "../shared/supresion-por-evento.js";
+import { bloquearPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
-import { CODIGO_ENVIOS_EN_PAUSA, MENSAJE_EN_PAUSA, bloquearFreno, evaluarFreno, leerFreno } from "../shared/freno-dominio.js";
+import { CODIGO_ENVIOS_EN_PAUSA, MENSAJE_EN_PAUSA, leerFreno } from "../shared/freno-dominio.js";
 import { ESTADOS_PROSPECTO_CERRADO, HORAS_PARA_RETOMAR_DE_FILA, MAX_CONTACTOS_POR_CICLO, MENSAJE_INTERESADO_EN_OTRA, MENSAJE_SERIE_EN_CURSO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable, interesadoEnOtraCampanaSql, noInteresadoReciente, otraCampanaBloquea, serieEnCursoEnOtraCampanaSql } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { diaSiguiente, esFeriadoMx, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
@@ -1199,42 +1200,24 @@ export class AutomatizacionService {
   // 14-sep-2026): si el UPDATE de medios_contacto tronaba después de
   // confirmar el insert, un retry de n8n devolvía ya_existia sin volver a
   // intentar ese UPDATE.
+  //
+  // Desde 044 (20-nov-2026) esto ya no mueve el freno del dominio: el freno
+  // cuenta lo que llega por el Event Webhook directo (eventos_sendgrid). Así,
+  // mientras PT3 y el webhook directo conviven, nada se cuenta dos veces.
   async registrarSupresion(input: RegistroSupresionInput) {
     return this.db.transaction(async (tx) => {
       const valorNormalizado = normalizarValorSupresion(input.tipo, input.valor);
       const origen = { motivo: input.motivo, executionId: input.execution_id, usuarioId: null };
-      // El freno se bloquea ANTES de guardar la queja o el rebote: dos eventos
-      // que llegan juntos se forman desde aquí. Si cada uno guardaba primero y
-      // luego pedía el bloqueo, el que contaba esperaba la fila sin confirmar
-      // del otro, y el otro esperaba el bloqueo: se trababan (deadlock).
-      const cuentaParaElFreno = input.evento === "bounce" || input.evento === "spamreport";
-      if (cuentaParaElFreno) await bloquearFreno(tx);
       const supresion = await registrarSupresion(tx, { tipo: input.tipo, valorNormalizado, evento: input.evento, ...origen });
-      if (!supresion.ya_existia && cuentaParaElFreno) await evaluarFreno(tx);
 
       const esBajaDePersona = input.evento !== undefined && (EVENTOS_BAJA_DE_PERSONA as readonly string[]).includes(input.evento);
       if (!esBajaDePersona) {
         return { ...supresion, alcance: "medio" as const, supresion_ids: [supresion.id], prospectos_en_baja: [] as number[] };
       }
 
-      const duenos = await tx
-        .selectDistinct({ contactoId: mediosContacto.contactoId })
-        .from(mediosContacto)
-        .where(and(eq(mediosContacto.tipo, input.tipo), eq(mediosContacto.valorNormalizado, valorNormalizado), isNotNull(mediosContacto.contactoId)))
-        .orderBy(mediosContacto.contactoId);
-
-      const supresionIds = new Set([supresion.id]);
-      const prospectosEnBaja: number[] = [];
-      for (const { contactoId } of duenos) {
-        for (const id of await suprimirMediosDeContacto(tx, contactoId!, origen)) supresionIds.add(id);
-
-        // Misma acción que POST /prospectos/estado: el Historial de la
-        // ficha de cliente la muestra como cambio de estado.
-        const baja = await darDeBajaPersona(tx, contactoId!, { accion: "cambiar_estado_automatizacion", motivo: input.motivo, executionId: input.execution_id, usuarioId: null });
-        prospectosEnBaja.push(...baja.prospectosEnBaja);
-      }
-
-      return { ...supresion, alcance: "persona" as const, supresion_ids: [...supresionIds], prospectos_en_baja: prospectosEnBaja };
+      const baja = await darDeBajaPorEvento(tx, input.tipo, valorNormalizado, origen);
+      const supresionIds = new Set([supresion.id, ...baja.supresionIds]);
+      return { ...supresion, alcance: "persona" as const, supresion_ids: [...supresionIds], prospectos_en_baja: baja.prospectosEnBaja };
     });
   }
 
