@@ -90,7 +90,9 @@ Pruebas automáticas (sin llamar a Gemini): `535-automatizacion-scoring-incidenc
 `510-responder-prospecto`, `515-resumen-ficha`, `530-historial-documentos`.
 
 **Plan para medir:**
-1. **Al cargar los contactos de Carlos:** calcular M4 y revisar a mano el score de una muestra de prospectos con T2.
+1. **Al cargar los contactos de Carlos** (6 al 19-nov): M4 fue 0 % (Gemini respondió en los 116). Los 115 prospectos en
+   espera tienen un giro que el score no reconoce (auditoría del 20-nov), así que su parte por giro vale 0. ⏳ Revisar a
+   mano el score de una muestra con T2.
 2. **Operación real (envíos desde el 9-nov; el encendido se adelantó al 6-nov):** cada respuesta real deja su
    sugerencia y la decisión de la persona. `reporte-piloto.mjs` calcula M1 a M5 en cualquier momento, también por
    campaña.

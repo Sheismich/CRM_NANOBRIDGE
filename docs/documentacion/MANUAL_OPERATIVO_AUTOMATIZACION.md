@@ -50,8 +50,7 @@ En el correo:
 encendido del [RUNBOOK](../RUNBOOK_DEPLOY.md), §10. Si alguna vez se apaga con `MODO_PRUEBAS` (abajo), se vuelve a
 prender con esa misma lista.
 
-**Campañas:** Prospectos → Campañas → crear y activar. Pueden estar activas varias a la vez (hoy, agua y tratamiento
-de maquinaria). Sus correos se escriben en Administración → Correos de prospección → botón «Campañas»: elegir la
+**Campañas:** Prospectos → Campañas → crear y activar. Pueden estar activas varias a la vez (hoy 4: tratamiento de aguas residuales (4), pilotos de mantenimiento STEELSAFE NANO (5), desarrollo tecnológico y automatización (6) e I+D (7)). Sus correos se escriben en Administración → Correos de prospección → botón «Campañas»: elegir la
 campaña, escribir el correo y «Guardar para esta campaña»; «Usar el general» lo quita. El número que una campaña no
 tenga propio sale con el general, y el pie es uno para todas.
 

@@ -18,7 +18,7 @@ pendiente.
 | OB-01 | Diccionario de datos y reglas | 1.3 (20-nov, migración 043) ⏳ regenerar al cierre | [DICCIONARIO_DE_DATOS.md](DICCIONARIO_DE_DATOS.md) |
 | OB-02 | Base controlada: reporte de controles y auditorías | 1.3 (20-nov) ⏳ | [REPORTE_DE_CONTROLES.md](REPORTE_DE_CONTROLES.md), [auditorias/](auditorias/) |
 | Semana 11 | Procedimiento de auditoría y actualización | 1.0 (28-oct) | [PROCEDIMIENTO_AUDITORIA.md](PROCEDIMIENTO_AUDITORIA.md) |
-| Semana 13 | Certificación de audiencia | ⏳ | Auditoría después de cargar la lista (§5 del reporte) |
+| Semana 13 | Certificación de audiencia | 20-nov | [Auditoría del 20-nov](auditorias/calidad-2026-11-20.md) §5 y [flujo de campaña](FLUJO_DE_CAMPANA.md) §2 |
 | Semana 14 | Monitoreo de integridad durante el piloto | ⏳ | Una auditoría por día del piloto |
 | OB-07 (datos) | Manual de datos | 1.0.3 (20-nov) ⏳ | [MANUAL_DE_DATOS.md](MANUAL_DE_DATOS.md) |
 
@@ -33,8 +33,8 @@ contactos activos, medios de contacto y prospectos.
 
 | Indicador | Meta | Línea base · 28-oct (datos de ejemplo) | Tras cargar los contactos | Promedio del piloto | Final · cierre |
 |---|---|---|---|---|---|
-| **T1.1 · Validez y completitud** | ⏳ la del programa | 98.4 % (122 de 124) | ⏳ | ⏳ | ⏳ |
-| **T1.2 · Control de duplicados** | ⏳ la del programa | 96.8 % (4 sin resolver) | ⏳ | ⏳ | ⏳ |
+| **T1.1 · Validez y completitud** | ⏳ la del programa | 98.4 % (122 de 124) | 98.6 % (20-nov, sin prueba) | ⏳ | ⏳ |
+| **T1.2 · Control de duplicados** | ⏳ la del programa | 96.8 % (4 sin resolver) | 100.0 % (20-nov, sin prueba; 99.8 % con prueba) | ⏳ | ⏳ |
 | **T1.3 · Controles operativos** | ⏳ la del programa | 37 de 37 (28-oct) · 36 de 37 (4-nov, F-05 se retira) | ⏳ | — | ⏳ |
 
 **Cómo leer la línea base:** la base del 28-oct era de ejemplo, así que mide que el método funciona, no la calidad de
@@ -61,7 +61,7 @@ datos reales. Los números que cuentan son los de la columna «Tras cargar los c
 | Fecha | Momento | T1.1 | T1.2 | Hallazgos | Reporte |
 |---|---|---|---|---|---|
 | 28-oct | Línea base (datos de ejemplo) | 98.4 % | 96.8 % | Duplicados solo de pruebas; 2 empresas sin giro ni tamaño, también de ejemplo | [calidad-2026-10-28](auditorias/calidad-2026-10-28.md) |
-| ⏳ | Después de cargar los contactos de Carlos (la base de ejemplo se borró el 6-nov) | | | | |
+| 20-nov | Después de cargar los contactos de Carlos (6 al 19-nov, 4 campañas) | 98.6 % | 100.0 % | 106 de 115 listos; los 115 con un giro que el score no reconoce; 53 con correo de área; 5 prospectos abiertos con contacto o empresa desactivados | [calidad-2026-11-20](auditorias/calidad-2026-11-20.md) |
 | ⏳ | Primeras semanas de envíos | | | | |
 | ⏳ | Cierre | | | | |
 
