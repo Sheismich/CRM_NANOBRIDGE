@@ -179,17 +179,13 @@ archivos, en GitHub Actions.
 ## 11. Límites y pendientes
 
 - **Encendido el 6-nov-2026.** `MODO_PRUEBAS` está apagado; los envíos automáticos corren de lunes a viernes desde el 9-nov.
-  Encender es una decisión de G5, con la lista de encendido del RUNBOOK (§10).
-- **Faltan dos cambios en n8n** (`docs/n8n/confirmacion-envios/`): que PT1 y PT4 manden al correo que devuelve la API
-  y que PT1b confirme cada envío. Mientras tanto los correos salen igual, pero Administración los marca «sin confirmar»
-  y la regla de fallidos no se activa.
-- **PT1a corre a mano.** El día de encender se cambia a horario (10:00, lunes a viernes).
+  Se encendió con autorización escrita de Carlos, recorriendo la lista de encendido del RUNBOOK (§10).
+- **Confirmación de envíos en n8n** (`docs/n8n/confirmacion-envios/`): aplicada el 6-nov. PT1 y PT4 mandan al correo
+  que devuelve la API y PT1b confirma cada envío; un correo que SendGrid rechaza se reintenta sin gastar el contacto.
 - **Las respuestas se clasifican a mano.** La IA solo sugiere. Pasar a modo directo es una decisión aparte, cuando la
   IA demuestre que acierta (lo mide la evaluación del modelo, OB-04).
 - **Un «Retry» manual en n8n** crea otra ejecución con otro `execution_id`: puede repetir una fila de calificación o
   de bitácora, que es inofensivo; lo que importa (un correo doble) lo bloquea la política de contactos por persona.
-- **No se guarda la confirmación de SendGrid** en `envios`: si el registro pasa y el correo falla, ese correo se
-  pierde en vez de duplicarse. Está como mejora.
 
 ## Relacionado
 

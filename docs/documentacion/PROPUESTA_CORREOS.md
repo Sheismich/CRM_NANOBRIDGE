@@ -2,6 +2,8 @@
 
 **Para:** Carlos, para aprobar o corregir antes del piloto (G5, 23-27 nov 2026).
 **Versión:** 0.1 · 5 de noviembre de 2026 · Redacta: T1.
+**Estado:** Carlos aprobó los textos; están en Administración → Correos de prospección y salen desde el 9-nov. Los
+cambios se hacen ahí ([flujo de campaña](FLUJO_DE_CAMPANA.md) §3). Esta propuesta queda como antecedente.
 
 Cada persona recibe **hasta 3 correos**: el primero y, si no responde, dos recordatorios con 5 días hábiles entre uno y
 otro. En cuanto responde, ya no recibe los demás. Aquí van los tres textos propuestos y lo que necesitamos de usted

@@ -2,7 +2,7 @@
 
 **Para:** quien opere la prospección por correo después de la transferencia: el administrador o supervisor del CRM y
 la persona con acceso técnico (n8n, Google Cloud y SendGrid).
-**Versión:** 0.9.3 · 18 de noviembre de 2026 · servidor `nanobridge-api-00060-4xj` (18-nov): topes de 100 y 75, página de baja propia
+**Versión:** 0.9.4 · 20 de noviembre de 2026 · servidor `nanobridge-api-00060-4xj` (18-nov): topes de 100 y 75, página de baja propia
 (13-nov) y PT1a pidiendo 75 (17-nov). Pasa a
 1.0 al cierre, con lo que deje la operación y la lista de accesos de la transferencia (OB-07).
 
@@ -128,7 +128,7 @@ el RUNBOOK, «Qué está en producción».
 | Muchos scores calculados «por reglas» | Incidencias `gemini_agotado` en Administración | Nada se atora: los prospectos siguen su camino. Si pasa seguido, revisar la llave y la cuota de Gemini |
 | Una respuesta llegó sin identificar | Queda como tarea en la cola | Clasificarla a mano; si es de un prospecto, buscarlo por su correo |
 | Aviso «Se pausaron los envíos de prospección» (freno del dominio) | Administración → Estado del sistema: cuántas quejas y rebotes | Revisar la lista que los causó, corregir y **Reanudar** (§3). Nadie perdió su lugar |
-| Administración marca «correos sin confirmar» | ¿Ya se aplicaron los prompts de `docs/n8n/confirmacion-envios/`? ¿PT1b falló? | Mientras no estén los prompts es normal. Después, revisar la ejecución de PT1b |
+| Administración marca «correos sin confirmar» | ¿Falló PT1b? (los prompts de `docs/n8n/confirmacion-envios/` están aplicados desde el 6-nov) | Revisar la ejecución de PT1b en n8n; si SendGrid rechazó el correo, se reintenta solo hasta 3 veces |
 | La auditoría marca una persona con más de 3 correos, o un medio activo en la lista de supresión | Reporte de la auditoría (§4 de sus controles rojos) | **Detener la campaña** y avisar a T2 y a Dirección (procedimiento de auditoría) |
 | Gmail manda los correos a Promociones | Bandeja de un buzón de prueba | Riesgo conocido, sin solución todavía; anotarlo en el reporte del piloto |
 
@@ -148,5 +148,6 @@ el RUNBOOK, «Qué está en producción».
 
 ⏳ Se completa en la transferencia (OB-07): quién tiene acceso a n8n Cloud, a Google Cloud (proyecto
 `crm-prospeccion-outbound`), a SendGrid y a Firebase, y a quién pasan las cuentas que hoy están a nombre de los
-pasantes. Lo que ya se sabe que hay que cambiar: los avisos de B4, PT2 y Cloud Monitoring (§4) y el administrador
+pasantes. Lo que ya se sabe que hay que cambiar: los avisos de Cloud Monitoring (los de B4 y PT2 van a correos de trabajo desde
+el 6-nov, §4) y el administrador
 de la cuenta de SendGrid (RUNBOOK §10).

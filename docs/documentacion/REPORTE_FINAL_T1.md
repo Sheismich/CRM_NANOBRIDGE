@@ -2,7 +2,7 @@
 
 **Entregable:** reporte final de T1 (cierre del proyecto naranja · outbound).
 **Para:** revisión de cierre (G6, 9 de diciembre de 2026). **Redacta:** T1 · **Revisión:** T2 y Dirección General.
-**Versión:** 0.1 · esqueleto del 5 de noviembre de 2026. Lo marcado ⏳ se llena con la auditoría después de cargar
+**Versión:** 0.2 · esqueleto del 20 de noviembre de 2026 (versiones e incidentes de datos al día; la 0.1 es del 5-nov). Lo marcado ⏳ se llena con la auditoría después de cargar
 los contactos de Carlos, con las auditorías de las primeras semanas de envíos (desde el 9-nov; el encendido se adelantó
 al 6-nov) y al cierre.
 
@@ -15,12 +15,12 @@ pendiente.
 
 | Código | Entregable | Versión final | Dónde |
 |---|---|---|---|
-| OB-01 | Diccionario de datos y reglas | 1.0 (28-oct) ⏳ regenerar al cierre | [DICCIONARIO_DE_DATOS.md](DICCIONARIO_DE_DATOS.md) |
-| OB-02 | Base controlada: reporte de controles y auditorías | 1.1 (4-nov) ⏳ | [REPORTE_DE_CONTROLES.md](REPORTE_DE_CONTROLES.md), [auditorias/](auditorias/) |
+| OB-01 | Diccionario de datos y reglas | 1.3 (20-nov, migración 043) ⏳ regenerar al cierre | [DICCIONARIO_DE_DATOS.md](DICCIONARIO_DE_DATOS.md) |
+| OB-02 | Base controlada: reporte de controles y auditorías | 1.3 (20-nov) ⏳ | [REPORTE_DE_CONTROLES.md](REPORTE_DE_CONTROLES.md), [auditorias/](auditorias/) |
 | Semana 11 | Procedimiento de auditoría y actualización | 1.0 (28-oct) | [PROCEDIMIENTO_AUDITORIA.md](PROCEDIMIENTO_AUDITORIA.md) |
 | Semana 13 | Certificación de audiencia | ⏳ | Auditoría después de cargar la lista (§5 del reporte) |
 | Semana 14 | Monitoreo de integridad durante el piloto | ⏳ | Una auditoría por día del piloto |
-| OB-07 (datos) | Manual de datos | 1.0 (28-oct) ⏳ | [MANUAL_DE_DATOS.md](MANUAL_DE_DATOS.md) |
+| OB-07 (datos) | Manual de datos | 1.0.3 (20-nov) ⏳ | [MANUAL_DE_DATOS.md](MANUAL_DE_DATOS.md) |
 
 Además, desde el 3-nov T1 se encarga de toda la documentación: flujo de actualización (OB-03), evaluación del modelo
 (OB-04), flujo de campaña (OB-05), manual operativo, manual del vendedor, inventario de accesos y la bitácora. Su estado
@@ -31,14 +31,14 @@ final está en la [bitácora](BITACORA.md).
 Se calculan con [`auditar-datos.mjs`](auditar-datos.mjs) sobre la población completa (no una muestra): empresas activas,
 contactos activos, medios de contacto y prospectos.
 
-| Indicador | Meta | Línea base · 28-oct (datos de ejemplo) | Tras cargar la lista · semana 12 | Promedio del piloto | Final · cierre |
+| Indicador | Meta | Línea base · 28-oct (datos de ejemplo) | Tras cargar los contactos | Promedio del piloto | Final · cierre |
 |---|---|---|---|---|---|
 | **T1.1 · Validez y completitud** | ⏳ la del programa | 98.4 % (122 de 124) | ⏳ | ⏳ | ⏳ |
 | **T1.2 · Control de duplicados** | ⏳ la del programa | 96.8 % (4 sin resolver) | ⏳ | ⏳ | ⏳ |
 | **T1.3 · Controles operativos** | ⏳ la del programa | 37 de 37 (28-oct) · 36 de 37 (4-nov, F-05 se retira) | ⏳ | — | ⏳ |
 
 **Cómo leer la línea base:** la base del 28-oct era de ejemplo, así que mide que el método funciona, no la calidad de
-datos reales. Los números que cuentan son los de la columna «Tras cargar la lista» en adelante.
+datos reales. Los números que cuentan son los de la columna «Tras cargar los contactos» en adelante.
 
 ⏳ Al cierre: una gráfica o tabla por día del piloto (T1.1 y T1.2) y qué explica cada cambio.
 
@@ -50,8 +50,10 @@ datos reales. Los números que cuentan son los de la columna «Tras cargar la li
   avisos que sí importan llegan por la campanita y el correo del CRM.
 - **Controles propuestos que se hicieron:** G-01 (avisar de empresas con el mismo nombre al importar y dar de alta) y
   G-05 (fusionar empresas repetidas), en producción desde el 3-nov.
-- **Agregados después del corte:** «Dar de baja» desde la ficha para quien la pide por teléfono (4-nov). ⏳ Los que
-  entren con el PR de T2: freno automático del dominio, envíos fallidos que no gastan el contacto.
+- **Agregados después del corte:** «Dar de baja» desde la ficha para quien la pide por teléfono (4-nov); freno
+  automático del dominio y envíos fallidos que no gastan el contacto (5-nov); teléfonos sin lada de México (6-nov,
+  G-03); límites por persona y campaña (9-nov, D-03); página de baja con botón (13-nov, D-02). ⏳ Cuáles entran al
+  T1.3 lo decide Dirección.
 - ⏳ Al cierre: el T1.3 final, con los controles nuevos que se hayan aprobado.
 
 ## 5. Auditorías
@@ -69,6 +71,13 @@ datos reales. Los números que cuentan son los de la columna «Tras cargar la li
 supresión, duplicado que entró, y qué se hizo con cada uno. Si no hubo ninguno, decirlo con la evidencia (las
 auditorías diarias).
 
+Hasta el 20-nov:
+
+| Fecha | Qué pasó | Qué se hizo |
+|---|---|---|
+| 11 y 12-nov | Tres personas quedaron en baja y en la lista de supresión sin pedirlo: el escáner de links de Microsoft 365 abrió el link de baja de SendGrid | Se revirtieron el 13-nov en la base y en SendGrid; desde ese día el link lleva a una página con botón (D-02). Procedimiento en el manual de datos §6.1 |
+| 13-nov | La prueba de la página de baja dio de baja por error a un prospecto real | Se revirtió el mismo día |
+
 ## 7. Pendientes y recomendaciones
 
 Ya identificados (se confirma al cierre cuáles siguen abiertos):
@@ -76,7 +85,7 @@ Ya identificados (se confirma al cierre cuáles siguen abiertos):
 | # | Pendiente | Por qué | Esfuerzo |
 |---|---|---|---|
 | 1 | Catálogo de giros, o normalizarlos al capturar (G-02) | Un giro escrito distinto vale 0 en el score y no usa la plantilla de su giro | Bajo |
-| 2 | Teléfonos en formato internacional (G-03) | «442…» y «52442…» cuentan como dos personas | Medio |
+| 2 | Teléfonos de otros países (G-03) | Los de México se resolvieron el 6-nov (migración 041); los de otros países se guardan con sus dígitos y podrían no coincidir | Bajo, si llegan contactos de fuera |
 | 3 | Regla de asignación de las empresas sin responsable (G-04) | El reparto de interesados resuelve las de los interesados; falta decidir el resto | Decisión de Dirección |
 | 4 | Pasar `archiver` a la versión 8 | Avisos moderados de seguridad, que hoy el CRM no usa | Bajo, con sus pruebas |
 | 5 | Auditoría semanal después del piloto | Que la base no se degrade sin que nadie lo vea | Procedimiento de auditoría |
@@ -98,7 +107,9 @@ Ya identificados (se confirma al cierre cuáles siguen abiertos):
 Las que ya se ven (se completan al cierre):
 
 - **Medir con datos reales lo antes posible.** La base de ejemplo sirvió para probar el método, pero los indicadores que
-  valen llegaron hasta la semana 12. Cargar una muestra real antes habría adelantado los hallazgos.
+  valen llegan hasta que se cargan los contactos reales. Cargar una muestra real antes habría adelantado los hallazgos.
+- **Un link que cambia datos con solo abrirlo no sirve en correos a empresas.** Los filtros de seguridad (Microsoft 365)
+  abren los links al recibir el correo; lo que cambie algo debe pedir un botón (11 y 12-nov).
 - **La documentación junto al código** (en el repositorio, con su historial) permitió que cada cambio quedara fechado y
   con evidencia, que es lo que pide el KPI de trazabilidad.
 - **Probar como en producción.** Las pruebas automáticas en GitHub, con la misma versión de Node que producción,

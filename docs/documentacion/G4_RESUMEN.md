@@ -3,6 +3,9 @@
 Proyecto naranja (outbound) · Semana 10 de 16 (2-6 nov 2026) · Corte al 5 de noviembre de 2026.
 El detalle de todo está en la [bitácora](BITACORA.md); aquí solo lo que hace falta para la junta.
 
+> **Foto al 5-nov, antes de la junta.** Después cambió mucho: el encendido se adelantó al 6-nov, hay varias campañas,
+> el tope es de 100 al día y SendGrid ya se pagó. Lo vigente está en la [bitácora](BITACORA.md) §1.
+
 ## 1. Qué se entrega
 
 | Código | Entregable | Versión | Estado |

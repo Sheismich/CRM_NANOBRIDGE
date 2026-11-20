@@ -1,7 +1,7 @@
 # Manual de datos · CRM NANOBRIDGE
 
 **Entregable:** manual de datos (T1, paquete final OB-07). **Para:** quien cargue, revise y mantenga los datos del CRM
-(supervisor o el responsable de datos que siga). **Versión:** 1.0.2 · 17 de noviembre de 2026 (página de baja, topes del 10-nov y cómo reactivar a alguien directo en la
+(supervisor o el responsable de datos que siga). **Versión:** 1.0.3 · 20 de noviembre de 2026 (página de baja, topes, lugar en la fila y cómo reactivar a alguien directo en la
 base; la 1.0 es del 28-oct).
 
 Este manual explica el trabajo con los datos en el día a día. El detalle de cada campo está en el
@@ -164,7 +164,10 @@ No entran (y el CRM dice por qué): sin giro o tamaño, sin correo activo, en ba
 persona ya recibió 3 correos de esa campaña en los últimos 6 meses. A cada persona se le escriben como máximo 3 correos
 por campaña (el inicial y dos recordatorios, con 5 días hábiles entre uno y otro), una campaña a la vez, y nunca más del tope diario (100 en total desde el 10-nov).
 
-## 8. Limpiar los datos de prueba (antes del piloto)
+## 8. Limpiar los datos de prueba
+
+**Ya se hizo en producción el 6-nov-2026**, el día del encendido. Esta sección queda para si vuelven a entrar datos de
+prueba.
 
 La [auditoría del 28-oct](auditorias/calidad-2026-10-28.md) §6 lista las empresas y los medios de prueba. Hay dos formas:
 
@@ -184,7 +187,7 @@ del encendido (RUNBOOK §10), así:
 3. Correrlo con `--empresas=<ids>` y `--borrar` (más `LIMPIEZA_CONFIRMO=borrar-datos-de-prueba`). Si alguna empresa no
    parece de prueba, el script no borra nada; si algo falla a medias, deshace todo. Las de ejemplo que no parecen de
    prueba (nombre y correos que parecen reales) se pasan aparte con `--de-ejemplo=<ids>`, después de confirmarlo, y
-   quedan anotadas así en el registro. El paso a paso de la semana 12 está en
+   quedan anotadas así en el registro. El orden de limpieza, carga y certificación está en
    [Carga de la lista de Carlos](CARGA_DE_LA_LISTA.md).
 4. Correr la auditoría y comprobar que «Datos de prueba» quedó en cero. El registro de la limpieza queda en
    `auditorias/limpieza-<fecha>.md`.

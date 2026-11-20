@@ -2,7 +2,7 @@
 
 **Para:** la transferencia operativa (OB-07): quién tiene acceso a qué, qué depende de cuentas de los pasantes y qué hay
 que pasar a alguien de planta antes del cierre (9-dic-2026).
-**Versión:** 0.9.1 · 17 de noviembre de 2026 (SendGrid pagado y link de baja firmado). Los permisos de Google Cloud se
+**Versión:** 0.9.2 · 20 de noviembre de 2026 (avisos y remitente del 6-nov; SendGrid pagado y link de baja firmado). Los permisos de Google Cloud se
 leyeron del proyecto el 4-nov; lo marcado
 ⏳ hay que confirmarlo con quien administra esa cuenta.
 
@@ -13,12 +13,12 @@ Aquí no hay contraseñas ni llaves: solo dónde viven y quién las puede leer.
 | # | Qué | Por qué | Quién |
 |---|---|---|---|
 | 1 | Dar acceso de administrador a alguien de planta en **SendGrid** (Teammate) y en **n8n Cloud** | Hoy las dos cuentas dependen de los pasantes | Dirección y T2 |
-| 2 | Cambiar **a quién avisan** las fallas (B4), las respuestas (PT2) y la caída de la API (Cloud Monitoring) | Hoy llegan al Gmail de Fabián y a las cuentas de los pasantes | T2 |
+| 2 | Cambiar **a quién avisa** la caída de la API (Cloud Monitoring) | Hoy llega a las cuentas de los pasantes. Los avisos de fallas (B4) y de respuestas (PT2) van a `pasante.tics002@` y `director.general@` desde el 6-nov: al cierre, cambiar también `pasante.tics002@` por alguien de planta | T2 |
 | 3 | Quitar o bajar los permisos de **pasante.tics001** y **pasante.tics002** en Google Cloud, una vez entregado todo | Tienen editor, leen los secretos y una puede cambiar permisos | Dueño del proyecto |
 | 4 | **Rotar los secretos** que leyeron los pasantes (§3) después de quitarles el acceso | Quien los leyó los puede seguir usando | Dueño del proyecto, con el RUNBOOK §7 |
 | 5 | Pasar el **repositorio de GitHub** a una cuenta u organización de la empresa, y hacerlo privado | Hoy es la cuenta personal de Mich y es público | Mich y Dirección |
 | 6 | Dar de alta en el **CRM** a los administradores de planta y desactivar las cuentas de prueba y de pasantes | Las cuentas del CRM son de personas | Administrador del CRM |
-| 7 | Cambiar el **remitente** de SendGrid (hoy con el domicilio de Fabián) por el de la empresa | Va en cada correo | T2 con el domicilio de Carlos |
+| 7 | ~~Cambiar el **remitente** de SendGrid por el de la empresa~~ | Hecho el 6-nov, con el domicilio que dio Carlos el 4-nov | — |
 
 ## 2. Google Cloud · proyecto `crm-prospeccion-outbound`
 
@@ -69,7 +69,7 @@ Los leen las tres personas de §2 y la cuenta de la API. Cómo consultarlos o ro
 | Cuenta | n8n Cloud de Fabián | ⏳ Confirmar el correo de la cuenta y dar acceso a alguien de planta |
 | Flujos | PT1a, PT1, PT1b, PT2, PT2a, PT3, PT4, PT5 y B4 | Copia de referencia del código en `docs/n8n/` |
 | Credenciales guardadas en n8n | «Nanobridge-ApiKey» (la `CRM_CALLBACK_API_KEY`), «SendGrid account» y la llave de Gemini de n8n | Viven dentro de n8n; si se rota una, se cambia ahí |
-| Avisos | `DESTINOS` en B4 («armar correo de error») y en PT2 («armar aviso de respuesta») | Hoy al Gmail de Fabián: cambiarlos (§1, punto 2) |
+| Avisos | `DESTINOS` en B4 («armar correo de error») y en PT2 («armar aviso de respuesta») | `pasante.tics002@` y `director.general@nano-bridge-mex.com` desde el 6-nov; al cierre, cambiar `pasante.tics002@` (§1, punto 2) |
 
 ## 6. SendGrid
 
@@ -80,7 +80,7 @@ Los leen las tres personas de §2 y la cuenta de la API. Cómo consultarlos o ro
 | Dominio | `contacto.nano-bridge-mex.com`, verificado; respuestas en `respuestas.contacto.nano-bridge-mex.com` |
 | Inbound Parse y Event Webhook | Apuntan a n8n (PT2 y PT3) |
 | Llaves | Una para n8n (en su credencial) y otra para la API (`SENDGRID_API_KEY`) |
-| Remitente | Con el domicilio de Fabián; cambiarlo por el de la empresa (§1, punto 7) |
+| Remitente | Con el domicilio de la empresa desde el 6-nov |
 | Pendiente | Dar de alta a alguien de planta como Teammate administrador |
 
 ## 7. Dominio y DNS

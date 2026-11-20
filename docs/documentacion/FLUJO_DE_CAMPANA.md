@@ -2,7 +2,7 @@
 
 **Entregable:** flujo de campaña listo para decisión (OB-05), proyecto naranja · outbound.
 **Para:** Dirección General y quien opere la prospección. **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n).
-**Versión:** 0.9.2 · 18 de noviembre de 2026 (PT1a pide 75 y bajas falsas revertidas); 0.9.1 · 17 de noviembre de 2026 (topes del 10-nov y página de baja del 13-nov; la 0.9 del 10-nov trajo
+**Versión:** 0.9.3 · 20 de noviembre de 2026 (límites de §4 y reparto de §6 al día); 0.9.2 · 18 de noviembre de 2026 (PT1a pide 75 y bajas falsas revertidas); 0.9.1 · 17 de noviembre de 2026 (topes del 10-nov y página de baja del 13-nov; la 0.9 del 10-nov trajo
 el encendido y los correos por campaña). Pasa a 1.0 con los
 contactos de Carlos cargados y la audiencia certificada por campaña (§2).
 
@@ -94,8 +94,8 @@ responde, así que el resultado del piloto depende de esto (T2).
 | Correos por persona | Máximo 3 cada 6 meses **en cada campaña**; una serie a la vez | `D-03`, `590-varias-campanas` |
 | Espera entre correos | 5 días hábiles, a la misma hora; el recordatorio sale el día hábil siguiente al vencimiento | `D-03` |
 | Días hábiles | Lunes a viernes, sin los feriados de la Ley Federal del Trabajo | `215-dia-habil-mx` |
-| Tope diario de correos | 20 al encender (incluye recordatorios, que van primero) | `D-05` |
-| Nuevos por día | Hasta 10, sin pasar del tope | `D-05` |
+| Tope diario de correos | 100 desde el 10-nov (20 al encender, el 6-nov); incluye recordatorios, que van primero | `D-05` |
+| Nuevos por día | Hasta 75 desde el 17-nov (antes 10), sin pasar del tope | `D-05` |
 | Solo prospectos validados | Uno sin validar no recibe correo | `D-04` |
 | Campaña | Varias pueden estar activas; pausar una = esperar (nadie pierde su lugar) | `230-recordatorios` |
 
@@ -152,11 +152,11 @@ procesos fallidos). Nada de esto se borra.
   «interesado» crea la tarea «Contactar prospecto interesado», que vence al final del siguiente día hábil (si nadie
   la toma en un día hábil, sube a urgente y se avisa a los supervisores). Desde la
   cola, «Responder ahora» deja contestarle de inmediato, y quien lo hace se queda con la tarea.
-- **Reparto de interesados** (en producción desde el 3-nov, `00046-vrm`, **apagado**): prendido, la tarea le toca al
+- **Reparto de interesados** (en producción desde el 3-nov, `00046-vrm`; **prendido desde el 6-nov** entre Carlos,
+  Fabián y Mich): la tarea le toca al
   vendedor de la lista con menos interesados abiertos; si empatan, al que lleva más tiempo sin recibir uno. Si la
   empresa ya es de un vendedor activo, va con él. Quien la recibe queda como responsable de la empresa y le llega el
-  aviso. Apagado, la tarea queda sin asignar y un supervisor la reparte. Empieza apagado a propósito, para que ningún
-  interesado real le caiga a una cuenta de prueba.
+  aviso. Si se apaga, la tarea queda sin asignar y un supervisor la reparte.
 - **Métricas del modelo** M1 a M5 ([evaluación del modelo](EVALUACION_DEL_MODELO.md), §4), para el reporte del piloto.
 
 ## 7. Modo de prueba

@@ -2,7 +2,7 @@
 
 **Entregable:** reporte de controles de la base v1 (OB-02), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026). **Dueño:** T1 · **Revisión:** T2 y Dirección General.
-**Versión:** 1.2 · 17 de noviembre de 2026 (D-02 con la página de baja y D-05 con el tope de 100); la 1.1 (4-nov) dejó de contar F-05 como activo · la 1.0 es del 28 de octubre, base en la migración `037_borrador_empresa_existente.sql`.
+**Versión:** 1.3 · 20 de noviembre de 2026 (F-01, F-06 y G-03 al día); 1.2 · 17 de noviembre de 2026 (D-02 con la página de baja y D-05 con el tope de 100); la 1.1 (4-nov) dejó de contar F-05 como activo · la 1.0 es del 28 de octubre, base en la migración `037_borrador_empresa_existente.sql`.
 
 Este reporte lista los controles que protegen la base de datos: dónde vive cada uno y con qué se comprueba que funciona.
 Complementa al [diccionario de datos](DICCIONARIO_DE_DATOS.md) (qué es cada dato y sus reglas) y a la
@@ -89,12 +89,12 @@ Además hay 5 controles **propuestos que no entran en este corte** (§G). Se lis
 
 | ID | Control | Dónde | Comprobación |
 |---|---|---|---|
-| F-01 | **Cambios a la estructura solo por migraciones** numeradas, aplicadas antes de desplegar y registradas | `src/database/migrations/`, `schema_migrations` | Verificación en la base (37 aplicadas); RUNBOOK §6 |
+| F-01 | **Cambios a la estructura solo por migraciones** numeradas, aplicadas antes de desplegar y registradas. Dos veces se desplegó antes de migrar (la segunda, el 18-nov con la 043), sin daño | `src/database/migrations/`, `schema_migrations` | Verificación en la base (43 aplicadas al 20-nov); RUNBOOK §6 |
 | F-02 | **Respaldo diario y recuperación a un minuto exacto** (7 días) | Cloud SQL | Prueba manual documentada: restauración probada el 27-oct-2026 (RUNBOOK §9) |
 | F-03 | **Aviso si la API se cae** (revisión cada 5 minutos, correo a T1 y T2) | Cloud Monitoring | Prueba manual documentada: alerta de prueba disparada el 28-oct-2026 (RUNBOOK §11) |
 | F-04 | **Auditoría periódica de calidad de datos** | `docs/documentacion/auditar-datos.mjs` | Primera corrida el 28-oct-2026 ([reporte](auditorias/calidad-2026-10-28.md)) |
 | F-05 | ~~**Avisos a n8n que no se pierden:** bandeja de salida con reintentos (5 s, 30 s, 120 s) y procesos fallidos para revisar~~ **No opera y se retira (4-nov-2026):** n8n nunca tuvo quién recibiera esos avisos (`N8N_WEBHOOK_URL` sin configurar) y se quedaban esperando. Los avisos que sí importan llegan por la campanita y el correo del CRM; los procesos fallidos de n8n siguen | `src/outbox/` (se retira en la rama de T2) | — |
-| F-06 | **Diccionario al día:** se regenera de la base real después de cada migración | `docs/documentacion/generar-diccionario.mjs` | Generado el 5-nov-2026 (migración 040): 414 campos, 0 sin descripción |
+| F-06 | **Diccionario al día:** se regenera de la base real después de cada migración | `docs/documentacion/generar-diccionario.mjs` | Generado el 20-nov-2026 (migración 043): 418 campos, 0 sin descripción |
 
 ## G. Controles propuestos (fuera de este corte)
 
@@ -105,7 +105,7 @@ los aprueba, entran al siguiente corte.
 |---|---|---|---|
 | G-01 | Avisar en la importación cuando el nombre de una empresa se parece a una que ya existe | Hoy las empresas no se deduplican por nombre | ✅ **Hecho** 29-oct-2026: `src/shared/empresas-parecidas.ts`, prueba `545-empresas-parecidas` |
 | G-02 | Catálogo de giros (o normalizarlos al capturar) | El giro es texto libre; las plantillas por giro dependen de que se escriba igual | Bajo |
-| G-03 | Teléfonos en formato internacional (E.164) | «442…» y «52442…» cuentan como distintos | Medio |
+| G-03 | Teléfonos en formato internacional (E.164) | «442…» y «52442…» contaban como distintos | ✅ **Hecho para México** el 6-nov-2026 (migración 041, `580-telefonos-y-csv`): «+52», «+52 1» y «0052» se guardan igual y sin extensión. Los de otros países siguen con sus dígitos |
 | G-04 | Regla de asignación de las empresas que crea la automatización | Hoy llegan sin responsable (19 en la auditoría) | Decisión de Dirección |
 | G-05 | Fusionar dos empresas repetidas desde el CRM (mover sus contactos, medios e historial a una) | Hoy no se puede: un contacto no cambia de empresa y los correos de una empresa desactivada siguen apartados | ✅ **Hecho** 29-oct-2026: `src/crm/fusion-empresas.service.ts`, prueba `546-fusion-empresas` |
 
