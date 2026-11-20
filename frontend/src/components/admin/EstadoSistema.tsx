@@ -97,7 +97,18 @@ export function EstadoSistema() {
         </div>
       )}
       <div className="relative z-[1] mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Servicio icono="servidor" titulo="API del CRM" sub={s?.api.revision ? `revisión ${s.api.revision.replace(/^nanobridge-api-/, "")} · Cloud Run` : "Cloud Run"} etiqueta="Responde en" valor={salud.data ? `${salud.data.respondeMs} ms` : "…"} pie="Funcionando" ok />
+        {/* El número grande lo mide la API (lo que tarda ella); "con tu conexión" es el
+            tiempo completo desde este navegador. Antes solo se veía ese y un internet
+            lento parecía una API lenta (20-nov-2026). */}
+        <Servicio
+          icono="servidor"
+          titulo="API del CRM"
+          sub={s?.api.revision ? `revisión ${s.api.revision.replace(/^nanobridge-api-/, "")} · Cloud Run` : "Cloud Run"}
+          etiqueta="Responde en"
+          valor={!salud.data ? "…" : `${s?.api.responde_ms ?? salud.data.respondeMs} ms`}
+          pie={salud.data && s?.api.responde_ms != null ? `Funcionando · con tu conexión ${duracion(salud.data.respondeMs)}` : "Funcionando"}
+          ok
+        />
         <Servicio
           icono={"M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3z M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6 M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"}
           titulo="Base de datos"
@@ -152,6 +163,11 @@ function Servicio({ icono, titulo, sub, etiqueta, valor, pie, ok }: { icono: Nom
       </div>
     </div>
   );
+}
+
+// "850 ms" o, desde un segundo, "1.5 s".
+function duracion(ms: number) {
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
 // "10:02" si es de hoy; si no, "18 nov".

@@ -9,8 +9,10 @@ import { ProblemasService } from "./problemas.service.js";
 // "Estado del sistema" de Administración (12-oct-2026; puntos 38 y 54). Solo
 // lo que de verdad sabemos medir: no hay tiempo en línea, ni entregabilidad
 // de SendGrid (necesitaría su Event Webhook), así que no se prometen.
-// - API: la revisión que corre (Cloud Run pone K_REVISION). Cuánto tarda en
-//   contestar lo mide la pantalla.
+// - API: la revisión que corre (Cloud Run pone K_REVISION) y cuánto tardó en
+//   armar esta respuesta (responde_ms, 20-nov-2026). La pantalla mide aparte
+//   el tiempo con la red de quien la abre: antes solo se veía ese, y un
+//   internet lento parecía una API lenta.
 // - Base de datos: cuánto tarda un SELECT 1. El respaldo diario es
 //   configuración de Cloud SQL: lo dice la pantalla como texto fijo.
 // - Freno del dominio: si los envíos están en pausa, y quejas y rebotes en 7 días.
@@ -34,7 +36,7 @@ export class SaludService {
       // Sin base no hay nada más que contar.
       return {
         revisado_en: new Date().toISOString(),
-        api: this.api(),
+        api: this.api(inicio),
         base_datos: { estado: "error" as const, responde_ms: null },
         correos: null,
         freno: null,
@@ -54,7 +56,7 @@ export class SaludService {
     ]);
     return {
       revisado_en: new Date().toISOString(),
-      api: this.api(),
+      api: this.api(inicio),
       base_datos: baseDatos,
       correos: { enviados_hoy: Number(correos?.n ?? 0), ultimo_envio_en: aIso(correos?.ultimo ?? null), sin_confirmar: Number(sinConfirmar?.n ?? 0) },
       freno,
@@ -62,8 +64,8 @@ export class SaludService {
     };
   }
 
-  private api() {
-    return { estado: "ok" as const, revision: process.env.K_REVISION ?? null };
+  private api(inicio: number) {
+    return { estado: "ok" as const, revision: process.env.K_REVISION ?? null, responde_ms: Math.round(performance.now() - inicio) };
   }
 
 }
