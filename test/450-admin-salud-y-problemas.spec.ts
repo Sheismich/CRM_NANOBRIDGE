@@ -125,7 +125,9 @@ describe("administración: estado del sistema y problemas agrupados", () => {
       const res = await api().get("/api/v1/admin/salud").set("Cookie", adminCookie);
       expect(res.status).toBe(200);
 
-      expect(res.body.api).toEqual({ estado: "ok", revision: null });
+      // responde_ms: lo que tardó la API en armar la respuesta (sin la red de quien la pide).
+      expect(res.body.api).toEqual({ estado: "ok", revision: null, responde_ms: expect.any(Number) });
+      expect(res.body.api.responde_ms).toBeGreaterThanOrEqual(res.body.base_datos.responde_ms);
       expect(res.body.base_datos.estado).toBe("ok");
       expect(typeof res.body.base_datos.responde_ms).toBe("number");
 

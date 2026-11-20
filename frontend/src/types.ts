@@ -472,7 +472,8 @@ export type Usuario = {
 // GET /admin/salud
 export type SaludSistema = {
   revisado_en: string;
-  api: { estado: "ok"; revision: string | null };
+  // responde_ms: lo que tardó la API, medido por ella (sin la red de quien abre la pantalla).
+  api: { estado: "ok"; revision: string | null; responde_ms?: number };
   base_datos: { estado: "ok" | "error"; responde_ms: number | null };
   correos: { enviados_hoy: number; ultimo_envio_en: string | null; sin_confirmar: number } | null;
   // 044 (20-nov-2026): rebotes duros/suaves, envíos y tasa en por ciento
