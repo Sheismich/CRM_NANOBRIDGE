@@ -3,7 +3,7 @@
 **Entregable:** OB-01 (diccionario y reglas) y apoyo de OB-02 (base maestra controlada), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026).
 **Dueño:** T1 (datos y estandarización) · **Revisión:** T2 y Dirección General.
-**Versión:** 1.2 · generado el 10 de noviembre de 2026 desde la base real, con migraciones hasta `042_plantillas_por_campana.sql` (42 en total). Cubre 36 tablas y 416 campos.
+**Versión:** 1.3 · generado el 20 de noviembre de 2026 desde la base real, con migraciones hasta `043_responder_con_copia.sql` (43 en total). Cubre 36 tablas y 418 campos.
 
 > Este documento se genera con `generar-diccionario.mjs` (misma carpeta) a partir de la estructura real de la
 > base y de las reglas del código. No editar las tablas a mano: cambiar el script y volver a generarlo (ver al final).
@@ -95,7 +95,7 @@ y sin una serie en curso en otra (desde el 9-nov-2026, migración 042).
 | Estado | Significa | Quién lo pone |
 |---|---|---|
 | `capturado` | Recién creado (alta manual, CSV o n8n) | CRM / n8n |
-| `en_fila` | Mandado a la fila de automatización; n8n lo toma de 6 a 10 por día | CRM («Mandar a automatización») |
+| `en_fila` | Mandado a la fila de automatización; n8n lo toma cada día hábil, hasta `NUEVOS_POR_DIA` (75 desde el 17-nov-2026). Quien tiene una serie en curso en otra campaña espera sin lugar en la fila | CRM («Mandar a automatización») |
 | `validado` | Pasó las validaciones de n8n; listo para campaña («En campaña» si ya recibió correo) | n8n |
 | `excluido` | No pasó validaciones (sin giro, sin correo…); se puede corregir y volver a mandar | n8n |
 | `descartado` | Descartado por la automatización | n8n |
@@ -315,7 +315,9 @@ Correo que un vendedor le contestó a un prospecto desde el CRM (etapa 3), en el
 | `respuesta_id` | entero | sí | Respuesta relacionada. → `respuestas.id` |
 | `prospecto_id` | entero | sí | Prospecto relacionado. → `prospectos.id` |
 | `usuario_id` | entero | sí | Usuario relacionado. → `usuarios.id` |
-| `para` | texto (máx. 320) | sí | Destinatario: siempre el remitente de la respuesta original (no se puede cambiar). |
+| `contacto_id` | entero | no | Contacto del correo de Para (043). NULL en las filas de antes de la 043. |
+| `para` | texto (máx. 320) | sí | Destinatario (Para). Desde la 043 el vendedor lo elige entre los correos de los contactos de la empresa; antes era siempre el remitente de la respuesta original. |
+| `copia` | JSON | no | Correos que fueron en copia (CC), arreglo JSON; [] si ninguno (043). NULL en las filas de antes de la 043. |
 | `asunto` | texto (máx. 500) | sí | Asunto del correo. |
 | `texto` | texto largo | sí | Texto del correo. |
 | `uso_ia` | uno de: sin_ia, tal_cual, editado | sí | sin_ia, tal_cual (borrador de la IA sin cambios) o editado. Por omisión: `sin_ia`. |

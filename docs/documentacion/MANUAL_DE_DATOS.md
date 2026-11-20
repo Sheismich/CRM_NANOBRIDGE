@@ -157,6 +157,8 @@ en la base.
 
 Solo administrador y supervisor: Prospectos → elegir con las casillas → «Mandar a automatización». Entran a la **fila**
 y la automatización toma hasta 75 por día hábil (desde el 17-nov), con lo que dejen del tope diario los recordatorios.
+Si la persona ya está recibiendo la serie de otra campaña, en Prospectos sale «Espera a que termine «Campaña»»: no
+tiene lugar en la fila y sale cuando esa serie termina (desde el 18-nov).
 
 No entran (y el CRM dice por qué): sin giro o tamaño, sin correo activo, en baja, empresa o contacto desactivados, o la
 persona ya recibió 3 correos de esa campaña en los últimos 6 meses. A cada persona se le escriben como máximo 3 correos

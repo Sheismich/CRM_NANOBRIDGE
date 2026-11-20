@@ -2,7 +2,7 @@
 
 **Entregable:** flujo de actualización de la base (OB-03), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026). **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n) y Dirección General.
-**Versión:** 1.3 · 17 de noviembre de 2026 (topes del 10-nov y página de baja propia del 13-nov, sin migración) · base en la migración `042_plantillas_por_campana.sql`. La 1.2 (10-nov) trajo los teléfonos sin lada, el encendido del 6-nov y las varias campañas del 9-nov. La 1.1 (5-nov) quitó la bandeja de salida y agregó envíos confirmados, freno del dominio y tareas nuevas.
+**Versión:** 1.4 · 20 de noviembre de 2026 (responder con copia, migración 043, y lugar en la fila de quien espera otra campaña, del 18-nov) · base en la migración `043_responder_con_copia.sql`. La 1.3 (17-nov) trajo los topes del 10-nov y la página de baja propia del 13-nov. La 1.2 (10-nov) trajo los teléfonos sin lada, el encendido del 6-nov y las varias campañas del 9-nov. La 1.1 (5-nov) quitó la bandeja de salida y agregó envíos confirmados, freno del dominio y tareas nuevas.
 
 Este documento explica cómo entran y cambian los registros de la base cuando interviene la automatización: qué
 crea cada paso, qué se rechaza, qué queda registrado, qué se puede deshacer y con qué pruebas se comprueba. Las
@@ -47,7 +47,9 @@ CRM, la importación CSV y la automatización: viven en un solo lugar, el códig
    le llegan correos, teléfonos ni nombres de archivo (`D-07`).
 6. **PT1 revisa si se le puede escribir** (`envios/verificacion`): supresión, máximo de 3 correos en 6 meses en esa
    campaña, espera de 5 días hábiles, campaña activa y que la persona no tenga una serie en curso en otra campaña ni le
-   haya interesado otra (desde el 9-nov). Si no se puede, el prospecto se marca con el motivo.
+   haya interesado otra (desde el 9-nov). Si no se puede, el prospecto se marca con el motivo. Mientras espera a que
+   termine la serie de otra campaña, la lista de Prospectos dice «Espera a que termine «Campaña»» y no le da lugar en la
+   fila (desde el 18-nov).
 7. **PT1 registra el envío** (`POST /envios`) **antes** de mandarlo; la API abre la espera de 5 días hábiles y
    devuelve el texto del correo. Luego PT1b lo manda.
 8. **PT4 manda los recordatorios** (correos 2 y 3) cuando vence la espera. Después del tercero, si nadie respondió,

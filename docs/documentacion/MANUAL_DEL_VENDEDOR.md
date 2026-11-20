@@ -1,7 +1,7 @@
 # Manual del vendedor · CRM NANOBRIDGE
 
 **Para:** quien vende y da seguimiento a los clientes en el CRM (agentes y supervisores).
-**Versión:** 0.9.2 · 10 de noviembre de 2026 (con las campañas del 9-nov). Pasa a 1.0 al cierre, con lo que salga del piloto. Las capturas son del CRM con
+**Versión:** 0.9.3 · 20 de noviembre de 2026 (responder con copia del 18-nov; la 0.9.2 del 10-nov trajo las campañas). Pasa a 1.0 al cierre, con lo que salga del piloto. Las capturas son del CRM con
 datos de ejemplo: ningún nombre ni correo es de un cliente real.
 
 El CRM está en **https://crm-prospeccion-outbound.web.app**. Funciona en la computadora y en el celular.

@@ -2,7 +2,7 @@
 
 **Para:** quien opere la prospección por correo después de la transferencia: el administrador o supervisor del CRM y
 la persona con acceso técnico (n8n, Google Cloud y SendGrid).
-**Versión:** 0.9.3 · 18 de noviembre de 2026 · servidor `nanobridge-api-00059-rzt`: topes de 100 y 75, página de baja propia
+**Versión:** 0.9.3 · 18 de noviembre de 2026 · servidor `nanobridge-api-00060-4xj` (18-nov): topes de 100 y 75, página de baja propia
 (13-nov) y PT1a pidiendo 75 (17-nov). Pasa a
 1.0 al cierre, con lo que deje la operación y la lista de accesos de la transferencia (OB-07).
 

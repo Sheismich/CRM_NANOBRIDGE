@@ -1,8 +1,8 @@
 # Reporte del piloto · CRM NANOBRIDGE (OB-06)
 
 **Para:** Dirección, para decidir qué sigue.
-**Versión:** 0.4 · esqueleto del 18 de noviembre de 2026 (topes del 10-nov, bajas falsas del 11 y 12-nov y caídas del
-17-nov). El encendido se adelantó al 6-nov con autorización escrita de
+**Versión:** 0.5 · esqueleto del 20 de noviembre de 2026 (topes del 10-nov, bajas falsas del 11 y 12-nov, caídas del
+17-nov y despliegue antes de migrar del 18-nov). El encendido se adelantó al 6-nov con autorización escrita de
 Carlos, así que el «piloto» es la operación real desde el primer envío (9-nov) y no la semana del 30-nov al 4-dic que
 marcaba el programa. La v0.8 se entrega en la semana 14 (4-dic) y la final con los ajustes de la semana 15 (11-dic).
 **Quién:** Datos (Daniela) y Automatización (Fabián).
@@ -86,6 +86,7 @@ y cuántas se escalaron por llevar un día hábil sin atender. Si el reparto aut
 | 13-nov-2026 | La prueba de la página de baja en producción dio de baja por error a un prospecto real (147) | 1 prospecto | Se revirtió a mano en la base | Sí (13-nov) |
 | 13 al 16-nov-2026 | PT1a estuvo pausada mientras se cambiaba el link de baja: no salieron primeros correos esos días | Toda la fila | Se prendió de nuevo; primera corrida el 17-nov | Sí (17-nov) |
 | 17-nov-2026 | La API falló al reusar conexiones a la base que MySQL ya había cortado (`PROTOCOL_CONNECTION_LOST` en una petición real a las 12:24) y la revisión de la API falló 10 veces seguidas: alerta «CRM caído» a las 23:27. Otra alerta a las 12:29 fue del lado de Google (la API respondía bien) | ⏳ qué peticiones fallaron | El pool de conexiones cierra las inactivas (18-nov, `00059-rzt`) | Sí (18-nov) |
+| 18-nov-2026 | Se desplegó la API `00060-4xj` antes de aplicar la migración 043 (en Cloud Shell no salió `Applied 043`): unos minutos con el código nuevo sin las columnas nuevas. Es la segunda vez que pasa (RUNBOOK §6) | Nadie: nadie abrió un Historial ni contestó en ese rato | La 043 se aplicó después, con la IP autorizada solo durante la migración | Sí. ⏳ Que el orden «migrar, revisar `Applied`, desplegar» quede como paso obligatorio |
 | ⏳ | | | | |
 
 Se anota: cada aviso «[NANOBRIDGE] Falló …» de B4 y cada «CRM caído», las incidencias y procesos fallidos (§5 de
