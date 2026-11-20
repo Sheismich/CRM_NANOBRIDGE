@@ -6,7 +6,8 @@ el CRM con las campañas actuales antes de construirlo (§9).
 
 ## 1. Qué se quiere
 
-Carlos quiere una campaña para ofrecer **automatización con IA y desarrollo de CRM**. Hace falta de dónde sacar
+Carlos quiere una campaña para ofrecer **automatización con IA y desarrollo de CRM** (ya existe en el CRM: la 6,
+«Desarrollo tecnológico y automatización…», creada el 10-nov con sus 3 correos). Hace falta de dónde sacar
 empresas nuevas. La idea es conectar la API del CRM con la **API del DENUE** (Directorio Estadístico Nacional de
 Unidades Económicas del INEGI) para buscar empresas por estado, municipio, giro y tamaño, y que terminen en esa campaña.
 

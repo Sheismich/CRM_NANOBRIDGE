@@ -116,7 +116,7 @@ filtros dicen a quién se le puede escribir.
 - **Mandar a la automatización** (supervisor y administrador): elegir prospectos → «Mandar a automatización», con la
   campaña. Solo entran los que tienen giro, tamaño y correo; los demás regresan con su motivo. Uno de esos motivos
   es «respondió que no le interesa; hay que esperar 6 meses» (ver abajo).
-- **La misma persona en otra campaña** (por ejemplo, agua y tratamiento de maquinaria): también se puede mandar a
+- **La misma persona en otra campaña** (por ejemplo, aguas residuales y mantenimiento): también se puede mandar a
   quien ya terminó o va en otra. Si ya espera en la fila de otra campaña, el CRM pregunta **«Agregar también a esta
   campaña»** (va a las dos) o **«Cambiar a esta campaña»**. Recibe una serie a la vez: la segunda empieza cuando
   termina la primera. Si la campaña no tiene correos propios, el CRM avisa que saldrán los generales.

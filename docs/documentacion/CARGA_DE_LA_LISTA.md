@@ -1,11 +1,11 @@
 # Carga de los contactos de Carlos
 
 **Para:** quien cargue contactos a las campañas en producción (Datos, o un supervisor o administrador).
-**Versión:** 1.2 · 17 de noviembre de 2026 (75 nuevos al día desde el 10-nov). La 1.0 (6-nov) planeaba la carga para la semana 12, antes de autorizar el
+**Versión:** 1.3 · 20 de noviembre de 2026 (cómo fue la carga real, §5). La 1.0 (6-nov) planeaba la carga para la semana 12, antes de autorizar el
 piloto; el encendido se adelantó al 6-nov con autorización escrita de Carlos y la base de ejemplo ya se borró ese día.
 
-Cómo meter los contactos de Carlos a sus campañas (hoy, agua y tratamiento de maquinaria) y certificar la audiencia de
-cada una. **Ojo: las campañas ya están activas y el modo de prueba está apagado.** Quien entre a la fila de una campaña
+Cómo meter los contactos de Carlos a sus campañas (hoy 4: tratamiento de aguas residuales (4), pilotos de mantenimiento STEELSAFE NANO (5), desarrollo tecnológico y automatización (6) e I+D (7)) y certificar la
+audiencia de cada una. **Ojo: las campañas ya están activas y el modo de prueba está apagado.** Quien entre a la fila de una campaña
 activa puede recibir su primer correo en la siguiente corrida de PT1a (10:00, de lunes a viernes).
 Desde el 17-nov PT1a toma hasta 75 nuevos al día (`NUEVOS_POR_DIA`): una lista de ese tamaño sale casi completa en una
 sola mañana. Del 10 al 16-nov salían solo 10, porque PT1a pedía `limite: 10`.
@@ -71,3 +71,20 @@ En una copia local de la base, con una lista inventada de 26 filas que trae los 
 | «No interesado» hace menos de 6 meses | La auditoría lo saca de «Listos» y la API lo rechaza con el mismo motivo |
 
 La lista del ensayo y su script están fuera del repositorio (eran datos inventados).
+
+## 5. Cómo fue la carga real (6 al 19-nov)
+
+Carlos subió 13 archivos (8 el 6-nov, el resto el 10, 11, 18 y 19-nov) y dio de alta 12 contactos a mano. Al 20-nov hay
+127 empresas, 127 contactos y 133 prospectos.
+
+| Qué pasó | Cuántas filas | Qué enseña |
+|---|---|---|
+| Sin nombre de la persona | 82 | El archivo traía la empresa pero no a quién escribirle. Es la causa principal |
+| Correo mal escrito | 22 | |
+| Tamaño que no es micro, pequeña, mediana o grande | 16 | La plantilla de Excel con listas lo evita |
+| Sin nombre de la empresa | 14 | |
+| Sitio web sin `http://` o canal no válido | 7 | |
+
+Son 141 filas rechazadas, pero el 6-nov el mismo archivo se intentó subir seis veces antes de que pasara, así que
+muchas son la misma fila. La auditoría del 20-nov (§5) certificó la audiencia: 106 de 115 listos. Quedan 15 prospectos
+confirmados sin campaña que nadie mandó a automatización, y 53 con correo de área (ver flujo de campaña §2).

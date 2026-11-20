@@ -2,9 +2,9 @@
 
 **Entregable:** flujo de campaña listo para decisión (OB-05), proyecto naranja · outbound.
 **Para:** Dirección General y quien opere la prospección. **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n).
-**Versión:** 0.9.3 · 20 de noviembre de 2026 (límites de §4 y reparto de §6 al día); 0.9.2 · 18 de noviembre de 2026 (PT1a pide 75 y bajas falsas revertidas); 0.9.1 · 17 de noviembre de 2026 (topes del 10-nov y página de baja del 13-nov; la 0.9 del 10-nov trajo
-el encendido y los correos por campaña). Pasa a 1.0 con los
-contactos de Carlos cargados y la audiencia certificada por campaña (§2).
+**Versión:** 0.9.4 · 20 de noviembre de 2026 (las 4 campañas, contactos cargados y certificación de audiencia); 0.9.3 · 20 de noviembre de 2026 (límites de §4 y reparto de §6 al día); 0.9.2 · 18 de noviembre de 2026 (PT1a pide 75 y bajas falsas revertidas); 0.9.1 · 17 de noviembre de 2026 (topes del 10-nov y página de baja del 13-nov; la 0.9 del 10-nov trajo
+el encendido y los correos por campaña). Pasa a 1.0 con lo que
+queda en §10.
 
 Este documento junta lo autorizado para la prospección: a quién se le escribe, qué se le dice, con qué límites, qué se
 excluye, qué queda registrado, cómo se vigila y cómo se detiene. **El encendido se adelantó al 6-nov-2026, con
@@ -18,7 +18,7 @@ solo lo que hace falta para decidir.
 
 | # | Decisión | Propuesta | Estado |
 |---|---|---|---|
-| 1 | **Audiencia** | Los contactos que Carlos cargue en sus campañas, con correo de persona, giro y tamaño | ⏳ Encendido sin lista (6-nov); falta que Carlos los cargue |
+| 1 | **Audiencia** | Los contactos que Carlos cargue en sus campañas, con correo de persona, giro y tamaño | Cargados del 6 al 19-nov (13 archivos y 12 altas a mano); certificada el 20-nov (§2) |
 | 2 | **Textos de los 3 correos** (inicial y 2 recordatorios) | Los actuales, en Administración → Correos de prospección (§3) | Carlos los aprobó por escrito (6-nov); los cambios se hacen desde Administración |
 | 3 | **Pie del correo:** domicilio de la empresa y aviso de privacidad | Ignacio T Chávez 328, Obraje, 20230, Aguascalientes, Ags. (Carlos, 4-nov); el aviso ya está publicado | Hecho (pie y remitente, 6-nov) |
 | 4 | **Tope diario** de correos | 100 al día en total; los recordatorios van primero. Se encendió con 20 para calentar el dominio, con la idea de duplicarlo cada semana si los rebotes quedaban debajo de 2 % y las quejas debajo de 0.1 %; se subió a 100 el 10-nov, al pagar SendGrid | Aplicado (10-nov, `00054-qxb`; 20 del 6 al 10-nov) · ⏳ quién lo autorizó |
@@ -29,14 +29,14 @@ solo lo que hace falta para decidir.
 | 9 | **Quién recibe los avisos** de respuestas (PT2) y de fallas (B4) | `pasante.tics002@` y `director.general@nano-bridge-mex.com` | Publicado (6-nov) |
 | 10 | **Cuenta de SendGrid** pagada, con Inbound Parse incluido | Plan Essentials 50K (50,000 correos al mes) | Pagado (10-nov) |
 | 11 | **Quién atiende a los interesados** | Reparto automático entre Carlos, Fabián y Mich (§6) | Prendido (6-nov) |
-| 12 | **Varias campañas con los mismos contactos** (agua y tratamiento de maquinaria) | Cada campaña con sus 3 correos; los límites se cuentan por persona y campaña; una serie a la vez; «me interesa» en una frena las demás (§4) | Decidido por Fabián (9-nov), en producción (`00053-4wf`) |
+| 12 | **Varias campañas con los mismos contactos** | Cada campaña con sus 3 correos; los límites se cuentan por persona y campaña; una serie a la vez; «me interesa» en una frena las demás (§4) | Decidido por Fabián (9-nov), en producción (`00053-4wf`). Hoy hay 4 campañas activas, todas con sus 3 correos propios: tratamiento de aguas residuales (4), pilotos de mantenimiento STEELSAFE NANO (5), desarrollo tecnológico y automatización (6) e I+D (7) |
 
 ## 2. Audiencia
 
 **De dónde sale:** los contactos de Carlos entran por la importación CSV del CRM (o uno por uno), una persona revisa y
 confirma cada fila (duplicados contra la base y contra el archivo) y un administrador o supervisor los manda a la fila
-de automatización con su campaña: hoy son dos servicios distintos, agua y tratamiento de maquinaria, y la misma
-persona puede ir a las dos. La automatización no crea prospectos por su cuenta. La base de ejemplo se borró el 6-nov.
+de automatización con su campaña: hoy son 4 campañas, tratamiento de aguas residuales (4), pilotos de mantenimiento STEELSAFE NANO (5), desarrollo tecnológico y automatización (6) e I+D (7), y la misma
+persona puede ir a varias. Carlos cargó sus contactos del 6 al 19-nov: 13 archivos y 12 altas a mano. La automatización no crea prospectos por su cuenta. La base de ejemplo se borró el 6-nov.
 
 **Quién entra a la fila** (control `D-06`): solo quien tiene giro, tamaño y un correo usable, no está en baja ni en la
 lista de supresión, tiene menos de 3 correos en 6 meses **en esa campaña**, no tiene una espera abierta en ella, no está ya en esa
@@ -50,8 +50,14 @@ certificar sin que salga ningún correo está en [Carga de la lista de Carlos](C
 
 | Campaña | En espera | Listos | Fuera, y por qué |
 |---|---|---|---|
-| ⏳ Agua | Se llena cuando Carlos cargue sus contactos | | |
-| ⏳ Tratamiento de maquinaria | Se llena cuando Carlos cargue sus contactos | | |
+| 4 · Tratamiento de aguas residuales | 17 | 16 | 1 con contacto o empresa desactivados |
+| 5 · Pilotos de mantenimiento STEELSAFE NANO | 50 | 44 | 6 sin correo utilizable (rebotaron) y 3 desactivados |
+| 6 · Desarrollo tecnológico y automatización | 27 | 26 | 1 sin correo utilizable |
+| 7 · I+D | 21 | 20 | 1 sin correo utilizable; 1 espera que termine otra campaña (sí está listo) |
+
+Certificada con la [auditoría del 20-nov](auditorias/calidad-2026-11-20.md) §5 (un prospecto puede tener varios motivos).
+**Calidad:** los 115 tienen un giro que el score no reconoce y 53 tienen un correo de área (`info@`, `ventas@`), que la
+decisión 8 dejaba fuera: ⏳ Carlos confirma si lo acepta o se sacan.
 
 **Lo que hace falta para que un contacto de Carlos pueda entrar:**
 - **Tamaño de la empresa.** La lista no lo trae y sin él nadie entra a la fila. Se le pide a Carlos.
@@ -101,7 +107,7 @@ responde, así que el resultado del piloto depende de esto (T2).
 
 **Una persona en varias campañas** (desde el 9-nov, `00053-4wf`):
 - Los 3 correos y los 6 meses de un «no interesado» se cuentan **dentro de cada campaña**: a quien dijo que no al
-  servicio de agua sí se le puede escribir del de maquinaria.
+  servicio de aguas residuales sí se le puede escribir del de mantenimiento.
 - **Una serie a la vez:** si la persona tiene otra campaña en curso (le salió un correo en los últimos 6 meses y no ha
   terminado, o PT1 la acaba de tomar), el primer correo de la nueva espera en la fila. Arranca cuando la otra termina:
   al contestar la persona o al marcarla inactiva PT4 después del tercero.
@@ -185,9 +191,9 @@ encender, después de la autorización. Resumen al 3-nov:
 | Textos aprobados y domicilio en el pie y en el remitente | ✅ Hecho (6-nov) |
 | SendGrid pagado (Essentials 50K) | ✅ Hecho (10-nov) |
 | Datos de ejemplo borrados | ✅ Hecho (6-nov) |
-| Contactos de Carlos cargados en una campaña activa | ⏳ Carlos |
+| Contactos de Carlos cargados en una campaña activa | ✅ Hecho (6 al 19-nov, 4 campañas) |
 | Pruebas en vivo: fuera de oficina y firma incorrecta | ✅ Hecho (6-nov) |
-| Primer rebote y primer recordatorio real de PT4 | ⏳ Revisar cuando ocurran |
+| Primer rebote y primer recordatorio real de PT4 | ✅ Primer rebote el 10-nov; primeros recordatorios el 18-nov, sin fallas |
 | Prompts de n8n para usar el correo de la API y confirmar cada envío (`docs/n8n/confirmacion-envios/`) | ✅ Hecho (6-nov) |
 | Avisos de PT2 y B4 a las personas correctas | ✅ Hecho (6-nov) |
 | Equipo de ventas dado de alta y reparto de interesados prendido | ✅ Hecho (6-nov) |
@@ -207,8 +213,9 @@ encender, después de la autorización. Resumen al 3-nov:
 
 ## 10. Para pasar a v1.0
 
-1. Certificación de audiencia por campaña con los contactos de Carlos cargados (§2).
-2. Correos propios de cada campaña escritos y aprobados por Carlos, o la decisión de usar los generales (§3).
+1. ~~Certificación de audiencia por campaña~~ (hecha el 20-nov, §2). Falta que Carlos decida sobre los 53 correos de área.
+2. ~~Correos propios de cada campaña~~ (las 4 tienen sus 3 correos). ⏳ Confirmar que Carlos los aprobó.
 3. Registrar quién autorizó los topes del 10-nov (decisiones 4 y 5).
-4. El primer rebote y el primer recordatorio real de PT4 revisados (§7).
+4. ~~El primer rebote y el primer recordatorio real de PT4~~ (10 y 18-nov). Nuevo: los rebotes van en 5.6 % (8 de 144)
+   y el freno se activó el 20-nov; 6 de los 8 son de la campaña 5. Revisar esa lista.
 5. Qué se hará con lo de Promociones (§3).

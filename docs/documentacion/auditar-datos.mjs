@@ -36,6 +36,15 @@ const NOMBRE_EMPRESA = `TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(nombre_legal), 
 const CORREO_VALIDO = `'^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$'`;
 // Datos de prueba: dominios .test/.local, buzones +prueba y empresas con "prueba" en el nombre.
 const ES_PRUEBA_MEDIO = `(valor_normalizado LIKE '%.test' OR valor_normalizado LIKE '%.local' OR valor_normalizado LIKE '%+prueba%' OR valor_normalizado LIKE '%@pruebas-nanobridge%')`;
+// Copia de normalizePhone (src/shared/normalize.ts): si cambia allá, cambiar aquí.
+const EXTENSION_AL_FINAL = /\s*(?:ext\.?|extensi[oó]n|x|#)\s*:?\s*\d{1,6}\s*$/i;
+function normalizarTelefono(valor) {
+  let digitos = String(valor).replace(EXTENSION_AL_FINAL, "").replace(/\D/g, "");
+  if (digitos.startsWith("0052")) digitos = digitos.slice(2);
+  if (digitos.length === 13 && digitos.startsWith("521")) return digitos.slice(3);
+  if (digitos.length === 12 && digitos.startsWith("52")) return digitos.slice(2);
+  return digitos;
+}
 
 const r = {};
 // --- Totales
@@ -76,7 +85,10 @@ r.med = {
   porTipoEstado: await filas("SELECT tipo, estado_contacto, COUNT(*) n FROM medios_contacto GROUP BY tipo, estado_contacto ORDER BY tipo, estado_contacto"),
   correoMalFormado: (await filas(`SELECT id FROM medios_contacto WHERE tipo = 'correo' AND valor_normalizado NOT REGEXP ${CORREO_VALIDO}`)).map((f) => f.id),
   correoMalNormalizado: (await filas("SELECT id FROM medios_contacto WHERE tipo = 'correo' AND valor_normalizado <> LOWER(TRIM(valor))")).map((f) => f.id),
-  telefonoMalNormalizado: (await filas("SELECT id FROM medios_contacto WHERE tipo IN ('telefono','whatsapp') AND valor_normalizado <> REGEXP_REPLACE(valor, '[^0-9]', '')")).map((f) => f.id),
+  // Con la misma regla que el CRM (normalizarTelefono, abajo): antes se comparaba contra «solo los dígitos» y, desde la
+  // migración 041 (6-nov-2026, sin lada de México ni extensión), marcaba como mal casi todos los teléfonos.
+  telefonoMalNormalizado: (await filas("SELECT id, valor, valor_normalizado FROM medios_contacto WHERE tipo IN ('telefono','whatsapp')"))
+    .filter((f) => f.valor_normalizado !== normalizarTelefono(f.valor)).map((f) => f.id),
   telefonoLargoRaro: (await filas("SELECT id FROM medios_contacto WHERE tipo IN ('telefono','whatsapp') AND (CHAR_LENGTH(valor_normalizado) < 7 OR CHAR_LENGTH(valor_normalizado) > 15)")).map((f) => f.id),
   activoPeroSuprimido: (await filas("SELECT m.id FROM medios_contacto m JOIN lista_supresion s ON s.valor_normalizado = m.valor_normalizado AND (s.tipo = m.tipo OR (s.tipo = 'telefono' AND m.tipo = 'whatsapp')) WHERE m.estado_contacto = 'activo'")).map((f) => f.id),
   // Mismos últimos 10 dígitos con distinto valor (ej. 4421234567 y 524421234567).

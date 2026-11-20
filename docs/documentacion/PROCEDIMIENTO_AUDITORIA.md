@@ -92,3 +92,4 @@ Cuando una migración nueva cambia la base:
 | Fecha | Momento | T1.1 (sin prueba) | T1.2 (sin prueba) | Reporte |
 |---|---|---|---|---|
 | 28-oct-2026 | Línea base para G4 | 96.6 % | 96.6 % | [calidad-2026-10-28](auditorias/calidad-2026-10-28.md) |
+| 20-nov-2026 | Primera con los contactos reales (4 campañas) | 98.6 % | 100.0 % | [calidad-2026-11-20](auditorias/calidad-2026-11-20.md) |
