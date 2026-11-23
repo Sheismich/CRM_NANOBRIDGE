@@ -13,6 +13,7 @@ import { bloquearPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { CODIGO_ENVIOS_EN_PAUSA, MENSAJE_EN_PAUSA, leerFreno } from "../shared/freno-dominio.js";
 import { anotarLlamadaN8n } from "../shared/latido-n8n.js";
+import { confirmarRecibido, sendgridLoRecibio } from "../shared/envio-recibido.js";
 import { ESTADOS_PROSPECTO_CERRADO, HORAS_PARA_RETOMAR_DE_FILA, MAX_CONTACTOS_POR_CICLO, MENSAJE_INTERESADO_EN_OTRA, MENSAJE_SERIE_EN_CURSO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable, interesadoEnOtraCampanaSql, noInteresadoReciente, otraCampanaBloquea, serieEnCursoEnOtraCampanaSql } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { diaSiguiente, esFeriadoMx, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
@@ -920,6 +921,14 @@ export class AutomatizacionService {
 
       if (input.estado === "enviado") {
         await tx.update(envios).set({ estado: "enviado", proveedorId: input.proveedor_id ?? null }).where(eq(envios.id, id));
+        return { id, estado: "enviado" as const };
+      }
+
+      // SendGrid ya avisó de este envío: sí lo recibió aunque n8n no se
+      // enterara (#4 de la revisión; ver shared/envio-recibido.ts).
+      const avisoDeSendgrid = await sendgridLoRecibio(tx, { id, prospectoId: envio.prospectoId });
+      if (avisoDeSendgrid) {
+        await confirmarRecibido(tx, id, avisoDeSendgrid);
         return { id, estado: "enviado" as const };
       }
 
