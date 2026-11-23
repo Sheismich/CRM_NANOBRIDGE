@@ -12,6 +12,7 @@ import { darDeBajaPorEvento } from "../shared/supresion-por-evento.js";
 import { bloquearPersona, personaEnBaja } from "../shared/baja-prospecto.js";
 import { buscarPersona } from "../shared/identidad.js";
 import { CODIGO_ENVIOS_EN_PAUSA, MENSAJE_EN_PAUSA, leerFreno } from "../shared/freno-dominio.js";
+import { anotarLlamadaN8n } from "../shared/latido-n8n.js";
 import { ESTADOS_PROSPECTO_CERRADO, HORAS_PARA_RETOMAR_DE_FILA, MAX_CONTACTOS_POR_CICLO, MENSAJE_INTERESADO_EN_OTRA, MENSAJE_SERIE_EN_CURSO, bloquearCorreosDePersona, cicloActualDePersona, correoUtilizable, interesadoEnOtraCampanaSql, noInteresadoReciente, otraCampanaBloquea, serieEnCursoEnOtraCampanaSql } from "../shared/ciclo-contacto.js";
 import { campanaActivaSql, campanaEnEsperaSql, campanaNoHaTerminadoSql, campanaYaEmpezoSql, vigenciaCampana } from "../shared/campana-vigente.js";
 import { diaSiguiente, esFeriadoMx, fechaMx, inicioDelDiaMxSql, sumarDiasHabilesMx } from "../shared/dia-habil.js";
@@ -425,6 +426,8 @@ export class AutomatizacionService {
   // - En feriado no se le da a nadie (n8n no conoce los feriados y corre
   //   igual): esperan su lugar para el siguiente día hábil.
   async tomarDeFila(input: TomarDeFilaInput) {
+    // Latido para el aviso de n8n sin correr (shared/latido-n8n.ts).
+    await anotarLlamadaN8n(this.db, "pt1a");
     const hoy = fechaMx(new Date());
     if (esFeriadoMx(hoy) || (await leerFreno(this.db)).pausado) return { data: [], cupo_restante: 0, tope_diario_alcanzado: false };
     return this.db.transaction(async (tx) => {
@@ -958,6 +961,8 @@ export class AutomatizacionService {
   // ventana del envío más reciente, no desde esta.
   async listarVentanasVencidas(query: VentanasVencidasQuery) {
     // Fecha de México para las reglas de campaña (ver shared/campana-vigente.ts).
+    // Latido para el aviso de n8n sin correr (shared/latido-n8n.ts).
+    await anotarLlamadaN8n(this.db, "pt4");
     const hoy = fechaMx(new Date());
     // En feriado no se reclama nada (n8n no conoce los feriados y PT4 corre
     // igual): las ventanas siguen abiertas y salen el siguiente día hábil.
