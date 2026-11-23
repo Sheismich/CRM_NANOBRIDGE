@@ -203,6 +203,8 @@ const CAMPOS = {
   "envios.numero_contacto": "1 = correo inicial; 2 y 3 = recordatorios. Máximo 3 por persona y campaña cada 6 meses.",
   "envios.ventana_vence_en": "Hasta cuándo se espera respuesta antes del siguiente recordatorio (5 días hábiles).",
   "envios.ventana_estado": "abierta = esperando; vencida = toca recordatorio; cerrada = ya respondió o terminó.",
+  "envios.ventana_entregada_en": "Cuándo se le entregó a n8n (PT4) esta ventana vencida para mandar el recordatorio. Vacío = nunca se entregó (o la API la canceló a propósito, por ejemplo por campaña terminada).",
+  "envios.ventana_retomas": "Cuántas veces se volvió a abrir la ventana porque en 6 horas no llegó el recordatorio de PT4. Solo se retoma una vez.",
   "envios.enviado_en": "Cuándo salió el correo.",
   "envios.asunto": "Asunto con el que salió.",
   "respuestas.contenido": "Texto de la respuesta del prospecto.",

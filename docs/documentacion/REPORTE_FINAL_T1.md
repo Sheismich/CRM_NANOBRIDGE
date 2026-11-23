@@ -15,7 +15,7 @@ pendiente.
 
 | Código | Entregable | Versión final | Dónde |
 |---|---|---|---|
-| OB-01 | Diccionario de datos y reglas | 1.4 (20-nov, migración 044; lo regeneró T2) ⏳ regenerar al cierre | [DICCIONARIO_DE_DATOS.md](DICCIONARIO_DE_DATOS.md) |
+| OB-01 | Diccionario de datos y reglas | 1.5 (23-nov, migración 045; lo regeneró T2) ⏳ regenerar al cierre | [DICCIONARIO_DE_DATOS.md](DICCIONARIO_DE_DATOS.md) |
 | OB-02 | Base controlada: reporte de controles y auditorías | 1.4 (23-nov) ⏳ | [REPORTE_DE_CONTROLES.md](REPORTE_DE_CONTROLES.md), [auditorias/](auditorias/) |
 | Semana 11 | Procedimiento de auditoría y actualización | 1.0 (28-oct) | [PROCEDIMIENTO_AUDITORIA.md](PROCEDIMIENTO_AUDITORIA.md) |
 | Semana 13 | Certificación de audiencia | 20-nov | [Auditoría del 20-nov](auditorias/calidad-2026-11-20.md) §5 y [flujo de campaña](FLUJO_DE_CAMPANA.md) §2 |

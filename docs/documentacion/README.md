@@ -7,7 +7,7 @@ Cierre del proyecto: **9 de diciembre de 2026**.
 |---|---|---|---|
 | [Resumen para la revisión G4](G4_RESUMEN.md) y [acta](actas/2026-11-G4.md) | Una página con lo que se entrega, los indicadores, lo que se pide decidir y los riesgos; el acta se llena en la junta | G4 | Listo para la junta |
 | [Bitácora del proyecto](BITACORA.md) | Avance contra el programa, expediente de entregables, documentación que falta, control de cambios y riesgos (KPI C3) | Todo el proyecto | Corte al 23-nov |
-| [Diccionario de datos y reglas](DICCIONARIO_DE_DATOS.md) | Cada tabla y campo de la base: formato, obligatoriedad, fuente, identificador, reglas de duplicados y de actualización | OB-01 · G4 | ✅ v1.4 (20-nov, regenerado con la migración 044) |
+| [Diccionario de datos y reglas](DICCIONARIO_DE_DATOS.md) | Cada tabla y campo de la base: formato, obligatoriedad, fuente, identificador, reglas de duplicados y de actualización | OB-01 · G4 | ✅ v1.5 (23-nov, regenerado con la migración 045) |
 | [Reporte de controles](REPORTE_DE_CONTROLES.md) | Los 37 controles que protegen la base, dónde viven y con qué se comprueban (KPI T1.3) | OB-02 · G4 | ✅ v1.4 (23-nov, con el freno del dominio y los rebotes por prospecto) |
 | [Flujo de actualización](FLUJO_DE_ACTUALIZACION.md) | Cómo entran y cambian los registros con la automatización: alta, cambio, rechazo, registro, reversión y sus pruebas | OB-03 · G4 | ✅ v1.5 (23-nov, webhook de SendGrid y estado «rebotado», migración 044) |
 | [Evaluación del modelo](EVALUACION_DEL_MODELO.md) | Dónde se usa Gemini, con qué datos, quién revisa, cómo se mide y qué resultados hay | OB-04 · G4 | ✅ v1.0 (3-nov); resultados sobre muestra en el piloto |

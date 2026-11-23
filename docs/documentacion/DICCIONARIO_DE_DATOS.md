@@ -3,7 +3,7 @@
 **Entregable:** OB-01 (diccionario y reglas) y apoyo de OB-02 (base maestra controlada), proyecto naranja · outbound.
 **Para:** revisión G4 · CDR (semana 10, 2-6 nov 2026).
 **Dueño:** T1 (datos y estandarización) · **Revisión:** T2 y Dirección General.
-**Versión:** 1.4 · generado el 20 de noviembre de 2026 desde la base real, con migraciones hasta `044_rebotes_sendgrid.sql` (44 en total). Cubre 37 tablas y 435 campos.
+**Versión:** 1.5 · generado el 23 de noviembre de 2026 desde la base real, con migraciones hasta `045_recordatorio_retomado.sql` (45 en total). Cubre 37 tablas y 437 campos.
 
 > Este documento se genera con `generar-diccionario.mjs` (misma carpeta) a partir de la estructura real de la
 > base y de las reglas del código. No editar las tablas a mano: cambiar el script y volver a generarlo (ver al final).
@@ -349,6 +349,8 @@ Cada correo de prospección que salió (inicial o recordatorio) y su ventana de 
 | `numero_contacto` | entero | sí | 1 = correo inicial; 2 y 3 = recordatorios. Máximo 3 por persona y campaña cada 6 meses. |
 | `ventana_vence_en` | fecha y hora (UTC) | sí | Hasta cuándo se espera respuesta antes del siguiente recordatorio (5 días hábiles). |
 | `ventana_estado` | uno de: abierta, vencida, cerrada | sí | abierta = esperando; vencida = toca recordatorio; cerrada = ya respondió o terminó. Por omisión: `abierta`. |
+| `ventana_entregada_en` | fecha y hora (UTC) | no | Cuándo se le entregó a n8n (PT4) esta ventana vencida para mandar el recordatorio. Vacío = nunca se entregó (o la API la canceló a propósito, por ejemplo por campaña terminada). |
+| `ventana_retomas` | entero | sí | Cuántas veces se volvió a abrir la ventana porque en 6 horas no llegó el recordatorio de PT4. Solo se retoma una vez. Por omisión: `0`. |
 | `execution_id` | texto (máx. 100) | no | Identificador de la corrida de n8n que lo creó. Único: si n8n reintenta, no se duplica (idempotencia). |
 | `enviado_en` | fecha y hora (UTC) | sí | Cuándo salió el correo. |
 | `plantilla_id` | entero | no | Plantilla con la que salió (para rearmarlo si n8n reintenta). |
