@@ -7,6 +7,7 @@ import { HttpError } from "../shared/http-error.js";
 import { darEmpresaAlAgente, responsableAsignable } from "../shared/empresa-de-agente.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { cancelarSeguimientosDeOportunidad } from "../shared/seguimiento-cotizacion.js";
+import { detenerSeguimiento } from "../shared/detener-seguimiento.js";
 import type { CambiarEtapaInput, CambiarLlevaFacturaInput, CrearOportunidadInput, ListOportunidadesQuery, ReabrirOportunidadInput } from "./dto/oportunidad.schema.js";
 
 function toRow(row: typeof oportunidades.$inferSelect & { etapaClave: string; etapaNombre: string; probabilidad: number }) {
@@ -240,6 +241,19 @@ export class OportunidadesService {
       });
       // Asignar = dar dueño: ver shared/empresa-de-agente.ts.
       await darEmpresaAlAgente(tx, { empresaId: input.empresaId, responsable, actor: user, origen: { oportunidad_id: created.insertId } });
+
+      // Ya se negocia con esta persona: la automatización deja de escribirle
+      // (pendiente #1 de la revisión del 20-nov, 23-nov-2026). Con
+      // prospectoId, ese prospecto; con contactoId, su serie en curso. Sin
+      // ninguno (oportunidad de la empresa) no se frena a nadie: para eso
+      // está el botón de la ficha. Si no había nada en automatización, no pasa nada.
+      const motivo = `Se creó la oportunidad «${input.titulo}»`.slice(0, 200);
+      if (input.prospectoId) {
+        const [p] = await tx.select({ contactoId: prospectos.contactoId }).from(prospectos).where(eq(prospectos.id, input.prospectoId)).limit(1);
+        if (p) await detenerSeguimiento(tx, p.contactoId, { motivo, usuarioId: user.id, prospectoId: input.prospectoId });
+      } else if (input.contactoId) {
+        await detenerSeguimiento(tx, input.contactoId, { motivo, usuarioId: user.id });
+      }
 
       return created.insertId;
     });

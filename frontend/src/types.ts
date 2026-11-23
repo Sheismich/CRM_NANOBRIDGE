@@ -75,6 +75,9 @@ export type ContactoConMedio = {
   facebook_url: string | null;
   instagram_url: string | null;
   activo: boolean;
+  // Tiene algo en automatización (fila o serie en curso): se enseña
+  // «Detener seguimiento» (23-nov-2026). Viene en cada fila de la persona.
+  en_automatizacion: boolean;
   medio_id: number | null;
   medio_tipo: MedioContacto["tipo"] | null;
   medio_valor: string | null;

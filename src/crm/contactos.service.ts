@@ -6,6 +6,7 @@ import { HttpError } from "../shared/http-error.js";
 import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { suprimirMediosDeContacto } from "../shared/supresion.js";
 import { ACCION_BAJA_DESDE_FICHA, darDeBajaPersona } from "../shared/baja-prospecto.js";
+import { detenerSeguimiento } from "../shared/detener-seguimiento.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { EmpresasService } from "./empresas.service.js";
 import type { UpdateContactInput } from "./dto/empresa.schema.js";
@@ -152,6 +153,19 @@ export class ContactosService {
       if (supresionIds.length === 0) throw new HttpError(409, "Esta persona no tiene correo, teléfono ni WhatsApp registrados: no hay nada que dar de baja");
       const baja = await darDeBajaPersona(tx, id, { accion: ACCION_BAJA_DESDE_FICHA, motivo, executionId: null, usuarioId: user.id });
       return { contacto_id: id, supresion_ids: supresionIds, prospectos_en_baja: baja.prospectosEnBaja, tareas_canceladas: baja.tareasCanceladas };
+    });
+  }
+
+  // «Detener seguimiento» (pendiente #1 de la revisión del 20-nov, 23-nov-2026):
+  // la persona ya habla con ventas por otro lado. Ver shared/detener-seguimiento.ts.
+  // La puede usar el agente dueño de la empresa, el supervisor y el
+  // administrador (mismo alcance que la baja). No se deshace desde el CRM.
+  async detenerSeguimiento(user: CurrentUser, id: number, motivo: string) {
+    await this.resolverEmpresaId(user, id);
+    return this.db.transaction(async (tx) => {
+      const resultado = await detenerSeguimiento(tx, id, { motivo, usuarioId: user.id });
+      if (!resultado) throw new HttpError(409, "Esta persona no tiene nada en automatización: no hay seguimiento que detener");
+      return { contacto_id: id, ...resultado };
     });
   }
 

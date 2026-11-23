@@ -141,6 +141,15 @@ export function campanaQueHaceEsperarSql(contacto: SQL | number, campana: SQL | 
     ORDER BY pw.estado = 'interesado' DESC, pw.id LIMIT 1)`;
 }
 
+/**
+ * SQL: la persona tiene algo en automatización: un prospecto en la fila o
+ * una serie en curso en cualquier campaña. Lo usa la ficha para enseñar
+ * «Detener seguimiento» (shared/detener-seguimiento.ts, 23-nov-2026).
+ */
+export function enAutomatizacionSql(contacto: SQL | number) {
+  return sql`EXISTS (SELECT 1 FROM prospectos pa WHERE pa.contacto_id = ${contacto} AND (pa.estado = 'en_fila' OR ${serieEnCursoDe("pa")}))`;
+}
+
 export type BloqueoDeOtraCampana = "interesado_en_otra_campana" | "serie_en_curso";
 
 /**

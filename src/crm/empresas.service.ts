@@ -8,6 +8,7 @@ import { insertarMediosContacto, buildMedioCandidatos, estadoInicialDeMedio, COD
 import { isDuplicateEntry } from "../shared/database-errors.js";
 import { normalizeEmail, normalizePhone } from "../shared/normalize.js";
 import { indiceDeEmpresas, parecidasEn } from "../shared/empresas-parecidas.js";
+import { enAutomatizacionSql } from "../shared/ciclo-contacto.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import type { CompanyInput, ContactInput, ListEmpresasQuery, UpdateCompanyInput, UpdateContactInput } from "./dto/empresa.schema.js";
 
@@ -629,6 +630,9 @@ export class EmpresasService {
         activo: contactos.activo,
         creado_en: contactos.creadoEn,
         actualizado_en: contactos.actualizadoEn,
+        // Tiene algo en automatización (fila o serie en curso): la ficha
+        // enseña «Detener seguimiento» (23-nov-2026).
+        en_automatizacion: sql<boolean>`${enAutomatizacionSql(sql`${contactos.id}`)}`.mapWith(Boolean),
         medio_id: mediosContacto.id,
         medio_tipo: mediosContacto.tipo,
         medio_valor: mediosContacto.valor,
