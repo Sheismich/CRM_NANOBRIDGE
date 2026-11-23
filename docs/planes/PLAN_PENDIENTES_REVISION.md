@@ -10,7 +10,7 @@ Tamaño: **chico** = medio día o menos, **mediano** = 1 a 2 días, **grande** =
 
 | # | Pendiente | Quién | Tamaño | Depende de |
 |---|---|---|---|---|
-| 2 | Avisar cuando n8n no corrió | Fabián (API) + Mich (Cloud Scheduler) | chico | - |
+| 2 | ✅ Avisar cuando n8n no corrió (API `00064-s4w`; Cloud Scheduler `revisar-n8n` el 23-nov, primera corrida el 24-nov) | Fabián (API) + Mich (Cloud Scheduler) | chico | - |
 | 7 | Respaldo de los flujos de n8n en el repo | Fabián (n8n) | chico | - |
 | 6 | Encabezado List-Unsubscribe | Fabián (API + n8n) | chico | - |
 | 4 | Correo duplicado si SendGrid tarda | Fabián (n8n + API) | chico/mediano | #7 |
@@ -47,7 +47,7 @@ Tamaño: **chico** = medio día o menos, **mediano** = 1 a 2 días, **grande** =
 
 ## Fabián
 
-### #2 Avisar cuando n8n no corrió (chico; la parte de Google Cloud es de Mich)
+### #2 Avisar cuando n8n no corrió (chico; la parte de Google Cloud es de Mich) · ✅ 23-nov-2026, Cloud Scheduler `revisar-n8n` (RUNBOOK §11)
 
 **Hoy:** si n8n se para, nadie se entera. La tarjeta "sin confirmar" (`src/admin/salud.service.ts:53`) solo se ve
 si alguien entra a Administración, y la única alerta es la de `/health`.

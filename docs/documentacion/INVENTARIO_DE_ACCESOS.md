@@ -49,7 +49,7 @@ Los leen las tres personas de §2 y la cuenta de la API. Cómo consultarlos o ro
 | Secreto | Para qué | Si se rota |
 |---|---|---|
 | `DATABASE_URL` | La API entra a la base | Cambiar también la contraseña de `appuser` en Cloud SQL (RUNBOOK §6) |
-| `CRM_CALLBACK_API_KEY` | Llave con la que n8n llama a la API | Cambiarla también en la credencial «Nanobridge-ApiKey» de n8n |
+| `CRM_CALLBACK_API_KEY` | Llave con la que n8n llama a la API, y el Cloud Scheduler `revisar-n8n` (desde el 23-nov) | Cambiarla también en la credencial «Nanobridge-ApiKey» de n8n y en el encabezado del trabajo `revisar-n8n` (RUNBOOK §11) |
 | `WEBHOOK_ENTRADA_API_KEY` | Llave para que la API llame a n8n (B3, sin usar) | Sin efecto hoy |
 | `REPLY_TO_SIGNING_SECRET` | Firma el Reply-To de cada correo y, desde el 13-nov, el link de baja | **Las respuestas a correos ya enviados llegan como «no identificadas» y sus links de baja dejan de servir**: rotarlo solo si se filtró |
 | `SENDGRID_API_KEY` | La API manda avisos, respuestas y cotizaciones | Crear la llave nueva en SendGrid primero |

@@ -700,6 +700,23 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 3. Si los registros hablan de la base: Cloud SQL → `nanobridge-db` (que esté
    RUNNABLE; en Operaciones, si hay mantenimiento). Respaldos y recuperación en §9.
 
+### Aviso si n8n no corrió (Cloud Scheduler, 23-nov-2026)
+
+Si n8n se para, PT5 tampoco corre, así que este aviso no puede salir de n8n. Un Cloud Scheduler de Google
+llama a la API (#2 de la revisión del 20-nov; código en `src/shared/latido-n8n.ts`, desplegado en la `00064-s4w`):
+
+| Qué | Valor |
+|---|---|
+| Trabajo | `revisar-n8n`, región `us-central1` (API `cloudscheduler.googleapis.com` activada el 23-nov) |
+| Cuándo | `0 11 * * 1-5`, zona `America/Mexico_City` (lunes a viernes a las 11:00) |
+| A dónde | `POST https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/jobs/revisar-n8n`, directo a Cloud Run |
+| Llave | Encabezado `X-API-Key` con el valor de `CRM_CALLBACK_API_KEY`, guardado en el trabajo. **Si se rota esa llave, hay que actualizar el trabajo** (`gcloud scheduler jobs update http revisar-n8n --location=us-central1 --update-headers=X-API-Key=<nueva>`), o el aviso deja de llegar sin que nadie lo note |
+| Qué hace la API | En día hábil, si PT4 o PT1a no llamaron hoy o hay envíos sin confirmar de más de 1 h, avisa con correo a administradores y supervisores, una vez al día. Nada en fines de semana ni feriados |
+
+Lo creó Mich el 23-nov después de las 11:00, para que la primera corrida (24-nov) ya tuviera los latidos de PT4 y
+PT1a: ese día la API nueva se desplegó después de las corridas de n8n y una llamada habría avisado en falso.
+Revisar el 24-nov en Cloud Scheduler que la corrida dio 200 y que no llegó aviso.
+
 ## 12. Event Webhook de SendGrid directo a la API (migración 044, 20-nov-2026)
 
 Antes los rebotes y quejas llegaban a n8n (PT3) y PT3 llamaba a `POST /automatizacion/supresion`.
