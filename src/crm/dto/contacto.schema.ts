@@ -31,6 +31,12 @@ export const bajaContactoSchema = z.object({
   motivo: z.string().trim().min(2).max(255)
 });
 
+// Borrar los datos de una persona (ARCO, 23-nov-2026): hay que escribir su nombre
+// tal como está en el CRM para confirmar.
+export const borrarDatosSchema = z.object({
+  confirmacion: z.string().trim().min(1).max(160)
+});
+
 // «Detener seguimiento» (23-nov-2026): por qué, obligatorio y corto (va a la auditoría).
 export const detenerSeguimientoSchema = z.object({
   motivo: z.string().trim().min(2).max(200)

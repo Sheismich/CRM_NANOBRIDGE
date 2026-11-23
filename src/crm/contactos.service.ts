@@ -7,6 +7,7 @@ import { compactConditions, patronLike } from "../shared/drizzle-utils.js";
 import { suprimirMediosDeContacto } from "../shared/supresion.js";
 import { ACCION_BAJA_DESDE_FICHA, darDeBajaPersona } from "../shared/baja-prospecto.js";
 import { detenerSeguimiento } from "../shared/detener-seguimiento.js";
+import { borrarDatosPersona, NOMBRE_PERSONA_ELIMINADA } from "../shared/borrar-datos-persona.js";
 import type { CurrentUser } from "../auth/current-user.type.js";
 import { EmpresasService } from "./empresas.service.js";
 import type { UpdateContactInput } from "./dto/empresa.schema.js";
@@ -154,6 +155,21 @@ export class ContactosService {
       const baja = await darDeBajaPersona(tx, id, { accion: ACCION_BAJA_DESDE_FICHA, motivo, executionId: null, usuarioId: user.id });
       return { contacto_id: id, supresion_ids: supresionIds, prospectos_en_baja: baja.prospectosEnBaja, tareas_canceladas: baja.tareasCanceladas };
     });
+  }
+
+  // Borrar los datos de una persona por solicitud ARCO (pendiente #9 de la revisión
+  // del 20-nov, 23-nov-2026). Ver shared/borrar-datos-persona.ts. Solo el
+  // administrador (lo revisa el controlador). No se puede deshacer: hay que
+  // escribir su nombre para confirmar. Sirve también para un contacto ya
+  // desactivado o de una empresa desactivada: la solicitud puede llegar después.
+  async borrarDatos(user: CurrentUser, id: number, confirmacion: string) {
+    const [persona] = await this.db.select({ nombre: contactos.nombre }).from(contactos).where(eq(contactos.id, id)).limit(1);
+    if (!persona) throw new HttpError(404, "Contacto no encontrado");
+    if (persona.nombre === NOMBRE_PERSONA_ELIMINADA) throw new HttpError(409, "Los datos de esta persona ya se borraron");
+    const igual = (a: string) => a.trim().toLocaleLowerCase("es-MX").replace(/\s+/g, " ");
+    if (igual(confirmacion) !== igual(persona.nombre)) throw new HttpError(400, "Para confirmar, escribe el nombre de la persona tal como aparece en el CRM");
+    const filas = await this.db.transaction((tx) => borrarDatosPersona(tx, id, user.id));
+    return { contacto_id: id, filas };
   }
 
   // «Detener seguimiento» (pendiente #1 de la revisión del 20-nov, 23-nov-2026):

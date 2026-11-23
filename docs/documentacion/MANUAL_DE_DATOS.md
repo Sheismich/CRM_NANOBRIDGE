@@ -156,6 +156,23 @@ en la base.
 - Correr la auditoría (`auditar-datos.mjs`) y anotar la reactivación en la bitácora (§5, control de cambios) y, si fue
   por un error del sistema, en el reporte del piloto (§7).
 
+### 6.2 Borrar los datos de una persona (derecho ARCO)
+
+Si una persona pide que se borren sus datos (cancelación, LFPDPPP), un **administrador** lo hace desde la ficha de la
+empresa: en el contacto, **«Borrar datos»**, y escribir su nombre tal como está en el CRM para confirmar. No se deshace.
+
+- **Se borran en todo el CRM:** su nombre (queda «Persona eliminada»), puesto y redes; sus correos y teléfonos; el
+  texto de sus respuestas y de los correos que se le mandaron; las notas de sus actividades y tareas; sus avisos; sus
+  filas en las importaciones; y sus datos dentro de la auditoría (la fila queda, con quién y cuándo).
+- **Se queda:** su correo y su teléfono en la **lista de supresión**, para no volver a escribirle si alguien la vuelve a
+  importar (la ley reconoce esa lista de exclusión). Las ventas, cotizaciones y documentos de la empresa se quedan, sin
+  su nombre. Si la empresa es una persona física con ventas, sus datos fiscales se quedan los 5 años que pide la ley
+  fiscal (son de la empresa, no se tocan).
+- **Fuera del CRM** se borra con el tiempo y así se le dice en la respuesta: los respaldos de Cloud SQL (7 días), el
+  historial de SendGrid y las ejecuciones de n8n.
+- Queda en el Registro de cambios como «Datos de una persona borrados (ARCO)», sin datos personales.
+- Funciona también con un contacto ya desactivado (la solicitud puede llegar después).
+
 ## 7. Mandar a automatización
 
 Solo administrador y supervisor: Prospectos → elegir con las casillas → «Mandar a automatización». Entran a la **fila**
