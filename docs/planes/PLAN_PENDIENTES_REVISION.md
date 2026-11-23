@@ -11,10 +11,10 @@ Tamaño: **chico** = medio día o menos, **mediano** = 1 a 2 días, **grande** =
 | # | Pendiente | Quién | Tamaño | Depende de |
 |---|---|---|---|---|
 | 2 | ✅ Avisar cuando n8n no corrió (API `00064-s4w`; Cloud Scheduler `revisar-n8n` el 23-nov, primera corrida el 24-nov) | Fabián (API) + Mich (Cloud Scheduler) | chico | - |
-| 7 | Respaldo de los flujos de n8n en el repo | Fabián (n8n) | chico | - |
-| 6 | Encabezado List-Unsubscribe | Fabián (API + n8n) | chico | - |
-| 4 | Correo duplicado si SendGrid tarda | Fabián (n8n + API) | chico/mediano | #7 |
-| 3 | Recordatorio perdido si PT4 truena | Fabián | mediano | - |
+| 7 | ✅ Respaldo de los flujos de n8n en el repo (23-nov, `docs/n8n/flujos/`) | Fabián (n8n) | chico | - |
+| 6 | ✅ Encabezado List-Unsubscribe (23-nov, `00067-nz8`, PR 8; PT1b publicado) | Fabián (API + n8n) | chico | - |
+| 4 | ✅ Correo duplicado si SendGrid tarda (23-nov, `00068-x52`, PR 10; Retry On Fail apagado en PT1b) | Fabián (n8n + API) | chico/mediano | #7 |
+| 3 | ✅ Recordatorio perdido si PT4 truena (23-nov, `00069-vdf`, PR 12, migración 045) | Fabián | mediano | - |
 | 11 | Rebotes suaves y el freno | Fabián (solo vigilar) | - | - |
 | 1 | ✅ Detener seguimiento de quien ya habla con ventas (23-nov, `00065-2pj`, PR #7) | Mich (API + front) | mediano | - |
 | 5 | Repo público | Mich (decide) | chico | - |
