@@ -391,6 +391,10 @@ export const envios = mysqlTable("envios", {
   numeroContacto: int("numero_contacto").notNull(),
   ventanaVenceEn: datetime("ventana_vence_en").notNull(),
   ventanaEstado: mysqlEnum("ventana_estado", ["abierta", "vencida", "cerrada"]).notNull().default("abierta"),
+  // 045: cuándo se le entregó la ventana a n8n (PT4) y cuántas veces se
+  // retomó porque no llegó su resultado (ver listarVentanasVencidas).
+  ventanaEntregadaEn: datetime("ventana_entregada_en"),
+  ventanaRetomas: tinyint("ventana_retomas", { unsigned: true }).notNull().default(0),
   executionId: varchar("execution_id", { length: 100 }),
   enviadoEn: datetime("enviado_en").notNull().default(sql`CURRENT_TIMESTAMP`),
   // 033_plantillas_correo.sql: qué plantilla y qué asunto salieron.
@@ -407,6 +411,7 @@ export const envios = mysqlTable("envios", {
   uniqueIndex("uq_envios_prospecto_canal_numero").on(table.prospectoId, table.canal, table.numeroContacto),
   index("idx_envios_prospecto_canal").on(table.prospectoId, table.canal),
   index("idx_envios_ventana").on(table.ventanaEstado, table.ventanaVenceEn),
+  index("idx_envios_ventana_entregada").on(table.ventanaEstado, table.ventanaEntregadaEn),
   index("idx_envios_estado").on(table.estado, table.enviadoEn)
 ]);
 
