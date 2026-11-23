@@ -93,3 +93,4 @@ Cuando una migración nueva cambia la base:
 |---|---|---|---|---|
 | 28-oct-2026 | Línea base para G4 | 96.6 % | 96.6 % | [calidad-2026-10-28](auditorias/calidad-2026-10-28.md) |
 | 20-nov-2026 | Primera con los contactos reales (4 campañas) | 98.6 % | 100.0 % | [calidad-2026-11-20](auditorias/calidad-2026-11-20.md) |
+| 23-nov-2026 | Seguimiento semanal; sin cargas nuevas | 98.6 % | 100.0 % | [calidad-2026-11-23](auditorias/calidad-2026-11-23.md) |

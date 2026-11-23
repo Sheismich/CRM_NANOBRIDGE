@@ -103,8 +103,12 @@ r.interesados = await uno(`SELECT COUNT(DISTINCT p.contacto_id) ${RESP} AND r.cl
 r.tiemposClasificar = (await filas(`SELECT TIMESTAMPDIFF(MINUTE, r.recibido_en, r.clasificado_en) / 60 h ${RESP} AND r.clasificado_en IS NOT NULL`, RESP_P)).map((x) => Number(x.h));
 
 // --- 3. Bajas, rebotes y quejas (lista de supresión desde el inicio del periodo)
-r.supresion = await filas(`SELECT COALESCE(evento, motivo, 'sin motivo') e, tipo, COUNT(*) n FROM lista_supresion WHERE creado_en >= ? GROUP BY e, tipo ORDER BY n DESC`, [ini]);
-const cuenta = (ev) => r.supresion.filter((x) => x.e === ev && x.tipo === "correo").reduce((s, x) => s + Number(x.n), 0);
+// de_contactos: solo los correos que son de un contacto del CRM. Así no cuentan los eventos de prueba de SendGrid
+// («Test Integration» del 20-nov-2026 manda un rebote y una queja de un correo de ejemplo).
+r.supresion = await filas(`SELECT COALESCE(s.evento, s.motivo, 'sin motivo') e, s.tipo, COUNT(*) n,
+  SUM(EXISTS (SELECT 1 FROM medios_contacto m WHERE m.tipo = s.tipo AND m.valor_normalizado = s.valor_normalizado)) de_contactos
+  FROM lista_supresion s WHERE s.creado_en >= ? GROUP BY e, s.tipo ORDER BY n DESC`, [ini]);
+const cuenta = (ev) => r.supresion.filter((x) => x.e === ev && x.tipo === "correo").reduce((s, x) => s + Number(x.de_contactos), 0);
 r.rebotes = cuenta("bounce");
 r.quejas = cuenta("spamreport");
 // Desde la 044 (20-nov-2026) el webhook de SendGrid pasa a «rebotado» solo el prospecto al que le rebotó el correo
@@ -181,7 +185,7 @@ ${tabla(["Clasificación", "Respuestas"], [...clases(r.respuestas).map(([c, n]) 
 
 ## 3. Bajas, rebotes y quejas
 
-${tabla(["Motivo", "Medio", "Altas en la lista de supresión"], r.supresion.map((x) => [x.e, x.tipo, String(x.n)]))}
+${tabla(["Motivo", "Medio", "Altas en la lista de supresión", "De contactos del CRM"], r.supresion.map((x) => [x.e, x.tipo, String(x.n), String(x.de_contactos)]))}
 
 - Rebotes: **${r.rebotes}** de ${totalCorreos} correos (**${pct(r.rebotes, totalCorreos)}**; para subir el tope tiene que quedar debajo de 2 %).
 ${r.rebotados ? `- Prospectos en «rebotado» hoy (no reciben más correos; se reactivan en Administración): **${r.rebotados.reduce((t, x) => t + Number(x.n), 0)}**${r.rebotados.length ? ` (${r.rebotados.map((x) => `${x.tipo} ${x.n}`).join(", ")})` : ""}.

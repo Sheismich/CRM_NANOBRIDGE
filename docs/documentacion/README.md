@@ -12,6 +12,7 @@ Cierre del proyecto: **9 de diciembre de 2026**.
 | [Flujo de actualización](FLUJO_DE_ACTUALIZACION.md) | Cómo entran y cambian los registros con la automatización: alta, cambio, rechazo, registro, reversión y sus pruebas | OB-03 · G4 | ✅ v1.5 (23-nov, webhook de SendGrid y estado «rebotado», migración 044) |
 | [Evaluación del modelo](EVALUACION_DEL_MODELO.md) | Dónde se usa Gemini, con qué datos, quién revisa, cómo se mide y qué resultados hay | OB-04 · G4 | ✅ v1.0 (3-nov); resultados sobre muestra en el piloto |
 | [Auditoría de calidad · 28-oct](auditorias/calidad-2026-10-28.md) | Línea base de validez y duplicados (KPI T1.1 y T1.2) con conclusiones y acciones | Semana 9 · G4 | ✅ |
+| [Auditoría de calidad · 23-nov](auditorias/calidad-2026-11-23.md) | Seguimiento semanal: sin cambios en la calidad | Semana 13 | ✅ |
 | [Auditoría de calidad · 20-nov](auditorias/calidad-2026-11-20.md) | Primera con los contactos reales: T1.1 98.6 %, T1.2 100 % y certificación de audiencia de las 4 campañas | Semana 13 | ✅ |
 | [Procedimiento de auditoría y actualización](PROCEDIMIENTO_AUDITORIA.md) | Cuándo y cómo auditar, qué hacer con cada hallazgo, qué hacer tras una migración | Semana 11 | ✅ v1.0 (adelantado) |
 | [Inventario de accesos](INVENTARIO_DE_ACCESOS.md) | Quién tiene acceso a Google Cloud, SendGrid, n8n, dominio, Gemini, GitHub y el CRM, y qué pasar a alguien de planta antes del cierre | OB-07 · cierre | 🟡 v0.9.3 (23-nov, adelantado, con SendGrid pagado y su webhook): faltan datos de n8n, AI Studio y DNS |

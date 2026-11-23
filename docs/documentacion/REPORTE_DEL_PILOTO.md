@@ -38,6 +38,10 @@ fallidos.
 9 al 12-nov, 56 el 17-nov (arrancaron las campañas 6 y 7) y 10 el 19 y el 20; nada del 13 al 16 (PT1a pausada, fin de
 semana y feriado). Recordatorios desde el 18-nov: 28.
 
+**Corte al 23-nov:** 153 correos a las mismas 116 personas. El 23-nov solo salieron 9 recordatorios y **ningún primer
+correo**: la fila está vacía (una sola persona, que espera que termine su serie en otra campaña). Sin cargas nuevas
+desde el 19-nov, no salen correos nuevos. El rebote de prueba de SendGrid del 20-nov («Test Integration») no cuenta.
+
 Controles que deben dar 0 (si no, es un incidente, §7):
 
 | Control | Resultado |
@@ -74,7 +78,7 @@ Además, 1 respuesta automática y 1 sin clasificar desde el 19-nov a las 20:15 
 
 | | Casos | % de los correos | Límite |
 |---|---|---|---|
-| Rebotes (corte al 20-nov) | 8 | 5.6 % | debajo de 2 % · **arriba del límite** |
+| Rebotes (corte al 23-nov) | 8 | 5.2 % (de 153) | debajo de 2 % · **arriba del límite** |
 | Quejas de spam | 0 | 0 % | debajo de 0.1 % |
 | ¿Se activó el freno del dominio? | Sí, el 20-nov a las 10:01 (5 rebotes en 7 días); se reanudó a las 10:13 | — | 2 quejas o 5 rebotes en 7 días |
 
@@ -101,7 +105,7 @@ día (mediana 3.2 h); ninguna escalada. El reparto estuvo prendido.
 | 13 al 16-nov-2026 | PT1a estuvo pausada mientras se cambiaba el link de baja: no salieron primeros correos esos días | Toda la fila | Se prendió de nuevo; primera corrida el 17-nov | Sí (17-nov) |
 | 17-nov-2026 | La API falló al reusar conexiones a la base que MySQL ya había cortado (`PROTOCOL_CONNECTION_LOST` en una petición real a las 12:24) y la revisión de la API falló 10 veces seguidas: alerta «CRM caído» a las 23:27. Otra alerta a las 12:29 fue del lado de Google (la API respondía bien) | ⏳ qué peticiones fallaron | El pool de conexiones cierra las inactivas (18-nov, `00059-rzt`) | Sí (18-nov) |
 | 18-nov-2026 | Se desplegó la API `00060-4xj` antes de aplicar la migración 043 (en Cloud Shell no salió `Applied 043`): unos minutos con el código nuevo sin las columnas nuevas. Es la segunda vez que pasa (RUNBOOK §6) | Nadie: nadie abrió un Historial ni contestó en ese rato | La 043 se aplicó después, con la IP autorizada solo durante la migración | Sí. ⏳ Que el orden «migrar, revisar `Applied`, desplegar» quede como paso obligatorio |
-| 20-nov-2026 | El freno del dominio pausó toda la prospección a las 10:01: 5 rebotes en 7 días (2 el 17-nov y 3 el 20-nov). En total van 8 rebotes de 144 correos (5.6 %), 6 de la campaña 5 | Todas las campañas, 12 minutos | Se reanudó a las 10:13. Ese día Fabián puso el webhook de SendGrid directo a la API (`00062-qhc`): un rebote pasa a «rebotado» solo a ese prospecto y el freno va por porcentaje (2 % con 100 correos o más en 7 días) y cuenta desde las 10:13 | En parte. ⏳ Revisar la lista de la campaña 5 |
+| 20-nov-2026 | El freno del dominio pausó toda la prospección a las 10:01: 5 rebotes en 7 días (2 el 17-nov y 3 el 20-nov). En total van 8 rebotes de 144 correos (5.6 %), 6 de la campaña 5 | Todas las campañas, 12 minutos | Carlos lo reanudó a las 10:13. Ese día Fabián puso el webhook de SendGrid directo a la API (`00062-qhc`): un rebote pasa a «rebotado» solo a ese prospecto y el freno va por porcentaje (2 % con 100 correos o más en 7 días) y cuenta desde las 10:13 | En parte. ⏳ Revisar la lista de la campaña 5 |
 | ⏳ | | | | |
 
 Se anota: cada aviso «[NANOBRIDGE] Falló …» de B4 y cada «CRM caído», las incidencias y procesos fallidos (§5 de
@@ -115,6 +119,7 @@ Una auditoría por día hábil las primeras semanas, y luego una por semana ([pr
 | Fecha | T1.1 | T1.2 | Controles rojos | Reporte |
 |---|---|---|---|---|
 | 20-nov | 98.6 % | 100.0 % | 0 | [calidad-2026-11-20](auditorias/calidad-2026-11-20.md) |
+| 23-nov | 98.6 % | 100.0 % | 0 | [calidad-2026-11-23](auditorias/calidad-2026-11-23.md) |
 | ⏳ | | | | |
 
 ## 9. El modelo

@@ -218,6 +218,6 @@ encender, después de la autorización. Resumen al 3-nov:
 1. ~~Certificación de audiencia por campaña~~ (hecha el 20-nov, §2). Falta que Carlos decida sobre los 53 correos de área.
 2. ~~Correos propios de cada campaña~~ (las 4 tienen sus 3 correos). ⏳ Confirmar que Carlos los aprobó.
 3. Registrar quién autorizó los topes del 10-nov (decisiones 4 y 5).
-4. ~~El primer rebote y el primer recordatorio real de PT4~~ (10 y 18-nov). Nuevo: los rebotes van en 5.6 % (8 de 144)
+4. ~~El primer rebote y el primer recordatorio real de PT4~~ (10 y 18-nov). Nuevo: los rebotes van en 5.2 % (8 de 153, al 23-nov)
    y el freno se activó el 20-nov; 6 de los 8 son de la campaña 5. Revisar esa lista.
 5. Qué se hará con lo de Promociones (§3).
