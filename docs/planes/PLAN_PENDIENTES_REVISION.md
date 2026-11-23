@@ -105,6 +105,11 @@ botón de Gmail deja al prospecto en baja.
 
 ### #4 Correo duplicado si SendGrid tarda (chico/mediano, n8n + API)
 
+**Estado 23-nov-2026:** parte de la API en la rama `envio-fallido-entregado` (`src/shared/envio-recibido.ts`):
+cualquier aviso del Event Webhook de un envío prueba que SendGrid lo recibió. Si n8n lo reporta fallido con el
+aviso ya guardado, queda enviado sin reprogramar; si el aviso llega después, vuelve a enviado y se deshace la
+reprogramación. Parte de n8n: quitar "Retry On Fail" del nodo "SendGrid · enviar" de PT1b (Fabián).
+
 **Hoy (sospecha):** si n8n reporta un envío como fallido, la API lo reprograma (`automatizacion.service.ts:923`).
 Si en realidad SendGrid sí lo mandó y solo tardó en contestar, la persona recibe el correo dos veces. El aviso
 posterior de SendGrid de que sí se entregó no corrige nada.

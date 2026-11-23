@@ -11,6 +11,7 @@ import { bloquearFreno, evaluarFreno } from "../shared/freno-dominio.js";
 import { registrarSupresion } from "../shared/supresion.js";
 import { darDeBajaPorEvento } from "../shared/supresion-por-evento.js";
 import { marcarRebotado, rebotesSuavesSeguidos } from "../shared/rebotes.js";
+import { corregirFallidoRecibido } from "../shared/envio-recibido.js";
 import { EVENTOS_BAJA_DE_PERSONA } from "../automatizacion/dto/automatizacion.schema.js";
 import { eventoSendgridSchema, loteSendgridSchema, type EventoSendgrid } from "./sendgrid-eventos.schema.js";
 
@@ -89,6 +90,10 @@ export class SendgridEventosService {
       // El freno se bloquea ANTES de guardar el evento: dos eventos que
       // llegan juntos se forman desde aquí (ver bloquearFreno).
       if (cuentaParaElFreno) await bloquearFreno(tx);
+      // El envío se bloquea ANTES de guardar el evento, igual que el "fallido"
+      // de n8n (shared/envio-recibido.ts): así no se traban entre ellos.
+      const envioId = prospectoId !== null ? ev.envio_id ?? null : null;
+      if (envioId !== null) await tx.select({ id: envios.id }).from(envios).where(eq(envios.id, envioId)).for("update");
 
       let id: number;
       try {
@@ -101,7 +106,7 @@ export class SendgridEventosService {
           clasificacion: recortar(ev.bounce_classification, 60),
           correo: correo ?? recortar(ev.email, 512),
           prospectoId,
-          envioId: prospectoId !== null ? ev.envio_id ?? null : null,
+          envioId,
           ocurrioEn: new Date(ev.timestamp * 1000),
           resultado: "ignorado"
         });
@@ -110,6 +115,9 @@ export class SendgridEventosService {
         if (isDuplicateEntry(error)) return false;
         throw error;
       }
+
+      // Un envío que n8n reportó fallido pero que SendGrid sí recibió (#4).
+      if (envioId !== null) await corregirFallidoRecibido(tx, envioId, ev.event);
 
       const resultado = await this.aplicar(tx, ev, clase, prospectoId, correo);
       if (resultado !== "ignorado") await tx.update(eventosSendgrid).set({ resultado }).where(eq(eventosSendgrid.id, id));
