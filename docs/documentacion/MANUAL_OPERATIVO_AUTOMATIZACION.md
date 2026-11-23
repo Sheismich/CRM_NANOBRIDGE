@@ -27,6 +27,8 @@ no entrega nada a PT1 ni a PT4: corren, no mandan nada, y todo sale el siguiente
 | Cada lote de eventos de SendGrid | **Event Webhook** (desde el 20-nov) | API | Un rebote pasa **solo ese** prospecto a «rebotado» (duro, o 3 suaves seguidos) y el correo duro a supresión; una queja o baja da de baja a la persona. Cada evento se guarda una vez en `eventos_sendgrid` |
 | Con cada queja o rebote | **Freno del dominio** | API | Con 2 quejas en 7 días, o con 2 % de rebotes si salieron al menos 100 correos en 7 días (con menos, 5 rebotes), pausa la prospección y avisa a administradores y supervisores. Solo cuenta lo que llega por el webhook |
 | Cada 5 minutos | **Revisión de que la API responde** | Google Cloud Monitoring | Si la API no responde 5 minutos seguidos, manda un correo; otro cuando se recupera |
+| Con cada error 500 | **Aviso de errores de la API** (desde el 23-nov) | Google Cloud Monitoring | Con 3 o más errores 5xx en 10 minutos manda un correo «CRM: la API respondió errores 500» |
+| 11:00, lunes a viernes | **Revisión de que n8n corrió** (desde el 24-nov) | Google Cloud Scheduler → API | Si PT4 o PT1a no corrieron hoy, o hay envíos sin confirmar de más de 1 h, avisa por correo a administradores y supervisores |
 
 Desde el 6-nov-2026 `MODO_PRUEBAS` está apagado: PT4 y PT1a corren solos con estos horarios.
 

@@ -702,6 +702,20 @@ recorre completa. El orden de los pendientes vive en `PLAN_N8N_DEFINITIVO.md`
 3. Si los registros hablan de la base: Cloud SQL → `nanobridge-db` (que esté
    RUNNABLE; en Operaciones, si hay mantenimiento). Respaldos y recuperación en §9.
 
+### Aviso de errores 500 (Cloud Monitoring, 23-nov-2026)
+
+Antes un 500 solo quedaba en el log (`src/shared/http-exception.filter.ts`) y nadie se enteraba (#8 de la revisión del 20-nov).
+
+| Qué | Valor |
+|---|---|
+| Métrica de logs | `nanobridge_api_errores_5xx`: peticiones a `nanobridge-api` con `httpRequest.status>=500`, **sin** `/health` (sus 503 ya los cubre la alerta de arriba) |
+| Alerta | «CRM: la API respondió errores 500»: más de 2 en 10 minutos (es decir, 3 o más). Se cierra sola a los 30 min sin errores |
+| A quién avisa | Los mismos dos canales de correo que «CRM caído» (`pasante.tics001@` y `pasante.tics002@`): al cierre se cambian juntos |
+
+Probado el 23-nov: el filtro encuentra los 500 reales del 17-nov a las 12:24 (6 en el mismo segundo, por las
+conexiones que MySQL había cortado), que con esta regla habrían avisado. Para probar la alerta se escribieron a mano
+3 registros marcados `/prueba-alerta-500` (log `prueba-alerta-500`, no son errores reales).
+
 ### Aviso si n8n no corrió (Cloud Scheduler, 23-nov-2026)
 
 Si n8n se para, PT5 tampoco corre, así que este aviso no puede salir de n8n. Un Cloud Scheduler de Google

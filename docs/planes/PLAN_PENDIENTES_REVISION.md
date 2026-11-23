@@ -18,7 +18,7 @@ Tamaño: **chico** = medio día o menos, **mediano** = 1 a 2 días, **grande** =
 | 11 | Rebotes suaves y el freno | Fabián (solo vigilar) | - | - |
 | 1 | ✅ Detener seguimiento de quien ya habla con ventas (23-nov, `00065-2pj`, PR #7) | Mich (API + front) | mediano | - |
 | 5 | Repo público | Mich (decide) | chico | - |
-| 8 | Aviso de errores 500 | Mich (Google Cloud) | chico | - |
+| 8 | ✅ Aviso de errores 500 (23-nov, métrica `nanobridge_api_errores_5xx` y alerta en Cloud Monitoring) | Mich (Google Cloud) | chico | - |
 | 9 | Borrar datos de una persona (ARCO) | Mich (API + front) | mediano | - |
 | 10 | Deploy automático con Cloud Build | Mich (Google Cloud) | mediano | acceso a GCP |
 | 15 | Pruebas que faltan | Mich (+ ejemplos de n8n de Fabián) | mediano | #7 |
@@ -207,7 +207,7 @@ historial (revisado el 4-nov).
 - Si se queda público, borrarlos también del historial es reescribirlo (`git filter-repo` + force push). Eso es
   delicado y hay que coordinarlo con Fabián, porque los dos tienen copias.
 
-### #8 Aviso de errores 500 (chico, Google Cloud)
+### #8 Aviso de errores 500 (chico, Google Cloud) · ✅ 23-nov-2026 (RUNBOOK §11)
 
 **Hoy:** un error 500 solo se escribe en el log (`src/shared/http-exception.filter.ts:82`). Nadie se entera.
 
