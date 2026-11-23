@@ -3,7 +3,7 @@ import type { DrizzleDb, DrizzleTx } from "../database/drizzle.constants.js";
 import { contactos, empresas, envios, parametrosAutomatizacion, plantillasCorreo, prospectos } from "../database/schema.js";
 import { HttpError } from "../shared/http-error.js";
 import { armarCorreo, type CorreoArmado, type DatosPlantilla } from "../shared/plantillas.js";
-import { urlDeBaja } from "../shared/link-baja.js";
+import { cabecerasDeBaja, urlDeBaja } from "../shared/link-baja.js";
 
 export const CLAVE_PIE_CORREO = "pie_correo";
 
@@ -44,11 +44,18 @@ export async function elegirPlantilla(db: Db, campanaId: number | null, giro: st
   return plantilla;
 }
 
+/** Un correo de prospección: el armado más los encabezados de baja (shared/link-baja.ts) que PT1b le pasa a SendGrid. */
+export type CorreoDeProspeccion = CorreoArmado & { cabeceras: Record<string, string> };
+
+function deProspeccion(plantilla: { asunto: string; cuerpo: string }, datos: DatosPlantilla, pie: string, prospectoId: number): CorreoDeProspeccion {
+  return { ...armarCorreo(plantilla, datos, pie, { linkDeBaja: urlDeBaja(prospectoId) }), cabeceras: cabecerasDeBaja(prospectoId) };
+}
+
 /** El correo del contacto número `numeroEnCiclo` (1-3) de este prospecto, y qué plantilla se usó. */
-export async function correoParaEnvio(db: Db, prospectoId: number, numeroEnCiclo: number): Promise<{ plantillaId: number; correo: CorreoArmado }> {
+export async function correoParaEnvio(db: Db, prospectoId: number, numeroEnCiclo: number): Promise<{ plantillaId: number; correo: CorreoDeProspeccion }> {
   const datos = await datosDelProspecto(db, prospectoId);
   const plantilla = await elegirPlantilla(db, datos.campanaId, datos.giro, Math.min(Math.max(numeroEnCiclo, 1), 3));
-  return { plantillaId: plantilla.id, correo: armarCorreo(plantilla, datos, await leerPie(db), { linkDeBaja: urlDeBaja(prospectoId) }) };
+  return { plantillaId: plantilla.id, correo: deProspeccion(plantilla, datos, await leerPie(db), prospectoId) };
 }
 
 /**
@@ -57,11 +64,11 @@ export async function correoParaEnvio(db: Db, prospectoId: number, numeroEnCiclo
  * envíos de antes de la 033 no tienen plantilla, y la de una campaña se pudo
  * quitar después: usan la que hoy toca a su campaña y número de contacto.
  */
-export async function correoDeEnvio(db: Db, envioId: number): Promise<CorreoArmado> {
+export async function correoDeEnvio(db: Db, envioId: number): Promise<CorreoDeProspeccion> {
   const [envio] = await db.select({ prospectoId: envios.prospectoId, plantillaId: envios.plantillaId, numeroContacto: envios.numeroContacto }).from(envios).where(eq(envios.id, envioId)).limit(1);
   if (!envio) throw new HttpError(404, "Envío no encontrado");
   const datos = await datosDelProspecto(db, envio.prospectoId);
   const [guardada] = envio.plantillaId != null ? await db.select().from(plantillasCorreo).where(eq(plantillasCorreo.id, envio.plantillaId)).limit(1) : [];
   const plantilla = guardada ?? (await elegirPlantilla(db, datos.campanaId, null, Math.min(envio.numeroContacto, 3)));
-  return armarCorreo(plantilla, datos, await leerPie(db), { linkDeBaja: urlDeBaja(envio.prospectoId) });
+  return deProspeccion(plantilla, datos, await leerPie(db), envio.prospectoId);
 }
