@@ -16,7 +16,7 @@ Tamaño: **chico** = medio día o menos, **mediano** = 1 a 2 días, **grande** =
 | 4 | Correo duplicado si SendGrid tarda | Fabián (n8n + API) | chico/mediano | #7 |
 | 3 | Recordatorio perdido si PT4 truena | Fabián | mediano | - |
 | 11 | Rebotes suaves y el freno | Fabián (solo vigilar) | - | - |
-| 1 | Detener seguimiento de quien ya habla con ventas | Mich (API + front) | mediano | - |
+| 1 | ✅ Detener seguimiento de quien ya habla con ventas (23-nov, `00065-2pj`, PR #7) | Mich (API + front) | mediano | - |
 | 5 | Repo público | Mich (decide) | chico | - |
 | 8 | Aviso de errores 500 | Mich (Google Cloud) | chico | - |
 | 9 | Borrar datos de una persona (ARCO) | Mich (API + front) | mediano | - |
@@ -151,7 +151,7 @@ el freno pausa en falso, se revisa ahí.
 
 ## Mich
 
-### #1 Detener seguimiento de quien ya habla con ventas (mediano, API + front)
+### #1 Detener seguimiento de quien ya habla con ventas (mediano, API + front) · ✅ 23-nov-2026, `00065-2pj`, PR #7
 
 **Hoy:** los recordatorios se frenan solo si la persona contesta al correo de la campaña o si alguien la
 clasifica. Si habla por teléfono, por WhatsApp o desde otro correo, le siguen llegando. Crear una oportunidad
