@@ -1,4 +1,6 @@
-import { Controller, HttpCode, Logger, Param, Post, UseGuards } from "@nestjs/common";
+import { Controller, HttpCode, Inject, Logger, Param, Post, UseGuards } from "@nestjs/common";
+import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
+import { revisarN8n } from "../shared/latido-n8n.js";
 import { ApiKeyGuard } from "../auth/guards/api-key.guard.js";
 import { AuthService } from "../auth/auth.service.js";
 import { TareasService } from "../tareas/tareas.service.js";
@@ -30,7 +32,8 @@ export class JobsController {
     reportesService: ReportesService,
     prospectosService: ProspectosService,
     cotizacionesService: CotizacionesService,
-    notificacionesService: NotificacionesService
+    notificacionesService: NotificacionesService,
+    @Inject(DRIZZLE) db: DrizzleDb
   ) {
     this.trabajos = {
       // Tareas abiertas con su fecha límite vencida (p. ej. "Contactar
@@ -54,6 +57,10 @@ export class JobsController {
         await reportesService.calcularMetricasDelDia(fecha);
         return { procesados: 1, fecha };
       },
+      // Este no lo llama n8n sino un Cloud Scheduler de Google a las 11:00 de
+      // lunes a viernes: avisa si PT4 o PT1a no corrieron hoy (#2 de la
+      // revisión, 23-nov-2026; ver shared/latido-n8n.ts).
+      "revisar-n8n": () => revisarN8n(db),
       // Borradores de importación vencidos + contadores viejos de login +
       // cotizaciones enviadas cuyo cierre ya pasó (12-oct-2026; va aquí y no
       // en un trabajo propio para no tener que tocar PT5 en n8n).

@@ -1,9 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq, isNotNull, lt, ne, sql } from "drizzle-orm";
+import { and, ne, sql } from "drizzle-orm";
 import { DRIZZLE, type DrizzleDb } from "../database/drizzle.constants.js";
 import { envios } from "../database/schema.js";
 import { diaSiguiente, fechaMx, inicioDelDiaMxSql } from "../shared/dia-habil.js";
 import { estadoFreno } from "../shared/freno-dominio.js";
+import { contarEnviosSinConfirmar } from "../shared/latido-n8n.js";
 import { ProblemasService } from "./problemas.service.js";
 
 // "Estado del sistema" de Administración (12-oct-2026; puntos 38 y 54). Solo
@@ -48,9 +49,8 @@ export class SaludService {
     const [[correos], [sinConfirmar], freno, grupos] = await Promise.all([
       this.db.select({ n: sql<number>`COUNT(*)`, ultimo: sql<Date | string | null>`MAX(${envios.enviadoEn})` }).from(envios)
         .where(and(ne(envios.estado, "fallido"), sql`${envios.enviadoEn} >= ${inicioDelDiaMxSql(hoy)}`, sql`${envios.enviadoEn} < ${inicioDelDiaMxSql(diaSiguiente(hoy))}`)),
-      // destinatario NULL = fila de antes de la 039: nadie la va a confirmar.
-      this.db.select({ n: sql<number>`COUNT(*)` }).from(envios)
-        .where(and(eq(envios.estado, "registrado"), isNotNull(envios.destinatario), lt(envios.enviadoEn, sql`CURRENT_TIMESTAMP - INTERVAL 1 HOUR`))),
+      // La misma cuenta que usa el aviso de n8n sin correr.
+      contarEnviosSinConfirmar(this.db).then((n) => [{ n }]),
       estadoFreno(this.db),
       this.problemasService.grupos()
     ]);

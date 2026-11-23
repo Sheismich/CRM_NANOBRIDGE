@@ -99,14 +99,19 @@ export function esFeriadoMx(fecha: string): boolean {
   return fecha === nesimoLunes(anio, 2, 1) || fecha === nesimoLunes(anio, 3, 3) || fecha === nesimoLunes(anio, 11, 3);
 }
 
-// Avanza `fecha` (de calendarioMx) `dias` días hábiles: brinca sábado,
-// domingo y feriados (esFeriadoMx).
+// `fecha` (AAAA-MM-DD) es día hábil: ni sábado, ni domingo, ni feriado.
+export function esDiaHabilMx(fecha: string): boolean {
+  const diaSemana = new Date(`${fecha}T00:00:00Z`).getUTCDay();
+  return diaSemana !== 0 && diaSemana !== 6 && !esFeriadoMx(fecha);
+}
+
+// Avanza `fecha` (de calendarioMx) `dias` días hábiles (esDiaHabilMx).
 function avanzarDiasHabiles(fecha: Date, dias: number): Date {
   const result = new Date(fecha);
   let sumados = 0;
   while (sumados < dias) {
     result.setUTCDate(result.getUTCDate() + 1);
-    if (result.getUTCDay() !== 0 && result.getUTCDay() !== 6 && !esFeriadoMx(result.toISOString().slice(0, 10))) sumados++;
+    if (esDiaHabilMx(result.toISOString().slice(0, 10))) sumados++;
   }
   return result;
 }
