@@ -9,7 +9,7 @@
 // Las que no pasan se siguen clasificando a mano, igual que siempre.
 // ============================================================
 const IA_MODO = "abierto";
-const PERMITIDOS = ["fabiandelirardz@gmail.com", "fabiannawal502@gmail.com"];
+const PERMITIDOS = ["<buzon-de-pruebas>@gmail.com", "<otro-buzon-de-pruebas>@gmail.com"];
 
 const d = $input.first().json;
 

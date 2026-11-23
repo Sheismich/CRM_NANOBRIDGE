@@ -40,7 +40,7 @@ prospecto como *excluido* para siempre. El correo no sale y esa dirección
 ya no sirve para pruebas.
 
 - **Tu Gmail:** agrega una etiqueta nueva, por ejemplo
-  `fabiandelirardz+prueba6@gmail.com`. Llega a tu misma bandeja, pero para
+  `<buzon-de-pruebas>+prueba6@gmail.com`. Llega a tu misma bandeja, pero para
   el sistema es una persona distinta. Revisa abajo el
   [registro de direcciones usadas](#registro-de-direcciones-usadas).
 - **Otra persona:** su correo tal cual, con su permiso y solo si nunca se
@@ -155,14 +155,14 @@ la base de datos**: al final se limpian cerrando sus ventanas.
 
 | Dirección | Fecha | Notas |
 |---|---|---|
-| fabiandelirardz+prueba1@gmail.com | 29-sep-2026 | prospecto 26 |
-| fabiandelirardz+prueba2@gmail.com | 29-sep-2026 | prospecto 27 |
-| fabiandelirardz+prueba3@gmail.com | 29-sep-2026 | prospecto 28; se gastó en sandbox (200) |
-| fabiandelirardz+prueba4@gmail.com | 29-sep-2026 | prospecto 29, envío 14; contestado y dado de baja (suprimido) |
+| <buzon-de-pruebas>+prueba1@gmail.com | 29-sep-2026 | prospecto 26 |
+| <buzon-de-pruebas>+prueba2@gmail.com | 29-sep-2026 | prospecto 27 |
+| <buzon-de-pruebas>+prueba3@gmail.com | 29-sep-2026 | prospecto 28; se gastó en sandbox (200) |
+| <buzon-de-pruebas>+prueba4@gmail.com | 29-sep-2026 | prospecto 29, envío 14; contestado y dado de baja (suprimido) |
 | (demo "Prospecto Nawal") | 30-sep-2026 | envío 15; contestado ("Me interesa") |
-| fabiandelirardz+prueba6@gmail.com | 1-oct-2026 | "Empresa Prueba Seis"; contestado, clasificado interesado → tarea "Contactar prospecto interesado" |
-| fabiandelirardz+prueba8@gmail.com | 8-oct-2026 | prospecto 32; sin giro ni tamaño → `excluido`, no se mandó |
-| fabiandelirardz+prueba9@gmail.com | 8-oct-2026 | "Empresa Prueba Nueve"; correo 1 enviado, sin baja (sigue activo) |
-| fabiandelirardz+prueba10@gmail.com | 8-oct-2026 | prospecto 34, envío 21; dado de baja con el link del pie |
-| fabiandelirardz+prueba11@gmail.com | 8-oct-2026 | prospecto 35, envío 22; dado de baja con el link del pie (prueba de baja) |
+| <buzon-de-pruebas>+prueba6@gmail.com | 1-oct-2026 | "Empresa Prueba Seis"; contestado, clasificado interesado → tarea "Contactar prospecto interesado" |
+| <buzon-de-pruebas>+prueba8@gmail.com | 8-oct-2026 | prospecto 32; sin giro ni tamaño → `excluido`, no se mandó |
+| <buzon-de-pruebas>+prueba9@gmail.com | 8-oct-2026 | "Empresa Prueba Nueve"; correo 1 enviado, sin baja (sigue activo) |
+| <buzon-de-pruebas>+prueba10@gmail.com | 8-oct-2026 | prospecto 34, envío 21; dado de baja con el link del pie |
+| <buzon-de-pruebas>+prueba11@gmail.com | 8-oct-2026 | prospecto 35, envío 22; dado de baja con el link del pie (prueba de baja) |
 | | | |

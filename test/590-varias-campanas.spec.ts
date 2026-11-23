@@ -133,7 +133,7 @@ describe("una persona en varias campañas", () => {
       expect((await verificar(enMaquinaria)).body.puede_enviar).toBe(true);
     });
 
-    // Caso DTC (18-nov-2026): en la lista decía "lugar 1" a uno que la API no
+    // Caso del 18-nov (18-nov-2026): en la lista decía "lugar 1" a uno que la API no
     // suelta porque su serie de otra campaña sigue en curso. Ahora no tiene
     // lugar, dice qué campaña espera y no les quita lugar a los demás.
     it("el que espera la serie de otra campaña no tiene lugar en la fila y dice qué campaña espera", async () => {

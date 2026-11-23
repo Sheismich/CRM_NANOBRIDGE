@@ -57,7 +57,7 @@ const tieneEnvios = () => sql`EXISTS (SELECT 1 FROM ${envios} WHERE ${envios.pro
 // fila o si ya lo tomaron. La vigencia de la campaña la arma quien llama con
 // vigenciaCampana (activa / en_espera / inactiva = "campaña terminada").
 //
-// fila_espera (18-nov-2026, caso DTC): la persona tiene la serie de otra
+// fila_espera (18-nov-2026, caso del 18-nov): la persona tiene la serie de otra
 // campaña en curso (o le interesó otra), así que la fila no la suelta aunque
 // le toque: no tiene lugar, y tampoco cuenta para el lugar de los demás.
 // fila_espera_campana = el nombre de esa otra campaña.

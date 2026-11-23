@@ -699,7 +699,7 @@ para que lo sepas si tocas estas pantallas:
 
 ## "Lugar 1" que no salía: espera a su otra campaña (Fabián, 18 nov 2026)
 
-Caso DTC: la misma persona estaba en la fila de una campaña con la serie de otra en curso. La lista decía
+Caso del 18-nov: la misma persona estaba en la fila de una campaña con la serie de otra en curso. La lista decía
 "lugar 1", pero la API no la suelta hasta que termina la otra serie (regla del 9-nov). Ya hecho por Fabián
 (API + front, sin migración); para que lo sepas si tocas Prospectos:
 

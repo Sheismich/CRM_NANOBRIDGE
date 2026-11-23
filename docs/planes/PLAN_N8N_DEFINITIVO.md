@@ -693,7 +693,7 @@ Decisiones de diseño (`/grill-me`, 23-sep-2026):
 4. **Aviso por correo (7-oct-2026, publicado y probado):** en paralelo al registro en la API,
    Code `armar correo de error` → HTTP `avisar por correo` (`POST /v3/mail/send`, credencial
    "SendGrid account", 3×5 s, On Error = Continue). Va a `DESTINOS` (hoy
-   `fabiandelirardz@gmail.com`; cambiarlo antes de que termine la pasantía), desde
+   `<buzon-de-pruebas>@gmail.com`; cambiarlo antes de que termine la pasantía), desde
    `hola@contacto.nano-bridge-mex.com` como "NANOBRIDGE alertas", asunto
    `[NANOBRIDGE] Falló <workflow> en <nodo>`, solo texto y sin rastreo ni link de baja.
    "registrar error en API" también tiene On Error = Continue: n8n corre las dos ramas una tras

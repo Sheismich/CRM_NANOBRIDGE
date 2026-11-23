@@ -201,6 +201,9 @@ historial (revisado el 4-nov).
 - Decidir si se hace privado. Si sí, revisar antes los minutos de GitHub Actions: un repo privado gratis tiene
   2,000 al mes y el CI puede tardar hasta 60 minutos por corrida.
 - Pase lo que pase, quitar de los docs los nombres de prospectos reales y los Gmail personales.
+  **Hecho el 23-nov (Mich):** los Gmail de prueba de Fabián, el de los diseños y los nombres de 4 empresas prospecto
+  se cambiaron por marcadores en los docs, los diseños, la copia de PT2a y comentarios del código. Siguen en el
+  historial de git. Queda por decidir si el repo se hace privado.
 - Si se queda público, borrarlos también del historial es reescribirlo (`git filter-repo` + force push). Eso es
   delicado y hay que coordinarlo con Fabián, porque los dos tienen copias.
 

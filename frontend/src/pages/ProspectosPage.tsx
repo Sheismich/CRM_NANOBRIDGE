@@ -564,7 +564,7 @@ function textoFila(fila: DatosFila & { estado: string }): { texto: string; alert
   if (fila.fila_tomado_en) return { texto: "Ya lo tomó la automatización", alerta: false };
   if (fila.campana_vigencia === "inactiva") return { texto: "Campaña terminada", alerta: true };
   if (fila.campana_vigencia === "en_espera") return { texto: "Esperando a la campaña", alerta: false };
-  // Caso DTC (18-nov-2026): la fila no lo suelta hasta que termine su otra campaña.
+  // Caso del 18-nov (18-nov-2026): la fila no lo suelta hasta que termine su otra campaña.
   if (fila.fila_espera === "serie_en_curso") return { texto: `Espera a que termine ${fila.fila_espera_campana ? `«${fila.fila_espera_campana}»` : "su otra campaña"}`, alerta: false };
   if (fila.fila_espera === "interesado_en_otra_campana") return { texto: "Le interesó otra campaña: no sale", alerta: true };
   const desde = fila.fila_desde ? `Desde ${formatoDiaMes.format(fechaUtc(fila.fila_desde))}` : null;
