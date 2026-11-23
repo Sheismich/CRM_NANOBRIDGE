@@ -40,6 +40,13 @@ export const CODIGO_OTRA_CAMPANA_EN_CURSO = "OTRA_CAMPANA_EN_CURSO";
 // ya avisó por el Error Workflow.
 const MAX_INTENTOS_ENVIO = 3;
 
+// Una ventana que PT4 recibió y de la que no llegó resultado en este tiempo se
+// vuelve a abrir, una sola vez (ver retomarRecordatoriosSinResultado). PT4
+// corre una vez al día: con 6 horas la retoma la corrida del día siguiente, o
+// una corrida a mano el mismo día.
+const HORAS_PARA_RETOMAR_RECORDATORIO = 6;
+const MAX_RETOMAS_RECORDATORIO = 1;
+
 // tipo fijo de incidencias.tipo para todo lo que reporta el Error Workflow
 // global de n8n (B4) — junto con execution_id es la pareja que usa el
 // UNIQUE uq_incidencias_execution_tipo (004_scoring_e_incidencias.sql)
@@ -960,8 +967,9 @@ export class AutomatizacionService {
   // cada prospecto en espera. Semántica de "reclamar": las filas devueltas
   // se marcan vencida en la misma transacción, para que un segundo poll
   // concurrente (o el siguiente ciclo) no las vuelva a traer. Si n8n falla
-  // después de reclamarlas, el Error Workflow (B4) es la red de
-  // recuperación, no un reintento automático de este endpoint.
+  // después de reclamarlas, el Error Workflow (B4) avisa, y desde el 23-nov
+  // las que no llegaron a registrarse se retoman una vez
+  // (retomarRecordatoriosSinResultado).
   // es_ultimo_contacto=true (la PERSONA ya llegó a 3 contactos en su ciclo
   // actual) le dice a n8n que debe marcar inactividad (Estado de
   // prospecto) en vez de mandar otro recordatorio. Si la persona tiene un
@@ -978,6 +986,10 @@ export class AutomatizacionService {
     // En pausa tampoco: siguen abiertas y salen al reanudar.
     if (esFeriadoMx(hoy) || (await leerFreno(this.db)).pausado) return { data: [], omitidas: [], tope_diario_alcanzado: false };
     return this.db.transaction(async (tx) => {
+      // Las que se entregaron y no llegó su resultado se vuelven a abrir
+      // antes de elegir: salen en esta misma corrida (#3, ver abajo).
+      await this.retomarRecordatoriosSinResultado(tx);
+
       // Tope diario de correos (bloque "antes de encender", 5-oct-2026): solo
       // se entregan los recordatorios que caben hoy. Los que no caben NO se
       // reclaman: su ventana sigue abierta y salen otro día. Así, al
@@ -1081,8 +1093,54 @@ export class AutomatizacionService {
       if (reclamadas.length > 0) {
         await tx.update(envios).set({ ventanaEstado: "vencida" }).where(inArray(envios.id, reclamadas));
       }
+      // Solo las que de verdad se le entregan a n8n: las omitidas y las viejas
+      // se cancelaron a propósito y nunca se retoman.
+      if (data.length > 0) {
+        await tx.update(envios).set({ ventanaEntregadaEn: sql`CURRENT_TIMESTAMP` }).where(inArray(envios.id, data.map((f) => f.envio_id)));
+      }
       return { data, omitidas, tope_diario_alcanzado: correosQueSalen >= cupo };
     });
+  }
+
+  // #3 de la revisión del 20-nov-2026 (23-nov-2026): la ventana se marca
+  // vencida al entregársela a PT4. Si PT4 truena antes de registrar el envío,
+  // el recordatorio se perdía y la persona se quedaba en "serie en curso" 6
+  // meses. Una entregada hace más de HORAS_PARA_RETOMAR_RECORDATORIO sin su
+  // resultado se vuelve a abrir:
+  // - recordatorio normal: no hay envío con execution_id
+  //   "recordatorio-<ventana>" (así registra PT4; el reintento usa el mismo, así
+  //   que retomarla no puede duplicar un correo ya registrado);
+  // - último contacto: el prospecto no se cerró (PT4 lo marca inactivo).
+  // Un prospecto ya cerrado (contestó, baja...) no se retoma. Solo una vez
+  // (MAX_RETOMAS_RECORDATORIO): PT4 a veces la salta a propósito sin avisar
+  // (sin campaña, 409 de la API) y se repetiría todos los días.
+  private async retomarRecordatoriosSinResultado(tx: DrizzleTx) {
+    const limite = new Date(Date.now() - HORAS_PARA_RETOMAR_RECORDATORIO * 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+    const cerrados = sql.join(ESTADOS_PROSPECTO_CERRADO.map((e) => sql`${e}`), sql`, `);
+    const sinResultado = await tx
+      .select({ id: envios.id, prospectoId: envios.prospectoId })
+      .from(envios)
+      .where(and(
+        eq(envios.ventanaEstado, "vencida"),
+        lt(envios.ventanaEntregadaEn, sql`${limite}`),
+        lt(envios.ventanaRetomas, MAX_RETOMAS_RECORDATORIO),
+        sql`NOT EXISTS (SELECT 1 FROM envios r WHERE r.execution_id = CONCAT('recordatorio-', ${envios.id}))`,
+        sql`EXISTS (SELECT 1 FROM prospectos p WHERE p.id = ${envios.prospectoId} AND p.estado NOT IN (${cerrados}))`
+      ))
+      .for("update", { skipLocked: true });
+    if (sinResultado.length === 0) return;
+
+    const ids = sinResultado.map((e) => e.id);
+    await tx.update(envios)
+      .set({ ventanaEstado: "abierta", ventanaEntregadaEn: null, ventanaRetomas: sql`${envios.ventanaRetomas} + 1` })
+      .where(and(inArray(envios.id, ids), eq(envios.ventanaEstado, "vencida")));
+    await tx.insert(auditoria).values(sinResultado.map((e) => ({
+      usuarioId: null,
+      entidad: "envio",
+      entidadId: e.id,
+      accion: "retomar_recordatorio",
+      despues: { prospecto_id: e.prospectoId, motivo: `PT4 la recibió hace más de ${HORAS_PARA_RETOMAR_RECORDATORIO} horas y no llegó su resultado` }
+    })));
   }
 
   // A quién va el recordatorio de una ventana vencida, o por qué no se le
