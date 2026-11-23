@@ -19,7 +19,7 @@ Tamaño: **chico** = medio día o menos, **mediano** = 1 a 2 días, **grande** =
 | 1 | ✅ Detener seguimiento de quien ya habla con ventas (23-nov, `00065-2pj`, PR #7) | Mich (API + front) | mediano | - |
 | 5 | Repo público | Mich (decide) | chico | - |
 | 8 | ✅ Aviso de errores 500 (23-nov, métrica `nanobridge_api_errores_5xx` y alerta en Cloud Monitoring) | Mich (Google Cloud) | chico | - |
-| 9 | Borrar datos de una persona (ARCO) | Mich (API + front) | mediano | - |
+| 9 | ✅ Borrar datos de una persona (ARCO) (23-nov, `00070-mgp`, PR #11) | Mich (API + front) | mediano | - |
 | 10 | Deploy automático con Cloud Build | Mich (Google Cloud) | mediano | acceso a GCP |
 | 15 | Pruebas que faltan | Mich (+ ejemplos de n8n de Fabián) | mediano | #7 |
 | 14 | Tipos del front generados, no copiados | Mich (front) | mediano | después de #1 y #9 |
@@ -238,7 +238,7 @@ Actualizar el RUNBOOK §6 con el paso nuevo. Si a Mich le falta acceso al proyec
 
 **Listo cuando:** un tag de prueba deja la revisión nueva en Cloud Run con las mismas variables de antes.
 
-### #9 Borrar datos de una persona, derecho ARCO (mediano, API + front)
+### #9 Borrar datos de una persona, derecho ARCO (mediano, API + front) · ✅ 23-nov-2026, `00070-mgp`, PR #11
 
 **Hoy:** "eliminar" una persona solo la desactiva y marca sus correos como obsoletos
 (`src/crm/empresas.service.ts:570`). Sus datos siguen en la base y en la auditoría. Si alguien pide que se borren
