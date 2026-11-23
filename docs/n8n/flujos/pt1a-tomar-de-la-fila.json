@@ -1,0 +1,145 @@
+{
+  "name": "PT1a. tomar de la fila",
+  "id": "mYFI6MsAUcuvsDte",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "81a899b6-5c29-4ab5-9cde-aec245dd6281",
+      "name": "Lunes a viernes 10:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/prospectos/fila/tomar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ execution_id: $execution.id, limite: 75 }) }}",
+        "options": {}
+      },
+      "id": "f00b450e-e50a-4e94-84d3-bc48bc32ebd5",
+      "name": "Tomar de la fila",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "c84cdf81-2fea-4447-a272-561079c1dac8",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "YnDrrDHOC5HJlYtv",
+          "cachedResultName": "PT1. ingesta y scoring"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "6619296f-c025-4bda-9935-638b52682481",
+      "name": "Procesar en PT1",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        672,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Lunes a viernes 10:00": {
+      "main": [
+        [
+          {
+            "node": "Tomar de la fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tomar de la fila": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Procesar en PT1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "pL9iXvgOB7cSgTNJ",
+    "timezone": "America/Mexico_City",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "_respaldo": {
+    "exportado_de_n8n": "2026-11-17T16:02:19.166Z",
+    "publicado_en": "2026-11-23T16:33:23.260Z",
+    "version_publicada": "4c54f265-980c-4206-b97d-dbf24d2e0a1e",
+    "version_del_editor": "4c54f265-980c-4206-b97d-dbf24d2e0a1e",
+    "editor_igual_a_publicado": true,
+    "credenciales_usadas": [
+      "Nanobridge-ApiKey (httpHeaderAuth)"
+    ]
+  }
+}

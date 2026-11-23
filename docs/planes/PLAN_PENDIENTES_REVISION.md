@@ -67,7 +67,11 @@ si n8n se cae, el aviso se cae con él.
 **Listo cuando:** con PT4 apagado un día hábil, a las 11:00 llega el correo. Con todo corriendo, no llega nada.
 En feriado no llega nada.
 
-### #7 Respaldo de los flujos de n8n (chico, n8n)
+### #7 Respaldo de los flujos de n8n (chico, n8n) ✅ 23-nov-2026
+
+Hecho: los 9 flujos activos en `docs/n8n/flujos/`, limpios, con README (interruptores, horarios, cómo exportar e
+importar) y el script `limpiar-n8n.mjs`. No había llaves en ningún flujo. Pendiente aparte: el respaldo automático
+semanal a una carpeta privada del Drive de la empresa (opcional).
 
 **Hoy:** `docs/n8n/` solo tiene prompts. Si se borra un flujo, no hay copia. `MODO_PRUEBAS` e `IA_MODO` solo
 existen en n8n.
@@ -108,6 +112,11 @@ posterior de SendGrid de que sí se entregó no corrige nada.
 **Qué hacer:**
 1. n8n (con el JSON del #7): ver qué hace PT1b cuando SendGrid tarda o da error de red. ¿Reporta "fallido"?
    Si nunca lo hace, el pendiente se cierra aquí.
+   **Visto el 23-nov en el export:** el nodo "SendGrid · enviar" tiene `retryOnFail` con 3 intentos y 30 s de
+   espera, y si los 3 fallan va a "Confirmar fallido". O sea: si SendGrid sí aceptó el correo pero tardó en
+   contestar, **n8n lo vuelve a mandar él mismo** (hasta 3 veces), además de la reprogramación de la API. El
+   arreglo empieza en n8n: quitar el reintento de ese nodo, o dejarlo solo para errores en que SendGrid seguro no
+   lo recibió.
 2. Si sí lo hace, en la API: cuando llega un `processed` o `delivered` de SendGrid con el `envio_id` de un envío
    fallido, regresarlo a "enviado" y deshacer la reprogramación (cerrar la ventana que se reabrió, o sacarlo de
    la fila si era el primero). Queda en auditoría.

@@ -1,0 +1,275 @@
+{
+  "name": "PT5. trabajos diarios",
+  "id": "4IQIBLu0PqQyJEQ8",
+  "active": true,
+  "nodes": [
+    {
+      "id": "6764ced2-7dfd-40f4-8901-35ce7d6f03f2",
+      "name": "Cada día 7 am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "16d0a4d3-cd44-4c00-8fb5-e989da1cabe7",
+      "name": "Job sla-tareas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/jobs/sla-tareas",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "463970ed-76eb-452d-8a13-6954e6a67f32",
+      "name": "Job documentos-pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/jobs/documentos-pendientes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "87e054bc-d2cd-47ec-9c29-8618b8973c4c",
+      "name": "Job metricas-diarias",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/jobs/metricas-diarias",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "55f95b55-f39a-4b49-a414-2aff39464793",
+      "name": "Job limpiar-borradores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/jobs/limpiar-borradores",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "d1d6c457-29bd-45dd-b443-7ccc967eabea",
+      "name": "Cada hora: escalar interesados",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        192
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9-18 * * 1-5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e49394ad-3fab-4a86-9e70-e2f77bc8d5c7",
+      "name": "Escalar interesados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        192
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/jobs/escalar-interesados",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Cada día 7 am": {
+      "main": [
+        [
+          {
+            "node": "Job sla-tareas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job sla-tareas": {
+      "main": [
+        [
+          {
+            "node": "Job documentos-pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job documentos-pendientes": {
+      "main": [
+        [
+          {
+            "node": "Job metricas-diarias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job metricas-diarias": {
+      "main": [
+        [
+          {
+            "node": "Job limpiar-borradores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada hora: escalar interesados": {
+      "main": [
+        [
+          {
+            "node": "Escalar interesados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City",
+    "errorWorkflow": "pL9iXvgOB7cSgTNJ",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "_respaldo": {
+    "exportado_de_n8n": "2026-11-06T16:32:22.636Z",
+    "publicado_en": "2026-11-06T16:35:43.872Z",
+    "version_publicada": "eb1c1aa2-b5ae-4df4-b7c4-38b656057df0",
+    "version_del_editor": "eb1c1aa2-b5ae-4df4-b7c4-38b656057df0",
+    "editor_igual_a_publicado": true,
+    "credenciales_usadas": [
+      "Nanobridge-ApiKey (httpHeaderAuth)"
+    ]
+  }
+}

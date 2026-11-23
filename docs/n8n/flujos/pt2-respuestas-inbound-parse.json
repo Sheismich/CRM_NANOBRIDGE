@@ -1,0 +1,321 @@
+{
+  "name": "PT2. respuestas (Inbound Parse)",
+  "id": "qECqDm8BIWQxx68L",
+  "active": true,
+  "nodes": [
+    {
+      "id": "811585e4-c44a-49d3-93fb-407b48ac3f24",
+      "name": "Webhook Inbound Parse",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sendgrid/inbound",
+        "authentication": "basicAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "webhookId": "0f0045bf-4513-4b53-bba1-7acdc15ea7ad",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "sY35EoqRJvOnNQvh",
+          "name": "SendGrid Inbound Parse"
+        }
+      }
+    },
+    {
+      "id": "8d8c32ae-3db7-4fa2-b748-d3c8cec863ea",
+      "name": "Leer respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nfunction stripAccents(s) {\n  return (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n}\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const body = item.json.body || item.json;\n\n  // envelope (JSON en texto)\n  let envelope = {};\n  try {\n    envelope = typeof body.envelope === 'string' ? JSON.parse(body.envelope) : (body.envelope || {});\n  } catch (e) {\n    envelope = {};\n  }\n\n  // reply_to: primera direccion que empiece con \"r+\", si no la primera de la lista\n  const toList = Array.isArray(envelope.to) ? envelope.to : (envelope.to ? [envelope.to] : []);\n  let reply_to = '';\n  const rPlus = toList.find(a => typeof a === 'string' && a.toLowerCase().startsWith('r+'));\n  if (rPlus) {\n    reply_to = rPlus;\n  } else if (toList.length > 0) {\n    reply_to = toList[0];\n  }\n\n  // remitente\n  const remitente = envelope.from || body.from || '';\n\n  // asunto\n  const asunto = body.subject || '';\n\n  // headers (texto plano, respetando encabezados partidos en varias lineas)\n  const rawHeaders = body.headers || '';\n  const unfolded = rawHeaders.replace(/\\r?\\n[ \\t]+/g, ' ');\n  const headerLines = unfolded.split(/\\r?\\n/);\n  const headers = {};\n  for (const line of headerLines) {\n    const idx = line.indexOf(':');\n    if (idx === -1) continue;\n    const name = line.slice(0, idx).trim().toLowerCase();\n    const value = line.slice(idx + 1).trim();\n    if (!(name in headers)) headers[name] = value;\n  }\n\n  const messageId = headers['message-id'] || '';\n  const autoSubmitted = headers['auto-submitted'];\n  const xAutoreply = headers['x-autoreply'];\n  const xAutorespond = headers['x-autorespond'];\n  const xAutoResponseSuppress = headers['x-auto-response-suppress'];\n  const precedence = headers['precedence'];\n\n  // automatica\n  let automatica = false;\n  if (autoSubmitted !== undefined && autoSubmitted.toLowerCase() !== 'no') automatica = true;\n  if (xAutoreply !== undefined || xAutorespond !== undefined) automatica = true;\n  if (xAutoResponseSuppress !== undefined) automatica = true;\n  if (precedence !== undefined && precedence.toLowerCase() === 'auto_reply') automatica = true;\n\n  const asuntoNorm = stripAccents(asunto).toLowerCase().trim();\n  const prefijos = [\n    'respuesta automatica',\n    'fuera de la oficina',\n    'fuera de oficina',\n    'out of office',\n    'automatic reply',\n    'autoreply',\n  ];\n  if (prefijos.some(p => asuntoNorm.startsWith(p))) automatica = true;\n\n  // contenido: text; si vacio, html sin etiquetas\n  let contenido = body.text || '';\n  if (!contenido || !contenido.trim()) {\n    const html = body.html || '';\n    contenido = html.replace(/<[^>]*>/g, '');\n  }\n\n  // quitar la parte citada del correo original\n  const cutCandidates = [];\n\n  // atribución (Gmail puede partirla en varios renglones, hasta 2 saltos de línea)\n  const attrMatch = /^(On |El )(?:[^\\n]*\\n){0,2}[^\\n]*?(wrote:|escribió:)/m.exec(contenido);\n  if (attrMatch) cutCandidates.push(attrMatch.index);\n\n  // -----Original Message-----\n  const origMatch = /^[ \\t]*-----Original Message-----[ \\t]*$/m.exec(contenido);\n  if (origMatch) cutCandidates.push(origMatch.index);\n\n  // líneas citadas que empiezan con \">\"\n  const quoteMatch = /^[ \\t]*>/m.exec(contenido);\n  if (quoteMatch) cutCandidates.push(quoteMatch.index);\n\n  if (cutCandidates.length > 0) {\n    contenido = contenido.slice(0, Math.min(...cutCandidates));\n  }\n  contenido = contenido.trim().slice(0, 8000);\n\n  // execution_id\n  let execution_id;\n  if (messageId) {\n    execution_id = 'msg-' + crypto.createHash('sha256').update(messageId).digest('hex').slice(0, 40);\n  } else {\n    execution_id = 'msg-' + crypto.createHash('sha256').update(remitente + asunto + contenido).digest('hex').slice(0, 40);\n  }\n\n  // message_id: encabezado Message-ID tal cual (sin hash), sin espacios extremos, max 255; null si no viene\n  const rawMessageId = headers['message-id'];\n  const messageIdTrim = typeof rawMessageId === 'string' ? rawMessageId.trim() : '';\n  const message_id = messageIdTrim ? messageIdTrim.slice(0, 255) : null;\n\n  // asunto de salida: subject recortado a 500; null si no viene\n  const rawSubject = body.subject;\n  const asuntoSalida = (rawSubject === undefined || rawSubject === null || String(rawSubject) === '')\n    ? null\n    : String(rawSubject).slice(0, 500);\n\n  results.push({\n    json: { execution_id, reply_to, remitente, asunto: asuntoSalida, contenido, automatica, message_id },\n  });\n}\n\nreturn results;"
+      }
+    },
+    {
+      "id": "e03acd0c-360d-4e03-bc53-a8dad8272d39",
+      "name": "Registrar respuesta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/respuestas",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  execution_id: $json.execution_id,\n  reply_to: $json.reply_to,\n  remitente: $json.remitente,\n  canal: \"correo\",\n  contenido: $json.contenido,\n  automatica: $json.automatica,\n  crear_tarea_clasificacion: !$json.automatica,\n  message_id: $('Leer respuesta').item.json.message_id ?? null,\n  asunto: $('Leer respuesta').item.json.asunto ?? null\n}) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "9f9a1974-3910-44b5-8343-4d9abec91328",
+      "name": "¿Avisar al supervisor?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        928,
+        160
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "avisar-supervisor-cond",
+              "leftValue": "={{ !$('Leer respuesta').item.json.automatica && !$json.ya_existia && !$json.ignorada }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "no-en-conversacion-cond",
+              "leftValue": "={{ $('Registrar respuesta').item.json.en_conversacion !== true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "62eef23d-9f9b-4684-8aa4-2d341b375101",
+      "name": "armar aviso de respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -80
+      ],
+      "parameters": {
+        "jsCode": "const r = $('Leer respuesta').first().json;\nconst api = $('Registrar respuesta').first().json;\nconst DESTINOS = [\"<CORREO_ADMIN_1>\", \"<CORREO_DIRECCION>\", \"<CORREO_ADMIN_2>\"];\nconst contactoNombre = String(api.contacto_nombre ?? \"\").trim();\nconst empresaNombre = String(api.empresa_nombre ?? \"\").trim();\nconst prospectoId = api.prospecto_id ?? \"no identificado\";\nconst partesContacto = [contactoNombre ? \"Contacto: \" + contactoNombre : null, empresaNombre ? \"Empresa: \" + empresaNombre : null].filter(Boolean);\nconst lineaProspecto = partesContacto.length ? partesContacto.join(\" · \") + \" (prospecto \" + prospectoId + \")\" : \"Prospecto: \" + prospectoId;\nconst extras = [api.tardia ? \"respuesta tardía\" : null, api.identificada ? null : \"NO identificada\"].filter(Boolean);\nconst texto = [\n  \"Llegó una respuesta de un prospecto\" + (extras.length ? \" (\" + extras.join(\", \") + \")\" : \"\") + \".\",\n  \"De: \" + (r.remitente || \"?\"),\n  \"Asunto: \" + (r.asunto || \"(sin asunto)\"),\n  lineaProspecto,\n  \"\",\n  (r.contenido || \"(vacía)\").slice(0, 500),\n  \"\",\n  \"Clasifícala en el CRM: https://crm-prospeccion-outbound.web.app/tareas (Cola de clasificación)\"\n].join(\"\\n\");\nreturn [{ json: { sendgrid: {\n  personalizations: [{ to: DESTINOS.map((email) => ({ email })) }],\n  from: { email: \"hola@contacto.nano-bridge-mex.com\", name: \"NANOBRIDGE alertas\" },\n  subject: \"[NANOBRIDGE] Respondió \" + (r.remitente || \"un prospecto\") + (extras.length ? \" (\" + extras.join(\", \") + \")\" : \"\"),\n  content: [{ type: \"text/plain\", value: texto }],\n  tracking_settings: { subscription_tracking: { enable: false }, click_tracking: { enable: false, enable_text: false }, open_tracking: { enable: false } },\n  mail_settings: { sandbox_mode: { enable: false } }\n} } }];"
+      }
+    },
+    {
+      "id": "f0961532-0f8e-45fd-b7ed-d1ff019dc255",
+      "name": "avisar supervisor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        -80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "sendGridApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.sendgrid }}",
+        "options": {}
+      },
+      "credentials": {
+        "sendGridApi": {
+          "id": "0Hwn28C1gft2jXPj",
+          "name": "SendGrid account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "8110aa7d-2f3f-455d-b4e0-20d68e8f1b7c",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "41828d0f-c106-48ef-b41f-de3193fc9d5b",
+      "name": "Datos para IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// ============================================================\n// PT2 · \"Datos para IA\"  (pegar completo en el nodo Code, después de\n// \"Responder 200\"). Junta lo que necesita el subflujo PT2a. La decisión\n// de si se manda o no a Gemini la toma PT2a, no este nodo.\n// ============================================================\nconst r = $('Leer respuesta').first().json;\nconst api = $('Registrar respuesta').first().json;\n\nreturn [{\n  json: {\n    remitente: r.remitente,\n    contenido: r.contenido,\n    automatica: r.automatica === true,\n    respuesta_id: api.id ?? null,\n    tarea_id: api.tarea_id ?? null,\n    identificada: api.identificada === true,\n    ya_existia: api.ya_existia === true,\n    contacto_nombre: api.contacto_nombre ?? null,\n    empresa_nombre: api.empresa_nombre ?? null\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "863f72a9-d9a2-42cb-8fa2-4b6076be4327",
+      "name": "Sugerencia IA (subflujo)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        0
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "dc0Q0SG9Qo2R3yKv",
+          "cachedResultName": "PT2a. sugerencia IA"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook Inbound Parse": {
+      "main": [
+        [
+          {
+            "node": "Leer respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer respuesta": {
+      "main": [
+        [
+          {
+            "node": "Registrar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar respuesta": {
+      "main": [
+        [
+          {
+            "node": "¿Avisar al supervisor?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Avisar al supervisor?": {
+      "main": [
+        [
+          {
+            "node": "armar aviso de respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "armar aviso de respuesta": {
+      "main": [
+        [
+          {
+            "node": "avisar supervisor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "avisar supervisor": {
+      "main": [
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder 200": {
+      "main": [
+        [
+          {
+            "node": "Datos para IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos para IA": {
+      "main": [
+        [
+          {
+            "node": "Sugerencia IA (subflujo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "pL9iXvgOB7cSgTNJ",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "_respaldo": {
+    "exportado_de_n8n": "2026-11-18T16:58:07.615Z",
+    "publicado_en": "2026-11-18T17:06:24.793Z",
+    "version_publicada": "f163647e-a301-45c6-b103-74fd6dc7c256",
+    "version_del_editor": "f163647e-a301-45c6-b103-74fd6dc7c256",
+    "editor_igual_a_publicado": true,
+    "credenciales_usadas": [
+      "SendGrid account (sendGridApi)",
+      "Nanobridge-ApiKey (httpHeaderAuth)",
+      "SendGrid Inbound Parse (httpBasicAuth)"
+    ]
+  }
+}

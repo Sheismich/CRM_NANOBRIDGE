@@ -1,0 +1,479 @@
+{
+  "name": "PT4. recordatorios",
+  "id": "0ZkjfiUz0RlmOncj",
+  "active": true,
+  "nodes": [
+    {
+      "id": "2ab5a487-789b-4941-ae15-a3eb2231eb7b",
+      "name": "Cada día hábil",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f5e771e8-427b-41c9-8048-7c2fedea5afb",
+      "name": "Ventanas vencidas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/envios/vencidas?limit=50",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "46402000-f1dc-4a64-8645-3f0167558d03",
+      "name": "Una por fila",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      }
+    },
+    {
+      "id": "2757e143-c617-4279-9f0a-9885b818390f",
+      "name": "¿Último contacto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "es-ultimo-contacto-cond",
+              "leftValue": "={{ $json.es_ultimo_contacto }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fa924923-0326-43eb-ac30-0bd5e6673183",
+      "name": "Marcar inactivo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/prospectos/estado",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"execution_id\": \"inactivo-{{ $json.envio_id }}\",\n  \"prospecto_id\": {{ $json.prospecto_id }},\n  \"estado\": \"inactivo\",\n  \"motivo\": \"Tres contactos sin respuesta\"\n}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      }
+    },
+    {
+      "id": "6d66ba9c-4b6d-40fd-85b1-a543430c554f",
+      "name": "Modo pruebas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        720
+      ],
+      "parameters": {
+        "jsCode": "// ============================================================\n// MODO PRUEBAS (igual que en PT1). Solo se manda a PERMITIDOS\n// (y sus variantes con +). Se apaga al encender.\n// SANDBOX = true: SendGrid acepta el correo pero NO lo entrega.\n// ============================================================\nconst MODO_PRUEBAS = false;\nconst SANDBOX = false;\nconst PERMITIDOS = [\"<CORREO_PRUEBA_1>\"];\n\nreturn $input.all().map(({ json: f }) => {\n  const correo = (f.correo ?? \"\").trim().toLowerCase();\n  const [usuario, dominio] = correo.split(\"@\");\n  const sinEtiqueta = usuario && dominio ? `${usuario.split(\"+\")[0]}@${dominio}` : \"\";\n  const permitido = PERMITIDOS.map((c) => c.trim().toLowerCase()).includes(sinEtiqueta);\n\n  let motivo = null;\n  if (correo === \"\") motivo = \"Sin correo\";\n  else if (f.campana_activa === false) motivo = \"Campaña inactiva\";\n  else if (f.campana_id === null && !MODO_PRUEBAS) motivo = \"Sin campaña\";\n  else if (MODO_PRUEBAS && !permitido) motivo = \"Modo pruebas: destinatario fuera de la lista\";\n\n  return { json: { ...f, correo, sandbox: SANDBOX, enviar: motivo === null, motivo, MODO_PRUEBAS, PERMITIDOS } };\n});\n"
+      }
+    },
+    {
+      "id": "54b6919b-3123-4dbf-8164-c430b69b7507",
+      "name": "¿Se envía?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1056,
+        720
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "se-envia-cond",
+              "leftValue": "={{ $json.enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "413bbbff-6802-41f4-99f7-d6f7afb9dce1",
+      "name": "Registrar envío",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1280,
+        912
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/envios",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"execution_id\": \"recordatorio-{{ $json.envio_id }}\",\n  \"prospecto_id\": {{ $json.prospecto_id }},\n  \"canal\": \"correo\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      }
+    },
+    {
+      "id": "273f72ab-1dee-4c05-aff8-a73fe2f2812f",
+      "name": "Revisar registro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        816
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 201 = registrado: se manda. 200 = ya_existia: este recordatorio ya se\n// registró antes, NO se vuelve a mandar (preferimos perder uno a mandar\n// uno doble). 409 = la API no lo permite (ventana activa, supresión): no\n// se manda. Cualquier otro status es error real -> Error Workflow.\nconst r = $json;\nconst f = $('Modo pruebas').item.json;\nif (r.statusCode === 200) return { json: { ...f, enviar: false, motivo: \"ya_existia: no se vuelve a mandar\" } };\nif (r.statusCode === 409) return { json: { ...f, enviar: false, motivo: `409: ${r.body?.message ?? \"\"}` } };\nif (r.statusCode !== 201) throw new Error(`Registrar envío respondió ${r.statusCode}: ${JSON.stringify(r.body)}`);\nreturn { json: {\n  prospecto_id: f.prospecto_id, correo: r.body.destinatario, nombre: f.contacto_nombre,\n  empresa: f.empresa_nombre, giro: f.giro, sandbox: f.sandbox,\n  envio_id: r.body.id, numero_contacto: r.body.numero_contacto, reply_to: r.body.reply_to,\n  correo_contenido: r.body.correo,\n  enviar: true, motivo: null\n} };\n"
+      }
+    },
+    {
+      "id": "c7e1c6c5-919e-40e4-a48c-1f47b6b8c70a",
+      "name": "¿Registrado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1728,
+        816
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "registrado-cond",
+              "leftValue": "={{ $json.enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7cad964e-2ba7-4b85-81e7-9af309399397",
+      "name": "Revisar destinatario",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        528
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Última revisión antes de PT1b: el destinatario que regresó POST /automatizacion/envios\n// debe estar en PERMITIDOS cuando MODO_PRUEBAS está encendido. El interruptor y la\n// lista se leen de \"Modo pruebas\" (un solo lugar). Compara igual que \"Modo pruebas\".\nconst mp = $('Modo pruebas').item.json;\nif (typeof mp.MODO_PRUEBAS !== \"boolean\" || !Array.isArray(mp.PERMITIDOS)) {\n  throw new Error(\"Revisar destinatario: falta MODO_PRUEBAS o PERMITIDOS en la salida de Modo pruebas\");\n}\n\nif (mp.MODO_PRUEBAS) {\n  const r = $('Registrar envío').item.json;\n  const destinatario = ((r.body && r.body.destinatario) ?? \"\").trim().toLowerCase();\n  const [usuario, dominio] = destinatario.split(\"@\");\n  const sinEtiqueta = usuario && dominio ? usuario.split(\"+\")[0] + \"@\" + dominio : \"\";\n  const permitido = mp.PERMITIDOS.map((c) => c.trim().toLowerCase()).includes(sinEtiqueta);\n\n  if (!permitido) {\n    throw new Error(\"Modo pruebas: destinatario fuera de la lista\");\n  }\n}\n\nreturn { json: $json };\n"
+      }
+    },
+    {
+      "id": "22c45c6f-80a7-43dd-8ae4-196b0907154e",
+      "name": "Enviar correo (subflujo)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1952,
+        720
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "mmoychzdaYH4yp1w",
+          "cachedResultName": "PT1b. enviar correo (SendGrid)"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "d57fc8f8-dd37-4b28-9739-d97ee482ad85",
+      "name": "No se manda",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1952,
+        912
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "2db306df-0adf-4386-b969-00377b49bda0",
+      "name": "No se envía",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        720
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Cada día hábil": {
+      "main": [
+        [
+          {
+            "node": "Ventanas vencidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ventanas vencidas": {
+      "main": [
+        [
+          {
+            "node": "Una por fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Una por fila": {
+      "main": [
+        [
+          {
+            "node": "¿Último contacto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Último contacto?": {
+      "main": [
+        [
+          {
+            "node": "Marcar inactivo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Modo pruebas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modo pruebas": {
+      "main": [
+        [
+          {
+            "node": "¿Se envía?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se envía?": {
+      "main": [
+        [
+          {
+            "node": "Registrar envío",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No se envía",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar envío": {
+      "main": [
+        [
+          {
+            "node": "Revisar registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisar registro": {
+      "main": [
+        [
+          {
+            "node": "¿Registrado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Registrado?": {
+      "main": [
+        [
+          {
+            "node": "Revisar destinatario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No se manda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisar destinatario": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo (subflujo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City",
+    "errorWorkflow": "pL9iXvgOB7cSgTNJ",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [
+    {
+      "id": "7e127999-7211-4698-8805-c0c3347565b4",
+      "name": "Enviar recordatorio",
+      "nodeIds": [
+        "6d66ba9c-4b6d-40fd-85b1-a543430c554f",
+        "54b6919b-3123-4dbf-8164-c430b69b7507",
+        "2db306df-0adf-4386-b969-00377b49bda0",
+        "413bbbff-6802-41f4-99f7-d6f7afb9dce1",
+        "273f72ab-1dee-4c05-aff8-a73fe2f2812f",
+        "c7e1c6c5-919e-40e4-a48c-1f47b6b8c70a",
+        "7cad964e-2ba7-4b85-81e7-9af309399397",
+        "22c45c6f-80a7-43dd-8ae4-196b0907154e",
+        "d57fc8f8-dd37-4b28-9739-d97ee482ad85"
+      ],
+      "description": "Para ventanas que aún no son el último contacto: filtra destinatarios, registra el envío y manda el correo si quedó registrado nuevo."
+    }
+  ],
+  "_respaldo": {
+    "exportado_de_n8n": "2026-11-06T20:42:50.028Z",
+    "publicado_en": "2026-11-06T20:42:59.960Z",
+    "version_publicada": "e3a51227-c752-41bc-9d28-ec8193e8357e",
+    "version_del_editor": "e3a51227-c752-41bc-9d28-ec8193e8357e",
+    "editor_igual_a_publicado": true,
+    "credenciales_usadas": [
+      "Nanobridge-ApiKey (httpHeaderAuth)"
+    ]
+  }
+}

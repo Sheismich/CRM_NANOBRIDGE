@@ -1,0 +1,357 @@
+{
+  "name": "PT3. eventos SendGrid",
+  "id": "ywVSXVZlhxmTkcj5",
+  "active": true,
+  "nodes": [
+    {
+      "id": "8b749284-e8eb-45b7-ab36-e255570e622a",
+      "name": "Webhook eventos SendGrid",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        96
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sendgrid/eventos",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "webhookId": "4c476917-0df3-4ce7-bf95-ee223490e4a7"
+    },
+    {
+      "id": "4ff90880-609d-40dd-8b29-970aa244e0e6",
+      "name": "Verificar firma",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst SENDGRID_PUBLIC_KEY = \"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEg5aRNhh+DLFC74CeyxiF5lebBiWTtEJi90NBoTq6tXJ0Ef3C47UZPertiAyYXwbPhITVpmIFF+mjIVxYYoCmng==\";\nconst item = $input.first();\nconst h = item.json.headers || {};\nconst firma = h['x-twilio-email-event-webhook-signature'] || '';\nconst ts = h['x-twilio-email-event-webhook-timestamp'] || '';\nconst crudo = (await this.helpers.getBinaryDataBuffer(0, 'data')).toString('utf8');\nlet valida = false;\ntry {\n  const pem = '-----BEGIN PUBLIC KEY-----\\n' + SENDGRID_PUBLIC_KEY + '\\n-----END PUBLIC KEY-----';\n  valida = crypto.createVerify('sha256').update(ts + crudo).verify(pem, firma, 'base64');\n} catch (e) { valida = false; }\nlet eventos = [];\ntry { eventos = JSON.parse(crudo); } catch (e) {}\nreturn [{ json: { firma_valida: valida, eventos: Array.isArray(eventos) ? eventos : [] } }];"
+      }
+    },
+    {
+      "id": "50224c1e-7307-491c-93fb-de473a9afd91",
+      "name": "¿Firma válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "firma-valida-cond",
+              "leftValue": "={{ $json.firma_valida }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9dbab5d8-3a91-4bbc-89ff-933840046b6d",
+      "name": "Elegir eventos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        384
+      ],
+      "parameters": {
+        "jsCode": "const eventos = $input.first().json.eventos || [];\nconst supresiones = [];\nfor (const e of eventos) {\n  let motivo = null;\n  if (e.event === 'unsubscribe' || e.event === 'group_unsubscribe') motivo = 'Baja por link de SendGrid';\n  else if (e.event === 'spamreport') motivo = 'Queja de spam en SendGrid';\n  else if (e.event === 'bounce' && e.type === 'bounce') motivo = 'Rebote definitivo: ' + String(e.reason || '').slice(0, 150);\n  if (!motivo || !e.email || !e.sg_event_id) continue;\n  if (!e.event) throw new Error(\"Evento sin nombre: \" + JSON.stringify(e));\n  if (e.envio_id) motivo += ' (envío ' + e.envio_id + ')';\n  supresiones.push({ execution_id: 'sg-' + e.sg_event_id, tipo: 'correo', valor: e.email, motivo: motivo.slice(0, 255), evento: e.event });\n}\nreturn [{ json: { supresiones } }];"
+      }
+    },
+    {
+      "id": "594d3c00-17e2-4cde-a30c-0093db2eefcb",
+      "name": "¿Hay supresiones?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        976,
+        224
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "hay-supresiones-cond",
+              "leftValue": "={{ $json.supresiones.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6d20931b-88dc-402e-b362-e3b5bc432ffd",
+      "name": "Separar",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        144
+      ],
+      "parameters": {
+        "fieldToSplitOut": "supresiones",
+        "options": {}
+      }
+    },
+    {
+      "id": "f4db4d56-22a2-499c-ba65-b39af461d431",
+      "name": "Registrar supresión",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1424,
+        144
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/supresion",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ execution_id: $json.execution_id, tipo: $json.tipo, valor: $json.valor, motivo: $json.motivo, evento: $json.evento }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      }
+    },
+    {
+      "id": "7b7b661b-a10a-4d5c-a750-98c1b587e2da",
+      "name": "Revisar respuestas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1648,
+        144
+      ],
+      "parameters": {
+        "jsCode": "const todas = $input.all();\nconst malas = todas.filter(i => ![200, 201, 409].includes(i.json.statusCode));\nif (malas.length > 0) {\n  throw new Error('La API rechazó ' + malas.length + ' supresión(es): ' + JSON.stringify(malas.slice(0, 3).map(i => ({ status: i.json.statusCode, body: i.json.body }))));\n}\nreturn [{ json: { registradas: todas.length } }];"
+      }
+    },
+    {
+      "id": "b81c0d2e-1812-4c77-8aad-3de75974835b",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1872,
+        224
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"ok\": true\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "3bfa85b8-a9c1-4e14-8b5b-d50867bbaf5f",
+      "name": "Rechazar",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        192
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"error\": \"firma invalida\"\n}",
+        "options": {
+          "responseCode": 403
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook eventos SendGrid": {
+      "main": [
+        [
+          {
+            "node": "Verificar firma",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar firma": {
+      "main": [
+        [
+          {
+            "node": "¿Firma válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Firma válida?": {
+      "main": [
+        [
+          {
+            "node": "Elegir eventos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rechazar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Elegir eventos": {
+      "main": [
+        [
+          {
+            "node": "¿Hay supresiones?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay supresiones?": {
+      "main": [
+        [
+          {
+            "node": "Separar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separar": {
+      "main": [
+        [
+          {
+            "node": "Registrar supresión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar supresión": {
+      "main": [
+        [
+          {
+            "node": "Revisar respuestas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisar respuestas": {
+      "main": [
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "pL9iXvgOB7cSgTNJ",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [
+    {
+      "id": "5a821056-7b40-410a-aee3-770586852bab",
+      "name": "Verificar firma",
+      "nodeIds": [
+        "4ff90880-609d-40dd-8b29-970aa244e0e6",
+        "50224c1e-7307-491c-93fb-de473a9afd91"
+      ],
+      "description": "Valida la firma ECDSA del webhook de SendGrid contra la llave pública; si es inválida se responde 403."
+    },
+    {
+      "id": "39857747-a4a5-4a5e-a869-febb51e8a93e",
+      "name": "Registrar supresiones",
+      "nodeIds": [
+        "9dbab5d8-3a91-4bbc-89ff-933840046b6d",
+        "594d3c00-17e2-4cde-a30c-0093db2eefcb",
+        "6d20931b-88dc-402e-b362-e3b5bc432ffd",
+        "f4db4d56-22a2-499c-ba65-b39af461d431",
+        "7b7b661b-a10a-4d5c-a750-98c1b587e2da",
+        "b81c0d2e-1812-4c77-8aad-3de75974835b"
+      ],
+      "description": "Convierte los eventos (bajas, quejas, rebotes) en supresiones, las envía a la API una por una y responde 200."
+    }
+  ],
+  "_respaldo": {
+    "exportado_de_n8n": "2026-10-01T19:54:44.409Z",
+    "publicado_en": "2026-10-01T19:54:55.786Z",
+    "version_publicada": "66c5dd6a-51a6-4679-9500-9e6357b7c78e",
+    "version_del_editor": "66c5dd6a-51a6-4679-9500-9e6357b7c78e",
+    "editor_igual_a_publicado": true,
+    "credenciales_usadas": [
+      "Nanobridge-ApiKey (httpHeaderAuth)"
+    ]
+  }
+}

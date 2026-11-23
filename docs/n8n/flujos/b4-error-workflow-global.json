@@ -1,0 +1,164 @@
+{
+  "name": "B4 · Error Workflow global",
+  "id": "pL9iXvgOB7cSgTNJ",
+  "active": true,
+  "nodes": [
+    {
+      "id": "83424a82-a360-4860-9d4d-3c7c10439328",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "864ef63a-0ee2-4205-a909-01eda1d5b9e8",
+      "name": "armar reporte de error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const e = $json.execution ?? {};\nconst w = $json.workflow ?? {};\nconst err = e.error ?? {};\n\nconst codigo = Number(err.httpCode);\nconst codigoValido = Number.isInteger(codigo) && codigo >= 100 && codigo <= 599;\n\nreturn [{\n  json: {\n    execution_id: String(e.id ?? `sin-id-${Date.now()}`),\n    workflow: String(w.name ?? \"desconocido\").slice(0, 120),\n    nodo: String(e.lastNodeExecuted ?? err.node?.name ?? \"desconocido\").slice(0, 120),\n    codigo_http: codigoValido ? codigo : undefined,\n    mensaje: String(err.message || \"Error sin mensaje\").slice(0, 2000),\n    critico: true,\n    detalle: {\n      execution_url: e.url ?? null,\n      retry_of: e.retryOf ?? null,\n      modo: e.mode ?? null,\n      workflow_id: w.id ?? null,\n      descripcion: err.description ?? null\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "6490929e-4e1b-4614-b3b5-4362d2652fc6",
+      "name": "registrar error en API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/errores-workflow",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "33146ba2-f4df-4182-8953-a7bf8d6540b2",
+      "name": "armar correo de error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const r = $json;\nconst DESTINOS = [\"<CORREO_ADMIN_1>\", \"<CORREO_DIRECCION>\"];\nconst url = (r.detalle && r.detalle.execution_url) || \"(sin link)\";\nconst texto = [\n  \"Falló un workflow de n8n.\",\n  \"Workflow: \" + (r.workflow || \"?\"),\n  \"Nodo: \" + (r.nodo || \"?\"),\n  \"Código HTTP: \" + (r.codigo_http ?? \"-\"),\n  \"Mensaje: \" + (r.mensaje || \"?\"),\n  \"Ejecución: \" + (r.execution_id || \"?\"),\n  \"Ver en n8n: \" + url\n].join(\"\\n\");\nreturn [{ json: { sendgrid: {\n  personalizations: [{ to: DESTINOS.map((email) => ({ email })) }],\n  from: { email: \"hola@contacto.nano-bridge-mex.com\", name: \"NANOBRIDGE alertas\" },\n  subject: \"[NANOBRIDGE] Falló \" + (r.workflow || \"un workflow\") + \" en \" + (r.nodo || \"?\"),\n  content: [{ type: \"text/plain\", value: texto }],\n  tracking_settings: { subscription_tracking: { enable: false }, click_tracking: { enable: false, enable_text: false }, open_tracking: { enable: false } },\n  mail_settings: { sandbox_mode: { enable: false } }\n} } }];"
+      }
+    },
+    {
+      "id": "88a4f336-a5fb-4c9d-8931-590081ed050f",
+      "name": "avisar por correo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        144
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "sendGridApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.sendgrid }}"
+      },
+      "credentials": {
+        "sendGridApi": {
+          "id": "0Hwn28C1gft2jXPj",
+          "name": "SendGrid account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "armar reporte de error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "armar reporte de error": {
+      "main": [
+        [
+          {
+            "node": "registrar error en API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "armar correo de error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "armar correo de error": {
+      "main": [
+        [
+          {
+            "node": "avisar por correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [],
+  "_respaldo": {
+    "exportado_de_n8n": "2026-11-06T18:52:24.552Z",
+    "publicado_en": "2026-11-06T18:53:08.708Z",
+    "version_publicada": "82d86a62-bb23-4b7c-a6d2-4b98d52913de",
+    "version_del_editor": "82d86a62-bb23-4b7c-a6d2-4b98d52913de",
+    "editor_igual_a_publicado": true,
+    "credenciales_usadas": [
+      "SendGrid account (sendGridApi)",
+      "Nanobridge-ApiKey (httpHeaderAuth)"
+    ]
+  }
+}

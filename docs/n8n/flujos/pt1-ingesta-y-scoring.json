@@ -1,0 +1,1193 @@
+{
+  "name": "PT1. ingesta y scoring",
+  "id": "YnDrrDHOC5HJlYtv",
+  "active": true,
+  "nodes": [
+    {
+      "id": "fa06c382-6b1f-4c59-adcf-886f7a674440",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        192
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "bc6a5b04-25dd-497f-b6cc-2f42d5223e53",
+      "name": "Datos del prospecto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $input.first().json;\nconst clave = (v) => typeof v === \"string\" && v.trim() !== \"\" ? v.trim().toLowerCase().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\") : undefined;\nreturn [{ json: {\n  id: d.prospecto_id,\n  prospecto: {\n    empresa: { nombreLegal: d.empresa_nombre, giro: clave(d.giro), tamano: d.tamano || undefined, region: d.region || undefined },\n    contacto: { nombre: d.contacto_nombre, correo: d.correo || undefined, telefono: d.telefono || undefined },\n    campana_id: d.campana_id || undefined\n  }\n} }];"
+      }
+    },
+    {
+      "id": "4801cde3-20ba-4d00-aa7b-8433a8cfe61c",
+      "name": "Validaciones",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        912,
+        -880
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/validaciones",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"execution_id\": \"{{ $execution.id }}\",\n  \"prospecto_id\": \"{{ $json.id }}\"\n}\n",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "f1802e05-d600-47be-b223-43f475ab3c31",
+      "name": "prospecto valido ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1104,
+        -816
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ba701b22-1927-4c9b-a19a-816900391d5e",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7dc5821d-2050-43d4-9429-3c4b4fb8743c",
+      "name": "preparar solicitud",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -832
+      ],
+      "parameters": {
+        "jsCode": "// ============================================================\n// Paso 5 — Preparar solicitud para Gemini\n// ⚠️ FASE 7: NUNCA mandar correo, teléfono ni descripción libre\n// prospecto viene del nodo 3 (validacion de Formato) directo --\n// upsert prospectos (nodo 5) ya es HTTP real, su salida es la\n// respuesta de la API, no el prospecto.\n// ============================================================\n\nconst p = $('Datos del prospecto').first().json.prospecto;\nconst prospectoId = $json.id;\n\nconst datosParaIA = {\n  giro: p.empresa.giro,\n  tamano: p.empresa.tamano,\n  region: p.empresa.region || null\n};\n\nconst instruccion = `Eres un asistente de calificación de leads B2B.\nCon base en estos datos de una empresa prospecto, calcula un score de 0 a 100\ny explica los factores que lo justifican.\n\nDatos: ${JSON.stringify(datosParaIA)}`;\n\nreturn [{\n  json: {\n    prospecto: p,\n    prospecto_id: prospectoId,\n    intento_gemini: 1,\n    datos_enviados_ia: datosParaIA,\n    body_gemini: {\n      contents: [{ parts: [{ text: instruccion }] }],\n      generationConfig: {\n        responseMimeType: \"application/json\",\n        responseSchema: {\n          type: \"OBJECT\",\n          properties: {\n            score_ia:  { type: \"NUMBER\" },\n            confianza: { type: \"NUMBER\" },\n            factores:  {\n              type: \"OBJECT\",\n              properties: {\n                giro:   { type: \"STRING\" },\n                tamano: { type: \"STRING\" }\n              }\n            }\n          },\n          required: [\"score_ia\", \"confianza\", \"factores\"]\n        }\n      }\n    }\n  }\n}];\n\n"
+      }
+    },
+    {
+      "id": "60e79988-49be-4106-a4dd-c807cd0de4af",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1552,
+        -752
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body_gemini }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "FDp0u0Lf6YjjqmuF",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "165bfbf7-2fb4-4519-9859-77a255bb9cbd",
+      "name": "Parseo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2128,
+        -832
+      ],
+      "parameters": {
+        "jsCode": "const origen = $('preparar solicitud').first().json;\nconst p = origen.prospecto;\nconst prospectoId = origen.prospecto_id;\n\nlet ia_ok = false;\nlet score_ia = null;\nlet confianza = null;\nlet factoresIa = null;\n\ntry {\n  const textoRespuesta = $json.candidates[0].content.parts[0].text;\n  const parsed = JSON.parse(textoRespuesta);\n\n  if (\n    typeof parsed.score_ia === \"number\" &&\n    typeof parsed.confianza === \"number\" &&\n    parsed.factores && typeof parsed.factores === \"object\"\n  ) {\n    score_ia = parsed.score_ia;\n    confianza = parsed.confianza;\n    factoresIa = parsed.factores;\n    ia_ok = true;\n  }\n} catch (e) {\n  ia_ok = false;\n}\n\nreturn [{\n  json: {\n    prospecto: p,\n    prospecto_id: prospectoId,\n    ia_ok,\n    score_ia,\n    confianza,\n    factores_ia: factoresIa\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "79e6ac32-459d-4dad-b849-8712ebd6db77",
+      "name": "If2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2304,
+        -832
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fb93f567-1d7f-4764-adc7-b182e7224ec6",
+              "leftValue": "={{ $json.ia_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fb718617-494f-4455-992c-87f4706fe379",
+      "name": "combinar score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        -848
+      ],
+      "parameters": {
+        "jsCode": "// ============================================================\n// Combinar score de reglas + score de IA (rama de éxito, E1 = No falló)\n// Pesos provisionales: 40% reglas, 60% IA — no están definidos en el plan,\n// ajustar si el equipo decide otra proporción.\n// ============================================================\n\nconst origen = $('preparar solicitud').first().json;\nconst p = origen.prospecto;\nconst prospectoId = origen.prospecto_id;\n\nconst PESO_REGLAS = 0.4;\nconst PESO_IA = 0.6;\n\nconst PUNTOS_TAMANO = { grande: 40, mediana: 30, pequena: 20, micro: 10 };\nconst PUNTOS_GIRO = { tecnologia: 30, manufactura: 25, logistica: 25, financiero: 20,\n  servicios: 20, salud: 15, construccion: 15, agroindustria: 15, comercio: 10,\n  educacion: 10, otro: 5 };\n\n\nlet scoreReglas = 0;\nscoreReglas += PUNTOS_TAMANO[p.empresa.tamano] || 0;\nscoreReglas += PUNTOS_GIRO[p.empresa.giro] || 0;\nif (p.contacto.correo)    scoreReglas += 10;\nif (p.contacto.telefono)  scoreReglas += 10;\nif (p.empresa.region)     scoreReglas += 10;\n\n\nconst scoreIa = $json.score_ia;\nconst confianza = $json.confianza;\nconst factoresIa = $json.factores_ia;\n\nconst scoreFinal = Math.round(scoreReglas * PESO_REGLAS + scoreIa * PESO_IA);\n\nlet prioridad;\nif (scoreFinal >= 70)      prioridad = \"alta\";\nelse if (scoreFinal >= 40) prioridad = \"media\";\nelse                       prioridad = \"baja\";\n\nreturn [{ json: { prospecto: p, prospecto_id: prospectoId,\n  scoring: { score_reglas: scoreReglas, score_ia: scoreIa, score_final: scoreFinal,\n    peso_reglas: PESO_REGLAS, peso_ia: PESO_IA, origen: \"reglas_ia\",\n    prioridad: prioridad, factores_ia: factoresIa,\n    motivo_solo_reglas: null, confianza: confianza,\n    execution_id: $execution.id } } }];\n"
+      }
+    },
+    {
+      "id": "352334ff-d55b-429b-8af0-ba74978fa373",
+      "name": "Preparar registro de scoring",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2848,
+        -640
+      ],
+      "parameters": {
+        "jsCode": "const s = $json.scoring;\n\nlet confianza;\nif (s.confianza === null || s.confianza === undefined) {\n  confianza = undefined;\n} else if (s.confianza >= 0.8) {\n  confianza = \"alta\";\n} else if (s.confianza >= 0.5) {\n  confianza = \"media\";\n} else {\n  confianza = \"baja\";\n}\n\nconst metodo = s.origen === \"solo_reglas\" ? \"reglas\" : \"gemini\";\n\nreturn [{\n  json: {\n    prospecto: $json.prospecto,\n    prospecto_id: $json.prospecto_id,\n    scoring: s,\n    registro_scoring: {\n      execution_id: s.execution_id,\n      prospecto_id: $json.prospecto_id,\n      score: s.score_final,\n      prioridad: s.prioridad,\n      confianza: confianza,\n      metodo: metodo,\n      detalle: {\n        score_reglas: s.score_reglas,\n        score_ia: s.score_ia,\n        peso_reglas: s.peso_reglas,\n        peso_ia: s.peso_ia,\n        factores_ia: s.factores_ia,\n        motivo_solo_reglas: s.motivo_solo_reglas\n      }\n    }\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "e7d6eac9-8ae5-447f-91b9-6fea5a7de615",
+      "name": "HTTP Request6",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3072,
+        -640
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/scoring",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.registro_scoring) }}\n",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "6a499943-510d-4ab6-8b41-05946104113f",
+      "name": "HTTP Request3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3344,
+        -640
+      ],
+      "parameters": {
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/envios/verificacion",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "canal",
+              "value": "correo"
+            },
+            {
+              "name": "prospecto_id",
+              "value": "={{ $('Preparar registro de scoring').first().json.prospecto_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "7ca74b3f-951e-4e4a-8bbf-27834a02cb60",
+      "name": "If3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3760,
+        -544
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cb6c5fea-8de1-4649-948a-74550fa5eb2d",
+              "leftValue": "={{ $json.puede_enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b6f93dc7-74a3-4ced-b5a3-c95977eeb11a",
+      "name": "tienes campaña?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4208,
+        -560
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "72a4853b-d8a0-4905-9b43-1c47a7baa302",
+              "leftValue": "={{ !!$('Preparar registro de scoring').first().json.prospecto.campana_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e7479d09-ae82-4bb0-ae9b-99c2b34bddcf",
+      "name": "Consultar campaña actual",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        4512,
+        -992
+      ],
+      "parameters": {
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/campanas/activa",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "campana_id",
+              "value": "={{ $('Preparar registro de scoring').first().json.prospecto.campana_id }}\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "0e21902c-fe06-449a-b143-f523fe4e6ddf",
+      "name": "Campaña activa?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4704,
+        -976
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d39b4259-f3c2-4673-a273-6c3e85e01f26",
+              "leftValue": "={{ $json.activa }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6b9dd4bd-aecb-4594-bb24-214e01aa85a7",
+      "name": "Modo pruebas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        -640
+      ],
+      "parameters": {
+        "jsCode": "// ============================================================\n// Interruptor TEMPORAL de modo pruebas\n// ============================================================\nconst MODO_PRUEBAS = false;\nconst SANDBOX = false;\nconst PERMITIDOS = [\"<CORREO_PRUEBA_1>\", \"<CORREO_PRUEBA_2>\"];\n\nconst d = $('Preparar registro de scoring').first().json;\nconst prospecto_id = d.prospecto_id;\nconst correoRaw = d.prospecto && d.prospecto.contacto ? d.prospecto.contacto.correo : undefined;\nconst nombre = d.prospecto && d.prospecto.contacto ? d.prospecto.contacto.nombre : undefined;\nconst empresa = d.prospecto && d.prospecto.empresa ? d.prospecto.empresa.nombreLegal : undefined;\nconst giro = d.prospecto && d.prospecto.empresa ? d.prospecto.empresa.giro : undefined;\n\n// Normalizar correo: trim + minúsculas\nconst correo = typeof correoRaw === \"string\" ? correoRaw.trim().toLowerCase() : \"\";\n\n// Quitar la etiqueta \"+...\" del correo para comparar con PERMITIDOS\nconst quitarEtiqueta = (email) => {\n  if (!email || email.indexOf(\"@\") === -1) return email;\n  const partes = email.split(\"@\");\n  const local = partes[0].split(\"+\")[0];\n  return local + \"@\" + partes[1];\n};\n\nconst correoSinEtiqueta = quitarEtiqueta(correo);\nconst permitidosNorm = PERMITIDOS.map((e) => quitarEtiqueta(String(e).trim().toLowerCase()));\nconst permitido = permitidosNorm.indexOf(correoSinEtiqueta) !== -1;\n\nconst correoVacio = !correo || correo === \"\";\n\nlet enviar;\nlet motivo;\nif (correoVacio) {\n  enviar = false;\n  motivo = \"El prospecto no tiene correo\";\n} else if (MODO_PRUEBAS && !permitido) {\n  enviar = false;\n  motivo = \"Modo pruebas: destinatario fuera de la lista\";\n} else {\n  enviar = true;\n  motivo = null;\n}\n\nreturn [{\n  json: {\n    prospecto_id: prospecto_id,\n    correo: correo,\n    nombre: nombre,\n    empresa: empresa,\n    giro: giro || null,\n    sandbox: SANDBOX,\n    enviar: enviar,\n    motivo: motivo,\n    MODO_PRUEBAS: MODO_PRUEBAS,\n    PERMITIDOS: PERMITIDOS\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "1ece773e-0ad6-49ca-b4c8-97500a8572da",
+      "name": "¿Se envía?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4624,
+        -640
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a1f0c2d3-1111-4a22-9b33-5c44d55e66f7",
+              "leftValue": "={{ $json.enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9d83329a-9737-4238-b0d2-b35c0486060a",
+      "name": "HTTP Request5",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        4960,
+        -544
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/envios",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"execution_id\": \"{{ $execution.id }}\",\n  \"prospecto_id\": \"{{ $json.prospecto_id }}\",\n  \"canal\": \"correo\"\n}\n",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "76142f77-4e3d-4f3c-bb19-06436accb7e8",
+      "name": "Datos para el envío",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5072,
+        -640
+      ],
+      "parameters": {
+        "jsCode": "const base = $('Modo pruebas').first().json;\nconst resp = items[0].json;\n\nreturn [{\n  json: {\n    prospecto_id: base.prospecto_id,\n    correo: resp.destinatario,\n    nombre: base.nombre,\n    empresa: base.empresa,\n    giro: base.giro,\n    sandbox: base.sandbox,\n    envio_id: resp.id,\n    numero_contacto: resp.numero_contacto,\n    reply_to: resp.reply_to,\n    correo_contenido: resp.correo\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "51748155-46ff-4d83-8897-e8661b855aec",
+      "name": "Revisar destinatario",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5296,
+        -640
+      ],
+      "parameters": {
+        "jsCode": "// Última revisión antes de PT1b: el destinatario que regresó POST /automatizacion/envios\n// debe estar en PERMITIDOS cuando MODO_PRUEBAS está encendido. El interruptor y la\n// lista se leen de \"Modo pruebas\" (un solo lugar). Compara igual que \"Modo pruebas\".\nconst mp = $('Modo pruebas').first().json;\nif (typeof mp.MODO_PRUEBAS !== \"boolean\" || !Array.isArray(mp.PERMITIDOS)) {\n  throw new Error(\"Revisar destinatario: falta MODO_PRUEBAS o PERMITIDOS en la salida de Modo pruebas\");\n}\n\nif (mp.MODO_PRUEBAS) {\n  const destinatarioRaw = $('HTTP Request5').first().json.destinatario;\n  const destinatario = typeof destinatarioRaw === \"string\" ? destinatarioRaw.trim().toLowerCase() : \"\";\n\n  const quitarEtiqueta = (email) => {\n    if (!email || email.indexOf(\"@\") === -1) return email;\n    const partes = email.split(\"@\");\n    const local = partes[0].split(\"+\")[0];\n    return local + \"@\" + partes[1];\n  };\n\n  const permitidosNorm = mp.PERMITIDOS.map((e) => quitarEtiqueta(String(e).trim().toLowerCase()));\n  const permitido = destinatario !== \"\" && permitidosNorm.indexOf(quitarEtiqueta(destinatario)) !== -1;\n\n  if (!permitido) {\n    throw new Error(\"Modo pruebas: destinatario fuera de la lista\");\n  }\n}\n\nreturn $input.all();\n"
+      }
+    },
+    {
+      "id": "5ea2f18d-622a-4a5f-b426-fe2c21c2cd69",
+      "name": "Enviar correo (subflujo)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        5520,
+        -640
+      ],
+      "parameters": {
+        "mode": "once",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "mmoychzdaYH4yp1w",
+          "cachedResultName": "PT1b. enviar correo (SendGrid)"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "5074f26a-f069-4beb-9713-d004341f27fe",
+      "name": "No se envía (modo pruebas)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4848,
+        -448
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "f74e6e6b-e4d1-41d2-8900-cc20462906a9",
+      "name": "¿Campaña en espera?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4400,
+        -448
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "campana-en-espera-cond",
+              "leftValue": "={{ [\"pausada\", \"aun_no_empieza\"].includes($json.motivo) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "05d50aa2-1e98-42a4-8517-d693a0960804",
+      "name": "En espera (campaña pausada o sin empezar)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4624,
+        -448
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "7d07c192-f481-407f-902d-d87ed98a48a4",
+      "name": "Marcar prospecto inactivo por campaña",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        5200,
+        -1104
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/prospectos/estado",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"execution_id\": \"{{ $execution.id }}\",\n  \"prospecto_id\": \"{{ $('Preparar registro de scoring').first().json.prospecto_id }}\",\n  \"estado\": \"inactivo\",\n  \"motivo\": \"Campana {{ $json.nombre }} no esta activa (estado: {{ $json.estado }})\"\n}\n",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "2350fbf8-1964-422e-b258-65b7d6e5e57b",
+      "name": "¿En espera?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3728,
+        -208
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "en-espera-envio-cond",
+              "leftValue": "={{ $json.en_espera === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b14a1383-eaae-4ff2-bfa2-d9004699c868",
+      "name": "En espera: sin lugar hoy",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3952,
+        48
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "44f58246-3b0c-4888-b33e-bfc7bb7dc16c",
+      "name": "HTTP Request4",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3856,
+        -144
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/prospectos/estado",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"execution_id\": \"{{ $execution.id }}\",\n  \"prospecto_id\": \"{{ $json.prospecto_id }}\",\n  \"estado\": \"excluido\",\n  \"motivo\": \"{{ $json.motivo }}\"\n}\n",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "ebbd1f25-8f88-4913-86bd-2482653e94b8",
+      "name": "scoring por reglas 5b",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        -320
+      ],
+      "parameters": {
+        "jsCode": "// ============================================================\n// Paso 5b — Scoring solo con reglas (fallback cuando la IA falla)\n// ============================================================\n\nconst origen = $('preparar solicitud').first().json;\nconst p = origen.prospecto;\nconst prospectoId = origen.prospecto_id;\n\nconst PUNTOS_TAMANO = { grande: 40, mediana: 30, pequena: 20, micro: 10 };\nconst PUNTOS_GIRO = { tecnologia: 30, manufactura: 25, logistica: 25, financiero: 20,\n  servicios: 20, salud: 15, construccion: 15, agroindustria: 15, comercio: 10,\n  educacion: 10, otro: 5 };\n\nlet score = 0;\nscore += PUNTOS_TAMANO[p.empresa.tamano] || 0;\nscore += PUNTOS_GIRO[p.empresa.giro] || 0;\nif (p.contacto.correo)    score += 10;\nif (p.contacto.telefono)  score += 10;\nif (p.empresa.region)     score += 10;\n\nlet prioridad;\nif (score >= 70)      prioridad = \"alta\";\nelse if (score >= 40) prioridad = \"media\";\nelse                  prioridad = \"baja\";\n\nreturn [{ json: { prospecto: p, prospecto_id: prospectoId,\n  scoring: { score_reglas: score, score_ia: null, score_final: score,\n    peso_reglas: 1.000, peso_ia: 0.000, origen: \"solo_reglas\",\n    prioridad: prioridad, factores_ia: null,\n    motivo_solo_reglas: $('HTTP Request2').isExecuted ? \"Fallo del servicio de IA tras agotar reintentos\" : \"La IA respondió con un formato no válido\",\n    confianza: null,\n    execution_id: $execution.id } } }];\n"
+      }
+    },
+    {
+      "id": "4584ae99-e5d6-46cd-9cc7-2a4ba5577883",
+      "name": "control reintento gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1936,
+        -288
+      ],
+      "parameters": {
+        "jsCode": "const origen = $('preparar solicitud').first().json;\nconst intento = $runIndex + 1;\nconst ESPERAS_SEG = [5, 30, 120];\n\nreturn [{\n  json: {\n    prospecto_id: origen.prospecto_id,\n    body_gemini: origen.body_gemini,\n    intento,\n    espera_seg: ESPERAS_SEG[intento - 1] ?? null,\n    error_gemini: $json.error ?? null\n  }\n}];"
+      }
+    },
+    {
+      "id": "8d05b2ca-9f53-460e-bf4a-adc61a2316e6",
+      "name": "reportar gemini",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1776,
+        -656
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "65ec2460-db1e-4e05-9b3d-5cfcf04d1a2d",
+              "leftValue": "={{ $json.intento }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "403eff27-6655-46a1-91fd-845d1e844c97",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2080,
+        -672
+      ],
+      "parameters": {
+        "amount": "={{ $json.espera_seg }}"
+      },
+      "webhookId": "366f500b-51a9-4ed4-b05b-c4cbb0825174"
+    },
+    {
+      "id": "1ecc2cdc-b4a6-42d1-8a9d-0845a3414778",
+      "name": "HTTP Request2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1984,
+        -480
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/incidencias",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"execution_id\": \"{{ $execution.id }}\",\n  \"prospecto_id\": {{ $json.prospecto_id }},\n  \"tipo\": \"gemini_agotado\",\n  \"severidad\": \"media\",\n  \"mensaje\": \"Gemini falló tras 4 intentos, se usa scoring por reglas como respaldo\",\n  \"detalle\": { \"intentos\": {{ $json.intento }} }\n}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Datos del prospecto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos del prospecto": {
+      "main": [
+        [
+          {
+            "node": "Validaciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validaciones": {
+      "main": [
+        [
+          {
+            "node": "prospecto valido ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prospecto valido ?": {
+      "main": [
+        [
+          {
+            "node": "preparar solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "preparar solicitud": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Parseo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "control reintento gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parseo": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "combinar score",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "scoring por reglas 5b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "combinar score": {
+      "main": [
+        [
+          {
+            "node": "Preparar registro de scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar registro de scoring": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request6": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "tienes campaña?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿En espera?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "tienes campaña?": {
+      "main": [
+        [
+          {
+            "node": "Consultar campaña actual",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Modo pruebas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar campaña actual": {
+      "main": [
+        [
+          {
+            "node": "Campaña activa?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campaña activa?": {
+      "main": [
+        [
+          {
+            "node": "Modo pruebas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Campaña en espera?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Modo pruebas": {
+      "main": [
+        [
+          {
+            "node": "¿Se envía?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se envía?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No se envía (modo pruebas)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request5": {
+      "main": [
+        [
+          {
+            "node": "Datos para el envío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos para el envío": {
+      "main": [
+        [
+          {
+            "node": "Revisar destinatario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revisar destinatario": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo (subflujo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Campaña en espera?": {
+      "main": [
+        [
+          {
+            "node": "En espera (campaña pausada o sin empezar)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar prospecto inactivo por campaña",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿En espera?": {
+      "main": [
+        [
+          {
+            "node": "En espera: sin lugar hoy",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "scoring por reglas 5b": {
+      "main": [
+        [
+          {
+            "node": "Preparar registro de scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "control reintento gemini": {
+      "main": [
+        [
+          {
+            "node": "reportar gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "reportar gemini": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "scoring por reglas 5b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "errorWorkflow": "pL9iXvgOB7cSgTNJ"
+  },
+  "nodeGroups": [],
+  "_respaldo": {
+    "exportado_de_n8n": "2026-11-06T20:43:05.316Z",
+    "publicado_en": "2026-11-06T20:43:37.575Z",
+    "version_publicada": "7c32a09c-c1a7-49f0-ba68-ecfc29bbae39",
+    "version_del_editor": "7c32a09c-c1a7-49f0-ba68-ecfc29bbae39",
+    "editor_igual_a_publicado": true,
+    "credenciales_usadas": [
+      "Nanobridge-ApiKey (httpHeaderAuth)",
+      "Google Gemini(PaLM) Api account (googlePalmApi)"
+    ]
+  }
+}

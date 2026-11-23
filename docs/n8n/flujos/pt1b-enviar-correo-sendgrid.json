@@ -1,0 +1,280 @@
+{
+  "name": "PT1b. enviar correo (SendGrid)",
+  "id": "mmoychzdaYH4yp1w",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "6528fca8-a805-45c2-9c65-3a1f5c1fbffb",
+      "name": "Cuando lo llama otro flujo",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const FROM_EMAIL = \"hola@contacto.nano-bridge-mex.com\";\nconst FROM_NAME = \"NANOBRIDGE\";\n\nconst d = items[0].json;\n\nconst reply_to = d.reply_to;\nconst correo = d.correo;\nconst nombre = d.nombre;\nconst empresa = d.empresa;\nconst giro = d.giro;\nconst numero_contacto = d.numero_contacto;\n\nif (!reply_to || typeof reply_to !== \"string\" || !reply_to.startsWith(\"r+\")) {\n  throw new Error(\"Falta el reply_to firmado que devuelve POST /envios\");\n}\n\nif (!correo || typeof correo !== \"string\" || correo.trim() === \"\") {\n  throw new Error(\"El prospecto no tiene correo\");\n}\n\nconst sandbox = d.sandbox === false ? false : true;\n\nconst c = d.correo_contenido;\nif (!c || !c.asunto || !c.texto || !c.html) {\n  throw new Error('Falta el correo armado por la API (campo correo de POST /envios)');\n}\n\n// Destinatario: omitir name si viene vacío\nconst to = { email: correo };\nif (nombre && String(nombre).trim() !== \"\") {\n  to.name = nombre;\n}\n\nconst sendgrid = {\n  personalizations: [\n    {\n      to: [to],\n      custom_args: {\n        prospecto_id: String(d.prospecto_id),\n        envio_id: String(d.envio_id)\n      }\n    }\n  ],\n  custom_args: { prospecto_id: String(d.prospecto_id), envio_id: String(d.envio_id) },\n  from: { email: FROM_EMAIL, name: FROM_NAME },\n  reply_to: { email: reply_to },\n  subject: c.asunto,\n  content: [\n    { type: \"text/plain\", value: c.texto },\n    { type: \"text/html\", value: c.html }\n  ],\n  tracking_settings: { subscription_tracking: { enable: false }, click_tracking: { enable: false, enable_text: false }, open_tracking: { enable: false } },\n  mail_settings: { sandbox_mode: { enable: sandbox } }\n};\n\nreturn [{\n  json: {\n    prospecto_id: d.prospecto_id,\n    envio_id: d.envio_id,\n    sandbox: sandbox,\n    sendgrid: sendgrid\n  }\n}];\n"
+      },
+      "id": "8ccba346-7923-41c6-88ee-a9cc5def6dbe",
+      "name": "Armar correo SendGrid",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "sendGridApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.sendgrid }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "ce1e30e0-2404-4e3b-9f66-016acf9bc60c",
+      "name": "SendGrid · enviar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "sendGridApi": {
+          "id": "0Hwn28C1gft2jXPj",
+          "name": "SendGrid account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "mensaje-error",
+              "name": "mensaje",
+              "type": "string",
+              "value": "={{ (() => { const e = $json.error; let m; if (typeof e === 'string') { m = e; } else if (e && e.message) { m = e.description ? e.message + ': ' + e.description : e.message; } else { m = JSON.stringify(e || $json); } return ('SendGrid falló: ' + String(m)).slice(0, 300); })() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b53ee164-1234-477c-b3e4-652987f150d4",
+      "name": "Preparar error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/envios/{{ $('Cuando lo llama otro flujo').first().json.envio_id }}/confirmacion",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ estado: 'fallido', error: $json.mensaje }) }}",
+        "options": {}
+      },
+      "id": "6bbebc5a-45d5-4d19-bdc7-a3067529f0a5",
+      "name": "Confirmar fallido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        944,
+        224
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ $('Preparar error').first().json.mensaje }}"
+      },
+      "id": "a56a71db-31bf-487e-8496-ab96792ae83d",
+      "name": "Detener con error",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://nanobridge-api-165032456965.us-central1.run.app/api/v1/automatizacion/envios/{{ $('Cuando lo llama otro flujo').first().json.envio_id }}/confirmacion",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ estado: 'enviado', proveedor_id: ($json.headers || {})['x-message-id'] || null }) }}",
+        "options": {}
+      },
+      "id": "70663ba7-3807-492a-9d08-227f0c3cc8bc",
+      "name": "Confirmar enviado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        832,
+        -96
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AWZW5xxpgG8ETqvE",
+          "name": "Nanobridge-ApiKey"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const entrada = $('Cuando lo llama otro flujo').first().json;\nconst base = $('Armar correo SendGrid').first().json;\nconst resp = $('SendGrid · enviar').first().json;\nconst confirmacion = items[0].json;\n\nconst headers = resp.headers || {};\nconst messageId = headers[\"x-message-id\"] || null;\n\nreturn [{\n  json: {\n    prospecto_id: entrada.prospecto_id,\n    envio_id: entrada.envio_id,\n    destinatario: entrada.correo,\n    sandbox: base.sandbox,\n    sendgrid_status: resp.statusCode,\n    sendgrid_message_id: messageId,\n    proveedor_id: messageId,\n    confirmacion: confirmacion\n  }\n}];\n"
+      },
+      "id": "c4801848-27c4-4410-8b6e-57603510b6e9",
+      "name": "Resultado del envio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Cuando lo llama otro flujo": {
+      "main": [
+        [
+          {
+            "node": "Armar correo SendGrid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar correo SendGrid": {
+      "main": [
+        [
+          {
+            "node": "SendGrid · enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SendGrid · enviar": {
+      "main": [
+        [
+          {
+            "node": "Confirmar enviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar error": {
+      "main": [
+        [
+          {
+            "node": "Confirmar fallido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar fallido": {
+      "main": [
+        [
+          {
+            "node": "Detener con error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar enviado": {
+      "main": [
+        [
+          {
+            "node": "Resultado del envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": [
+    {
+      "id": "d3c9ff91-0653-43b3-9c10-25c70faac2bc",
+      "name": "Registrar envío fallido",
+      "nodeIds": [
+        "b53ee164-1234-477c-b3e4-652987f150d4",
+        "6bbebc5a-45d5-4d19-bdc7-a3067529f0a5",
+        "a56a71db-31bf-487e-8496-ab96792ae83d"
+      ],
+      "description": "Si el correo no salió, avisa a la API que falló con el motivo y detiene el flujo para que llegue la alerta de error."
+    }
+  ],
+  "_respaldo": {
+    "exportado_de_n8n": "2026-11-20T17:48:12.867Z",
+    "publicado_en": "2026-11-23T16:34:00.455Z",
+    "version_publicada": "b9f5ff49-4de6-456b-b287-7e0e421193ae",
+    "version_del_editor": "b9f5ff49-4de6-456b-b287-7e0e421193ae",
+    "editor_igual_a_publicado": true,
+    "credenciales_usadas": [
+      "SendGrid account (sendGridApi)",
+      "Nanobridge-ApiKey (httpHeaderAuth)"
+    ]
+  }
+}
