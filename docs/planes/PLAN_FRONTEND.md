@@ -724,6 +724,16 @@ Administración); para que lo sepas si tocas Prospectos o Empresas:
   lo quieres en el detalle del prospecto, pídeselo a Fabián: las columnas ya existen (`tipo_rebote`,
   `motivo_rebote`, `fecha_rebote`), solo falta agregarlas a la respuesta.
 
+## Pendientes de la revisión del 20-nov: lo tuyo (Fabián, 23 nov 2026)
+
+Se repartieron los 15 pendientes de la revisión entre los dos. El detalle está en
+[PLAN_PENDIENTES_REVISION.md](PLAN_PENDIENTES_REVISION.md). Tienes todo lo de Google Cloud. Los tuyos, en este orden:
+**#1** detener seguimiento (API + front, ya decidido cómo), **#5** repo público (decides tú), **#2** el Cloud
+Scheduler del aviso de n8n (cuando Fabián despliegue su parte), **#8** alerta de errores 500, **#10** deploy con
+Cloud Build, **#9** borrar datos de una persona (API + front, ya decidido cómo), **#15** pruebas, **#14** tipos
+del front y **#13** partir archivos grandes (este, después de que Fabián una el #3 y el #4). Al final, la parte de
+la API del #12.
+
 ## 7. Fuera de alcance de este plan
 
 - **n8n**: la interfaz no reemplaza ni necesita saber cómo funciona la automatización — consume sus resultados (prospectos clasificados, respuestas) ya guardados en el backend. En particular, el frontend **no registra supresiones**: desde el 24-sep-2026 la API las crea sola cuando una respuesta se clasifica `baja`, sea por n8n o desde la cola de clasificación (`PLAN_N8N_DEFINITIVO.md` B2). La ficha solo muestra el resultado: el medio de contacto aparece como `no_contactar`.
