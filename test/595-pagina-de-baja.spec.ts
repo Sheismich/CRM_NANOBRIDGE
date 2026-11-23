@@ -89,6 +89,23 @@ describe("página de baja propia (link del pie de los correos)", () => {
       expect(otraVez.body.ya_existia).toBe(true);
       expect(otraVez.body.correo.html).toContain(`<a href="${url}"`);
     });
+
+    // #6 de la revisión del 20-nov-2026: sin List-Unsubscribe, Gmail no muestra
+    // su botón de "Cancelar suscripción" y la gente marca spam. PT1b pasa
+    // estos encabezados a SendGrid tal cual.
+    it("trae los encabezados List-Unsubscribe con el mismo link del pie, también en el reintento", async () => {
+      const p = await prospecto();
+      const executionId = randomUUID();
+      const esperado = { "List-Unsubscribe": `<${urlDeBaja(p.id)}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
+
+      const res = await conLlave(api().post("/api/v1/automatizacion/envios")).send({ execution_id: executionId, prospecto_id: p.id, canal: "correo" });
+      expect(res.status).toBe(201);
+      expect(res.body.correo.cabeceras).toEqual(esperado);
+
+      const otraVez = await conLlave(api().post("/api/v1/automatizacion/envios")).send({ execution_id: executionId, prospecto_id: p.id, canal: "correo" });
+      expect(otraVez.body.ya_existia).toBe(true);
+      expect(otraVez.body.correo.cabeceras).toEqual(esperado);
+    });
   });
 
   describe("abrir la página (GET)", () => {
@@ -156,6 +173,16 @@ describe("página de baja propia (link del pie de los correos)", () => {
       // Ya no se le puede escribir.
       const envio = await conLlave(api().post("/api/v1/automatizacion/envios")).send({ execution_id: randomUUID(), prospecto_id: p.id, canal: "correo" });
       expect(envio.status).toBe(409);
+    });
+
+    // RFC 8058: el botón de Gmail manda un POST al link de List-Unsubscribe con
+    // ese cuerpo, sin cookies ni origen del CRM.
+    it("el botón 'Cancelar suscripción' de Gmail (POST de un clic) da de baja", async () => {
+      const p = await prospecto();
+      const res = await api().post(ruta(p.id)).type("form").send("List-Unsubscribe=One-Click");
+      expect(res.status).toBe(200);
+      expect(await estado(p.id)).toBe("baja");
+      expect(await enLista(p.correo)).toHaveLength(1);
     });
 
     it("apretar dos veces da el mismo 'Listo' y no duplica nada", async () => {

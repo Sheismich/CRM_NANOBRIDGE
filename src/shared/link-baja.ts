@@ -26,6 +26,15 @@ export function urlDeBaja(prospectoId: number) {
   return `${env.CRM_URL}${RUTA_BAJA}/${prospectoId}.${firma(prospectoId)}`;
 }
 
+// Encabezados para que el programa de correo muestre su propio botón de
+// "Cancelar suscripción" (#6 de la revisión del 20-nov-2026; RFC 2369 y 8058).
+// Se perdieron el 13-nov al apagar el link de SendGrid. El botón de Gmail manda
+// un POST al link, que es lo mismo que apretar "Confirmar baja" en la página.
+// Solo en correos de prospección: no en avisos ni en respuestas de vendedores.
+export function cabecerasDeBaja(prospectoId: number): Record<string, string> {
+  return { "List-Unsubscribe": `<${urlDeBaja(prospectoId)}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
+}
+
 // El prospecto_id si el token es nuestro y la firma es válida; null si no.
 export function leerTokenDeBaja(token: string): number | null {
   const match = FORMATO.exec(token);

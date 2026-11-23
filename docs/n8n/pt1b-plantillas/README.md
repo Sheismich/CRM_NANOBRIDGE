@@ -138,3 +138,36 @@ sale nada a medias. PT4 usa el mismo subflujo: queda arreglado con este cambio.
 
 Los correos que salieron antes de este cambio conservan el link de SendGrid:
 PT3 sigue igual y atiende esas bajas.
+
+## Prompt 6 · PT1b, encabezados List-Unsubscribe (23-nov-2026)
+
+Desde el 13-nov los correos no traen `List-Unsubscribe` (lo ponía el link de
+SendGrid que se apagó). Sin ese encabezado Gmail no muestra su botón
+"Cancelar suscripción" y quien no quiere más correos marca spam; con 2 quejas en
+7 días se pausan los envíos. Desde la API 00065 (PR 8), `POST
+/automatizacion/envios` trae en `correo.cabeceras` los dos encabezados listos
+(`List-Unsubscribe` con el link de baja firmado y `List-Unsubscribe-Post`). El
+botón de Gmail manda un POST a ese link, igual que "Confirmar baja".
+
+**Orden:** primero el deploy de la API, luego este cambio. PT4 usa el mismo
+subflujo: queda arreglado con este cambio.
+
+> En el subflujo PT1b, nodo Code "Armar correo SendGrid", dentro del objeto
+> `sendgrid`, agrega esta línea justo después de la línea `subject: c.asunto,`:
+>
+> ```js
+>   ...(c.cabeceras ? { headers: c.cabeceras } : {}),
+> ```
+>
+> No cambies nada más. Guarda y publica PT1b.
+
+**Prueba:** correr PT1a con un prospecto de prueba (`+pruebaN`).
+1. En Gmail, abre el correo → ⋮ → "Mostrar original": trae
+   `List-Unsubscribe: <https://crm-prospeccion-outbound.web.app/api/v1/baja/…>`
+   y `List-Unsubscribe-Post: List-Unsubscribe=One-Click`.
+2. Gmail puede tardar en mostrar el botón "Cancelar suscripción" junto al
+   remitente (lo decide Gmail según la reputación); que no salga no es error.
+3. Si sale y lo pulsas: el prospecto queda en baja y el Historial dice "Baja
+   confirmada en la página de baja".
+
+Después, volver a exportar PT1b a `docs/n8n/flujos/` (ver su README).
