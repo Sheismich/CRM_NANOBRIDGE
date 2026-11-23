@@ -714,7 +714,8 @@ Antes un 500 solo quedaba en el log (`src/shared/http-exception.filter.ts`) y na
 
 Probado el 23-nov: el filtro encuentra los 500 reales del 17-nov a las 12:24 (6 en el mismo segundo, por las
 conexiones que MySQL había cortado), que con esta regla habrían avisado. Para probar la alerta se escribieron a mano
-3 registros marcados `/prueba-alerta-500` (log `prueba-alerta-500`, no son errores reales).
+3 registros marcados `/prueba-alerta-500` (log `prueba-alerta-500`, no son errores reales). El aviso llegó a las dos
+cuentas (confirmado por Mich el 23-nov).
 
 ### Aviso si n8n no corrió (Cloud Scheduler, 23-nov-2026)
 
