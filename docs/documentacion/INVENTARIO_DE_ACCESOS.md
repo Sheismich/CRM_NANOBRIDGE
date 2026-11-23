@@ -2,7 +2,7 @@
 
 **Para:** la transferencia operativa (OB-07): quién tiene acceso a qué, qué depende de cuentas de los pasantes y qué hay
 que pasar a alguien de planta antes del cierre (9-dic-2026).
-**Versión:** 0.9.2 · 20 de noviembre de 2026 (avisos y remitente del 6-nov; SendGrid pagado y link de baja firmado). Los permisos de Google Cloud se
+**Versión:** 0.9.3 · 23 de noviembre de 2026 (Event Webhook directo a la API; avisos y remitente del 6-nov; SendGrid pagado y link de baja firmado). Los permisos de Google Cloud se
 leyeron del proyecto el 4-nov; lo marcado
 ⏳ hay que confirmarlo con quien administra esa cuenta.
 
@@ -78,7 +78,7 @@ Los leen las tres personas de §2 y la cuenta de la API. Cómo consultarlos o ro
 | Cuenta | La de `pasante.tics002@nano-bridge-mex.com` (decidido el 22-oct-2026). El jefe tiene acceso a ese correo |
 | Plan | Essentials 50K (50,000 correos al mes), pagado el 10-nov-2026 · ⏳ con qué tarjeta y quién recibe la factura |
 | Dominio | `contacto.nano-bridge-mex.com`, verificado; respuestas en `respuestas.contacto.nano-bridge-mex.com` |
-| Inbound Parse y Event Webhook | Apuntan a n8n (PT2 y PT3) |
+| Inbound Parse y Event Webhook | Inbound Parse apunta a n8n (PT2). Event Webhook: desde el 20-nov uno firmado directo a la API (`/api/v1/webhooks/sendgrid/eventos`, llave pública en `SENDGRID_WEBHOOK_PUBLIC_KEY`) y el de PT3 en n8n, que se apaga en unos días (RUNBOOK §12) |
 | Llaves | Una para n8n (en su credencial) y otra para la API (`SENDGRID_API_KEY`) |
 | Remitente | Con el domicilio de la empresa desde el 6-nov |
 | Pendiente | Dar de alta a alguien de planta como Teammate administrador |

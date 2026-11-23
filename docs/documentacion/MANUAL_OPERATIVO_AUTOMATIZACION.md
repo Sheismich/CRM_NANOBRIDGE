@@ -2,7 +2,7 @@
 
 **Para:** quien opere la prospección por correo después de la transferencia: el administrador o supervisor del CRM y
 la persona con acceso técnico (n8n, Google Cloud y SendGrid).
-**Versión:** 0.9.4 · 20 de noviembre de 2026 · servidor `nanobridge-api-00060-4xj` (18-nov): topes de 100 y 75, página de baja propia
+**Versión:** 0.9.5 · 23 de noviembre de 2026 (webhook de SendGrid, `rebotado` y freno por porcentaje, `00063-slf`); 0.9.4 · 20 de noviembre de 2026 · servidor `nanobridge-api-00060-4xj` (18-nov): topes de 100 y 75, página de baja propia
 (13-nov) y PT1a pidiendo 75 (17-nov). Pasa a
 1.0 al cierre, con lo que deje la operación y la lista de accesos de la transferencia (OB-07).
 
@@ -21,10 +21,11 @@ no entrega nada a PT1 ni a PT4: corren, no mandan nada, y todo sale el siguiente
 | 9:00 | **PT4 · recordatorios** | n8n | Manda los correos 2 y 3 a quien ya cumplió su espera de 5 días hábiles; marca inactivo a quien ya recibió 3 |
 | 10:00, después de PT4 | **PT1a → PT1 · nuevos** | n8n | Toma de la fila hasta 75 prospectos (el `limite` que pide, igual a `NUEVOS_POR_DIA`; la API acepta hasta 200), con lo que dejen del tope diario los recordatorios, los valida, los califica y les manda el primer correo |
 | Cada vez que alguien responde | **PT2 · respuestas** | n8n | Registra la respuesta, detiene los recordatorios de esa persona, la pone en la cola de clasificación, pide la sugerencia a la IA y avisa al supervisor |
-| Cada evento de SendGrid | **PT3 · bajas, spam y rebotes** | n8n | Da de baja a la persona si marcó spam (o solo el correo, si rebotó). Atiende también el link de baja de SendGrid de los correos anteriores al 13-nov |
+| Cada evento de SendGrid | **PT3 · bajas, spam y rebotes** | n8n | Suprime el correo o da de baja a la persona, como antes, pero desde el 20-nov ya no mueve el freno. Sigue unos días junto con el Event Webhook y después se apaga (RUNBOOK §12, paso 5) |
 | Cuando alguien aprieta «Confirmar baja» | **Página de baja** | API | Da de baja a la persona. Abrir el link no cambia nada; solo el botón (§5) |
 | Cuando algo falla | **B4 · avisos de falla** | n8n | Registra la falla en el CRM y manda un correo «[NANOBRIDGE] Falló …» |
-| Con cada queja o rebote | **Freno del dominio** | API | Con 2 quejas o 5 rebotes en 7 días pausa la prospección y avisa a administradores y supervisores |
+| Cada lote de eventos de SendGrid | **Event Webhook** (desde el 20-nov) | API | Un rebote pasa **solo ese** prospecto a «rebotado» (duro, o 3 suaves seguidos) y el correo duro a supresión; una queja o baja da de baja a la persona. Cada evento se guarda una vez en `eventos_sendgrid` |
+| Con cada queja o rebote | **Freno del dominio** | API | Con 2 quejas en 7 días, o con 2 % de rebotes si salieron al menos 100 correos en 7 días (con menos, 5 rebotes), pausa la prospección y avisa a administradores y supervisores. Solo cuenta lo que llega por el webhook |
 | Cada 5 minutos | **Revisión de que la API responde** | Google Cloud Monitoring | Si la API no responde 5 minutos seguidos, manda un correo; otro cuando se recupera |
 
 Desde el 6-nov-2026 `MODO_PRUEBAS` está apagado: PT4 y PT1a corren solos con estos horarios.
@@ -69,8 +70,12 @@ los recordatorios salen repartidos por el tope diario.
 3. Avisar a Dirección.
 
 **Reanudar después del freno del dominio:** primero revisar de dónde salieron las quejas o los rebotes (la lista, un
-correo mal escrito); luego Administración → Estado del sistema → «Reanudar». Solo un administrador. Después solo cuentan
-las quejas y rebotes nuevos.
+correo mal escrito): Administración → aviso de pausa → «Ver los contactos que rebotaron». Luego Administración → Estado
+del sistema → «Reanudar». Solo un administrador. Después solo cuentan las quejas y rebotes nuevos.
+
+**Reactivar a alguien que rebotó** (por ejemplo, el correo ya se corrigió): en esa misma lista, «Reactivar». Vuelve a
+«capturado» y, si fue rebote duro, sale de la lista de supresión. SendGrid guarda su propia lista: hay que quitarlo
+también en SendGrid → Suppressions → Bounces, o sus correos se descartan.
 
 **Prender el reparto de interesados:** Administración → «Reparto de interesados»: elegir a los vendedores que
 reciben y prender «Repartir solo». Antes, el equipo de ventas tiene que estar dado de alta como usuarios.
@@ -88,7 +93,9 @@ reciben y prender «Repartir solo». Antes, el equipo de ventas tiene que estar 
 | IA que sugiere la clasificación | `abierto` (todas las respuestas) | n8n: `IA_MODO` en PT2a (`abierto`, `pruebas` o `apagado`) |
 | IA del CRM (borrador y resumen) | Encendida | Google Cloud: `IA_DRIVER=gemini`; para apagarla, `IA_DRIVER=falso` |
 | Reparto de interesados | Prendido desde el 6-nov (Carlos, Fabián y Mich) | CRM: Administración → Reparto de interesados |
-| Límites del freno del dominio | 2 quejas o 5 rebotes en 7 días | Google Cloud: `FRENO_QUEJAS_7D` y `FRENO_REBOTES_7D` con `--update-env-vars` |
+| Límites del freno del dominio | 2 quejas en 7 días; 2 % de rebotes con al menos 100 correos en 7 días, y con menos, 5 rebotes (desde el 20-nov) | Google Cloud: `FRENO_QUEJAS_7D`, `FRENO_TASA_REBOTE_7D`, `FRENO_MIN_ENVIOS_7D` y `FRENO_REBOTES_7D` con `--update-env-vars` |
+| Rebotes suaves que desactivan a un prospecto | 3 seguidos, sin un entregado entre medio | Google Cloud: `REBOTES_SUAVES_PARA_DESACTIVAR` |
+| Llave del Event Webhook de SendGrid | La pública que da SendGrid al activar la firma (no es secreta) | Google Cloud: `SENDGRID_WEBHOOK_PUBLIC_KEY`. Sin ella el webhook responde 503 y no procesa nada (RUNBOOK §12) |
 | A quién avisa B4 y a quién avisa PT2 | `pasante.tics002@` y `director.general@nano-bridge-mex.com` | n8n: `DESTINOS` en «armar correo de error» (B4) y en «armar aviso de respuesta» (PT2) |
 | A quién avisa Cloud Monitoring | Hoy a las cuentas de los pasantes | Google Cloud: Monitoring → Alerting → la alerta → Notifications |
 
@@ -126,7 +133,7 @@ el RUNBOOK, «Qué está en producción».
 | Hoy no salió ningún correo | ¿Es feriado? ¿La campaña está activa o pausada? ¿Hay prospectos en la fila? ¿Se alcanzó el tope? ¿Corrieron PT4 y PT1a en n8n? ¿Sigue encendido `MODO_PRUEBAS`? | Lo que aplique. Si n8n corrió y la API no entregó nada, el motivo está en la respuesta de `fila/tomar` o `envios/vencidas` dentro de la ejecución |
 | Muchos scores calculados «por reglas» | Incidencias `gemini_agotado` en Administración | Nada se atora: los prospectos siguen su camino. Si pasa seguido, revisar la llave y la cuota de Gemini |
 | Una respuesta llegó sin identificar | Queda como tarea en la cola | Clasificarla a mano; si es de un prospecto, buscarlo por su correo |
-| Aviso «Se pausaron los envíos de prospección» (freno del dominio) | Administración → Estado del sistema: cuántas quejas y rebotes | Revisar la lista que los causó, corregir y **Reanudar** (§3). Nadie perdió su lugar |
+| Aviso «Se pausaron los envíos de prospección» (freno del dominio) | Administración → Estado del sistema: rebotes duros y suaves, quejas y el porcentaje; «Ver los contactos que rebotaron» | Revisar la lista que los causó, corregir y **Reanudar** (§3). Nadie perdió su lugar |
 | Administración marca «correos sin confirmar» | ¿Falló PT1b? (los prompts de `docs/n8n/confirmacion-envios/` están aplicados desde el 6-nov) | Revisar la ejecución de PT1b en n8n; si SendGrid rechazó el correo, se reintenta solo hasta 3 veces |
 | La auditoría marca una persona con más de 3 correos, o un medio activo en la lista de supresión | Reporte de la auditoría (§4 de sus controles rojos) | **Detener la campaña** y avisar a T2 y a Dirección (procedimiento de auditoría) |
 | Gmail manda los correos a Promociones | Bandeja de un buzón de prueba | Riesgo conocido, sin solución todavía; anotarlo en el reporte del piloto |

@@ -2,7 +2,7 @@
 
 **Entregable:** flujo de campaña listo para decisión (OB-05), proyecto naranja · outbound.
 **Para:** Dirección General y quien opere la prospección. **Redacta:** T1 · **Revisión:** T2 (dueño de los flujos de n8n).
-**Versión:** 0.9.4 · 20 de noviembre de 2026 (las 4 campañas, contactos cargados y certificación de audiencia); 0.9.3 · 20 de noviembre de 2026 (límites de §4 y reparto de §6 al día); 0.9.2 · 18 de noviembre de 2026 (PT1a pide 75 y bajas falsas revertidas); 0.9.1 · 17 de noviembre de 2026 (topes del 10-nov y página de baja del 13-nov; la 0.9 del 10-nov trajo
+**Versión:** 0.9.5 · 23 de noviembre de 2026 (rebotes por prospecto y freno por porcentaje, 20-nov); 0.9.4 · 20 de noviembre de 2026 (las 4 campañas, contactos cargados y certificación de audiencia); 0.9.3 · 20 de noviembre de 2026 (límites de §4 y reparto de §6 al día); 0.9.2 · 18 de noviembre de 2026 (PT1a pide 75 y bajas falsas revertidas); 0.9.1 · 17 de noviembre de 2026 (topes del 10-nov y página de baja del 13-nov; la 0.9 del 10-nov trajo
 el encendido y los correos por campaña). Pasa a 1.0 con lo que
 queda en §10.
 
@@ -130,6 +130,7 @@ A nadie de esta lista le sale un correo, aunque esté en la campaña:
 |---|---|---|
 | Persona en la lista de supresión | Pidió la baja, marcó spam o su correo rebotó | `D-01` |
 | Persona en baja | Se le dio de baja por respuesta o por evento de SendGrid; no se deshace | `D-02` |
+| Prospecto rebotado | Su correo rebotó (duro, o 3 suaves seguidos); solo ese prospecto, desde el 20-nov. Se reactiva en Administración | `D-09`, `605-webhook-sendgrid` |
 | Prospecto cerrado | `interesado`, `no_interesado`, `descartado`, `excluido` o `inactivo` | `230-recordatorios` |
 | Sin correo utilizable | No hay a dónde escribir | `D-06` |
 | Ya con 3 correos en 6 meses en esta campaña, o con una espera abierta en ella | Límite de contacto | `D-03` |
@@ -147,7 +148,8 @@ procesos fallidos). Nada de esto se borra.
 **Durante el piloto:**
 - **Auditoría de datos diaria** (procedimiento §1), con atención a los dos controles rojos: personas con más de 3
   correos en 6 meses y medios activos que están en la lista de supresión. Cualquiera de los dos **detiene la campaña**.
-- **Freno automático del dominio** (desde el 5-nov): con 2 quejas de spam o 5 rebotes en 7 días se pausa toda la
+- **Freno automático del dominio** (desde el 5-nov; por porcentaje desde el 20-nov): con 2 quejas de spam en 7 días, o con 2 % de rebotes si salieron al menos 100 correos en 7 días (con menos, 5
+  rebotes) se pausa toda la
   prospección y se avisa a administradores y supervisores; nadie pierde su lugar. Se revisa la lista y un
   administrador reanuda en Administración.
 - **Correos que no salieron:** si SendGrid rechaza uno, se reintenta hasta 3 veces sin gastar el contacto de la persona.

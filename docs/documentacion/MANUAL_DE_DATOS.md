@@ -1,7 +1,7 @@
 # Manual de datos · CRM NANOBRIDGE
 
 **Entregable:** manual de datos (T1, paquete final OB-07). **Para:** quien cargue, revise y mantenga los datos del CRM
-(supervisor o el responsable de datos que siga). **Versión:** 1.0.3 · 20 de noviembre de 2026 (página de baja, topes, lugar en la fila y cómo reactivar a alguien directo en la
+(supervisor o el responsable de datos que siga). **Versión:** 1.0.4 · 23 de noviembre de 2026 (rebotes: estado «rebotado» y reactivar; página de baja, topes, lugar en la fila y cómo reactivar a alguien directo en la
 base; la 1.0 es del 28-oct).
 
 Este manual explica el trabajo con los datos en el día a día. El detalle de cada campo está en el
@@ -92,9 +92,12 @@ teléfonos **siguen apartados**, así que no se pueden volver a capturar para ot
 
 ## 6. Bajas y lista de supresión
 
-- Una persona se da de baja sola con el enlace «Darte de baja» del pie de los correos, marcando el correo como spam, o
-  si su correo rebota. El enlace lleva a una página donde confirma con un botón: abrirla no da de baja (desde el
+- Una persona se da de baja sola con el enlace «Darte de baja» del pie de los correos o marcando el correo como spam. El enlace lleva a una página donde confirma con un botón: abrirla no da de baja (desde el
   13-nov-2026; antes los escáneres de correo de Microsoft 365 la abrían solos). También al clasificar su respuesta como «baja».
+- **Un rebote no es una baja** (desde el 20-nov-2026): si el correo rebota, solo ese prospecto pasa a «rebotado» (duro,
+  o 3 rebotes suaves seguidos) y, si fue duro, el correo entra a la lista de supresión. La persona sigue en las demás
+  campañas con sus otros medios. Se reactiva en Administración → «Ver los contactos que rebotaron» → «Reactivar», y
+  también hay que quitar el correo en SendGrid → Suppressions → Bounces.
 - **Si lo pide por teléfono o en persona:** en la ficha de la empresa, en el contacto, «Dar de baja», y escribir cómo
   lo pidió. Hace exactamente lo mismo que el enlace del pie (desde el 4-nov-2026).
 - Al darse de baja: sus medios pasan a «no contactar», entra a la **lista de supresión**, se cancelan sus seguimientos y

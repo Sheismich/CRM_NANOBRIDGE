@@ -107,6 +107,10 @@ r.supresion = await filas(`SELECT COALESCE(evento, motivo, 'sin motivo') e, tipo
 const cuenta = (ev) => r.supresion.filter((x) => x.e === ev && x.tipo === "correo").reduce((s, x) => s + Number(x.n), 0);
 r.rebotes = cuenta("bounce");
 r.quejas = cuenta("spamreport");
+// Desde la 044 (20-nov-2026) el webhook de SendGrid pasa a «rebotado» solo el prospecto al que le rebotó el correo
+// (duro, o 3 suaves seguidos). En una base sin la 044 no hay esa columna: se omite.
+const con044 = await uno("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'prospectos' AND column_name = 'tipo_rebote'");
+r.rebotados = con044 ? await filas("SELECT COALESCE(tipo_rebote, 'sin tipo') tipo, COUNT(*) n FROM prospectos WHERE estado = 'rebotado' GROUP BY tipo_rebote") : null;
 r.freno = await filas(`SELECT accion, DATE_FORMAT(${MX.replace("%s", "creado_en")}, '%Y-%m-%d %H:%i') cuando FROM auditoria WHERE entidad = 'freno_dominio' AND creado_en >= ? ORDER BY creado_en`, [ini]);
 
 // --- 4. Interesados: la tarea «Contactar prospecto interesado»
@@ -180,7 +184,8 @@ ${tabla(["Clasificación", "Respuestas"], [...clases(r.respuestas).map(([c, n]) 
 ${tabla(["Motivo", "Medio", "Altas en la lista de supresión"], r.supresion.map((x) => [x.e, x.tipo, String(x.n)]))}
 
 - Rebotes: **${r.rebotes}** de ${totalCorreos} correos (**${pct(r.rebotes, totalCorreos)}**; para subir el tope tiene que quedar debajo de 2 %).
-- Quejas de spam: **${r.quejas}** (**${pct(r.quejas, totalCorreos)}**; debajo de 0.1 %).
+${r.rebotados ? `- Prospectos en «rebotado» hoy (no reciben más correos; se reactivan en Administración): **${r.rebotados.reduce((t, x) => t + Number(x.n), 0)}**${r.rebotados.length ? ` (${r.rebotados.map((x) => `${x.tipo} ${x.n}`).join(", ")})` : ""}.
+` : ""}- Quejas de spam: **${r.quejas}** (**${pct(r.quejas, totalCorreos)}**; debajo de 0.1 %).
 - Freno del dominio: ${r.freno.length ? r.freno.map((x) => `${x.accion} el ${x.cuando}`).join("; ") : "no se activó"}.
 
 ## 4. Interesados

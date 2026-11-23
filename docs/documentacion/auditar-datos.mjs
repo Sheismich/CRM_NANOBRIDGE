@@ -28,8 +28,9 @@ const uno = async (sql, params) => Number(Object.values((await db.query(sql, par
 const filas = async (sql, params) => (await db.query(sql, params))[0];
 const ids = (lista, max = 15) => (lista.length ? lista.slice(0, max).join(", ") + (lista.length > max ? ` y ${lista.length - max} más` : "") : "—");
 
-const ESTADOS_VALIDOS = ["capturado", "en_fila", "validado", "excluido", "interesado", "no_interesado", "en_revision", "descartado", "inactivo", "baja"];
-const CERRADOS = ["baja", "interesado", "no_interesado", "descartado", "excluido", "inactivo"];
+const ESTADOS_VALIDOS = ["capturado", "en_fila", "validado", "excluido", "interesado", "no_interesado", "en_revision", "descartado", "inactivo", "baja", "rebotado"];
+// rebotado: desde la migración 044 (20-nov-2026), el correo de ese prospecto rebotó.
+const CERRADOS = ["baja", "interesado", "no_interesado", "descartado", "excluido", "inactivo", "rebotado"];
 const lista = (xs) => xs.map((x) => `'${x}'`).join(",");
 // Nombre de empresa para comparar: minúsculas, sin puntuación ni la forma jurídica.
 const NOMBRE_EMPRESA = `TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(nombre_legal), '[[:punct:]]', ''), '\\\\s+(sa|sapi|s de rl|sc|sas)?\\\\s*(de\\\\s+cv)?\\\\s*$', ''))`;
