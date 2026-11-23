@@ -402,6 +402,10 @@ type ContactoAgrupado = ReturnType<typeof agruparContactos>[number];
 // teléfono, WhatsApp u otro correo; POST /contactos/:id/detener-seguimiento
 // la saca de la automatización (su serie pasa a interesado, sin tarea nueva).
 // Solo a quien tiene algo en automatización. No se deshace desde el CRM.
+// «Borrar datos (ARCO)» (23-nov-2026): la persona pidió que se borren sus datos.
+// POST /contactos/:id/borrar-datos los anonimiza en todo el CRM (solo quedan su
+// correo y teléfono en la lista de supresión). Solo el administrador, y hay que
+// escribir su nombre para confirmar. No se deshace.
 function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { empresaId: number; contactos: ContactoAgrupado[]; oportunidadesAbiertas: number }) {
   const queryClient = useQueryClient();
   const [agregando, setAgregando] = useState(false);
@@ -415,6 +419,11 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
   const [porDetener, setPorDetener] = useState<ContactoAgrupado | null>(null);
   const [motivoDetener, setMotivoDetener] = useState("");
   const [detenido, setDetenido] = useState<string | null>(null);
+  const { user } = useAuth();
+  const esAdmin = user?.rol === "administrador";
+  const [porBorrar, setPorBorrar] = useState<ContactoAgrupado | null>(null);
+  const [confirmacionBorrar, setConfirmacionBorrar] = useState("");
+  const [borrado, setBorrado] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function aProspeccion(c: ContactoAgrupado) {
@@ -470,6 +479,27 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
     }
   }
 
+  async function borrarDatos(c: ContactoAgrupado) {
+    setError(null);
+    setBorrado(false);
+    try {
+      await api.post(`/api/v1/contactos/${c.contacto.id}/borrar-datos`, { confirmacion: confirmacionBorrar.trim() });
+      setBorrado(true);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["empresa", String(empresaId)] }),
+        queryClient.invalidateQueries({ queryKey: ["contactos"] }),
+        queryClient.invalidateQueries({ queryKey: ["prospectos"] }),
+        queryClient.invalidateQueries({ queryKey: ["timeline"] }),
+        queryClient.invalidateQueries({ queryKey: ["tareas"] })
+      ]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+    } finally {
+      setPorBorrar(null);
+      setConfirmacionBorrar("");
+    }
+  }
+
   async function desactivar(c: ContactoAgrupado) {
     setError(null);
     try {
@@ -517,6 +547,12 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
         <div className="mx-4 mt-3 flex items-center gap-2 rounded-[12px] bg-ok-bg px-3.5 py-3 text-[12px] font-semibold text-ok md:mx-[22px]">
           <Icono nombre="check" size={15} className="shrink-0" />
           <span className="min-w-0 flex-1">{dadoDeBaja} quedó dada de baja: ya no se le escribe y sus seguimientos se cancelaron.</span>
+        </div>
+      )}
+      {borrado && (
+        <div className="mx-4 mt-3 flex items-center gap-2 rounded-[12px] bg-ok-bg px-3.5 py-3 text-[12px] font-semibold text-ok md:mx-[22px]">
+          <Icono nombre="check" size={15} className="shrink-0" />
+          <span className="min-w-0 flex-1">Se borraron los datos de la persona. Solo quedan su correo y teléfono en la lista de supresión, para no volver a escribirle.</span>
         </div>
       )}
       {detenido && (
@@ -604,6 +640,16 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
                 <button type="button" className="rounded-[8px] px-2 py-1 text-[12px] font-bold text-danger hover:bg-danger-bg" onClick={() => setPorDesactivar(agrupado)}>
                   Desactivar
                 </button>
+                {esAdmin && (
+                  <button
+                    type="button"
+                    className="rounded-[8px] px-2 py-1 text-[12px] font-bold text-danger hover:bg-danger-bg"
+                    title="La persona pidió que se borren sus datos (derecho ARCO)"
+                    onClick={() => setPorBorrar(agrupado)}
+                  >
+                    Borrar datos
+                  </button>
+                )}
               </div>
             </li>
           );
@@ -625,6 +671,53 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
           </>
         }
       />
+      <Modal
+        abierto={porBorrar !== null}
+        onCerrar={() => {
+          setPorBorrar(null);
+          setConfirmacionBorrar("");
+        }}
+        titulo="¿Borrar los datos de esta persona?"
+        descripcion={
+          porBorrar
+            ? `Es para cuando «${porBorrar.contacto.nombre}» pide que se borren sus datos (derecho ARCO). Su nombre, correos, teléfonos, notas, respuestas y los correos que se le mandaron se borran de todo el CRM. Las ventas y cotizaciones de la empresa se quedan, sin su nombre. Su correo y teléfono quedan solo en la lista de supresión, para no volver a escribirle. No se puede deshacer.`
+            : undefined
+        }
+        acciones={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPorBorrar(null);
+                setConfirmacionBorrar("");
+              }}
+            >
+              No
+            </Button>
+            <Button
+              variant="rechazar"
+              disabled={!porBorrar || confirmacionBorrar.trim().toLocaleLowerCase("es-MX") !== porBorrar.contacto.nombre.trim().toLocaleLowerCase("es-MX")}
+              onClick={() => porBorrar && void borrarDatos(porBorrar)}
+            >
+              Sí, borrar sus datos
+            </Button>
+          </>
+        }
+      >
+        <div className="px-5 pb-2">
+          <Field label={porBorrar ? `Escribe «${porBorrar.contacto.nombre}» para confirmar` : "Escribe su nombre para confirmar"} htmlFor="confirmar-borrar">
+            <input
+              id="confirmar-borrar"
+              data-autofocus
+              autoComplete="off"
+              maxLength={160}
+              className={inputClass}
+              value={confirmacionBorrar}
+              onChange={(e) => setConfirmacionBorrar(e.target.value)}
+            />
+          </Field>
+        </div>
+      </Modal>
       <Modal
         abierto={porDetener !== null}
         onCerrar={() => {

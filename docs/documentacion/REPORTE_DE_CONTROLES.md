@@ -27,7 +27,7 @@ Cómo se comprueba cada control:
 - **Verificación en la base:** la regla la impone MySQL y se leyó de `information_schema` al generar el diccionario.
 - **Prueba manual documentada:** se ejecutó una vez, con fecha, y quedó en el RUNBOOK.
 
-D-08, D-09 y D-10 se agregaron después del corte: no entran en el denominador de T1.3 hasta que Dirección los apruebe.
+D-08 a D-11 se agregaron después del corte: no entran en el denominador de T1.3 hasta que Dirección los apruebe.
 
 Además hay 5 controles **propuestos que no entran en este corte** (§G). Se listan para que Dirección decida si se agregan.
 
@@ -76,6 +76,7 @@ Además hay 5 controles **propuestos que no entran en este corte** (§G). Se lis
 | D-08 | **Freno del dominio** (agregado el 5-nov, fuera del corte): con 2 quejas en 7 días, o con 2 % de rebotes si salieron al menos 100 correos en 7 días (con menos, 5 rebotes; desde el 20-nov), pausa toda la prospección y avisa; se reanuda a mano | `src/shared/freno-dominio.ts` | `565-freno-dominio`; en vivo: pausó el 20-nov-2026 a las 10:01 |
 | D-09 | **Un rebote desactiva solo ese prospecto** (agregado el 20-nov, fuera del corte): el webhook firmado de SendGrid pasa a «rebotado» al prospecto (duro, o 3 suaves seguidos), suprime el correo duro y guarda cada evento una sola vez | `src/sendgrid-eventos/`, `src/shared/rebotes.ts` | `605-webhook-sendgrid` |
 | D-10 | **Detener seguimiento de quien ya habla con ventas** (pendiente #1 de la revisión del 20-nov, fuera del corte): el botón de la ficha o una oportunidad con esa persona la sacan de la automatización en todas sus campañas, sin crear tarea ni cambiar los reportes | `src/shared/detener-seguimiento.ts` | `615-detener-seguimiento` |
+| D-11 | **Borrar los datos de una persona (ARCO)** (pendiente #9 de la revisión del 20-nov, fuera del corte): solo el administrador, con su nombre como confirmación; anonimiza sus datos en todo el CRM y deja solo su correo y teléfono en la lista de supresión | `src/shared/borrar-datos-persona.ts` | `620-borrar-datos-arco` (busca su nombre, correo y teléfono en todas las columnas de texto de la base) |
 
 ## E. Acceso y trazabilidad
 

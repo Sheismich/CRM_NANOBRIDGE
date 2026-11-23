@@ -190,6 +190,7 @@ export function frase(fila: FilaAuditoria, quien: string, nombres: Nombres): str
     }
     case "contacto:crear": return `${quien} agregó el contacto ${nombre}${deEmpresa(nombres.contactos.get(fila.entidadId)?.empresaId, nombres)}.`;
     case "contacto:actualizar": return `${quien} editó el contacto ${nombre}${deEmpresa(nombres.contactos.get(fila.entidadId)?.empresaId, nombres)}.`;
+    case "contacto:borrar_datos_arco": return `${quien} borró los datos de una persona por solicitud ARCO.`;
     case "contacto:desactivar": return `${quien} dio de baja el contacto ${nombre}${deEmpresa(nombres.contactos.get(fila.entidadId)?.empresaId, nombres)}.`;
     case "oportunidad:crear": return `${quien} creó la oportunidad ${nombre}.`;
     case "oportunidad:cambiar_etapa": return `${quien} movió la oportunidad ${nombre} a ${legible("etapa_clave", despues.etapa_clave, nombres)}.`;

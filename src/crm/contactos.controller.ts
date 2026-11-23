@@ -7,7 +7,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { updateContactSchema } from "./dto/empresa.schema.js";
-import { bajaContactoSchema, conteosContactosQuerySchema, createContactoSchema, detenerSeguimientoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
+import { bajaContactoSchema, borrarDatosSchema, conteosContactosQuerySchema, createContactoSchema, detenerSeguimientoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -58,6 +58,15 @@ export class ContactosController {
   @Roles("administrador", "supervisor", "agente")
   darDeBaja(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
     return this.contactosService.darDeBaja(user, idParamSchema.parse(idParam), bajaContactoSchema.parse(body ?? {}).motivo);
+  }
+
+  // Derecho ARCO (23-nov-2026): borra (anonimiza) los datos de la persona. Solo
+  // el administrador; no se deshace.
+  @Post(":id/borrar-datos")
+  @HttpCode(200)
+  @Roles("administrador")
+  borrarDatos(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    return this.contactosService.borrarDatos(user, idParamSchema.parse(idParam), borrarDatosSchema.parse(body ?? {}).confirmacion);
   }
 
   // Ya habla con ventas: la automatización deja de escribirle (23-nov-2026).

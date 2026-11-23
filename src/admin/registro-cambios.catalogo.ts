@@ -30,7 +30,7 @@ const REGLAS: Record<TipoRegistro, Record<string, Record<string, string>>> = {
   borrados: {
     documento: { eliminar: "Documento eliminado" },
     empresa: { desactivar: "Baja de empresa" },
-    contacto: { desactivar: "Baja de contacto" },
+    contacto: { desactivar: "Baja de contacto", borrar_datos_arco: "Datos de una persona borrados (ARCO)" },
     medio_contacto: { registrar_supresion: "Medio marcado como no contactar" }
     // + el prospecto que una persona pasó a "baja" (ver condicionBajaManual).
   },
