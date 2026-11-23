@@ -398,6 +398,10 @@ type ContactoAgrupado = ReturnType<typeof agruparContactos>[number];
 // Prospectos. Solo a quien tiene correo activo (la automatización solo
 // escribe por correo). Con oportunidades abiertas se pregunta antes: a un
 // cliente con el que ya se negocia no le conviene un correo en frío.
+// «Detener seguimiento» (23-nov-2026): la persona ya habla con ventas por
+// teléfono, WhatsApp u otro correo; POST /contactos/:id/detener-seguimiento
+// la saca de la automatización (su serie pasa a interesado, sin tarea nueva).
+// Solo a quien tiene algo en automatización. No se deshace desde el CRM.
 function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { empresaId: number; contactos: ContactoAgrupado[]; oportunidadesAbiertas: number }) {
   const queryClient = useQueryClient();
   const [agregando, setAgregando] = useState(false);
@@ -408,6 +412,9 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
   const [porDarDeBaja, setPorDarDeBaja] = useState<ContactoAgrupado | null>(null);
   const [motivoBaja, setMotivoBaja] = useState("");
   const [dadoDeBaja, setDadoDeBaja] = useState<string | null>(null);
+  const [porDetener, setPorDetener] = useState<ContactoAgrupado | null>(null);
+  const [motivoDetener, setMotivoDetener] = useState("");
+  const [detenido, setDetenido] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function aProspeccion(c: ContactoAgrupado) {
@@ -441,6 +448,25 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
     } finally {
       setPorDarDeBaja(null);
       setMotivoBaja("");
+    }
+  }
+
+  async function detenerSeguimiento(c: ContactoAgrupado) {
+    setError(null);
+    setDetenido(null);
+    try {
+      await api.post(`/api/v1/contactos/${c.contacto.id}/detener-seguimiento`, { motivo: motivoDetener.trim() });
+      setDetenido(c.contacto.nombre);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["empresa", String(empresaId)] }),
+        queryClient.invalidateQueries({ queryKey: ["prospectos"] }),
+        queryClient.invalidateQueries({ queryKey: ["timeline"] })
+      ]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
+    } finally {
+      setPorDetener(null);
+      setMotivoDetener("");
     }
   }
 
@@ -491,6 +517,12 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
         <div className="mx-4 mt-3 flex items-center gap-2 rounded-[12px] bg-ok-bg px-3.5 py-3 text-[12px] font-semibold text-ok md:mx-[22px]">
           <Icono nombre="check" size={15} className="shrink-0" />
           <span className="min-w-0 flex-1">{dadoDeBaja} quedó dada de baja: ya no se le escribe y sus seguimientos se cancelaron.</span>
+        </div>
+      )}
+      {detenido && (
+        <div className="mx-4 mt-3 flex items-center gap-2 rounded-[12px] bg-ok-bg px-3.5 py-3 text-[12px] font-semibold text-ok md:mx-[22px]">
+          <Icono nombre="check" size={15} className="shrink-0" />
+          <span className="min-w-0 flex-1">La automatización ya no le escribe a {detenido}: sigue con ventas.</span>
         </div>
       )}
       {agregando && (
@@ -549,6 +581,16 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
                 >
                   Editar
                 </button>
+                {contacto.en_automatizacion && (
+                  <button
+                    type="button"
+                    className="rounded-[8px] px-2 py-1 text-[12px] font-bold text-navy hover:bg-soft"
+                    title="Ya habla con ventas: que la automatización deje de escribirle"
+                    onClick={() => setPorDetener(agrupado)}
+                  >
+                    Detener seguimiento
+                  </button>
+                )}
                 {contactable && (
                   <button
                     type="button"
@@ -583,6 +625,50 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
           </>
         }
       />
+      <Modal
+        abierto={porDetener !== null}
+        onCerrar={() => {
+          setPorDetener(null);
+          setMotivoDetener("");
+        }}
+        titulo="¿Detener el seguimiento automático?"
+        descripcion={
+          porDetener
+            ? `«${porDetener.contacto.nombre}» ya habla con ventas. La automatización deja de escribirle en todas las campañas y no se crea tarea nueva. No se puede deshacer desde el CRM. Si lo que quiere es que no le escriban nadie, usa «Dar de baja».`
+            : undefined
+        }
+        acciones={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPorDetener(null);
+                setMotivoDetener("");
+              }}
+            >
+              No
+            </Button>
+            <Button disabled={motivoDetener.trim().length < 2} onClick={() => porDetener && void detenerSeguimiento(porDetener)}>
+              Sí, detener
+            </Button>
+          </>
+        }
+      >
+        <div className="px-5 pb-2">
+          <Field label="¿Por qué?" htmlFor="motivo-detener">
+            <textarea
+              id="motivo-detener"
+              data-autofocus
+              rows={2}
+              maxLength={200}
+              placeholder="Ej. Ya habla por WhatsApp con el vendedor"
+              className={inputClass}
+              value={motivoDetener}
+              onChange={(e) => setMotivoDetener(e.target.value)}
+            />
+          </Field>
+        </div>
+      </Modal>
       <Modal
         abierto={porDarDeBaja !== null}
         onCerrar={() => {

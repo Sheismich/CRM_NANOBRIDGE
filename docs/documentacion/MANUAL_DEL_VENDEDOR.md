@@ -81,6 +81,10 @@ Documentos.
 - **+ Agregar** una persona; **Editar** sus datos. Borrar el valor de un correo o teléfono no lo elimina: queda como
   «obsoleto».
 - **A prospección**: la manda a Prospectos para que la automatización le escriba (solo si tiene correo activo).
+- **Detener seguimiento**: si la persona **ya habla contigo** por teléfono, WhatsApp u otro correo, para que la
+  automatización deje de mandarle recordatorios. Solo aparece si la persona tiene algo en automatización. Escribe por
+  qué. Deja de escribirle en todas las campañas y no crea tarea nueva (ya la atiendes tú). Si creas una oportunidad
+  con esa persona, pasa solo. **No se deshace.** Si lo que pidió es que nadie le escriba, usa «Dar de baja».
 - **Dar de baja**: si la persona te pidió **por teléfono o en persona** que no le escriban. Escribe cómo lo pidió.
   Sus correos y teléfonos pasan a «no contactar», sus prospectos a baja y sus seguimientos se cancelan. **No se
   deshace.**

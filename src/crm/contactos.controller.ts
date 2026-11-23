@@ -7,7 +7,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { updateContactSchema } from "./dto/empresa.schema.js";
-import { bajaContactoSchema, conteosContactosQuerySchema, createContactoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
+import { bajaContactoSchema, conteosContactosQuerySchema, createContactoSchema, detenerSeguimientoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -58,6 +58,15 @@ export class ContactosController {
   @Roles("administrador", "supervisor", "agente")
   darDeBaja(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
     return this.contactosService.darDeBaja(user, idParamSchema.parse(idParam), bajaContactoSchema.parse(body ?? {}).motivo);
+  }
+
+  // Ya habla con ventas: la automatización deja de escribirle (23-nov-2026).
+  // Mismos roles y alcance que la baja.
+  @Post(":id/detener-seguimiento")
+  @HttpCode(200)
+  @Roles("administrador", "supervisor", "agente")
+  detenerSeguimiento(@Param("id") idParam: string, @Body() body: unknown, @CurrentUser() user: CurrentUserType) {
+    return this.contactosService.detenerSeguimiento(user, idParamSchema.parse(idParam), detenerSeguimientoSchema.parse(body ?? {}).motivo);
   }
 
   @Delete(":id")

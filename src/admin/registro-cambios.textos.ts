@@ -211,6 +211,7 @@ export function frase(fila: FilaAuditoria, quien: string, nombres: Nombres): str
     case "prospecto:importar_borrador": return `${quien} importó a ${nombre} como prospecto.`;
     case "prospecto:rebote": return `Se desactivó a ${nombre} porque su correo rebotó (${despues.tipo_rebote === "suave" ? "rebote suave repetido" : "rebote duro"}).`;
     case "prospecto:reactivar_rebote": return `${quien} reactivó a ${nombre}, que estaba rebotado.`;
+    case "prospecto:detener_seguimiento": return `${quien} detuvo el seguimiento automático de ${nombre}: ya habla con ventas${despues.motivo ? ` (${String(despues.motivo)})` : ""}.`;
     case "medio_contacto:registrar_supresion": return `${quien} marcó ${nombre} como "no contactar".`;
     case "catalogo_tipo_documento:cambiar_obligatorio": return despues.obligatorio ? `${quien} marcó ${nombre} como papel obligatorio.` : `${quien} quitó ${nombre} de los papeles obligatorios.`;
     case "evento_pendiente:reintentar": return `${quien} reintentó el aviso #${fila.entidadId} a n8n.`;

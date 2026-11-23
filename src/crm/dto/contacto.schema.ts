@@ -31,5 +31,10 @@ export const bajaContactoSchema = z.object({
   motivo: z.string().trim().min(2).max(255)
 });
 
+// «Detener seguimiento» (23-nov-2026): por qué, obligatorio y corto (va a la auditoría).
+export const detenerSeguimientoSchema = z.object({
+  motivo: z.string().trim().min(2).max(200)
+});
+
 export type CreateContactoInput = z.infer<typeof createContactoSchema>;
 export type ListContactosQuery = z.infer<typeof listContactosQuerySchema>;

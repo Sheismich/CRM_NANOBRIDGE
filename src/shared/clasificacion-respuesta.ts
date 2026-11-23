@@ -103,9 +103,17 @@ export async function aplicarClasificacionAlProspecto(tx: DrizzleTx, prospectoId
  * entrar mientras esta siga en interesado (listo-para-automatizacion.ts); a
  * las que ya iban se les cierra la ventana para que PT4 no mande el
  * siguiente. Las de esta misma campaña no se tocan: su ventana ya la cerró
- * la respuesta.
+ * la respuesta. También lo usa «Detener seguimiento» (detener-seguimiento.ts),
+ * con su propio motivo.
  */
-async function frenarOtrasCampanas(tx: DrizzleTx, prospectoId: number, contactoId: number, campanaId: number | null, usuarioId: number | null) {
+export async function frenarOtrasCampanas(
+  tx: DrizzleTx,
+  prospectoId: number,
+  contactoId: number,
+  campanaId: number | null,
+  usuarioId: number | null,
+  motivo = `Le interesó otra campaña (prospecto ${prospectoId})`
+) {
   const otrasCampanas = and(eq(prospectos.contactoId, contactoId), ne(prospectos.id, prospectoId), sql`NOT (${prospectos.campanaId} <=> ${campanaId})`);
   const enFila = await tx.select({ id: prospectos.id, filaEstadoPrevio: prospectos.filaEstadoPrevio }).from(prospectos).where(and(otrasCampanas, eq(prospectos.estado, "en_fila"))).for("update");
   for (const p of enFila) {
@@ -116,7 +124,7 @@ async function frenarOtrasCampanas(tx: DrizzleTx, prospectoId: number, contactoI
       entidadId: p.id,
       accion: "sacar_de_fila",
       antes: { estado: "en_fila", estado_previo: p.filaEstadoPrevio },
-      despues: { estado: "capturado", motivo: `Le interesó otra campaña (prospecto ${prospectoId})` }
+      despues: { estado: "capturado", motivo }
     });
   }
   const abiertas = await tx.select({ id: envios.id }).from(envios).innerJoin(prospectos, eq(prospectos.id, envios.prospectoId)).where(and(otrasCampanas, eq(envios.ventanaEstado, "abierta")));
