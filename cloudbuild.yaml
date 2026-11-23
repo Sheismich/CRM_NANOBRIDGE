@@ -1,0 +1,72 @@
+# Deploy automático (#10 de la revisión del 20-nov-2026). Plan completo, permisos y
+# encendido en docs/planes/PLAN_DEPLOY_CLOUD_BUILD.md. NO corre solo hasta que se cree
+# el disparador de Cloud Build (con aprobación manual) para los tags v*.
+#
+# Orden: construir → subir → migrar (Cloud Run Job, sin autorizar IPs) → desplegar la
+# API con la misma imagen → revisar /health → publicar el front. Si la migración falla,
+# no se despliega nada: arregla el "desplegar antes de migrar" del 18-nov.
+#
+# Nunca --set-env-vars: borraría TRUST_PROXY, SESSION_COOKIE_NAME y las demás.
+substitutions:
+  _REGION: us-central1
+  _IMAGEN: us-central1-docker.pkg.dev/crm-prospeccion-outbound/nanobridge-repo/nanobridge-api
+  _URL_API: https://nanobridge-api-165032456965.us-central1.run.app
+
+options:
+  # Con una cuenta de servicio propia (nanobridge-deploy), Cloud Build pide decir
+  # dónde guardar los registros.
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - id: construir
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGEN}:${SHORT_SHA}", "-t", "${_IMAGEN}:v1", "."]
+
+  - id: subir
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "--all-tags", "${_IMAGEN}"]
+
+  # El Job nanobridge-migrar (creado una vez, ver el plan §3) corre
+  # node dist/database/migrate.js con la conexión a Cloud SQL del servicio.
+  # --wait: si una migración falla, el build se detiene aquí.
+  - id: migrar
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        gcloud run jobs update nanobridge-migrar --image="${_IMAGEN}:${SHORT_SHA}" --region="${_REGION}"
+        gcloud run jobs execute nanobridge-migrar --region="${_REGION}" --wait
+
+  - id: desplegar-api
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        gcloud run deploy nanobridge-api --image="${_IMAGEN}:${SHORT_SHA}" --region="${_REGION}"
+
+  - id: revisar-api
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        # $$ = un $ para bash (Cloud Build usa $ para sus sustituciones).
+        test "$$(curl -s -o /dev/null -w '%{http_code}' ${_URL_API}/health)" = "200"
+        echo "API: /health 200 en $$(gcloud run services describe nanobridge-api --region=${_REGION} --format='value(status.latestReadyRevisionName)')"
+
+  # El front: mismo commit, publicado en Firebase Hosting con las credenciales de
+  # la cuenta de servicio del build (necesita roles/firebasehosting.admin).
+  - id: front
+    name: node:22-bookworm-slim
+    dir: frontend
+    entrypoint: bash
+    env:
+      - GOOGLE_CLOUD_QUOTA_PROJECT=crm-prospeccion-outbound
+    args:
+      - -ceu
+      - |
+        npm ci
+        npm run build
+        npx -y firebase-tools@15 deploy --only hosting --project crm-prospeccion-outbound --non-interactive

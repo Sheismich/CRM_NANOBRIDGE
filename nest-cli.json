@@ -5,7 +5,14 @@
   "compilerOptions": {
     "deleteOutDir": true,
     "assets": [
-      { "include": "shared/pdf/recursos/**/*", "outDir": "dist" }
+      {
+        "include": "shared/pdf/recursos/**/*",
+        "outDir": "dist"
+      },
+      {
+        "include": "database/migrations/**/*.sql",
+        "outDir": "dist"
+      }
     ]
   }
 }
