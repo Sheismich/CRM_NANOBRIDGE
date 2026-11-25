@@ -197,6 +197,22 @@ describe("borrar los datos de una persona (ARCO)", () => {
     expect(await dondeAparece(p.correo)).toEqual([]);
   });
 
+  it("la ficha lista los desactivados de la empresa para poder borrarlos (solo el administrador)", async () => {
+    const p = await personaConRastros();
+    const desactivados = (cookie = adminCookie) => api().get("/api/v1/contactos/desactivados").set("Cookie", cookie).query({ empresaId: p.empresaId });
+    expect(((await desactivados()).body.data as { id: number }[]).some((c) => c.id === p.contactoId)).toBe(false);
+
+    expect((await api().delete(`/api/v1/contactos/${p.contactoId}`).set("Cookie", adminCookie)).status).toBe(204);
+    expect((await desactivados()).body.data).toContainEqual(expect.objectContaining({ id: p.contactoId, nombre: p.nombre }));
+
+    const agente = await crearAgente(app, adminCookie, `agente.desact.${randomUUID().slice(0, 8)}@test.local`);
+    expect((await desactivados(agente)).status).toBe(403);
+
+    // Ya borrado, no vuelve a salir.
+    expect((await borrar(p.contactoId, p.nombre)).status).toBe(200);
+    expect(((await desactivados()).body.data as { id: number }[]).some((c) => c.id === p.contactoId)).toBe(false);
+  });
+
   it("un contacto que no existe da 404", async () => {
     expect((await borrar(999_999_999, "Nadie")).status).toBe(404);
   });

@@ -171,7 +171,8 @@ empresa: en el contacto, **«Borrar datos»**, y escribir su nombre tal como est
 - **Fuera del CRM** se borra con el tiempo y así se le dice en la respuesta: los respaldos de Cloud SQL (7 días), el
   historial de SendGrid y las ejecuciones de n8n.
 - Queda en el Registro de cambios como «Datos de una persona borrados (ARCO)», sin datos personales.
-- Funciona también con un contacto ya desactivado (la solicitud puede llegar después).
+- Funciona también con un contacto ya desactivado (la solicitud puede llegar después): en la tarjeta Contactos de la
+  ficha, «Ver contactos desactivados» → «Borrar datos» (solo lo ve el administrador).
 
 ## 7. Mandar a automatización
 

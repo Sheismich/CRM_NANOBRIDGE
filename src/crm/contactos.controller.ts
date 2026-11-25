@@ -7,7 +7,7 @@ import { Roles } from "../auth/decorators/roles.decorator.js";
 import { CurrentUser } from "../auth/decorators/current-user.decorator.js";
 import type { CurrentUser as CurrentUserType } from "../auth/current-user.type.js";
 import { updateContactSchema } from "./dto/empresa.schema.js";
-import { bajaContactoSchema, borrarDatosSchema, conteosContactosQuerySchema, createContactoSchema, detenerSeguimientoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
+import { bajaContactoSchema, borrarDatosSchema, conteosContactosQuerySchema, createContactoSchema, desactivadosQuerySchema, detenerSeguimientoSchema, listContactosQuerySchema } from "./dto/contacto.schema.js";
 
 const idParamSchema = z.coerce.number().int().positive();
 
@@ -30,6 +30,14 @@ export class ContactosController {
   @Get("conteos")
   conteos(@Query() query: Record<string, unknown>, @CurrentUser() user: CurrentUserType) {
     return this.contactosService.conteos(user, conteosContactosQuerySchema.parse(query));
+  }
+
+  // Los desactivados de una empresa, para borrar sus datos (ARCO) desde la
+  // ficha. Solo el administrador, igual que borrar-datos (antes de @Get(":id")).
+  @Get("desactivados")
+  @Roles("administrador")
+  desactivados(@Query() query: Record<string, unknown>) {
+    return this.contactosService.listarDesactivados(desactivadosQuerySchema.parse(query).empresaId);
   }
 
   @Post()

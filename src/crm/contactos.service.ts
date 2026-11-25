@@ -157,6 +157,19 @@ export class ContactosService {
     });
   }
 
+  // Los contactos desactivados de una empresa, para poder borrar sus datos desde
+  // la ficha (la ficha solo enseña los activos; lo encontró Fabián al revisar el
+  // #9, 23-nov-2026). Sin los que ya se borraron. Solo el administrador.
+  async listarDesactivados(empresaId: number) {
+    return {
+      data: await this.db
+        .select({ id: contactos.id, nombre: contactos.nombre, puesto: contactos.puesto, actualizado_en: contactos.actualizadoEn })
+        .from(contactos)
+        .where(and(eq(contactos.empresaId, empresaId), eq(contactos.activo, false), sql`${contactos.nombre} <> ${NOMBRE_PERSONA_ELIMINADA}`))
+        .orderBy(contactos.nombre)
+    };
+  }
+
   // Borrar los datos de una persona por solicitud ARCO (pendiente #9 de la revisión
   // del 20-nov, 23-nov-2026). Ver shared/borrar-datos-persona.ts. Solo el
   // administrador (lo revisa el controlador). No se puede deshacer: hay que
