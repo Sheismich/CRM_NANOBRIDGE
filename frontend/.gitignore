@@ -30,3 +30,8 @@ dist-ssr
 
 # Caché local de firebase deploy
 .firebase/
+
+# Pruebas de navegador (Playwright, #15 de la revisión del 20-nov-2026)
+/test-results/
+/playwright-report/
+/storage-e2e/
