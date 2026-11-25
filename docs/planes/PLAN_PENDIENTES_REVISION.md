@@ -19,7 +19,7 @@ Tamaño: **chico** = medio día o menos, **mediano** = 1 a 2 días, **grande** =
 | 1 | ✅ Detener seguimiento de quien ya habla con ventas (23-nov, `00065-2pj`, PR #7) | Mich (API + front) | mediano | - |
 | 5 | Repo público | Mich (decide) | chico | - |
 | 8 | ✅ Aviso de errores 500 (23-nov, métrica `nanobridge_api_errores_5xx` y alerta en Cloud Monitoring) | Mich (Google Cloud) | chico | - |
-| 9 | ✅ Borrar datos de una persona (ARCO) (23-nov, `00070-mgp`, PR #11; revisado por Fabián: falta poder borrar desde la ficha a un contacto desactivado, la API ya lo permite) | Mich (API + front) | mediano | - |
+| 9 | ✅ Borrar datos de una persona (ARCO) (23-nov, `00070-mgp`, PR #11; revisado por Fabián: faltaba poder borrar desde la ficha a un contacto desactivado; resuelto el 25-nov con «Ver contactos desactivados» en la ficha) | Mich (API + front) | mediano | - |
 | 10 | Deploy automático con Cloud Build | Mich (Google Cloud) | mediano | acceso a GCP |
 | 15 | Pruebas que faltan | Mich (+ ejemplos de n8n de Fabián) | mediano | #7 |
 | 14 | Tipos del front generados, no copiados | Mich (front) | mediano | después de #1 y #9 |

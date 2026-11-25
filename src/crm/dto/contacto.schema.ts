@@ -31,6 +31,11 @@ export const bajaContactoSchema = z.object({
   motivo: z.string().trim().min(2).max(255)
 });
 
+// Contactos desactivados de una empresa (ARCO desde la ficha, 25-nov-2026).
+export const desactivadosQuerySchema = z.object({
+  empresaId: z.coerce.number().int().positive()
+});
+
 // Borrar los datos de una persona (ARCO, 23-nov-2026): hay que escribir su nombre
 // tal como está en el CRM para confirmar.
 export const borrarDatosSchema = z.object({

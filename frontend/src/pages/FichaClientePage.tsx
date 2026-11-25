@@ -421,7 +421,14 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
   const [detenido, setDetenido] = useState<string | null>(null);
   const { user } = useAuth();
   const esAdmin = user?.rol === "administrador";
-  const [porBorrar, setPorBorrar] = useState<ContactoAgrupado | null>(null);
+  // Activo (fila de la lista) o desactivado (lista plegable de abajo): basta id y nombre.
+  const [porBorrar, setPorBorrar] = useState<{ id: number; nombre: string } | null>(null);
+  const [verDesactivados, setVerDesactivados] = useState(false);
+  const desactivados = useQuery({
+    queryKey: ["contactos-desactivados", empresaId],
+    queryFn: () => api.get<{ data: { id: number; nombre: string; puesto: string | null }[] }>(`/api/v1/contactos/desactivados?empresaId=${empresaId}`),
+    enabled: esAdmin
+  });
   const [confirmacionBorrar, setConfirmacionBorrar] = useState("");
   const [borrado, setBorrado] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -479,13 +486,14 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
     }
   }
 
-  async function borrarDatos(c: ContactoAgrupado) {
+  async function borrarDatos(c: { id: number; nombre: string }) {
     setError(null);
     setBorrado(false);
     try {
-      await api.post(`/api/v1/contactos/${c.contacto.id}/borrar-datos`, { confirmacion: confirmacionBorrar.trim() });
+      await api.post(`/api/v1/contactos/${c.id}/borrar-datos`, { confirmacion: confirmacionBorrar.trim() });
       setBorrado(true);
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["contactos-desactivados", empresaId] }),
         queryClient.invalidateQueries({ queryKey: ["empresa", String(empresaId)] }),
         queryClient.invalidateQueries({ queryKey: ["contactos"] }),
         queryClient.invalidateQueries({ queryKey: ["prospectos"] }),
@@ -505,6 +513,7 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
     try {
       await api.delete(`/api/v1/empresas/${empresaId}/contactos/${c.contacto.id}`);
       await queryClient.invalidateQueries({ queryKey: ["empresa", String(empresaId)] });
+      await queryClient.invalidateQueries({ queryKey: ["contactos-desactivados", empresaId] });
       await queryClient.invalidateQueries({ queryKey: ["contactos"] });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo conectar con el servidor");
@@ -645,7 +654,7 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
                     type="button"
                     className="rounded-[8px] px-2 py-1 text-[12px] font-bold text-danger hover:bg-danger-bg"
                     title="La persona pidió que se borren sus datos (derecho ARCO)"
-                    onClick={() => setPorBorrar(agrupado)}
+                    onClick={() => setPorBorrar({ id: contacto.id, nombre: contacto.nombre })}
                   >
                     Borrar datos
                   </button>
@@ -655,6 +664,33 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
           );
         })}
       </ul>
+      {esAdmin && (desactivados.data?.data.length ?? 0) > 0 && (
+        <div className="border-t border-border px-4 py-3 md:px-[22px]">
+          <button type="button" className="text-[12.5px] font-bold text-ink-2 hover:text-strong" aria-expanded={verDesactivados} onClick={() => setVerDesactivados((v) => !v)}>
+            {verDesactivados ? "Ocultar" : "Ver"} contactos desactivados ({desactivados.data?.data.length})
+          </button>
+          {verDesactivados && (
+            <ul className="mt-2 divide-y divide-border">
+              {desactivados.data?.data.map((d) => (
+                <li key={d.id} className="flex flex-wrap items-center gap-3 py-2">
+                  <span className="min-w-0 flex-1 text-[13px] text-ink-2">
+                    {d.nombre}
+                    {d.puesto && <small className="ml-1 text-[12px] text-ink-3">· {d.puesto}</small>}
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded-[8px] px-2 py-1 text-[12px] font-bold text-danger hover:bg-danger-bg"
+                    title="La persona pidió que se borren sus datos (derecho ARCO)"
+                    onClick={() => setPorBorrar({ id: d.id, nombre: d.nombre })}
+                  >
+                    Borrar datos
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       <Modal
         abierto={porDesactivar !== null}
         onCerrar={() => setPorDesactivar(null)}
@@ -680,7 +716,7 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
         titulo="¿Borrar los datos de esta persona?"
         descripcion={
           porBorrar
-            ? `Es para cuando «${porBorrar.contacto.nombre}» pide que se borren sus datos (derecho ARCO). Su nombre, correos, teléfonos, notas, respuestas y los correos que se le mandaron se borran de todo el CRM. Las ventas y cotizaciones de la empresa se quedan, sin su nombre. Su correo y teléfono quedan solo en la lista de supresión, para no volver a escribirle. No se puede deshacer.`
+            ? `Es para cuando «${porBorrar.nombre}» pide que se borren sus datos (derecho ARCO). Su nombre, correos, teléfonos, notas, respuestas y los correos que se le mandaron se borran de todo el CRM. Las ventas y cotizaciones de la empresa se quedan, sin su nombre. Su correo y teléfono quedan solo en la lista de supresión, para no volver a escribirle. No se puede deshacer.`
             : undefined
         }
         acciones={
@@ -696,7 +732,7 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
             </Button>
             <Button
               variant="rechazar"
-              disabled={!porBorrar || confirmacionBorrar.trim().toLocaleLowerCase("es-MX") !== porBorrar.contacto.nombre.trim().toLocaleLowerCase("es-MX")}
+              disabled={!porBorrar || confirmacionBorrar.trim().toLocaleLowerCase("es-MX") !== porBorrar.nombre.trim().toLocaleLowerCase("es-MX")}
               onClick={() => porBorrar && void borrarDatos(porBorrar)}
             >
               Sí, borrar sus datos
@@ -705,7 +741,7 @@ function TarjetaContactos({ empresaId, contactos, oportunidadesAbiertas }: { emp
         }
       >
         <div className="px-5 pb-2">
-          <Field label={porBorrar ? `Escribe «${porBorrar.contacto.nombre}» para confirmar` : "Escribe su nombre para confirmar"} htmlFor="confirmar-borrar">
+          <Field label={porBorrar ? `Escribe «${porBorrar.nombre}» para confirmar` : "Escribe su nombre para confirmar"} htmlFor="confirmar-borrar">
             <input
               id="confirmar-borrar"
               data-autofocus
