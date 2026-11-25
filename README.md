@@ -48,6 +48,35 @@ corrida, así que solo se acepta si su nombre contiene `test` (ver
 `test/setup/global-setup.ts`), ej.:
 `TEST_DATABASE_URL="mysql://root@127.0.0.1:3306/nanobridge_test" npm test`.
 
+**Sin Docker (como en la compu de Mich, 23-nov-2026).** Con el MySQL 8 de Windows instalado, un servidor desechable
+en otro puerto, sin tocar el MySQL de siempre. La primera vez se crea la carpeta de datos; después solo se arranca:
+
+```bash
+MYSQLD="/c/Program Files/MySQL/MySQL Server 8.0/bin/mysqld.exe"
+DATOS="$HOME/mysql-pruebas"                                      # cualquier carpeta fuera del repo
+[ -d "$DATOS" ] || "$MYSQLD" --no-defaults --initialize-insecure --datadir="$DATOS"   # solo la primera vez
+"$MYSQLD" --no-defaults --datadir="$DATOS" --port=3399 --bind-address=127.0.0.1 --mysqlx=OFF --default-time-zone=+00:00 &
+TEST_DATABASE_URL="mysql://root@127.0.0.1:3399/nanobridge_test" npm test
+"/c/Program Files/MySQL/MySQL Server 8.0/bin/mysqladmin.exe" -uroot -h127.0.0.1 -P3399 shutdown   # al terminar
+```
+
+Siempre en UTC (`--default-time-zone=+00:00`), como Cloud SQL: con la hora de México fallan las pruebas de días
+hábiles y ventanas. La suite completa tarda unos 20 minutos (967 pruebas en 110 archivos el 23-nov).
+
+**Pruebas de navegador (Playwright, #15 de la revisión).** `frontend/e2e/` recorre el camino principal en un Chrome de
+verdad: entrar, abrir la ficha de una empresa y mandar a su contacto a automatización, contra la API compilada y una
+base que se borra y se recrea en cada corrida (`nanobridge_e2e` en el MySQL de arriba; otra con `E2E_DATABASE_URL`,
+cuyo nombre debe decir `e2e` o `test`). Levanta solas la API (puerto 3101) y la pantalla (5174):
+
+```bash
+npm run build                                  # la API compilada (dist/)
+cd frontend && npx playwright install chromium # solo la primera vez
+npx playwright test                            # con el MySQL de pruebas arriba
+```
+
+Con Chrome o Edge ya instalados no hace falta bajar el Chromium de Playwright: `E2E_NAVEGADOR=chrome npx playwright test`
+(o `msedge`). Así corrió en la compu de Mich el 25-nov: 1 prueba en verde, unos 2 minutos con el arranque.
+
 Cobertura (22-sep-2026, 115 pruebas en 21 archivos): `SessionAuthGuard`/
 `RolesGuard`/`ApiKeyGuard` (401/403), `POST /auth/bootstrap` de un solo uso,
 la regla "no dejar el sistema sin al menos un administrador activo"
